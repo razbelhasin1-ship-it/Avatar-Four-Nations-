@@ -27,7 +27,9 @@ export type AirMaterialName =
   | 'shadow'
   | 'rope'
   | 'paintTeal'
-  | 'mosaic';
+  | 'mosaic'
+  | 'leaf'
+  | 'blossom';
 
 let refs = 0;
 const mats = new Map<AirMaterialName, THREE.Material>();
@@ -105,6 +107,10 @@ function create(name: AirMaterialName): THREE.Material {
     }
     case 'foliage':
       return new THREE.MeshStandardMaterial({ color: '#41723f', roughness: 0.95, flatShading: true });
+    case 'leaf':
+      return new THREE.MeshStandardMaterial({ color: '#6f9f48', roughness: 0.92, flatShading: true });
+    case 'blossom':
+      return new THREE.MeshStandardMaterial({ color: '#f3c2cf', roughness: 0.9, flatShading: true });
     case 'window':
       return new THREE.MeshStandardMaterial({ color: '#202830', roughness: 0.7, emissive: '#ffb860', emissiveIntensity: 0 });
     case 'banner':

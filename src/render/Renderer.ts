@@ -56,7 +56,7 @@ export function installAtmosphereFog(): void {
 `;
   THREE.ShaderChunk.fog_fragment = /* glsl */ `
 #ifdef USE_FOG
-  float fogK = clamp( ( vFogWorldPos.y - cameraPosition.y ) / 150.0, -1.1, 6.0 );
+  float fogK = clamp( ( vFogWorldPos.y - cameraPosition.y ) / 150.0, -0.45, 6.0 );
   float fogHF = abs( fogK ) < 1e-3 ? 1.0 : ( 1.0 - exp( - fogK ) ) / fogK;
   float fogD = vFogDepth * fogHF;
   #ifdef FOG_EXP2
@@ -380,6 +380,11 @@ export class RenderPipeline {
 
   render(dt: number): void {
     this.updateSun();
+    // Count every draw of the frame (scene + post passes + any off-screen
+    // renders), not just the last pass, which an auto-resetting info reports.
+    const info = this.renderer.info;
+    info.autoReset = false;
+    info.reset();
     if (this.composer) {
       if (this.bloomPass) {
         this.bloomPass.strength = 0.5 + this.bloomBoost;
@@ -397,7 +402,6 @@ export class RenderPipeline {
       this.fpsAccum = 0;
       this.fpsFrames = 0;
     }
-    const info = this.renderer.info;
     this.stats.drawCalls = info.render.calls;
     this.stats.triangles = info.render.triangles;
     this.stats.geometries = info.memory.geometries;

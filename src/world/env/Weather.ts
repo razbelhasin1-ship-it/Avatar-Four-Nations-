@@ -13,8 +13,12 @@ import { attachEnvUniforms, ENV_NOISE_GLSL, ENV_PARS_GLSL, envUniforms } from '.
  *   glowing embers), sandstorm (horizontal dust streaks), wind (blown leaves).
  * Rain sets ctx.water.raining (rain becomes a waterbending source) and wets the
  * terrain. Emits 'weather:changed'. Particle counts follow
- * settings.graphics.particleDensity; particles are off without ambientEffects
- * (sky, fog, wind and wetness still change so gameplay is identical).
+ * settings.graphics.particleDensity. Precipitation (rain, snow, blizzard drift,
+ * ash, blowing sand) tells the player what the weather is doing, so it stays
+ * visible without ambientEffects at a reduced density; only the decorative
+ * layers (ashfall embers, wind-blown leaves) need ambientEffects. Density 0
+ * turns every layer off (sky, fog, wind and wetness still change, so gameplay
+ * is identical).
  */
 
 export type WeatherType = 'clear' | 'cloudy' | 'snow' | 'blizzard' | 'rain' | 'fog' | 'ashfall' | 'sandstorm' | 'wind';
@@ -62,7 +66,7 @@ const PRESETS: Record<WeatherType, WeatherParams> = {
   snow: params({ cloudCover: 0.9, overcast: 0.6, fogScale: 1.8, tint: '#e2ecf8', cloudTint: '#dfe6ef', wind: 0.4, gust: 0.35, snow: 0.7 }),
   blizzard: params({ cloudCover: 1, overcast: 0.88, fogScale: 6.5, tint: '#eef4fb', cloudTint: '#e4eaf2', wind: 1.35, gust: 0.9, snow: 1 }),
   fog: params({ cloudCover: 0.7, overcast: 0.55, fogScale: 5.5, tint: '#cfd8cc', cloudTint: '#c8d0c8', wind: 0.12, gust: 0.1, wet: 0.35 }),
-  ashfall: params({ cloudCover: 0.85, overcast: 0.62, fogScale: 2.6, tint: '#c9a894', cloudTint: '#8c7468', wind: 0.35, gust: 0.3, ash: 1 }),
+  ashfall: params({ cloudCover: 0.76, overcast: 0.32, fogScale: 2.2, tint: '#f2a77c', cloudTint: '#d69a74', wind: 0.35, gust: 0.3, ash: 1 }),
   sandstorm: params({ cloudCover: 0.7, overcast: 0.55, fogScale: 7, tint: '#e3b77e', cloudTint: '#d9b07c', wind: 1.4, gust: 0.95, sand: 1 }),
   wind: params({ cloudCover: 0.45, overcast: 0.1, fogScale: 1.05, wind: 1.15, gust: 0.9, leaves: 1 }),
 };
@@ -325,6 +329,9 @@ export class WeatherSystem implements WorldUpdatable {
   private pendingSnap = true;
   /** Extra fog from local effects (e.g. walking inside the Air Temple cloud deck), 0..1. */
   fogBoost = 0;
+  /** 0..1 viewer up on the Air Temple massif above the cloud sea: the deck hides the
+   * far ground, so the haze recedes (longer views of the spires and the sea). */
+  fogClear = 0;
   private readonly tmpTint = new THREE.Color();
   private readonly regionTint = new THREE.Color();
 
@@ -334,7 +341,7 @@ export class WeatherSystem implements WorldUpdatable {
     this.layers = {
       rain: new PrecipLayer({ name: 'rain', count: 8000, box: [34, 22, 34], fall: -17, windFactor: 0.6, size: [0.02, 0.9], shape: 0, color: '#c4d0dc', opacity: 0.5, sway: 0 }, t),
       snow: new PrecipLayer({ name: 'snow', count: 8000, box: [38, 22, 38], fall: -1.6, windFactor: 1.0, size: [0.1, 0.1], shape: 1, color: '#ffffff', opacity: 0.95, sway: 0.5 }, t),
-      ash: new PrecipLayer({ name: 'ash', count: 4000, box: [36, 20, 36], fall: -0.9, windFactor: 0.8, size: [0.045, 0.045], shape: 2, color: '#7a726d', opacity: 0.8, sway: 0.7 }, t),
+      ash: new PrecipLayer({ name: 'ash', count: 4000, box: [36, 20, 36], fall: -0.9, windFactor: 0.8, size: [0.065, 0.065], shape: 2, color: '#8a817b', opacity: 0.85, sway: 0.7 }, t),
       ember: new PrecipLayer({ name: 'ember', count: 500, box: [36, 20, 36], fall: 0.35, windFactor: 0.6, size: [0.06, 0.06], shape: 3, color: '#ff7a2a', opacity: 0.9, additive: true, sway: 0.9 }, t),
       sand: new PrecipLayer({ name: 'sand', count: 6000, box: [40, 12, 40], fall: -0.4, windFactor: 1.6, size: [0.06, 1.6], shape: 4, color: '#dcb57c', opacity: 0.55, sway: 0.2 }, t),
       leaves: new PrecipLayer({ name: 'leaves', count: 450, box: [40, 16, 40], fall: -0.8, windFactor: 1.1, size: [0.12, 0.12], shape: 5, color: '#ffffff', opacity: 1, sway: 1.1 }, t),
@@ -405,7 +412,7 @@ export class WeatherSystem implements WorldUpdatable {
     const rt = this.regionId ? REGION_TINT[this.regionId] : undefined;
     this.tmpTint.copy(this.cur.tint);
     if (rt) this.tmpTint.multiply(this.regionTint.set(rt));
-    const fogScale = this.cur.fogScale * (1 + this.fogBoost * 7);
+    const fogScale = this.cur.fogScale * (1 + this.fogBoost * 7) * (1 - 0.4 * this.fogClear);
     sky.setMood({ cloudCover: this.cur.cloudCover, overcast: this.cur.overcast, fogScale, tint: this.tmpTint, cloudTint: this.cur.cloudTint });
     if (snap) sky.snapMood();
   }
@@ -466,8 +473,9 @@ export class WeatherSystem implements WorldUpdatable {
     // Precipitation particles.
     const camP = ctx.camera as THREE.PerspectiveCamera;
     PRECIP_PIXEL.value = (2 * Math.tan(((camP.fov ?? 60) * Math.PI) / 360)) / Math.max(200, ctx.render.renderer.domElement.height || 540);
-    const on = this.particlesOn && this.density > 0;
-    const d = this.density;
+    const on = this.density > 0;
+    const decor = on && this.particlesOn;
+    const d = this.particlesOn ? this.density : Math.max(0.25, this.density * 0.6);
     const L = this.layers;
     const cam = ctx.camera.position;
     // Above the cloud deck / very high peaks: no precipitation falls on you.
@@ -477,9 +485,9 @@ export class WeatherSystem implements WorldUpdatable {
     L.snow.update(on ? c.snow * high : 0, d, wx * windSpeed, wz * windSpeed, 1 + blizzard * 1.5);
     L.drift.update(on ? c.snow * Math.min(1, blizzard) * high : 0, d, wx * windSpeed, wz * windSpeed);
     L.ash.update(on ? c.ash : 0, d, wx * windSpeed, wz * windSpeed);
-    L.ember.update(on ? c.ash * 0.8 : 0, d, wx * windSpeed, wz * windSpeed);
+    L.ember.update(decor ? c.ash * 0.8 : 0, d, wx * windSpeed, wz * windSpeed);
     L.sand.update(on ? c.sand : 0, d, wx * windSpeed, wz * windSpeed);
-    L.leaves.update(on ? c.leaves * 0.9 : 0, d, wx * windSpeed, wz * windSpeed);
+    L.leaves.update(decor ? c.leaves * 0.9 : 0, d, wx * windSpeed, wz * windSpeed);
   }
 
   /** New session / long travel: re-pick the regional weather and apply it instantly. */

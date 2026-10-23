@@ -50,8 +50,51 @@ export function faceYaw(dx: number, dz: number): number {
 
 const tmpM = new THREE.Matrix4();
 
-function inst(b: ContentBuilder, key: string, factory: () => THREE.BufferGeometry, mat: Mat, t: Parameters<typeof matrixFor>[0], castShadow = true): void {
-  b.instance(key, factory, mat as any, matrixFor(t, tmpM), castShadow);
+type Xf = Parameters<typeof matrixFor>[0];
+interface PendingProps {
+  factory: () => THREE.BufferGeometry;
+  mat: Mat;
+  castShadow: boolean;
+  xf: Xf[];
+}
+const pendingProps = new WeakMap<ContentBuilder, Map<string, PendingProps>>();
+
+/**
+ * Repeated prop (deferred): resolved by flushProps() when the zone finishes —
+ * kinds with few copies are merged into the material batches (no extra draw
+ * call), numerous ones become one InstancedMesh per kind.
+ */
+function inst(b: ContentBuilder, key: string, factory: () => THREE.BufferGeometry, mat: Mat, t: Xf, castShadow = true): void {
+  let m = pendingProps.get(b);
+  if (!m) {
+    m = new Map();
+    pendingProps.set(b, m);
+  }
+  let p = m.get(key);
+  if (!p) {
+    p = { factory, mat, castShadow, xf: [] };
+    m.set(key, p);
+  }
+  p.xf.push({ ...t });
+}
+
+/** Public form of the deferred repeated-prop helper (see inst). */
+export const repeatProp = inst;
+
+/** Resolve a builder's deferred props (call right before builder.finish()). */
+export function flushProps(b: ContentBuilder, maxMerge = 40): void {
+  const m = pendingProps.get(b);
+  if (!m) return;
+  pendingProps.delete(b);
+  for (const [key, p] of m) {
+    if (p.xf.length <= maxMerge) {
+      const geo = p.factory();
+      for (const t of p.xf) b.mesh(p.mat as any, geo, t, { castShadow: p.castShadow });
+      geo.dispose();
+    } else {
+      for (const t of p.xf) b.instance(key, p.factory, p.mat as any, matrixFor(t, tmpM), p.castShadow);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -118,7 +118,8 @@ float camD = length( instPos.xz - cameraPosition.xz );
 #endif
 float inside = 1.0 - smoothstep( uCrown.x * instScale * 0.8, uCrown.x * instScale * 1.25 + 0.5, camD );
 inside *= step( instPos.y - 1.0, cameraPosition.y ) * step( cameraPosition.y, instPos.y + uCrown.y * instScale + 1.5 );
-vSeeThrough = 1.0 - 0.8 * inside;
+// Fully gone while the camera is inside it (a partial screen-door reads as noise).
+vSeeThrough = 1.0 - inside;
 vFadeIn = clamp( ( camD - uFade.x ) / max( uFade.y - uFade.x, 1e-3 ), 0.0, 1.0 );
 vFadeOut = 1.0 - clamp( ( camD - uFade.z ) / max( uFade.w - uFade.z, 1e-3 ), 0.0, 1.0 );
 mvPosition = modelViewMatrix * mvPosition;
@@ -150,11 +151,13 @@ function createVegMaterial(flex: number, push: number, crown: THREE.Vector2): TH
   if ( vFadeIn < 1.0 && vFadeIn <= 1.0 - vegDither ) discard;
   if ( vFadeOut < 1.0 && vFadeOut <= vegDither ) discard;
   if ( vSeeThrough < 1.0 && vSeeThrough <= vegDither ) discard;
-  // Never fill the screen with a leaf right in front of the lens.
-  if ( length( vViewPosition ) < 1.3 ) discard;`,
+  // Never fill the screen with a leaf right in front of the lens: plants between
+  // the third-person camera and the player dissolve (dithered) as they get close.
+  float vegNear = smoothstep( 1.1, 2.3, length( vViewPosition ) );
+  if ( vegNear < 1.0 && vegNear <= vegDither ) discard;`,
       );
   };
-  mat.customProgramCacheKey = () => 'veg-v3';
+  mat.customProgramCacheKey = () => 'veg-v5';
   return mat;
 }
 

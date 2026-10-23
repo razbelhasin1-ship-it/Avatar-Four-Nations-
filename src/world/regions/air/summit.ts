@@ -7,6 +7,7 @@ import * as G from './geom';
 import * as P from './parts';
 import { am, type Frame, type Kit, type P2 } from './parts';
 import { AIR_SPOTS, SUMMIT, Y0, sl, polar } from './layout';
+import { BELL_PAVILION, buildGrounds } from './grounds';
 
 /**
  * The Southern Air Temple summit (plateau 'air_temple', flat at y = 330 out to
@@ -38,6 +39,15 @@ export class SouthernAirTemple extends AirRegion {
   readonly center = SUMMIT;
   readonly loadRadius = 700;
 
+  /**
+   * One district for the whole summit: the temple is nearly always seen as a
+   * whole, so merging everything per material keeps draw calls low (the merge
+   * itself is still time-sliced builder by builder).
+   */
+  protected override districtFor(): string {
+    return 'summit';
+  }
+
   protected parts(_ctx: GameContext): Array<[string, () => void]> {
     return [
       ['court', () => this.buildCourt()],
@@ -53,6 +63,7 @@ export class SouthernAirTemple extends AirRegion {
       ['garden', () => this.buildGarden()],
       ['rim', () => this.buildRim()],
       ['quarters', () => this.buildQuarters()],
+      ['grounds', () => buildGrounds((name, c, r, o) => this.zone(name, c, r, o))],
     ];
   }
 
@@ -105,6 +116,10 @@ export class SouthernAirTemple extends AirRegion {
     reg('air_gong', gong, Y0 + 1.6, 2.6, 'Strike the temple gong', 4, () => {
       ctx.audio.play('amb.bell', { position: { x: gong.x, y: Y0 + 1.8, z: gong.z }, volume: 1, range: 160 });
       ctx.events.emit('ui:notify', { text: 'The gong\'s note rolls out over the sea of clouds.', kind: 'info', duration: 3 });
+    });
+    reg('air_great_bell', BELL_PAVILION, Y0 + 1.2, 3.0, 'Ring the great bell', 6, () => {
+      ctx.audio.play('amb.bell', { position: { x: BELL_PAVILION.x, y: Y0 + 2.5, z: BELL_PAVILION.z }, volume: 1, range: 220 });
+      ctx.events.emit('ui:notify', { text: 'The great bell sounds across the summit. Somewhere below, a sky bison answers.', kind: 'info', duration: 3 });
     });
     const wheels = sl(-27.6, 44);
     reg('air_prayer_wheels', wheels, Y0 + 1, 3.2, 'Spin the prayer wheels', 60, () => {

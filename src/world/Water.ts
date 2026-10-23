@@ -88,6 +88,7 @@ uniform float uFoam;
 uniform float uMarsh;
 uniform float uHot;
 uniform float uFarOpaque;
+uniform vec4 uInland;
 uniform sampler2D uWaterTex;
 varying vec3 vWorld;
 varying vec2 vUv;
@@ -98,9 +99,14 @@ varying vec3 vWaveN;
 varying float vCrest;
 void main() {
   vec2 p = vWorld.xz;
+  // Inland basins below sea level (the swamp) hold their own water: no sea there.
+  if (uInland.w > 0.5 && length(p - uInland.xy) < uInland.z) discard;
   float t = uEnvTime;
   float ground = envTerrainHeight(p);
   float depth = max(0.0, vLevel - ground);
+  // Narrow river channels are only a few height-texture texels wide (4 m), so the
+  // sampled bed reads too shallow: rivers also assume a cross-section deepest mid-stream.
+  if (uFlowSpeed > 0.0) depth = max(depth, (1.0 - abs(vUv.x - 0.5) * 2.0) * 2.4);
   float camDist = length(cameraPosition - vWorld);
   // Detail normals: two drifting ripple layers from the water texture (+ flow-aligned for rivers).
   vec4 n1 = texture2D(uWaterTex, p * 0.031 + vec2(t * 0.011, t * 0.007));
@@ -109,11 +115,13 @@ void main() {
   float flowSpd = uFlowSpeed * (1.0 + vRapid * 2.2 + vFall * 4.0);
   vec4 n3 = vec4(0.5);
   if (uFlowSpeed > 0.0) {
-    n3 = texture2D(uWaterTex, vec2(vUv.x * 0.45, vUv.y * 0.09 - t * flowSpd * 0.09));
+    n3 = texture2D(uWaterTex, vec2(vUv.x * 0.45, vUv.y * 0.09 - t * flowSpd * 0.02));
     g += (n3.rg - 0.5) * (1.0 + vRapid * 1.5);
   }
   float detailFade = smoothstep(260.0, 20.0, camDist);
-  vec3 n = normalize(vWaveN + vec3(-g.x, 0.0, -g.y) * 0.2 * detailFade);
+  // Inland water (rivers, lakes, marsh) has no swell: stronger ripple normals carry its texture.
+  float inland = 1.0 - uFarOpaque;
+  vec3 n = normalize(vWaveN + vec3(-g.x, 0.0, -g.y) * mix(0.2, 0.36, inland) * detailFade);
   vec3 V = normalize(cameraPosition - vWorld);
   float ndv = max(dot(n, V), 0.0);
   float fres = 0.02 + 0.98 * pow(1.0 - ndv, 5.0);
@@ -128,6 +136,11 @@ void main() {
   body += shallow * sss * uDaylight;
   vec3 R = reflect(-V, n);
   vec3 refl = envSkyColor(R) * mix(1.0, 0.55, uMarsh);
+  // Inland water mirrors its darker banks and tree lines near the horizon, so
+  // ripples read as light / dark flecks instead of a flat sky tint.
+  refl *= mix(1.0, mix(0.42, 1.0, smoothstep(0.02, 0.32, R.y)), inland);
+  // Swamp water is a dark, tea-green mirror rather than a sky-blue one.
+  refl = mix(refl, refl * vec3(0.5, 0.62, 0.46), uMarsh * 0.7);
   vec3 col = mix(body, refl, fres * mix(0.85, 0.45, uMarsh));
   vec3 H = normalize(uSunDir + V);
   float nh = max(dot(n, H), 0.0);
@@ -148,6 +161,14 @@ void main() {
     riverFoam = smoothstep(0.86, 0.98, streak) * 0.08 * (0.3 + edge) + edge * 0.28 * smoothstep(0.45, 0.85, streak);
     riverFoam += vRapid * smoothstep(0.5, 0.8, n3.a) * 0.7;
     riverFoam += vFall * (0.6 + 0.4 * texture2D(uWaterTex, vec2(vUv.x * 1.6, vUv.y * 0.05 - t * 0.8)).b);
+    // Visible current: long sheen streaks and thin foam lines drifting downstream,
+    // and a churned foam band where the water shallows against the banks.
+    float sheen = texture2D(uWaterTex, vec2(vUv.x * 0.8 + 0.31, vUv.y * 0.035 - t * flowSpd * 0.007)).a;
+    col += (sheen - 0.5) * 0.22 * (refl * 0.8 + 0.12) * detailFade;
+    float lines = smoothstep(0.68, 0.82, texture2D(uWaterTex, vec2(vUv.x * 1.3 + 0.13, vUv.y * 0.05 - t * flowSpd * 0.01)).b);
+    riverFoam += lines * 0.12 * detailFade * (0.4 + 0.6 * smoothstep(0.3, 0.6, sheen));
+    float bankB = texture2D(uWaterTex, vec2(vUv.x * 2.0 + 0.5, vUv.y * 0.12 - t * flowSpd * 0.03)).b;
+    riverFoam += smoothstep(0.75, 0.12, depth) * smoothstep(0.35, 0.7, bankB) * 0.55;
   }
   float foam = clamp((shore + crest) * uFoam + riverFoam, 0.0, 1.0);
   // Marsh: duckweed and floating algae.
@@ -155,7 +176,10 @@ void main() {
   if (uMarsh > 0.0) {
     float w1 = texture2D(uWaterTex, p * 0.0071 + vec2(t * 0.0003, 0.0)).a;
     float w2 = n2.a;
-    weed = smoothstep(0.56, 0.64, w1) * (0.7 + 0.3 * w2);
+    // Duckweed rafts, denser in the shallows around banks and roots.
+    float shallowK = 1.0 - smoothstep(0.2, 1.6, depth);
+    weed = smoothstep(0.55, 0.63, w1 + shallowK * 0.12) * (0.7 + 0.3 * w2);
+    weed = max(weed, smoothstep(0.62, 0.7, texture2D(uWaterTex, p * 0.21).b) * shallowK * 0.85);
     col = mix(col, vec3(0.2, 0.3, 0.07) * (0.6 + 0.5 * w2) * (0.4 + 0.6 * uDaylight), weed * uMarsh);
   }
   vec3 foamCol = vec3(0.92, 0.96, 0.98) * (0.35 + 0.65 * max(uDaylight, 0.12)) + uSunColor * 0.08;
@@ -241,6 +265,7 @@ export function createWaterMaterial(o: Partial<WaterMaterialOptions> = {}): THRE
       uMarsh: { value: o.marsh ?? 0 },
       uHot: { value: o.hot ?? 0 },
       uFarOpaque: { value: o.farOpaque ?? 0 },
+      uInland: { value: new THREE.Vector4(0, 0, 0, 0) },
     },
   ]);
   // Shared texture assigned after merge (merge would clone it).
@@ -345,6 +370,7 @@ export class WaterRenderer {
     this.group.name = 'water';
     this.oceanMat = createWaterMaterial({ shallow: '#3fb7c0', deep: '#0b3d63', absorb: 0.16, opacity: 0.82, waveAmp: 0.85, foam: 1, farOpaque: 1 });
     this.materials.push(this.oceanMat);
+    this.oceanMat.uniforms.uInland.value.set(MARSH.x, MARSH.z, MARSH.r * 0.86, 1);
     this.ocean = new THREE.Mesh(buildOceanGeometry(72, 96, 3, 3600), this.oceanMat);
     this.ocean.position.y = SEA_LEVEL;
     this.ocean.renderOrder = 1;
@@ -361,9 +387,14 @@ export class WaterRenderer {
   }
 
   private buildRivers(): void {
-    const flowMat = createWaterMaterial({ shallow: '#4aa7a6', deep: '#145868', absorb: 0.45, opacity: 0.78, waveAmp: 0, flowSpeed: 1.6, foam: 0.5 });
+    const flowMat = createWaterMaterial({ shallow: '#4c9d92', deep: '#164c58', absorb: 0.42, opacity: 0.8, waveAmp: 0, flowSpeed: 1.6, foam: 0.5 });
     this.materials.push(flowMat);
+    // Slow, tea-dark channels with duckweed through the swamp (match the marsh).
+    const swampFlowMat = createWaterMaterial({ shallow: '#5d6a37', deep: '#1f2a17', absorb: 0.9, opacity: 0.9, waveAmp: 0, flowSpeed: 0.35, foam: 0.1, marsh: 1 });
+    this.materials.push(swampFlowMat);
     for (const r of getRiverRuntime()) {
+      const mid = r.line.pointAt(r.line.length * 0.5);
+      const swampy = Math.hypot(mid.x - MARSH.x, mid.z - MARSH.z) < MARSH.r * 1.2;
       // Sample at the profile spacing so waterfalls become single steep quads.
       const step = r.spacing;
       const n = Math.max(2, Math.ceil(r.line.length / step) + 1);
@@ -396,7 +427,9 @@ export class WaterRenderer {
       const idx: number[] = [];
       for (let i = 0; i < n - 1; i++) {
         const a = i * 2, b = a + 1, c = a + 2, d = a + 3;
-        idx.push(a, b, c, b, d, c);
+        // Counter-clockwise seen from above (a = left bank, b = right bank) so the
+        // front faces point up; the old order faced down and was back-face culled.
+        idx.push(a, c, b, b, c, d);
       }
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -405,7 +438,7 @@ export class WaterRenderer {
       geo.setAttribute('fall', new THREE.BufferAttribute(fall, 1));
       geo.setIndex(idx);
       geo.computeBoundingSphere();
-      const mesh = new THREE.Mesh(geo, r.frozen ? this.iceMaterial : flowMat);
+      const mesh = new THREE.Mesh(geo, r.frozen ? this.iceMaterial : swampy ? swampFlowMat : flowMat);
       mesh.name = `river_${r.id}`;
       mesh.renderOrder = 2;
       if (r.frozen) mesh.position.y = ICE_TOP - 0.04;

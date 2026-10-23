@@ -6,6 +6,7 @@ import { EnvFXSystem } from './EnvFX';
 import { GrassSystem } from './Grass';
 import { HorizonSystem } from './Horizon';
 import { VegetationSystem } from './Vegetation';
+import { WaterfallFXSystem } from './WaterfallFX';
 import { WEATHER_TYPES, WeatherSystem, type WeatherType } from './Weather';
 
 /**
@@ -23,6 +24,7 @@ export class EnvironmentSystem implements GameSystem {
   cloudSea!: CloudSeaSystem;
   horizon!: HorizonSystem;
   ambient!: AmbientSystem;
+  waterfalls!: WaterfallFXSystem;
   private ctx!: GameContext;
 
   init(ctx: GameContext): void {
@@ -34,11 +36,18 @@ export class EnvironmentSystem implements GameSystem {
     this.cloudSea = new CloudSeaSystem(ctx, ctx.world.sky.noiseTexture);
     this.horizon = new HorizonSystem(ctx);
     this.ambient = new AmbientSystem(ctx);
+    this.waterfalls = new WaterfallFXSystem(ctx);
     ctx.world.addUpdatable(this.cloudSea);
-    ctx.world.addUpdatable({ update: () => (this.weather.fogBoost = this.cloudSea.mist) });
+    ctx.world.addUpdatable({
+      update: () => {
+        this.weather.fogBoost = this.cloudSea.mist;
+        this.weather.fogClear = this.cloudSea.above;
+      },
+    });
     ctx.world.addUpdatable(this.weather);
     ctx.world.addUpdatable(this.horizon);
     ctx.world.addUpdatable(this.ambient);
+    ctx.world.addUpdatable(this.waterfalls);
     ctx.world.addUpdatable(this.vegetation);
     ctx.world.addUpdatable(this.grass);
     ctx.world.addUpdatable(this.fx);
@@ -118,9 +127,14 @@ export class EnvironmentSystem implements GameSystem {
       weatherState: () => this.weather.state(),
       ambient: () => this.ambient.state(),
       cloudSeaBand: () => this.cloudSea.band,
+      /** Cloud sea state: mist (camera inside the deck) and above (on the massif over the deck). */
+      cloudSea: () => ({ band: this.cloudSea.band, mist: this.cloudSea.mist, above: this.cloudSea.above, visible: this.cloudSea.group.visible }),
+      /** River waterfall sites (spray / mist emitters) near a point, or all of them. */
+      waterfalls: (x?: number, z?: number, r = 400) =>
+        (x === undefined || z === undefined ? this.waterfalls.sites : this.waterfalls.near(x, z, r)).map((s) => ({ river: s.riverId, x: +s.base.x.toFixed(1), y: +s.base.y.toFixed(1), z: +s.base.z.toFixed(1), drop: +s.drop.toFixed(1), width: +s.width.toFixed(1) })),
       /** Toggle subsystems for A/B screenshots: toggle('grass' | 'vegetation' | 'cloudSea' | 'horizon' | 'ambient' | 'decals', on). */
-      toggle: (what: 'grass' | 'vegetation' | 'cloudSea' | 'horizon' | 'ambient' | 'decals', on: boolean) => {
-        const m = { grass: this.grass, vegetation: this.vegetation, cloudSea: this.cloudSea, horizon: this.horizon, ambient: this.ambient, decals: this.fx } as const;
+      toggle: (what: 'grass' | 'vegetation' | 'cloudSea' | 'horizon' | 'ambient' | 'decals' | 'waterfalls', on: boolean) => {
+        const m = { grass: this.grass, vegetation: this.vegetation, cloudSea: this.cloudSea, horizon: this.horizon, ambient: this.ambient, decals: this.fx, waterfalls: this.waterfalls } as const;
         m[what].enabled = on;
       },
     };

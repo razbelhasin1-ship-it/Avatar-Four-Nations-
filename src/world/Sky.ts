@@ -120,17 +120,17 @@ interface SkyKey {
 }
 
 const KEYS: SkyKey[] = [
-  { t: 0, zenith: '#050a1a', horizon: '#18233f', sun: '#8fa4d8', sunI: 0.42, hemiSky: '#3a4c7a', hemiGround: '#1c1c26', hemiI: 0.72 },
-  { t: 4.6, zenith: '#0b1430', horizon: '#363a62', sun: '#8fa4d8', sunI: 0.28, hemiSky: '#3a4670', hemiGround: '#1c1a22', hemiI: 0.5 },
-  { t: 5.6, zenith: '#26386c', horizon: '#ef9e78', sun: '#ffa268', sunI: 0.75, hemiSky: '#9a8fb5', hemiGround: '#4a3a33', hemiI: 0.72 },
-  { t: 6.6, zenith: '#4b78c0', horizon: '#ffc797', sun: '#ffc288', sunI: 1.8, hemiSky: '#b9c4e0', hemiGround: '#6b5845', hemiI: 0.95 },
-  { t: 8.2, zenith: '#4885d6', horizon: '#d2e2f1', sun: '#ffe6c4', sunI: 2.45, hemiSky: '#c8dcf5', hemiGround: '#6e5c46', hemiI: 1.05 },
-  { t: 12, zenith: '#3f7fd6', horizon: '#c6dcf0', sun: '#fff3e0', sunI: 2.85, hemiSky: '#cfe2fa', hemiGround: '#6b5a45', hemiI: 1.15 },
-  { t: 16, zenith: '#4580d0', horizon: '#d9e0e6', sun: '#ffe0b4', sunI: 2.55, hemiSky: '#c9d6ea', hemiGround: '#70593f', hemiI: 1.05 },
-  { t: 18, zenith: '#4a6db2', horizon: '#ffc183', sun: '#ffb068', sunI: 2.0, hemiSky: '#c0b8c8', hemiGround: '#6e5038', hemiI: 0.92 },
-  { t: 19.2, zenith: '#2b386e', horizon: '#ff8d58', sun: '#ff8648', sunI: 1.0, hemiSky: '#8d7898', hemiGround: '#42302a', hemiI: 0.72 },
-  { t: 20.4, zenith: '#0f1838', horizon: '#47395f', sun: '#8a98c8', sunI: 0.4, hemiSky: '#3a4a78', hemiGround: '#1e1e28', hemiI: 0.7 },
-  { t: 24, zenith: '#050a1a', horizon: '#18233f', sun: '#8fa4d8', sunI: 0.42, hemiSky: '#3a4c7a', hemiGround: '#1c1c26', hemiI: 0.72 },
+  { t: 0, zenith: '#050a1a', horizon: '#18233f', sun: '#9fb4ec', sunI: 0.95, hemiSky: '#5b6fa6', hemiGround: '#2c3048', hemiI: 1.45 },
+  { t: 4.6, zenith: '#0b1430', horizon: '#363a62', sun: '#9fb0e0', sunI: 0.7, hemiSky: '#5a6698', hemiGround: '#2c2a36', hemiI: 1.3 },
+  { t: 5.6, zenith: '#26386c', horizon: '#ef9e78', sun: '#ffa268', sunI: 0.75, hemiSky: '#9a8fb5', hemiGround: '#5a463c', hemiI: 1.15 },
+  { t: 6.6, zenith: '#4b78c0', horizon: '#ffc797', sun: '#ffc288', sunI: 1.8, hemiSky: '#b9c4e0', hemiGround: '#7a6450', hemiI: 1.45 },
+  { t: 8.2, zenith: '#4885d6', horizon: '#d2e2f1', sun: '#ffe6c4', sunI: 2.45, hemiSky: '#c8dcf5', hemiGround: '#7a6650', hemiI: 1.3 },
+  { t: 12, zenith: '#3f7fd6', horizon: '#c6dcf0', sun: '#fff3e0', sunI: 2.85, hemiSky: '#cfe2fa', hemiGround: '#776450', hemiI: 1.38 },
+  { t: 16, zenith: '#4580d0', horizon: '#d9e0e6', sun: '#ffe0b4', sunI: 2.55, hemiSky: '#c9d6ea', hemiGround: '#7c644a', hemiI: 1.3 },
+  { t: 18, zenith: '#4a6db2', horizon: '#ffc183', sun: '#ffb068', sunI: 2.0, hemiSky: '#c0b8c8', hemiGround: '#7a5a40', hemiI: 1.38 },
+  { t: 19.2, zenith: '#2b386e', horizon: '#ff8d58', sun: '#ff8648', sunI: 1.0, hemiSky: '#8d7898', hemiGround: '#543c32', hemiI: 1.15 },
+  { t: 20.4, zenith: '#0f1838', horizon: '#47395f', sun: '#9aa8d8', sunI: 0.75, hemiSky: '#56679c', hemiGround: '#2c2c3c', hemiI: 1.35 },
+  { t: 24, zenith: '#050a1a', horizon: '#18233f', sun: '#9fb4ec', sunI: 0.95, hemiSky: '#5b6fa6', hemiGround: '#2c3048', hemiI: 1.45 },
 ];
 
 export interface SkyMood {
@@ -346,7 +346,7 @@ export class SkySystem {
     e.uSkyHorizon.value.copy(this.horizonColor);
     e.uDaylight.value = this.daylight;
     const golden = clamp01(1 - Math.abs(elev - 0.12) / 0.3);
-    e.envFogSun.value.set(this.sunColor.r * 1.1, this.sunColor.g * 0.95, this.sunColor.b * 0.8, (0.22 + 0.45 * golden) * (1 - night) * (1 - overcast * 0.8));
+    e.envFogSun.value.set(this.sunColor.r * 1.05, this.sunColor.g * 0.97, this.sunColor.b * 0.88, (0.14 + 0.22 * golden) * (1 - night) * (1 - overcast * 0.8));
     e.envFogSunDir.value.copy(trueSun);
 
     this.dome.position.copy(camera.position);

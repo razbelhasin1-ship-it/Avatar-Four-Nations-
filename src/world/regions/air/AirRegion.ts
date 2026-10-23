@@ -7,7 +7,7 @@ import type { RegionContent } from '../../RegionContent';
 import { allSpots } from '../../Spots';
 import type { P2 } from '../../WorldLayout';
 import { acquireAirMaterials, airMaterialIfCreated, releaseAirMaterials } from './materials';
-import type { Kit } from './parts';
+import { flushProps, type Kit } from './parts';
 
 /**
  * Base class for the Air Nomad region modules (Southern Air Temple summit,
@@ -92,13 +92,16 @@ export abstract class AirRegion implements RegionContent {
   private ambientTimer = 0;
   buildMs = 0;
   finishMs = 0;
+  /** Longest single merge step (ms) — the worst frame cost of a time-sliced build. */
+  maxFinishStepMs = 0;
   /** Distance (m) within which a zone's props are drawn (scaled by settings). */
   protected propRange = 170;
 
   /** Per-part construction timings (ms). */
   readonly timings: Record<string, number> = {};
   private queue: Array<[string, () => void]> = [];
-  private finishQueue: Zone[] | null = null;
+  /** Builders still to merge (one per time slice step: main, props, extra of each zone). */
+  private finishQueue: Array<{ z: Zone; b: ContentBuilder }> | null = null;
   private building = false;
 
   /**
@@ -134,15 +137,16 @@ export abstract class AirRegion implements RegionContent {
       this.buildMs += ms;
     }
     if (this.queue.length) return;
-    if (!this.finishQueue) this.finishQueue = [...this.zones];
+    if (!this.finishQueue) this.finishQueue = this.zones.flatMap((z) => z.builders.map((b) => ({ z, b })));
     while (this.finishQueue.length && performance.now() - t0 < budget) {
       const t = performance.now();
-      const z = this.finishQueue.shift()!;
-      for (const b of z.builders) b.finish();
+      const { z, b } = this.finishQueue.shift()!;
+      flushProps(b);
+      b.finish();
       // Only architecture casts shadows; small props would cost a second pass for little gain.
-      z.groups.props.traverse((o) => (o.castShadow = false));
-      z.groups.extra.traverse((o) => (o.castShadow = false));
+      if (b !== z.kit.main) b.group.traverse((o) => (o.castShadow = false));
       const ms = performance.now() - t;
+      this.maxFinishStepMs = Math.max(this.maxFinishStepMs, ms);
       this.finishMs += ms;
       this.buildMs += ms;
     }
@@ -172,8 +176,9 @@ export abstract class AirRegion implements RegionContent {
    * circle grows to cover all its zones.
    */
   protected zone(name: string, center: P2, radius: number, o: { far?: boolean; district?: string } = {}): Kit {
-    if (o.district) {
-      const d = this.zones.find((z) => z.name === o.district);
+    const district = this.districtFor(name, center, o.district);
+    if (district) {
+      const d = this.zones.find((z) => z.name === district);
       if (d) {
         // Grow the bounding circle to include this zone.
         const dist = Math.hypot(center.x - d.center.x, center.z - d.center.z);
@@ -185,7 +190,7 @@ export abstract class AirRegion implements RegionContent {
         }
         return d.kit;
       }
-      name = o.district;
+      name = district;
     }
     const root = new THREE.Group();
     root.name = `${this.id}:${name}`;
@@ -208,6 +213,16 @@ export abstract class AirRegion implements RegionContent {
     };
     this.zones.push({ name, kit, builders: [main, props, extra], groups, center, radius, far: o.far ?? true });
     return kit;
+  }
+
+  /**
+   * District (shared builder set) of a new zone. Fewer districts mean fewer
+   * draw calls (one merged mesh per material and one instanced mesh per prop
+   * kind per district) at the cost of coarser culling; regions override this
+   * to group their zones.
+   */
+  protected districtFor(_name: string, _center: P2, requested?: string): string | undefined {
+    return requested;
   }
 
   /** Track a custom object (added under `parent`) for disposal. */
@@ -380,6 +395,7 @@ export abstract class AirRegion implements RegionContent {
       built: this.built,
       buildMs: +this.buildMs.toFixed(1),
       finishMs: +this.finishMs.toFixed(1),
+      maxFinishStepMs: +this.maxFinishStepMs.toFixed(1),
       constructing: this.building,
       timings: this.timings,
       detail: this.detail,

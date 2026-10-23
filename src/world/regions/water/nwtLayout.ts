@@ -66,9 +66,15 @@ export const RIVER_ARCH = { z0: -1470, z1: -1430, top: 21.5 };
 
 // --- Water -------------------------------------------------------------------
 
+/**
+ * Where the two outer canals meet the open sea (north faces of the sea locks):
+ * causeway jetties carry them across the beach and the frozen shelf.
+ */
+export const SEA_END = { grand: -1932, harbor: -1900 };
+
 /** Canal water areas (holes in the podium). Water at WL. */
 export const CANALS: Record<string, Rect> = {
-  grand_out: [-228, -1836, -212, -1756],
+  grand_out: [-228, SEA_END.grand, -212, -1756],
   grand_gate: [-228, -1756, -212, -1744],
   grand: [-228, -1744, -212, -1636],
   basin: [-242, -1636, -198, -1620],
@@ -77,15 +83,15 @@ export const CANALS: Record<string, Rect> = {
   east: [-150, -1702, -140, -1606],
   harbor: [-104, -1740, -46, -1644],
   harbor_gate: [-84, -1756, -66, -1740],
-  harbor_out: [-84, -1836, -66, -1756],
+  harbor_out: [-84, SEA_END.harbor, -66, -1756],
 };
 
 /** Outer jetties (podium outside the north wall, either side of the canals). */
 export const JETTIES: Rect[] = [
-  [-240, -1834, -228, -1756],
-  [-212, -1834, -200, -1756],
-  [-96, -1834, -84, -1756],
-  [-66, -1834, -54, -1756],
+  [-240, SEA_END.grand, -228, -1756],
+  [-212, SEA_END.grand, -200, -1756],
+  [-96, SEA_END.harbor, -84, -1756],
+  [-66, SEA_END.harbor, -54, -1756],
 ];
 
 // --- Districts -----------------------------------------------------------------
@@ -175,6 +181,11 @@ defineSpots({
   dock_nwt_harbor: { x: -60, z: -1680, y: L1, yaw: -Math.PI / 2, r: 5, label: 'Harbor Canals', region: R },
   dock_nwt_grand_canal: { x: -234, z: -1626, y: L1, yaw: 0, r: 3, label: 'Moon Basin Landing', region: R },
   dock_nwt_outer: { x: -234, z: -1800, y: L1, yaw: Math.PI, r: 3, label: 'Outer Jetty', region: R },
+  dock_nwt_sea_gate: { x: -220, z: SEA_END.grand - 4.5, y: L1, yaw: Math.PI, r: 6, label: 'Sea Gate Lock', region: R },
+  dock_nwt_harbor_mouth: { x: -75, z: SEA_END.harbor - 4.5, y: L1, yaw: Math.PI, r: 6, label: 'Harbor Mouth', region: R },
+  // The two causeways across the beach (their radius also keeps trees off them).
+  bridge_nwt_sea_causeway: { x: -220, z: -1872, y: L1, yaw: Math.PI, r: 40, label: 'Sea Causeway', region: R },
+  bridge_nwt_harbor_causeway: { x: -75, z: -1858, y: L1, yaw: Math.PI, r: 34, label: 'Harbor Causeway', region: R },
   bridge_nwt_gate: { x: -220, z: -1735, y: L1, r: 6, label: 'Great Ice Gate', region: R },
   shrine_spirit_oasis: { x: -120, z: -1446, y: OASIS_FLOOR, r: 4, label: 'Spirit Oasis', region: R },
   viewpoint_nwt_wall: { x: -220, z: -1750, y: WALL.nTop, yaw: 0, r: 4, label: 'Sea Wall Lookout', region: R },

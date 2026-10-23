@@ -646,5 +646,85 @@ export function buildCaves(k: NwtKit): void {
   }
   iceSpikes(k.props, entrance.x + nx * (W / 2 + 4), heightAt(entrance.x + nx * (W / 2 + 4), entrance.z), entrance.z + nz * (W / 2 + 4), 4, 61);
   iceSpikes(k.props, entrance.x - nx * (W / 2 + 4), heightAt(entrance.x - nx * (W / 2 + 4), entrance.z), entrance.z - nz * (W / 2 + 4), 3.5, 62);
-  void crystal;
+
+  // Snow-buried entrance: a drift over the arch and ice boulders flanking it.
+  {
+    const ya2 = ys[0];
+    const top = boulder(1300, W / 2 + 5, 2.6, 3.2, 1);
+    cb.mesh(wtMat('snow'), top, { x: entrance.x - ux * 0.6, y: ya2 + H + 3.2, z: entrance.z - uz * 0.6, yaw: yawIn });
+    top.dispose();
+    for (const s of [-1, 1]) {
+      const bx = entrance.x - ux * 1.2 + nx * s * (W / 2 + 4.5), bz = entrance.z - uz * 1.2 + nz * s * (W / 2 + 4.5);
+      const b = boulder(1310 + (s > 0 ? 1 : 0), 3.2, 4.5, 3.0, 1);
+      cb.mesh(wtMat('ice_massive'), b, { x: bx, y: ya2 + 1.2, z: bz, yaw: yawIn + s * 0.4 });
+      b.dispose();
+      cb.collider({ shape: 'cylinder', x: bx, y: ya2 + 2.5, z: bz, r: 2.7, hy: 3.2, walkable: false, solid: true });
+    }
+  }
+
+  // Glacier cover: lumpy snow / ice mounds over and beside the tunnel so it reads
+  // as a glacier snout from outside (kept outside the walls and the vault), plus
+  // a walkable roof collider so nobody can drop through the vault from the slope.
+  for (let i = 0; i < STEPS; i++) {
+    const t = (i + 0.5) / STEPS;
+    const px = entrance.x + ux * len * t, pz = entrance.z + uz * len * t;
+    const fy = (ys[i] + ys[i + 1]) / 2;
+    cb.collider({ shape: 'box', x: px, y: fy + H + 0.9, z: pz, hx: segLen / 2 + 0.3, hy: 0.8, hz: W / 2 + 2.5, yaw: Math.atan2(-uz, ux), walkable: true, solid: true, surface: 'snow' });
+    if (i % 2 === 1) continue;
+    const top = boulder(1200 + i, W / 2 + 6, 4.5, segLen * 1.7, 1);
+    cb.mesh(wtMat('snow'), top, { x: px + ux * segLen * 0.5, y: fy + H + 4.6, z: pz + uz * segLen * 0.5, yaw: yawIn }, { castShadow: true });
+    top.dispose();
+    for (const s of [-1, 1]) {
+      const side = boulder(1250 + i * 2 + (s > 0 ? 1 : 0), 4, H / 2 + 2.5, segLen * 1.4, 1);
+      const off = W / 2 + 4.2;
+      cb.mesh(wtMat(i % 4 === 0 ? 'ice_massive' : 'snow'), side, { x: px + ux * segLen * 0.5 + nx * s * off, y: fy + H / 2 - 0.5, z: pz + uz * segLen * 0.5 + nz * s * off, yaw: yawIn });
+      side.dispose();
+    }
+  }
+
+  // Organic ice breaking up the straight walls: boulders hugging the walls
+  // (floor-level ones are solid), glowing veins high up, stalagmites and long
+  // icicle curtains near the walls.
+  const r2 = new Random(311);
+  for (let i = 0; i < STEPS; i++) {
+    const fy = (ys[i] + ys[i + 1]) / 2;
+    for (const s of [-1, 1]) {
+      for (let j = 0; j < 3; j++) {
+        const t = (i + (j + 0.5) / 3) / STEPS;
+        const off = W / 2 + r2.range(0.1, 0.8);
+        const bx = entrance.x + ux * len * t + nx * s * off, bz = entrance.z + uz * len * t + nz * s * off;
+        const sz = r2.range(1.3, 2.3);
+        const low = j !== 1;
+        const by = low ? fy + r2.range(-0.4, 0.3) : fy + r2.range(3.2, 5.8);
+        const b = boulder(900 + i * 11 + j * 3 + (s > 0 ? 1 : 0), sz, sz * r2.range(0.8, 1.4), sz * 0.85, 1);
+        cb.mesh(wtMat(r2.chance(0.35) ? 'ice_trim' : 'ice_massive'), b, { x: bx, y: by, z: bz, yaw: r2.range(0, 6) });
+        b.dispose();
+        if (low) cb.collider({ shape: 'cylinder', x: bx, y: by + sz * 0.5, z: bz, r: sz * 0.75, hy: sz * 0.9, walkable: false, solid: true });
+        else if (r2.chance(0.6)) {
+          const c = crystalCluster(950 + i * 5 + j + (s > 0 ? 2 : 0), r2.range(0.7, 1.2), 4);
+          k.props.mesh(wtMat('lantern_blue'), c, { x: bx - nx * s * sz * 0.7, y: by - 0.4, z: bz - nz * s * sz * 0.7, yaw: r2.range(0, 6), roll: s * 0.9 }, { castShadow: false });
+          c.dispose();
+        }
+      }
+      // Stalagmites and an icicle curtain along this wall.
+      const t = (i + 0.5) / STEPS;
+      const off = W / 2 - 1.2;
+      const gx = entrance.x + ux * len * t + nx * s * off, gz = entrance.z + uz * len * t + nz * s * off;
+      for (let q = 0; q < 3; q++) {
+        const h = r2.range(0.8, 2.2);
+        k.props.instance('cave_stalagmite', () => crystal(0.32, 1, 0.5), wtMat('ice_clear'),
+          new THREE.Matrix4().compose(V(gx + ux * (q - 1) * 1.3, fy - 0.1, gz + uz * (q - 1) * 1.3), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, r2.range(0, 6), 0)), V(1, h, 1)));
+      }
+      cb.collider({ shape: 'box', x: gx, y: fy + 1, z: gz, hx: 1.9, hy: 1.1, hz: 0.45, yaw: Math.atan2(-uz, ux), walkable: false, solid: true });
+      for (let q = 0; q < 5; q++) {
+        const cx2 = gx + ux * (q - 2) * 0.9 + nx * s * 0.6, cz2 = gz + uz * (q - 2) * 0.9 + nz * s * 0.6;
+        k.props.instance('cave_icicle', () => {
+          const c = new THREE.ConeGeometry(0.22, 1.6, 6);
+          c.rotateX(Math.PI);
+          c.translate(0, -0.8, 0);
+          return c;
+        }, wtMat('ice_clear'), new THREE.Matrix4().compose(V(cx2, fy + H + 0.2, cz2), new THREE.Quaternion(), V(1.2, r2.range(1.2, 2.6), 1.2)), false);
+      }
+    }
+  }
 }

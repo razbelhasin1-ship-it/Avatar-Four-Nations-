@@ -65,6 +65,8 @@ export const AIR_SPOTS: Record<string, Spot> = {
   shrine_air_pavilion: at(-24, -24, { y: Y0 + 0.9, r: 4, label: 'Teal pavilion' }),
   shrine_air_sanctum: at(52, -60.5, { y: F.sanctum + 0.6, r: 2.5, label: 'Sanctum shrine' }),
   shrine_air_avatars: { ...polar(228, 70), y: Y0 + 1.2, r: 6, label: 'Hall of the Avatars', region: R },
+  shrine_air_chortens: pol(95, 77, { y: Y0 + 0.12, r: 8, label: 'Chorten walk (south lawn)' }),
+  shrine_air_bell: at(37.6, -70.6, { y: Y0 + 0.6, r: 4, label: 'Great-bell pavilion' }),
   // --- Viewpoints ------------------------------------------------------------------
   viewpoint_air_meditation_1: pol(70, 94, { y: Y0 + 0.3, yaw: (70 * Math.PI) / 180 - Math.PI / 2, r: 4, label: 'Meditation balcony' }),
   viewpoint_air_meditation_2: pol(95, 94, { y: Y0 + 0.3, r: 4, label: 'Meditation balcony' }),

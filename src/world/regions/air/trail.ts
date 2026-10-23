@@ -7,7 +7,7 @@ import { AIR_DEBUG_EXTRAS, AirRegion } from './AirRegion';
 import * as G from './geom';
 import * as P from './parts';
 import { am, type Kit, type P2 } from './parts';
-import { TRAILHEAD } from './layout';
+import { TRAILHEAD, Y0 } from './layout';
 
 /**
  * The pilgrims' way up to the Southern Air Temple:
@@ -154,6 +154,11 @@ export class AirTempleTrail extends AirRegion {
     ];
   }
 
+  /** One district for the whole trail (fewer draw calls; the merge is time-sliced per builder). */
+  protected override districtFor(): string {
+    return 'trail';
+  }
+
   private initLine(): void {
     const tr = getTrailRuntime().find((t) => t.id === TRAIL_ID);
     if (!tr) return;
@@ -166,15 +171,20 @@ export class AirTempleTrail extends AirRegion {
     // Landing heights: level with the carved trail where the next flight leaves the landing.
     const cornerY: number[] = [];
     for (let i = 1; i < n; i++) cornerY[i] = H(cum[i] + TURN_W);
+    // The last flight tops out inside the summit gate, level with the avenue paving
+    // (walking surface = profile + RISE / 2 = Y0 + 0.125), so there is no lip to climb.
+    const endS = L - 1.5;
+    const endY = Math.max(H(L), Y0);
     const profile = (s: number): number => {
       s = Math.max(0, Math.min(L, s));
+      if (s >= endS) return endY;
       for (let i = 1; i < n; i++) if (Math.abs(s - cum[i]) <= TURN_W) return cornerY[i];
       let i = 0;
       while (i < n - 1 && s > cum[i + 1]) i++;
       const sa = i === 0 ? 0 : cum[i] + TURN_W;
-      const sb = i === n - 1 ? L : cum[i + 1] - TURN_W;
+      const sb = i === n - 1 ? endS : cum[i + 1] - TURN_W;
       const ya = i === 0 ? H(0) : cornerY[i];
-      const yb = i === n - 1 ? H(L) : cornerY[i + 1];
+      const yb = i === n - 1 ? endY : cornerY[i + 1];
       return ya + ((yb - ya) * (s - sa)) / Math.max(1e-6, sb - sa);
     };
     this.line = { points: pts, cum, length: L, height: H, profile, cornerY };
@@ -226,7 +236,8 @@ export class AirTempleTrail extends AirRegion {
       const mid = { x: (f.a.x + f.b.x) / 2, z: (f.a.z + f.b.z) / 2 };
       const k = this.zone(`run${i}`, mid, (f.s1 - f.s0) / 2 + 12, { district: i < 2 ? 'lower' : 'upper' });
       const sA = i === 0 ? f.s0 : f.s0 + TURN_W;
-      const sB = i === n - 1 ? f.s1 - 1.5 : f.s1 - TURN_W;
+      // The last flight runs on (flat) through the gate onto the avenue paving.
+      const sB = i === n - 1 ? f.s1 + 0.8 : f.s1 - TURN_W;
       const yaw = P.alongYaw(f.ux, f.uz);
       const grade = (Pf(sB) - Pf(sA)) / Math.max(1, sB - sA);
       const steps = Math.max(1, Math.round((sB - sA) / (RISE / Math.max(0.05, grade))));

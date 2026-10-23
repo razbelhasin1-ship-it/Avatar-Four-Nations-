@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createTerrainSample, heightAt, polarSeaFactor, sampleTerrain, seaIceField } from './Heightfield';
+import { AIR_SPIRES, createTerrainSample, heightAt, polarSeaFactor, sampleTerrain, seaIceField } from './Heightfield';
 import { attachEnvUniforms, ENV_NOISE_GLSL, ENV_PARS_GLSL } from './env/EnvShared';
 import { createTerrainTexture, TERRAIN_LAYER_SCALE, terrainLayerMeans } from './env/TerrainTextures';
 import { WorldHeightTexture } from './env/WorldHeightTexture';
@@ -210,8 +210,10 @@ const TERRAIN_COLOR = /* glsl */ `
   vec4 dtex = texture(uTerrainTex, vec3(wp.xz / uLayerScale[ml], float(ml)));
   float dl = dot(dtex.rgb, vec3(0.2126, 0.7152, 0.0722));
   float dt = clamp(dl / max(uLayerLum[ml], 0.02), 0.45, 1.7);
-  float macroL = texture(uTerrainTex, vec3(wp.xz / uLayerScale[13], 13.0)).r;
-  col = vVCol.rgb * mix(1.0, dt, 0.75) * (0.9 + 0.2 * macroL);
+  vec4 Ml = texture(uTerrainTex, vec3(wp.xz / uLayerScale[13], 13.0));
+  col = vVCol.rgb * mix(1.0, dt, 0.75) * (0.86 + 0.28 * Ml.r);
+  // Painterly sun-dried patches across meadows (same cue as the detailed path).
+  col *= mix(vec3(1.0), vec3(1.07, 1.03, 0.86), smoothstep(0.5, 0.85, Ml.g) * 0.7 * vSplatA.x);
   H = dtex.a;
   rough = vVCol.a;
   snowW = clamp(vSplatB.x + vSplatB.y, 0.0, 1.0);
@@ -338,6 +340,9 @@ const TERRAIN_NORMAL = /* glsl */ `
 `;
 
 const TERRAIN_OUTPUT = /* glsl */ `
+// Painterly sky fill: shadowed and back-lit ground keeps its colour (dark rock
+// and ash would otherwise crush to black when the sun is behind the slope).
+outgoingLight += diffuseColor.rgb * ( uSkyHorizon * 0.55 + uSkyZenith * 0.25 ) * 0.2 * ( 0.3 + 0.7 * uDaylight );
 #if TERRAIN_DETAIL > 0
 if (terrGloss > 0.02 || terrSparkle > 0.0) {
   vec3 wN = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
@@ -725,6 +730,33 @@ export function buildChunkGeometry(cx: number, cz: number, lod: number): THREE.B
 // Manager
 // ---------------------------------------------------------------------------
 
+/**
+ * Chunks covering the Air Temple needle spires (their whole flared foot) never
+ * drop below LOD 1: the near-vertical columns are the massif's silhouette from
+ * the summit and turn into faceted crystals at 8-16 m spacing. The boundary to
+ * coarser neighbours falls on the gentle foot, so the skirts still close it.
+ */
+const SPIRE_MIN_LOD = (() => {
+  const m = new Map<string, number>();
+  for (const sp of AIR_SPIRES) {
+    const R = sp.r * 2.5 + 8;
+    for (let cz = Math.floor((sp.z - R) / CHUNK_SIZE); cz <= Math.floor((sp.z + R) / CHUNK_SIZE); cz++) {
+      for (let cx = Math.floor((sp.x - R) / CHUNK_SIZE); cx <= Math.floor((sp.x + R) / CHUNK_SIZE); cx++) {
+        const x0 = cx * CHUNK_SIZE, z0 = cz * CHUNK_SIZE;
+        const dx = Math.max(x0 - sp.x, 0, sp.x - (x0 + CHUNK_SIZE));
+        const dz = Math.max(z0 - sp.z, 0, sp.z - (z0 + CHUNK_SIZE));
+        if (dx * dx + dz * dz <= R * R) m.set(chunkKey(cx, cz), 1);
+      }
+    }
+  }
+  return m;
+})();
+
+/** Minimum (finest-allowed-to-coarsen) LOD forced on a chunk, if any (tests / debug). */
+export function chunkMinLod(cx: number, cz: number): number | undefined {
+  return SPIRE_MIN_LOD.get(chunkKey(cx, cz));
+}
+
 export class TerrainManager {
   readonly group = new THREE.Group();
   material: THREE.MeshStandardMaterial;
@@ -789,8 +821,10 @@ export class TerrainManager {
         const mx = (cx + 0.5) * CHUNK_SIZE, mz = (cz + 0.5) * CHUNK_SIZE;
         const d = Math.max(0, Math.hypot(mx - focus.x, mz - focus.z) - CHUNK_SIZE * 0.7);
         if (d > range) continue;
-        const lod = this.lodFor(d);
         const key = chunkKey(cx, cz);
+        let lod = this.lodFor(d);
+        const minLod = d < 1100 ? SPIRE_MIN_LOD.get(key) : undefined;
+        if (minLod !== undefined && lod > minLod) lod = minLod;
         const ch = this.chunks.get(key);
         if (ch) {
           ch.lastUsed = this.frame;

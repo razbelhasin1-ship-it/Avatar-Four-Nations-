@@ -165,6 +165,54 @@ try {
     assert.ok(r.wind.wind > r.clear.wind, JSON.stringify(r));
   });
 
+  await check('rivers face up (visible from above) and waterfalls carry spray', async () => {
+    const r = await h.page.evaluate(async () => {
+      const g = window.__game;
+      const ups = [];
+      g.ctx.scene.traverse((o) => {
+        if (!o.isMesh || !o.name.startsWith('river_')) return;
+        const p = o.geometry.attributes.position.array;
+        const idx = o.geometry.index.array;
+        const v = (i) => [p[i * 3], p[i * 3 + 1], p[i * 3 + 2]];
+        const a = v(idx[0]), b = v(idx[1]), c = v(idx[2]);
+        const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+        const w = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+        ups.push(u[2] * w[0] - u[0] * w[2]); // y of cross(u, w): > 0 faces the sky
+      });
+      const falls = g.debug.env.waterfalls();
+      const f = falls.find((x) => x.river === 'misty_river') ?? falls[0];
+      await g.debug.env.preload(f.x + 25, f.z + 25);
+      g.step(3);
+      let spray = null;
+      g.ctx.scene.traverse((o) => {
+        if (o.name === 'waterfall_spray') spray = o.visible;
+      });
+      return { ups, falls: falls.length, near: g.debug.env.waterfalls(f.x, f.z, 50).length, spray };
+    });
+    assert.ok(r.ups.length > 0 && r.ups.every((y) => y > 0), 'river strips must face up: ' + JSON.stringify(r.ups));
+    assert.ok(r.falls > 0 && r.near > 0 && r.spray === true, JSON.stringify(r));
+  });
+
+  await check('cloud sea: clear air above the deck on the massif, mist inside it', async () => {
+    const r = await h.page.evaluate(async () => {
+      const g = window.__game;
+      g.debug.env.weather('clear');
+      await g.debug.env.preload(1450, 1250);
+      g.freeCamera({ x: 1450, y: 345, z: 1250 }, { x: 1800, y: 170, z: 1250 });
+      g.step(30, 1 / 10);
+      const above = g.debug.env.cloudSea();
+      const fogAbove = g.debug.env.weatherState().fogScale;
+      g.freeCamera({ x: 1050, y: 166, z: 1250 }, { x: 1400, y: 166, z: 1250 });
+      g.step(40, 1 / 10);
+      const inside = g.debug.env.cloudSea();
+      g.freeCamera(null);
+      g.debug.env.weather(null);
+      return { above, inside, fogAbove };
+    });
+    assert.ok(r.above.visible && r.above.above > 0.5 && r.above.mist < 0.1, JSON.stringify(r));
+    assert.ok(r.inside.mist > 0.5, JSON.stringify(r));
+  });
+
   await check('no console errors', async () => {
     assert.equal(h.errors.length, 0, h.errors.slice(0, 5).join('\n'));
   });

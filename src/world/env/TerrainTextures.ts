@@ -32,7 +32,7 @@ export const TERRAIN_LAYER_COUNT = 14;
 export const TERRAIN_MATERIAL_LAYERS = 12;
 
 /** World metres covered by one texture tile per layer (shader uniform). */
-export const TERRAIN_LAYER_SCALE = [4.5, 5.5, 9, 6.5, 9, 9, 6, 6, 3.2, 4.2, 6, 3.6, 5, 160];
+export const TERRAIN_LAYER_SCALE = [4.5, 5.5, 9, 6.5, 9, 15, 6, 6, 3.2, 4.2, 6, 3.6, 5, 160];
 
 type RGBH = [number, number, number, number];
 
@@ -137,21 +137,28 @@ export function generateTerrainLayers(size = 256): TerrainLayerData {
     if (hash2i(x, y, 12) > 0.993) { c[0] = c[1] = c[2] = 1; }
     c[3] = 0.35 + 0.35 * soft + 0.12 * mid + 0.05 * hi;
   };
-  // 5 ice — deep blue patches, white cracks, bubbles, frost.
+  // 5 ice — clear blue sheet with a broken network of large plates (only parts
+  // of each crack line show), darker refraction beside the cracks, hairline
+  // fractures, frost and trapped bubbles; avoids a regular tiled look.
   gen[5] = (u, v, x, y) => {
-    const lo = fLo.px(x + 222, y + 5), mid = fMid.px(x + 5, y + 222);
-    mixc([0.62, 0.81, 0.91], [0.33, 0.56, 0.73], smooth(-0.25, 0.55, lo), c);
-    worley(u, v, 6, 909, 0.95, w);
-    const crack = smooth(0.035, 0.0, w.f2 - w.f1);
-    worley(u, v, 17, 919, 0.9, w2);
-    const fine = smooth(0.02, 0.0, w2.f2 - w2.f1) * 0.45;
-    const frost = smooth(0.35, 0.8, mid) * 0.35;
-    const bub = hash2i(x, y, 14) > 0.993 ? 0.6 : 0;
-    const white = clamp01(crack * 0.75 + fine + frost + bub);
+    const lo = fLo.px(x + 222, y + 5), mid = fMid.px(x + 5, y + 222), hi = fHi.px(x + 17, y + 71);
+    mixc([0.68, 0.85, 0.94], [0.34, 0.58, 0.76], smooth(-0.3, 0.6, lo), c);
+    worley(u + 0.015 * mid, v + 0.015 * lo, 4, 909, 0.95, w);
+    const edge = w.f2 - w.f1;
+    const vis = smooth(-0.2, 0.3, fMid.px(x + 140, y + 33));
+    const crack = smooth(0.026, 0.0, edge) * vis;
+    const band = smooth(0.1, 0.025, edge) * vis * 0.22;
+    worley(u, v, 11, 919, 0.9, w2);
+    const vis2 = smooth(0.0, 0.45, fMid.px(x + 77, y + 190));
+    const fine = smooth(0.016, 0.0, w2.f2 - w2.f1) * 0.38 * vis2;
+    const frost = smooth(0.3, 0.8, mid) * 0.3 + smooth(0.5, 0.9, hi) * 0.1;
+    const bub = hash2i(x, y, 14) > 0.994 ? 0.5 : 0;
+    for (let i = 0; i < 3; i++) c[i] *= 1 - band;
+    const white = clamp01(crack * 0.8 + fine + frost + bub);
     c[0] = lerp(c[0], 0.9, white);
     c[1] = lerp(c[1], 0.96, white);
     c[2] = lerp(c[2], 1.0, white);
-    c[3] = clamp01(0.55 - 0.35 * crack - 0.15 * fine + 0.06 * lo + 0.08 * frost);
+    c[3] = clamp01(0.55 - 0.35 * crack - 0.12 * fine + 0.06 * lo + 0.08 * frost - band * 0.5);
   };
   // 6 ash — dark volcanic grit with pumice and rusty patches.
   gen[6] = (u, v, x, y) => {

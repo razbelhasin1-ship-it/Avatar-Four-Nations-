@@ -5,7 +5,7 @@ import { heightAt } from '../../Heightfield';
 import type { ContentBuilder } from '../../kit/Builder';
 import { WaterRegion } from './base';
 import { boulder, crystalCluster, disc, emblem, flatRing, mergeParts, panelWithArches, pillow } from './geometry';
-import { wtMat, wtWater, wtWaterfall } from './materials';
+import { wtMat, wtWater } from './materials';
 import {
   COURTYARD,
   COURT_POOL,
@@ -26,6 +26,7 @@ import {
   PODIUM_BOTTOM,
   RIVER_ARCH,
   SOUTH_GATE,
+  SEA_END,
   SPAWN,
   T1,
   WALL,
@@ -59,6 +60,7 @@ import {
   roundTower,
   V,
   WaterSheets,
+  waterfall,
   type Archetype,
 } from './parts';
 import { rasterRects } from './raster';
@@ -189,7 +191,8 @@ export class NorthernWaterTribe extends WaterRegion {
     }
     kr([PLAZA[0] - 3, PLAZA[1] - 3, PLAZA[2] + 3, PLAZA[3] + 3]);
     kr([T1[0] - 4, T1[1] - 16, T1[2] + 2, T1[3]]);
-    kr([PASSAGE[0] - 1, PASSAGE[1] - 4, PASSAGE[2] + 4, PASSAGE[3]]);
+    // The passage street runs all the way from the plaza to the Glacier Pass Gate.
+    kr([PASSAGE[0] - 1, PLAZA[3] - 2, PASSAGE[2] + 4, PASSAGE[3]]);
     kr([OASIS[0] - 4, OASIS[1] - 4, OASIS[2] + 4, OASIS[3]]);
     kr([-286, -1744, -246, -1735]); // wall stairs
     kr([WALL.w1, -1508, WALL.w1 + 12, -1492]); // west postern
@@ -229,8 +232,12 @@ export class NorthernWaterTribe extends WaterRegion {
     return `${cx}_${cz}`;
   }
 
+  /**
+   * Houses merge into 2x2 city quarters: few enough draw calls for the aerial
+   * view, still frustum-culled per quarter at street level.
+   */
   private houseBuilder(x: number, z: number): ContentBuilder {
-    const key = this.chunkKey(x, z);
+    const key = `${x < (INNER[0] + INNER[2]) / 2 ? 0 : 1}_${z < (INNER[1] + INNER[3]) / 2 ? 0 : 1}`;
     let b = this.houseBuilders.get(key);
     if (!b) {
       b = this.builder(this.main);
@@ -280,13 +287,39 @@ export class NorthernWaterTribe extends WaterRegion {
         k.core.collider({ shape: 'box', x: (r.x0 + r.x1) / 2, y: (L1 + PODIUM_BOTTOM) / 2, z: (r.z0 + r.z1) / 2, hx: w / 2, hy: (L1 - PODIUM_BOTTOM) / 2, hz: d / 2, walkable: true, solid: true, surface: 'packedsnow' });
       }
     }
-    // Jetty side walls (they stand on the open snowfield outside the sea wall).
+    // Jetty causeways: they cross the open snowfield and the beach to the sea
+    // locks, so their walls (and a solid core under the street podium) reach
+    // down below the terrain / sea floor — nothing can walk underneath.
     for (const j of JETTIES) {
+      const bottom = this.causewayBottom(j[0], j[1], j[2], j[3]);
       for (const [x, sx] of [[j[0], -1], [j[2], 1]] as const) {
-        k.core.box(wtMat('ice_wall'), { x: x - sx * 0.2, y: (L1 + 3.6) / 2, z: (j[1] + j[3]) / 2, sx: 0.4, sy: L1 - 3.6, sz: j[3] - j[1] }, { castShadow: false });
+        k.core.box(wtMat('ice_wall'), { x: x - sx * 0.2, y: (L1 + bottom) / 2, z: (j[1] + j[3]) / 2, sx: 0.4, sy: L1 - bottom, sz: j[3] - j[1] }, { castShadow: false });
       }
-      k.core.box(wtMat('ice_wall'), { x: (j[0] + j[2]) / 2, y: (L1 + 3.6) / 2, z: j[1] + 0.2, sx: j[2] - j[0], sy: L1 - 3.6, sz: 0.4 }, { castShadow: false });
+      k.core.collider({ shape: 'box', x: (j[0] + j[2]) / 2, y: (PODIUM_BOTTOM + bottom) / 2, z: (j[1] + j[3]) / 2, hx: (j[2] - j[0]) / 2, hy: (PODIUM_BOTTOM - bottom) / 2, hz: (j[3] - j[1]) / 2, walkable: true, solid: true, surface: 'ice' });
+      // Buttresses along the seaward stretch (where the beach falls away).
+      for (let z = j[3] - 24; z > j[1] + 6; z -= 14) {
+        const g = heightAt((j[0] + j[2]) / 2, z);
+        if (g > 3.2) continue;
+        for (const [x, sx] of [[j[0], -1], [j[2], 1]] as const) {
+          if (podiumHole(x + sx * 2, z)) continue; // canal side
+          k.core.box(wtMat('ice_massive'), { x: x + sx * 0.7, y: (L1 - 0.6 + bottom) / 2, z, sx: 1.4, sy: L1 - 0.6 - bottom, sz: 2.2 }, { collide: true, walkable: false });
+        }
+      }
     }
+    // Under the outer canals (the bed floats over the falling beach): ice core.
+    for (const id of ['grand_out', 'harbor_out']) {
+      const r = CANALS[id];
+      const bottom = this.causewayBottom(r[0], r[1], r[2], r[3]);
+      const z1 = -1850;
+      k.core.box(wtMat('ice_massive'), { x: (r[0] + r[2]) / 2, y: (3.86 + bottom) / 2, z: (r[1] + z1) / 2, sx: r[2] - r[0], sy: 3.86 - bottom, sz: z1 - r[1] }, { castShadow: false });
+    }
+  }
+
+  /** Lowest terrain under a causeway rectangle, minus a footing margin. */
+  private causewayBottom(x0: number, z0: number, x1: number, z1: number): number {
+    let m = 3.0;
+    for (let z = z0; z <= z1; z += 4) for (const x of [x0, (x0 + x1) / 2, x1]) m = Math.min(m, heightAt(x, z) - 1.2);
+    return Math.max(-12, m);
   }
 
   private canals(k: NwtKit): void {
@@ -299,13 +332,13 @@ export class NorthernWaterTribe extends WaterRegion {
     // Waterbending sources (linear canals; unlimited like rivers).
     const src = (id: string, label: string, path: Array<{ x: number; z: number }>, r: number) =>
       k.water({ id: `nwt:${id}`, type: 'canal', label, x: path[0].x, y: WL, z: path[0].z, r, path, capacity: Infinity, regen: 0, size: 'large' });
-    src('grand_canal', 'Grand Canal', [{ x: -220, z: -1834 }, { x: -220, z: -1636 }], 8);
+    src('grand_canal', 'Grand Canal', [{ x: -220, z: SEA_END.grand + 1 }, { x: -220, z: -1636 }], 8);
     src('moon_basin', 'Moon Basin', [{ x: -240, z: -1628 }, { x: -200, z: -1628 }], 8);
     src('north_canal', 'North Canal', [{ x: -328, z: -1707 }, { x: -48, z: -1707 }], 5);
     src('mid_canal', 'Market Canal', [{ x: -258, z: -1648 }, { x: -106, z: -1648 }], 4);
     src('east_canal', 'East Canal', [{ x: -145, z: -1700 }, { x: -145, z: -1608 }], 5);
     src('harbor', 'Harbor Basin', [{ x: -75, z: -1738 }, { x: -75, z: -1646 }], 29);
-    src('harbor_channel', 'Harbor Channel', [{ x: -75, z: -1834 }, { x: -75, z: -1742 }], 9);
+    src('harbor_channel', 'Harbor Channel', [{ x: -75, z: SEA_END.harbor + 1 }, { x: -75, z: -1742 }], 9);
   }
 
   /** Ice coping and wall facing along canal edges that border the street. */
@@ -336,7 +369,7 @@ export class NorthernWaterTribe extends WaterRegion {
       for (let i = 0; i < n; i++) {
         const t = (i + 0.5) / n;
         const x = ax + (bx - ax) * t + nx * 0.8, z = az + (bz - az) * t + nz * 0.8;
-        const street = !podiumHole(x, z) && inRect([WALL.w0, -1840, WALL.e1, WALL.s1], x, z) && !(z < WALL.n1 && z > WALL.n0 && !inRect([GATE_OPEN.x0, WALL.n0, GATE_OPEN.x1, WALL.n1], x, z) && !inRect([HARBOR_OPEN.x0, WALL.n0, HARBOR_OPEN.x1, WALL.n1], x, z));
+        const street = !podiumHole(x, z) && inRect([WALL.w0, SEA_END.grand - 6, WALL.e1, WALL.s1], x, z) && !(z < WALL.n1 && z > WALL.n0 && !inRect([GATE_OPEN.x0, WALL.n0, GATE_OPEN.x1, WALL.n1], x, z) && !inRect([HARBOR_OPEN.x0, WALL.n0, HARBOR_OPEN.x1, WALL.n1], x, z));
         const onJetty = z < WALL.n0 ? JETTIES.some((j) => inRect(j, x, z)) : true;
         if (street && onJetty) {
           if (runStart < 0) runStart = i;
@@ -902,39 +935,73 @@ export class NorthernWaterTribe extends WaterRegion {
     // Ramps from the jetties down to the snowfield.
     for (const j of JETTIES) {
       const cx = (j[0] + j[2]) / 2;
-      const outerSide = cx < -200 || (cx > -90 && cx < -70) ? -1 : 1;
+      // Each jetty's outer side faces away from its canal (grand canal x = -220, harbor x = -75).
+      const outerSide = cx < (cx < -150 ? -220 : -75) ? -1 : 1;
       const ex = outerSide < 0 ? j[0] : j[2];
       const ground = heightAt(ex + outerSide * 5, -1790);
-      if (cx === -234 || cx === -206 || cx === -90 || cx === -60) {
-        flight(k.core, V(ex + outerSide * 6, Math.min(ground, L1 - 0.3), -1790), V(ex, L1, -1790), 4, 'ice_trim', 'ice_wall', 'ice');
-      }
+      flight(k.core, V(ex + outerSide * 6, Math.min(ground, L1 - 0.3), -1790), V(ex, L1, -1790), 4, 'ice_trim', 'ice_wall', 'ice');
       // Parapets on the outer sides of the jetties.
-      parapet(k.core, 'ice_wall', ex, j[1] + 1, ex, -1795, L1, 0.8, 0.5, 'snow');
+      parapet(k.core, 'ice_wall', ex, j[1] + 4.5, ex, -1795, L1, 0.8, 0.5, 'snow');
       parapet(k.core, 'ice_wall', ex, -1785, ex, j[3] - 1, L1, 0.8, 0.5, 'snow');
+      // Lanterns along the causeway.
+      for (let z = -1772; z > j[1] + 8; z -= 22) lanternPost(props, ex - outerSide * 0.9, L1, z, 'warm');
     }
-    // Sea locks at the canal mouths (closed sluice gates).
-    for (const [x0, x1] of [[-228, -212], [-84, -66]] as const) {
+    // Sea locks where the causeway canals meet the open sea: a walkable lock
+    // deck across canal and jetties (the only dry crossing outside the walls),
+    // sluice arches spilling into the sea, a gantry with the moon emblem and two
+    // bulb towers standing in the water.
+    for (const [x0, x1, zE] of [[-228, -212, SEA_END.grand], [-84, -66, SEA_END.harbor]] as const) {
       const cx = (x0 + x1) / 2, w = x1 - x0;
-      k.core.box(wtMat('ice_massive'), { x: cx, y: (L1 + 7 + 2) / 2, z: -1837.5, sx: w + 8, sy: L1 + 7 - 2, sz: 3 }, { collide: true, walkable: true, surface: 'ice' });
-      const lock = panelWithArches(w + 8, 6, 0.6, [{ x: 0, y: 0, w: w - 2, h: 5 }], 8);
-      k.core.mesh(wtMat('ice_trim'), lock, { x: cx, y: L1 + 1.5, z: -1835.8 });
-      lock.dispose();
-      k.core.box(wtMat('wood'), { x: cx, y: WL + 0.8, z: -1835.6, sx: w, sy: 2.2, sz: 0.4 });
-      roundTower(k.core, x0 - 6, -1834, 2, 3.4, 13, 'bulb', true);
-      roundTower(k.core, x1 + 6, -1834, 2, 3.4, 13, 'bulb', true);
-      lanternPost(props, x0 - 1.5, L1, -1828, 'warm');
-      lanternPost(props, x1 + 1.5, L1, -1828, 'warm');
-      // Overflow spilling to the bay.
-      const yb = Math.max(0.2, heightAt(cx, -1842));
-      const fall = k.wet;
-      const sheet = new THREE.PlaneGeometry(w - 3, Math.max(0.6, WL - yb), 2, 2);
-      fall.mesh(wtWaterfall(), sheet, { x: cx, y: (WL + yb) / 2, z: -1839.2, yaw: 0 }, { castShadow: false });
-      sheet.dispose();
+      const jx0 = x0 - 12, jx1 = x1 + 12;
+      const bottom = Math.min(-2, heightAt(cx, zE - 10) - 1.5);
+      const zc = zE - 3.5; // deck spans zE-7 .. zE
+      const zP = zE - 1.2; // gantry line (canal side), the walkway runs seaward of it
+      k.core.box(wtMat('ice_massive'), { x: cx, y: (L1 - 0.3 + bottom) / 2, z: zc, sx: jx1 - jx0, sy: L1 - 0.3 - bottom, sz: 7 }, { collide: true, walkable: true, surface: 'ice' });
+      k.core.box(wtMat('paving'), { x: cx, y: L1 - 0.15, z: zc, sx: jx1 - jx0, sy: 0.3, sz: 7 }, { castShadow: false, collide: true, walkable: true, surface: 'packedsnow' });
+      // Sea face: three sluice arches with the outflow.
+      const face = panelWithArches(w + 2, L1 - 0.3 - bottom, 0.8, [-5, 0, 5].map((ox) => ({ x: ox, y: -bottom + 0.2, w: 3.4, h: 3.2 })), 8);
+      k.core.mesh(wtMat('ice_trim'), face, { x: cx, y: bottom, z: zE - 7.3 });
+      face.dispose();
+      for (const ox of [-5, 0, 5]) {
+        k.core.box(wtMat('dark'), { x: cx + ox, y: 1.8, z: zE - 7.15, sx: 3.4, sy: 3.4, sz: 0.2 }, { castShadow: false });
+        waterfall(k.wet, cx + ox, zE - 7.6, Math.PI, 2.9, 0.05, 2.8, 0.4);
+      }
+      k.emitter('mist', 2.5, V(cx, 0.8, zE - 9), { radius: 4 }, 110, true);
+      // Canal side: the closed wooden lock gates under an ice coping.
+      k.core.box(wtMat('wood'), { x: cx, y: WL - 0.2, z: zE + 0.3, sx: w, sy: 1.8, sz: 0.35 });
+      for (const ox of [-w / 4, w / 4]) k.core.box(wtMat('rope'), { x: cx + ox, y: WL + 0.25, z: zE + 0.5, sx: 0.12, sy: 0.9, sz: 0.12 }, { castShadow: false });
+      k.core.box(wtMat('ice_trim'), { x: cx, y: L1 - 0.24, z: zE + 0.35, sx: w + 1, sy: 0.52, sz: 0.9 }, { castShadow: false });
+      // Seaward parapet.
+      parapet(k.core, 'ice_wall', jx0 + 4.2, zE - 6.7, jx1 - 4.2, zE - 6.7, L1, 0.9, 0.5, 'snow');
+      // Gantry pylons + lintel with the emblem.
+      for (const px of [x0 - 1.4, x1 + 1.4]) {
+        k.core.box(wtMat('ice_trim'), { x: px, y: L1 + 4.5, z: zP, sx: 1.6, sy: 9, sz: 1.6 }, { collide: true, walkable: false });
+      }
+      k.core.box(wtMat('ice_wall'), { x: cx, y: L1 + 9.4, z: zP, sx: w + 4.6, sy: 1.0, sz: 2.0 });
+      for (const side of [-1, 1]) {
+        const d = disc(1.6, 0.4, 28);
+        k.core.mesh(wtMat('ice_trim'), d, { x: cx, y: L1 + 9.4, z: zP + side * 1.15, yaw: side < 0 ? Math.PI : 0 });
+        d.dispose();
+        const e = emblem(1.35, 0.25, true);
+        k.core.mesh(wtMat('snow'), e, { x: cx, y: L1 + 9.4, z: zP + side * 1.45, yaw: side < 0 ? Math.PI : 0 });
+        e.dispose();
+      }
+      banner(props, x0 - 1.4, L1 + 8.6, zP - 0.85, Math.PI, 1.3, 4.2, 'banner_water');
+      banner(props, x1 + 1.4, L1 + 8.6, zP - 0.85, Math.PI, 1.3, 4.2, 'banner_water');
+      // Towers in the sea at the outer corners.
+      roundTower(k.core, jx0 - 1.5, zc, bottom, 3.6, L1 - bottom + 9, 'bulb', true);
+      roundTower(k.core, jx1 + 1.5, zc, bottom, 3.6, L1 - bottom + 9, 'bulb', true);
+      lanternPost(props, x0 - 3.5, L1, zE - 5.9, 'blue');
+      lanternPost(props, x1 + 3.5, L1, zE - 5.9, 'blue');
     }
     // Boats in the outer canals.
     canalBoat(props, -224, WL, -1800, 0.05);
     canalBoat(props, -216, WL, -1782, Math.PI - 0.08);
+    canalBoat(props, -223.5, WL, -1858, 0.03, 5.6);
+    canalBoat(props, -216.5, WL, -1902, Math.PI + 0.05);
     canalBoat(props, -78, WL, -1790, 0.1, 6);
+    canalBoat(props, -71, WL, -1868, Math.PI - 0.06, 5.4);
+    this.sailboat(k, props, -79, -1842, 0.04);
     // Shore watchtowers / outposts.
     for (const [x, z] of [[-330, -1812], [-120, -1812], [-20, -1800]] as const) {
       const y = heightAt(x, z);

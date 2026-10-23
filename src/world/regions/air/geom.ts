@@ -355,21 +355,50 @@ export function monkStatue(): THREE.BufferGeometry {
   const plinth2 = new THREE.BoxGeometry(1.25, 0.25, 1.25);
   plinth2.translate(0, 0.725, 0);
   parts.push(plinth2);
-  const robe = new THREE.CylinderGeometry(0.38, 0.62, 1.9, 10);
-  robe.translate(0, 0.85 + 0.95, 0);
+  // Robed figure: hem flaring onto the plinth, waist, broad shoulders under the mantle.
+  const robe = lathe(
+    [
+      [0.64, 0.85],
+      [0.6, 1.05],
+      [0.5, 1.5],
+      [0.41, 1.95],
+      [0.43, 2.25],
+      [0.5, 2.48],
+      [0.46, 2.64],
+      [0.26, 2.78],
+      [0.12, 2.86],
+    ],
+    16,
+    1,
+  );
+  robe.scale(1, 1, 0.82);
   parts.push(robe);
-  const mantle = new THREE.CylinderGeometry(0.2, 0.52, 0.55, 10);
-  mantle.translate(0, 2.55, 0);
+  // Mantle draped over one shoulder.
+  const mantle = new THREE.SphereGeometry(0.34, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+  mantle.scale(1.35, 0.55, 1.0);
+  mantle.rotateZ(0.35);
+  mantle.translate(-0.08, 2.5, 0.02);
   parts.push(mantle);
-  const arms = new THREE.BoxGeometry(0.78, 0.26, 0.36);
-  arms.translate(0, 2.2, 0.3);
-  parts.push(arms);
-  const neck = new THREE.CylinderGeometry(0.11, 0.13, 0.2, 8);
-  neck.translate(0, 2.88, 0);
+  // Sleeves folded in front, hands together.
+  const sleeves = new THREE.CylinderGeometry(0.15, 0.15, 0.84, 8);
+  sleeves.rotateZ(Math.PI / 2);
+  sleeves.translate(0, 2.12, 0.3);
+  parts.push(sleeves);
+  for (const s of [-1, 1]) {
+    const cuff = new THREE.SphereGeometry(0.16, 8, 6);
+    cuff.translate(s * 0.42, 2.12, 0.3);
+    parts.push(cuff);
+  }
+  const hands = new THREE.SphereGeometry(0.11, 8, 6);
+  hands.scale(1.2, 1, 0.9);
+  hands.translate(0, 2.13, 0.44);
+  parts.push(hands);
+  const neck = new THREE.CylinderGeometry(0.1, 0.12, 0.2, 8);
+  neck.translate(0, 2.92, 0);
   parts.push(neck);
-  const head = new THREE.SphereGeometry(0.26, 12, 9);
-  head.scale(1, 1.12, 1);
-  head.translate(0, 3.17, 0.02);
+  const head = new THREE.SphereGeometry(0.25, 14, 10);
+  head.scale(0.95, 1.1, 1);
+  head.translate(0, 3.2, 0.02);
   parts.push(head);
   return mergeAll(parts);
 }

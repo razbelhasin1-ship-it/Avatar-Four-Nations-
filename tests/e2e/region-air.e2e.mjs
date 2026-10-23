@@ -35,31 +35,39 @@ async function walkTo(x, z, o = {}) {
     (g, x, z, o) => {
       const tol = o.tol ?? 1.2;
       const max = o.max ?? 900;
-      let p = g.state().player;
-      let minY = p.y, maxY = p.y, steps = 0, stuck = 0, last = Infinity;
-      if (o.sprint) g.ctx.input.setVirtual('sprint', true);
-      for (; steps < max; steps += 3) {
-        p = g.state().player;
-        const d = Math.hypot(x - p.x, z - p.z);
-        if (d < tol) break;
-        if (steps % 30 === 0) {
-          if (last - d < 0.3) stuck++;
-          else stuck = 0;
-          last = d;
-          if (stuck >= 3) break;
+      // Walking is pure simulation: skip the (software) render of every stepped frame.
+      const R = g.ctx.render;
+      const render = R.render;
+      R.render = () => {};
+      try {
+        let p = g.state().player;
+        let minY = p.y, maxY = p.y, steps = 0, stuck = 0, last = Infinity;
+        if (o.sprint) g.ctx.input.setVirtual('sprint', true);
+        for (; steps < max; steps += 3) {
+          p = g.state().player;
+          const d = Math.hypot(x - p.x, z - p.z);
+          if (d < tol) break;
+          if (steps % 30 === 0) {
+            if (last - d < 0.3) stuck++;
+            else stuck = 0;
+            last = d;
+            if (stuck >= 3) break;
+          }
+          g.faceTowards(x, z);
+          g.move(0, 1);
+          g.step(3);
+          p = g.state().player;
+          minY = Math.min(minY, p.y);
+          maxY = Math.max(maxY, p.y);
         }
-        g.faceTowards(x, z);
-        g.move(0, 1);
-        g.step(3);
+        g.move(0, 0);
+        if (o.sprint) g.ctx.input.setVirtual('sprint', false);
+        g.step(4);
         p = g.state().player;
-        minY = Math.min(minY, p.y);
-        maxY = Math.max(maxY, p.y);
+        return { x: p.x, y: p.y, z: p.z, grounded: p.grounded, minY, maxY, steps, dist: Math.hypot(x - p.x, z - p.z) };
+      } finally {
+        R.render = render;
       }
-      g.move(0, 0);
-      if (o.sprint) g.ctx.input.setVirtual('sprint', false);
-      g.step(4);
-      p = g.state().player;
-      return { x: p.x, y: p.y, z: p.z, grounded: p.grounded, minY, maxY, steps, dist: Math.hypot(x - p.x, z - p.z) };
     },
     x,
     z,
@@ -96,7 +104,7 @@ try {
 
   await check('spots: masters, training grounds, givers, habitats, updrafts, viewpoints', async () => {
     const spots = await h.eval((g) => g.debug.air.spots());
-    for (const id of ['master_tenzo', 'master_iio', 'master_pasang', 'master_hermit', 'giver_air_elder', 'habitat_bison_stable', 'habitat_sky_bison_1', 'merchant_air_temple_1', 'shrine_wind', 'viewpoint_air_sanctum', 'glide_launch_east', 'updraft_1', 'viewpoint_air_trail_1', 'bridge_air_gorge']) {
+    for (const id of ['master_tenzo', 'master_iio', 'master_pasang', 'master_hermit', 'giver_air_elder', 'habitat_bison_stable', 'habitat_sky_bison_1', 'merchant_air_temple_1', 'shrine_wind', 'viewpoint_air_sanctum', 'glide_launch_east', 'updraft_1', 'viewpoint_air_trail_1', 'bridge_air_gorge', 'shrine_air_chortens', 'shrine_air_bell']) {
       assert.ok(spots[id], `spot ${id} missing`);
     }
     for (const t of ['training_tenzo', 'training_iio', 'training_pasang', 'training_hermit']) {
@@ -143,6 +151,15 @@ try {
     await h.eval((g) => g.teleport(1490, 1241));
     const r = await walkPath([[1505, 1241], [1513.5, 1241], [1522, 1241], [1528, 1238]]);
     near(r.y, Y0 + 0.15, 0.2, 'balcony height');
+  });
+
+  await check('walk: plaza → stables walk → into the bison stables; plaza → library walk', async () => {
+    await h.eval((g) => g.teleport(1450 - 25, 1250 + 34));
+    let r = await walkPath([[1450 - 56, 1250 + 37.6], [1450 - 57.8, 1250 + 34.4], [1450 - 65.2, 1250 + 39.5]], { tol: 1.2 });
+    near(r.y, Y0 + 0.3, 0.2, 'stables floor');
+    await h.eval((g) => g.teleport(1450 + 20, 1250 + 55));
+    r = await walkPath([[1450 + 29, 1250 + 58.6], [1450 + 42.5, 1250 + 59.5]], { tol: 1.2 });
+    near(r.y, Y0 + 0.12, 0.2, 'library walk');
   });
 
   await check('rim: balustrade stops a runner at the cliff (r < 92.5)', async () => {
@@ -231,6 +248,49 @@ try {
     assert.ok(regs.includes('air_wind_shrine'), 'shrine built');
   });
 
+  await check('detail levels: far keeps the silhouette, hidden hides all, full restores', async () => {
+    const r = await h.eval((g) => {
+      const reg = g.debug.air.region('air_temple_summit');
+      const count = () => {
+        let n = 0;
+        reg.group.traverseVisible((o) => {
+          if (o.isMesh) n++;
+        });
+        return n;
+      };
+      const full = count();
+      reg.setDetail('far');
+      const far = count();
+      reg.setDetail('hidden');
+      const hidden = reg.group.visible ? count() : 0;
+      reg.setDetail('full');
+      return { full, far, hidden, after: count() };
+    });
+    assert.ok(r.far > 0 && r.far < r.full, `far detail hides props but keeps architecture: ${JSON.stringify(r)}`);
+    assert.equal(r.hidden, 0, 'hidden detail hides everything');
+    assert.equal(r.after, r.full, 'full detail restored');
+  });
+
+  await check('session restart: interactions re-registered, no duplicate regions or leaks', async () => {
+    const mem = () => h.eval((g) => ({ geo: g.ctx.render.renderer.info.memory.geometries, tex: g.ctx.render.renderer.info.memory.textures, regions: g.debug.air.regions().length }));
+    const before = await mem();
+    await h.newGame('air');
+    await h.step(10);
+    const after = await mem();
+    assert.equal(after.regions, before.regions, 'region count stable');
+    assert.ok(after.geo <= before.geo + 25, `geometries grew ${before.geo} -> ${after.geo}`);
+    assert.ok(after.tex <= before.tex + 4, `textures grew ${before.tex} -> ${after.tex}`);
+    const ok = await h.eval((g) => {
+      const bell = g.ctx.interactions.get('air_great_bell');
+      const gong = g.ctx.interactions.get('air_gong');
+      if (!bell || !gong) return false;
+      bell.interact();
+      return true;
+    });
+    assert.ok(ok, 'bell and gong interactions registered after restart');
+    await h.eval((g) => g.setting('graphics.renderScale', 0.35));
+  });
+
   await check('perf: draw calls / triangles / fps at the region centre', async () => {
     await h.eval((g) => g.setting('graphics.renderScale', 1));
     await h.eval((g) => g.teleport(1440, 1290));
@@ -243,7 +303,7 @@ try {
     await h.wait(1500);
     const b = (await h.state()).render;
     await h.eval((g) => g.freeCamera(null));
-    const regs = await h.eval((g) => g.debug.air.regions().map((r) => ({ id: r.id, buildMs: r.buildMs, colliders: r.colliders, tris: r.triangles })));
+    const regs = await h.eval((g) => g.debug.air.regions().map((r) => ({ id: r.id, buildMs: r.buildMs, finishMs: r.finishMs, maxFinishStepMs: r.maxFinishStepMs, colliders: r.colliders, tris: r.triangles })));
     console.log(`  [${preset}] spawn view: calls=${a.drawCalls} tris=${a.triangles} fps=${a.fps?.toFixed?.(1)}`);
     console.log(`  [${preset}] aerial view: calls=${b.drawCalls} tris=${b.triangles} fps=${b.fps?.toFixed?.(1)}`);
     console.log('  regions: ' + JSON.stringify(regs));

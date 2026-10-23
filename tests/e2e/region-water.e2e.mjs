@@ -98,7 +98,15 @@ async function assertOpenFlat(spot, label) {
     (g, s) => {
       const out = { bad: [] };
       const THREE = g.THREE;
-      const cy = g.ctx.world.groundAt(s.x, s.z, (s.y ?? 0) + 2).y;
+      // Reference level: the median ground height over the area (a training
+      // ground may have a shallow pool or a low dais; it must still be flat).
+      const ys = [];
+      for (const f of [0.3, 0.6, 0.9]) for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        ys.push(g.ctx.world.groundAt(s.x + Math.cos(a) * s.r * f, s.z + Math.sin(a) * s.r * f, (s.y ?? 0) + 2).y);
+      }
+      ys.sort((a, b) => a - b);
+      const cy = ys[ys.length >> 1];
       out.cy = cy;
       for (const f of [0, 0.45, 0.85]) {
         const n = f === 0 ? 1 : 12;
@@ -129,12 +137,12 @@ try {
     near(s.player.y, L1, 0.25, 'spawn on street level');
     assert.ok(s.player.grounded, 'grounded');
     for (const [dx, dz] of [[6, 0], [-6, 0], [0, 6], [0, -6], [4, 4], [-4, -4]]) near(await ground(-250 + dx, -1560 + dz, 8), L1, 0.1, `ground near spawn (${dx},${dz})`);
-    const built = await h.eval((g) => g.debug.water.built());
+    const built = await h.eval((g) => g.debug.waterRegions.built());
     assert.ok(built.includes('nwt_city'), 'nwt_city built: ' + JSON.stringify(built));
   });
 
   await check('NWT spots: masters, training grounds, givers, merchants, docks, shrines, viewpoints, habitats', async () => {
-    const spots = await h.eval((g) => g.debug.water.spots());
+    const spots = await h.eval((g) => g.debug.waterRegions.spots());
     const need = [
       'master_siku', 'training_siku', 'master_yugoda', 'training_yugoda', 'giver_nwt_elder', 'giver_nwt_chief',
       'merchant_nwt_1', 'merchant_nwt_2', 'merchant_nwt_3', 'merchant_nwt_4', 'dock_nwt_harbor', 'dock_nwt_grand_canal', 'dock_nwt_outer',
@@ -147,7 +155,7 @@ try {
   });
 
   await check('NWT training grounds are open and flat (Siku courtyard, Yugoda yard)', async () => {
-    const spots = await h.eval((g) => g.debug.water.spots());
+    const spots = await h.eval((g) => g.debug.waterRegions.spots());
     await teleport(spots.training_siku.x + 2, spots.training_siku.z - 9, 20);
     near(await assertOpenFlat(spots.training_siku, 'training_siku'), L1, 0.3, 'courtyard level');
     await teleport(spots.training_yugoda.x, spots.training_yugoda.z, 20);
@@ -158,7 +166,7 @@ try {
     const p = await teleport(-220, -1735, 30);
     assert.ok(p.y >= L1 - 0.1 && p.y < L1 + 1.2, `gate bridge deck height ${p.y}`);
     const r = await walkPath(
-      [[-234, -1728], [-234, -1692], [-234, -1662], [-234, -1641], [-246, -1641], [-246, -1612], [-230, -1592], [-235, -1552], [-235, -1531], [-232, -1514], [-221, -1512], [-220, -1498], [-220, -1476]],
+      [[-234, -1728], [-234, -1692], [-234, -1662], [-234, -1637.5], [-246, -1637.5], [-246, -1612], [-230, -1592], [-235, -1552], [-235, -1531], [-232, -1514], [-221, -1512], [-220, -1498], [-220, -1476]],
       { minY: L1 - 0.6 },
     );
     near(r.y, L3, 0.35, 'palace forecourt (T2) height');
@@ -166,7 +174,7 @@ try {
   });
 
   await check('NWT walk: plaza → gorge bridge → Waterbending Courtyard', async () => {
-    const routes = await h.eval((g) => g.debug.water.routes());
+    const routes = await h.eval((g) => g.debug.waterRegions.routes());
     const [b, a] = routes.gorge_bridge_1;
     const dx = b[0] - a[0], dz = b[1] - a[1];
     const l = Math.hypot(dx, dz);
@@ -185,6 +193,27 @@ try {
     assert.ok(r.grounded, 'grounded on the road side');
   });
 
+  await check('NWT walk: Great Ice Gate jetty → sea causeway → sea-lock deck crossing → harbor-side jetty', async () => {
+    await teleport(-234, -1772, 20);
+    // West jetty out to the sea lock, across the lock deck (seaward of the gantry), back on the east jetty.
+    const r = await walkPath([[-234, -1830], [-234, -1925], [-232, -1935], [-208, -1935], [-206, -1925], [-206, -1880]], { minY: L1 - 0.3 });
+    near(r.y, L1, 0.25, 'causeway deck height');
+    assert.ok(r.grounded, 'grounded on the causeway');
+    // The canal reaches the sea: liquid canal source near the lock, the open sea beyond.
+    const src = await sources(20);
+    assert.ok(src.some((s) => s.id === 'nwt:grand_canal' && !s.frozen), 'grand canal source on the causeway: ' + JSON.stringify(src));
+    const lockSea = await h.eval((g) => g.ctx.world.waterAt(-220, -1950));
+    assert.ok(lockSea && lockSea.kind === 'ocean', 'open sea beyond the lock: ' + JSON.stringify(lockSea));
+    // Nobody can walk under the causeway from the beach: solid down to the sea floor.
+    const under = await h.eval((g) => {
+      const THREE = g.THREE;
+      const y = g.ctx.world.collision.groundAt(-199.5, -1880, 50)?.y ?? null;
+      const hit = g.ctx.world.collision.overlapSphere(new THREE.Vector3(-201, 2.2, -1880), 0.4);
+      return { y, hit: hit ? hit.id : null };
+    });
+    assert.ok(under.hit !== null, 'causeway core is solid below the deck: ' + JSON.stringify(under));
+  });
+
   await check('NWT walk: passage → hidden door → Spirit Oasis', async () => {
     await teleport(-168, -1460, 20);
     const r = await walkPath([[-162, -1451.5], [-152, -1451.5], [-144, -1451.5], [-124, -1450]]);
@@ -198,15 +227,15 @@ try {
     let src = await sources(22);
     assert.ok(src.some((s) => s.id === 'nwt:moon_basin' || s.id === 'nwt:grand_canal'), 'basin/canal: ' + JSON.stringify(src));
     assert.ok(src.some((s) => s.type === 'canal' && !s.frozen), 'liquid canal source');
-    const spots = await h.eval((g) => g.debug.water.spots());
+    const spots = await h.eval((g) => g.debug.waterRegions.spots());
     await teleport(spots.training_siku.x + 6, spots.training_siku.z, 20);
     src = await sources(15);
     assert.ok(src.some((s) => s.id === 'nwt:courtyard_pool'), 'courtyard pool: ' + JSON.stringify(src));
     await teleport(spots.master_yugoda.x - 2, spots.master_yugoda.z, 20);
     src = await sources(15);
     assert.ok(src.some((s) => s.id.startsWith('nwt:healing_basin')), 'healing basins: ' + JSON.stringify(src));
-    await teleport(-232, -1480, 20);
-    src = await sources(40);
+    await teleport(-236, -1470, 20);
+    src = await sources(45);
     assert.ok(src.some((s) => s.id.startsWith('nwt:palace_fall') || s.id.startsWith('nwt:palace_pool')), 'palace falls/pools: ' + JSON.stringify(src));
     const p = await teleport(-521, -1337, 40);
     src = await sources(15);
@@ -234,10 +263,10 @@ try {
 
   await check('SWT walk: southern road → whalebone gate → meeting ground → sea ice (Akka)', async () => {
     await teleport(220, 1505, 60);
-    const built = await h.eval((g) => g.debug.water.built());
+    const built = await h.eval((g) => g.debug.waterRegions.built());
     assert.ok(built.includes('swt_village'), 'swt built: ' + JSON.stringify(built));
     const r = await walkPath([[220, 1548], [220, 1556], [220, 1572], [211, 1588], [219, 1601], [220, 1630], [221, 1645], [222, 1662]], { tol: 1.3 });
-    const spots = await h.eval((g) => g.debug.water.spots());
+    const spots = await h.eval((g) => g.debug.waterRegions.spots());
     near(r.y, spots.training_akka.y, 0.3, 'standing on the sea ice');
     await assertOpenFlat(spots.training_akka, 'training_akka');
     const src = await sources(25);
@@ -247,10 +276,10 @@ try {
 
   await check('Meditation Isle: spawn → training circle; pond, falls, stream and ice sources', async () => {
     await teleport(-1800, -1775, 80);
-    const built = await h.eval((g) => g.debug.water.built());
+    const built = await h.eval((g) => g.debug.waterRegions.built());
     assert.ok(built.includes('meditation_isle'), 'isle built: ' + JSON.stringify(built));
     const r = await walkPath([[-1794, -1764], [-1788, -1752]]);
-    const spots = await h.eval((g) => g.debug.water.spots());
+    const spots = await h.eval((g) => g.debug.waterRegions.spots());
     near(r.y, spots.training_tutorial.y, 0.3, 'on the stone circle');
     await assertOpenFlat({ ...spots.training_tutorial, r: 14 }, 'training_tutorial');
     await teleport(-1800, -1780, 20);

@@ -44,11 +44,14 @@ interface AmbientEmitter {
 const WATER_REGIONS = ['northern_water_tribe', 'southern_water_tribe', 'meditation_isle'];
 const LIVE = new Set<WaterRegion>();
 
-/** Test hooks on window.__game.debug.water (spots, walk routes, built regions). */
+/**
+ * Test hooks on window.__game.debug.waterRegions (spots, walk routes, built
+ * regions). `debug.water` belongs to the waterbending system.
+ */
 function installDebug(): void {
   const g = typeof window !== 'undefined' ? (window as unknown as { __game?: { debug?: Record<string, unknown> } }).__game : undefined;
-  if (!g?.debug || g.debug.water) return;
-  g.debug.water = {
+  if (!g?.debug || g.debug.waterRegions) return;
+  g.debug.waterRegions = {
     spots: () => Object.fromEntries(allSpots().filter(([, s]) => s.region && WATER_REGIONS.includes(s.region))),
     built: () => [...LIVE].map((r) => r.id),
     routes: () => Object.assign({}, ...[...LIVE].map((r) => (r as unknown as { routes?: Record<string, unknown> }).routes ?? {})),
@@ -139,12 +142,20 @@ export abstract class WaterRegion implements RegionContent {
     acquireWaterMaterials();
     this.construct(ctx);
     for (const b of this.builders) b.finish();
-    // Transparent water / falls render after opaque geometry.
+    // Transparent water / falls render after opaque geometry. Tiny instanced
+    // props (icicles, cairns, crates, finials...) skip the shadow pass: their
+    // shadows are invisible from a few metres away but each costs a draw call.
     this.group.traverse((o) => {
-      const m = (o as THREE.Mesh).material as THREE.Material | undefined;
+      const mesh = o as THREE.Mesh;
+      const m = mesh.material as THREE.Material | undefined;
       if (m && (m as THREE.Material).transparent) {
         o.renderOrder = 2;
-        (o as THREE.Mesh).castShadow = false;
+        mesh.castShadow = false;
+      }
+      if ((o as THREE.InstancedMesh).isInstancedMesh && mesh.castShadow) {
+        const g = mesh.geometry;
+        if (!g.boundingSphere) g.computeBoundingSphere();
+        if (g.boundingSphere && g.boundingSphere.radius < 1.0) mesh.castShadow = false;
       }
     });
     if (!this.npcDefsAdded) {
