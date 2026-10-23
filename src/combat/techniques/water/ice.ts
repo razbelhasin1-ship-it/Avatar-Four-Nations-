@@ -29,6 +29,36 @@ function crystal(): THREE.OctahedronGeometry {
   return crystalGeo;
 }
 
+// Flying shards: brighter than construct ice (they are small and fast) plus an additive motion streak.
+let shardMatS: THREE.MeshStandardMaterial | null = null;
+let streakGeo: THREE.ConeGeometry | null = null;
+let streakMat: THREE.MeshBasicMaterial | null = null;
+const SHARD_SCALE = new THREE.Vector3(0.15, 0.15, 0.62);
+
+function shardMat(): THREE.MeshStandardMaterial {
+  shardMatS ??= new THREE.MeshStandardMaterial({ color: '#eefcff', roughness: 0.1, metalness: 0.05, emissive: '#5fc4ff', emissiveIntensity: 0.6, flatShading: true });
+  return shardMatS;
+}
+
+function shardVisual(): THREE.Group {
+  const g = new THREE.Group();
+  const m = new THREE.Mesh(crystal(), shardMat());
+  m.scale.copy(SHARD_SCALE);
+  g.add(m);
+  if (!streakGeo) {
+    streakGeo = new THREE.ConeGeometry(1, 1, 6, 1, true);
+    streakGeo.rotateX(-Math.PI / 2); // tip toward -Z (behind the shard)
+    streakGeo.translate(0, 0, -0.5);
+  }
+  streakMat ??= new THREE.MeshBasicMaterial({ color: '#bfeaff', transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false });
+  const st = new THREE.Mesh(streakGeo, streakMat);
+  st.scale.set(0.11, 0.11, 1.5);
+  st.position.z = -0.35;
+  g.add(st);
+  for (const c of g.children) c.frustumCulled = false;
+  return g;
+}
+
 function iceLookFor(cast: Cast): number {
   return cast.water.frozen ? 1 : 0.6;
 }
@@ -50,7 +80,7 @@ class ShardForm implements WaterEffect {
     this.fx = fxOf(cast);
     this.castId = cast.id;
     for (let i = 0; i < n; i++) {
-      const m = new THREE.Mesh(crystal(), sharedIceMaterial());
+      const m = new THREE.Mesh(crystal(), shardMat());
       m.frustumCulled = false;
       m.renderOrder = 11;
       this.fx.group.add(m);
@@ -83,7 +113,7 @@ class ShardForm implements WaterEffect {
       m.position.copy(this.anchors[i]);
       m.lookAt(tC.copy(this.anchors[i]).addScaledVector(this.cast.aimDir, 3));
       const s = g * (0.9 + 0.1 * Math.sin(this.t * 20 + i));
-      m.scale.set(0.12 * s, 0.12 * s, 0.48 * s);
+      m.scale.copy(SHARD_SCALE).multiplyScalar(s);
     }
     return this.t < 3;
   }
@@ -94,16 +124,16 @@ class ShardForm implements WaterEffect {
 }
 
 function stuckShard(cast: Cast, at: THREE.Vector3, dir: THREE.Vector3): void {
-  const m = new THREE.Mesh(crystal(), sharedIceMaterial());
+  const m = new THREE.Mesh(crystal(), shardMat());
   m.position.copy(at);
   m.lookAt(tA.copy(at).add(dir));
-  m.scale.set(0.12, 0.12, 0.48);
+  m.scale.copy(SHARD_SCALE);
   cast.ctx.vfx.addTransient(
     m,
     3,
     (t) => {
       const s = t < 0.8 ? 1 : 1 - (t - 0.8) / 0.2;
-      m.scale.set(0.12 * s, 0.12 * s, 0.48 * s);
+      m.scale.copy(SHARD_SCALE).multiplyScalar(Math.max(0.001, s));
     },
     () => {},
   );
@@ -158,13 +188,11 @@ registerTechnique({
       // Each shard flies from its own anchor through the aim line, fanned out.
       const dir = cast.aimPoint.clone().sub(start).normalize().applyAxisAngle(UP, -k * spread);
       dir.normalize();
-      const mesh = new THREE.Mesh(crystal(), sharedIceMaterial());
-      mesh.scale.set(0.12, 0.12, 0.5);
-      mesh.frustumCulled = false;
+      const mesh = shardVisual();
       cast.projectile({
         position: start,
         velocity: dir.clone().multiplyScalar(36),
-        radius: 0.24,
+        radius: 0.28,
         gravity: 1.2,
         life: 0.85,
         damage: 7,

@@ -188,15 +188,16 @@ export class TubePool {
 
   constructor(private readonly parent: THREE.Object3D, private readonly quality: () => Quality) {}
 
-  /** detail > 1 for long bodies (draw streams, whips from far sources). */
-  acquire(look: WaterLook = {}, detail = 1): FlowTube {
+  /** detail > 1 for long bodies (draw streams, whips from far sources); minRadial for fat bodies (spout column). */
+  acquire(look: WaterLook = {}, detail = 1, minRadial = 0): FlowTube {
     const q = RES[this.quality()] ?? RES.medium;
     const segs = Math.round(q.segs * detail);
-    const key = `${segs}x${q.radial}`;
+    const radial = Math.max(q.radial, Math.round(minRadial));
+    const key = `${segs}x${radial}`;
     const list = this.free.get(key);
     let t = list?.pop();
     if (!t) {
-      t = new FlowTube(segs, q.radial);
+      t = new FlowTube(segs, radial);
       this.parent.add(t.mesh);
       this.all.add(t);
     }

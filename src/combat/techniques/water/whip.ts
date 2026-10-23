@@ -324,9 +324,9 @@ export class WhipEffect implements WaterEffect {
 // ---------------------------------------------------------------------------
 
 const STEPS: Array<Pick<WhipOptions, 'style' | 'hand' | 'range' | 'swing' | 'radius' | 'damage' | 'knockback' | 'stagger' | 'launch' | 'delay'> & { clip: string }> = [
-  { style: 'right', hand: 'handR', range: 9.5, swing: 0.2, radius: 0.2, damage: 8, knockback: 4, stagger: 12, clip: 'water_whip_r' },
-  { style: 'left', hand: 'handL', range: 9.5, swing: 0.2, radius: 0.21, damage: 9, knockback: 5, stagger: 14, clip: 'water_whip_l' },
-  { style: 'overhead', hand: 'hands', range: 10.5, swing: 0.24, radius: 0.27, damage: 15, knockback: 8, stagger: 30, launch: 3, delay: 0.06, clip: 'water_whip_slam' },
+  { style: 'right', hand: 'handR', range: 9.5, swing: 0.2, radius: 0.23, damage: 8, knockback: 4, stagger: 12, clip: 'water_whip_r' },
+  { style: 'left', hand: 'handL', range: 9.5, swing: 0.2, radius: 0.24, damage: 9, knockback: 5, stagger: 14, clip: 'water_whip_l' },
+  { style: 'overhead', hand: 'hands', range: 10.5, swing: 0.24, radius: 0.3, damage: 15, knockback: 8, stagger: 30, launch: 3, delay: 0.06, clip: 'water_whip_slam' },
 ];
 
 registerTechnique({

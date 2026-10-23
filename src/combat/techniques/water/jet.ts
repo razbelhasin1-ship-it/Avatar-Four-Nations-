@@ -18,7 +18,7 @@ import { contactsAlongPath, douse, fxOf, GatherStream, handPos, refundWater, spi
 
 const tA = new THREE.Vector3();
 const tB = new THREE.Vector3();
-export const JET = { range: 18, radius: 0.15, hitRadius: 0.42, tick: 0.16, damage: 3.2, push: 5 };
+export const JET = { range: 18, radius: 0.2, hitRadius: 0.48, tick: 0.16, damage: 3.2, push: 5 };
 
 class JetEffect implements WaterEffect {
   readonly kind = 'jet';
@@ -44,7 +44,8 @@ class JetEffect implements WaterEffect {
     this.fx = fxOf(cast);
     this.castId = cast.id;
     this.dir.copy(cast.aimDir).normalize();
-    this.beam = new StreamBody(this.fx, { flow: 22, foam: 1.3 }, 1, 6);
+    // High pressure: fast streaks, lots of foam, a faint glow so the beam reads at range.
+    this.beam = new StreamBody(this.fx, { flow: 26, foam: 1.6, glow: 0.18, opacity: 0.95 }, 1, 6, 8);
     this.beam.wobble = 0.02;
   }
 
@@ -109,8 +110,10 @@ class JetEffect implements WaterEffect {
       p[i].x += Math.sin(time * 40 + i * 2.1) * 0.03 * u;
       p[i].z += Math.cos(time * 37 + i * 1.7) * 0.03 * u;
     }
-    this.beam.radius = JET.radius * (1 + 0.15 * Math.sin(time * 30));
-    this.beam.profile = (u) => capTaper(u, 0.03, 0.04) * (1.2 - 0.35 * u);
+    this.beam.radius = JET.radius * (1 + 0.12 * Math.sin(time * 30));
+    // Tight at the palms, flaring slightly toward the impact; never thinner than the hitbox core.
+    this.beam.profile = (u) => capTaper(u, 0.02, 0.03) * (0.85 + 0.35 * u);
+    if (Math.random() < dt * 12) ctx.vfx.burst('spray', this.start, { count: 1, size: 0.5, speed: 0.6 });
     this.beam.build(6);
     if (this.emitter) {
       this.emitter.position.copy(this.end);

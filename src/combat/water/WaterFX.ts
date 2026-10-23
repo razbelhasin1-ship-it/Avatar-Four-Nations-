@@ -67,7 +67,7 @@ export class WaterFX {
   traceOn = false;
   traceLog: TraceFrame[] = [];
   /** Recent casts' first-frame stream geometry (debug: "visual starts at the river"). */
-  readonly castLog: Array<{ castId: number; techniqueId: string; sourceType: string | null; from: number[] | null; streamStart: number[] | null; t: number }> = [];
+  readonly castLog: Array<{ castId: number; techniqueId: string; sourceType: string | null; sourceId: string | null; frozen: boolean; from: number[] | null; streamStart: number[] | null; t: number }> = [];
 
   constructor(readonly ctx: GameContext) {
     this.group.name = 'waterbending_fx';
@@ -97,6 +97,8 @@ export class WaterFX {
       castId: cast.id,
       techniqueId: cast.def.id,
       sourceType: cast.water.sourceType,
+      sourceId: cast.water.sourceId,
+      frozen: cast.water.frozen,
       from: cast.water.from ? cast.water.from.toArray() : null,
       streamStart: streamStart ? streamStart.toArray() : null,
       t: this.ctx.time.elapsed,
@@ -291,8 +293,8 @@ export class StreamBody {
   profile: (u: number) => number = (u) => capTaper(u, 0.12, 0.18);
   wobble = 0.04;
 
-  constructor(private readonly fx: WaterFX, look: WaterLook = {}, detail = 1, count = 4) {
-    this.tube = fx.tubes.acquire(look, detail);
+  constructor(private readonly fx: WaterFX, look: WaterLook = {}, detail = 1, count = 4, minRadial = 0) {
+    this.tube = fx.tubes.acquire(look, detail, minRadial);
     for (let i = 0; i < count; i++) this.pts.push(new THREE.Vector3());
   }
 
@@ -376,6 +378,19 @@ export class ReserveVisual {
 
   get fraction(): number {
     return this.owner.maxWaterReserve > 0 ? clamp01(this.owner.waterReserve / this.owner.maxWaterReserve) : 0;
+  }
+
+  /** Debug/tests: whether the orbiting ring is currently drawn, and how icy it looks. */
+  get visible(): boolean {
+    return !!this.body?.tube?.mesh.visible;
+  }
+
+  get icyLevel(): number {
+    return this.icy;
+  }
+
+  get shownAmount(): number {
+    return this.shown;
   }
 
   /** Point on the ring nearest to p (falls back to the waist). */

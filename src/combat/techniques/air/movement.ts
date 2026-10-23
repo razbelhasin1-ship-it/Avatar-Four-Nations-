@@ -183,7 +183,8 @@ registerTechnique({
   release(cast) {
     const ctx = cast.ctx;
     const c = cast.caster;
-    const vel = new THREE.Vector3();
+    // Mounting kicks the ball off along the aim, so it rolls even before steering.
+    const vel = aimFlat(cast).multiplyScalar(7);
     const d: ScooterData = {
       shell: new WindShell(ctx, { rings: 2, opacity: 0.95, speed: 6 }),
       loop: ctx.audio.loop('bend_wind_loop', { position: c.position, volume: 0.6 }),

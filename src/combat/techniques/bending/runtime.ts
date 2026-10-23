@@ -8,6 +8,7 @@ import { constructCount, liveConstructs } from '../../../vfx/effects/constructs'
 import { DebrisField } from '../../../vfx/effects/debris';
 import { clearEffects, effectCount, setDebrisField, updateEffects } from '../../../vfx/effects/loop';
 import { FX_TIME } from '../../../vfx/effects/materials';
+import { getTechnique } from '../../CombatSystem';
 import type { Cast, Combatant } from '../../types';
 import { SparringDummy } from './SparringDummy';
 
@@ -440,6 +441,63 @@ class BendingRuntime {
           vy: e.body?.velocity.y ?? 0,
         };
       },
+      /**
+       * Turn sparring dummy `fromId` hostile and fire a test bolt at the player
+       * (shield / redirect / wall / guard tests). Returns false if impossible.
+       */
+      shootAt: (fromId: number, o: { speed?: number; damage?: number; radius?: number; life?: number; at?: { x: number; y: number; z: number } } = {}) => {
+        const from = ctx.entities.get(fromId);
+        const p = ctx.player;
+        const def = getTechnique('fire_jab');
+        if (!(from instanceof SparringDummy) || !p || !def) return false;
+        from.team = 'hostile';
+        const origin = from.castOrigin('chest', new THREE.Vector3());
+        const aim = o.at ? new THREE.Vector3(o.at.x, o.at.y, o.at.z) : p.aimPoint(new THREE.Vector3());
+        const dir = aim.sub(origin).normalize();
+        origin.addScaledVector(dir, from.radius + 0.35);
+        const r = o.radius ?? 0.28;
+        const mat = new THREE.MeshBasicMaterial({ color: '#ff7a2a' });
+        const mesh = new THREE.Mesh(new THREE.SphereGeometry(r * 1.2, 10, 8), mat);
+        ctx.vfx.group.add(mesh);
+        ctx.combat.detachedCast(from, def, origin, dir, p).projectile({
+          position: origin,
+          velocity: dir.clone().multiplyScalar(o.speed ?? 16),
+          radius: r,
+          life: o.life ?? 3,
+          damage: o.damage ?? 10,
+          knockback: 3,
+          visual: {
+            object: mesh,
+            update: (pr) => mesh.position.copy(pr.position),
+            dispose: () => {
+              mesh.removeFromParent();
+              mesh.geometry.dispose();
+              mat.dispose();
+            },
+          },
+        });
+        return true;
+      },
+      /** Live projectiles with their current owner (deflection tests). */
+      projectiles: () =>
+        ctx.combat.projectilesInRadius(ctx.player?.position ?? new THREE.Vector3(), 1e5).map((pr) => ({
+          owner: pr.cast.caster.id,
+          technique: pr.cast.def.id,
+          x: pr.position.x,
+          y: pr.position.y,
+          z: pr.position.z,
+          vx: pr.velocity.x,
+          vz: pr.velocity.z,
+        })),
+      /** Reset the player's cooldowns and refill chi (test loops). */
+      refresh: () => {
+        const p = ctx.player;
+        if (!p) return;
+        const st = (ctx.combat as unknown as { states: WeakMap<Entity, { cooldowns: Map<string, number> }> }).states.get(p);
+        st?.cooldowns.clear();
+        p.chi = p.maxChi;
+        this.state(p).heat = 0;
+      },
       stats: () => ({
         constructs: constructCount(),
         constructKinds: [...liveConstructs()].map((c) => c.kind),
@@ -447,6 +505,8 @@ class BendingRuntime {
         movers: this.movers.filter((m) => m.alive).length,
         debris: this.debris?.live ?? 0,
         colliders: ctx.world.collision.count,
+        /** Colliders created by bending constructs (tag 'bending') — leak checks independent of world streaming. */
+        bendingColliders: countTagged(ctx, 'bending'),
         projectiles: ctx.combat.projectileCount,
         particles: ctx.vfx.particleCount,
         casts: ctx.combat.activeCastCount,
@@ -477,6 +537,15 @@ class BendingRuntime {
 }
 
 export const bending = new BendingRuntime();
+
+/** Debug: number of live colliders carrying `tag` (reads CollisionWorld's table; -1 if unavailable). */
+function countTagged(ctx: GameContext, tag: string): number {
+  const table = (ctx.world.collision as unknown as { colliders?: Map<number, { tag?: string }> }).colliders;
+  if (!(table instanceof Map)) return -1;
+  let n = 0;
+  for (const c of table.values()) if (c.tag === tag) n++;
+  return n;
+}
 
 // ---------------------------------------------------------------------------
 // Shader warmup: compile the bending programs once so the first cast doesn't hitch.

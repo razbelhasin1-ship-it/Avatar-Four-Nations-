@@ -434,10 +434,12 @@ export class WaterSourceSystem implements GameSystem {
         const surf = g.surface;
         const p = new THREE.Vector3(pos.x, g.y, pos.z);
         const dist = Math.max(0, pos.y - p.y);
-        if (o.allowSnow && (b.cold > 0.5 || surf === 'snow' || surf === 'packedsnow')) {
+        // No "snow" on a river/lake/sea bed: there the water body itself is the source.
+        const wet = waterAt(pos.x, pos.z);
+        if (o.allowSnow && !wet && (b.cold > 0.5 || surf === 'snow' || surf === 'packedsnow')) {
           consider({ id: 'snowfield', type: 'snow', label: 'Snow', point: p, distance: dist, available: 60, frozen: true, capacity: Infinity, size: 'small' });
         }
-        if (o.allowIce && surf === 'ice' && g.colliderId === 0 && !waterAt(pos.x, pos.z)) {
+        if (o.allowIce && surf === 'ice' && g.colliderId === 0 && !wet) {
           consider({ id: 'glacier', type: 'ice', label: 'Glacier Ice', point: p, distance: dist, available: 999, frozen: true, capacity: Infinity, size: 'medium' });
         }
       }

@@ -761,7 +761,7 @@ export class WaterbendingSystem implements GameSystem, Persistable {
         equipFlask: (on = true) => {
           const p = ctx.game.player;
           const a = structuredClone(p.appearance);
-          a.outfit.accessory = on ? 'water_flask' : 'none_acc';
+          a.outfit.accessory = on ? 'water_flask' : 'none';
           p.setAppearance(a);
           return self.hasFlask();
         },
@@ -799,6 +799,10 @@ export class WaterbendingSystem implements GameSystem, Persistable {
         traceLog: () => self.fx.traceLog,
         castLog: () => self.fx.castLog,
         effects: () => (self.fx as unknown as { effects: Array<{ kind: string; castId?: number }> }).effects.map((e) => ({ kind: e.kind, castId: e.castId ?? null })),
+        reserveVisual: () => {
+          const r = self.fx.reserveOf(ctx.game.player);
+          return r ? { tracked: true, visible: r.visible, fraction: +r.fraction.toFixed(3), shown: +r.shownAmount.toFixed(2), icy: +r.icyLevel.toFixed(3) } : { tracked: false, visible: false, fraction: 0, shown: 0, icy: 0 };
+        },
         stats: () => ({ tubesActive: self.fx.tubes.activeCount, tubesTotal: self.fx.tubes.totalCount, effects: self.fx.activeCount, puddles: self.puddleCount, encased: self.encasedCount, meltables: self.fx.meltableCount }),
         humidity: (x?: number, z?: number) => {
           const p = ctx.game.player.position;

@@ -223,4 +223,18 @@ describe('WaterSourceSystem', () => {
     expect(river).toBeTruthy();
     expect(river!.size).toBe('large');
   });
+
+  it('snow is offered on cold dry ground, never on a river bed', () => {
+    fake.knows.add('water_snow_draw');
+    // Dry tundra near the Northern Water Tribe: snow underfoot.
+    const tundra = makeCaster(0, { x: -230, z: -1820 });
+    expect(ws.findAll(tundra.position, 16, { allowSnow: true }).some((h) => h.type === 'snow')).toBe(true);
+    // Standing in the Glacier Melt Stream: the river is the source, not "snow" on its bed.
+    const inRiver = makeCaster(0, { x: -336, z: -1505 });
+    const here = ws.findAll(inRiver.position, 16, { allowSnow: true, allowIce: true });
+    expect(here.some((h) => h.id.startsWith('river:'))).toBe(true);
+    expect(here.some((h) => h.type === 'snow')).toBe(false);
+    // A liquid technique there draws from the river.
+    expect(ws.acquire(inRiver, { amount: 4 }, aim, aimPt)!.sourceType).toBe('river');
+  });
 });

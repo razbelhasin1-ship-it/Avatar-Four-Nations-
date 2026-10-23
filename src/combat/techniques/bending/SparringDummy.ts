@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import type { GameContext } from '../../../core/GameContext';
 import { Entity, Health, type HitInfo, type HitResult } from '../../../entities/Entity';
 import { KinematicBody } from '../../../entities/KinematicBody';
+import type { Element } from '../../../core/types';
+import type { Combatant } from '../../types';
 
 /**
  * Weighted sparring dummy: unlike the fixed TrainingDummy it has a physics body,
@@ -9,8 +11,17 @@ import { KinematicBody } from '../../../entities/KinematicBody';
  * bending e2e tests (window.__game.debug.bending.spawnTarget) and available to
  * training content. kind 'target' → only the player/allies may damage it.
  */
-export class SparringDummy extends Entity {
+export class SparringDummy extends Entity implements Combatant {
   readonly kind = 'target' as const;
+  // Combatant surface so a dummy can act as a scripted "turret" in tests
+  // (window.__game.debug.bending.shootAt): it never casts on its own.
+  readonly humanoid = null;
+  readonly isPlayer = false;
+  element: Element = 'fire';
+  chi = 100;
+  maxChi = 100;
+  waterReserve = 0;
+  maxWaterReserve = 0;
   totalDamage = 0;
   hits = 0;
   lastElement: string | null = null;
@@ -54,6 +65,16 @@ export class SparringDummy extends Entity {
       this.post.add(mesh);
     }
     this.root.add(this.post);
+  }
+
+  castOrigin(which: 'handL' | 'handR' | 'hands' | 'chest' | 'feet', out: THREE.Vector3): THREE.Vector3 {
+    out.copy(this.position);
+    out.y += which === 'feet' ? 0.1 : 1.3;
+    return out;
+  }
+
+  powerMultiplier(): number {
+    return 1;
   }
 
   override receiveHit(hit: HitInfo, ctx: GameContext): HitResult {

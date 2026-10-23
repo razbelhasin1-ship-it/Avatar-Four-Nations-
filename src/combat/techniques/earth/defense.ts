@@ -134,7 +134,8 @@ bending.hook({
     const now = ctx.time.elapsed;
     for (const a of [...armors.values()]) {
       const e = a.entity;
-      if (!e.alive || e.disposed || now >= a.until) {
+      // Ends on timeout, death, or when something strips the armor status (cleanse, session reset).
+      if (!e.alive || e.disposed || now >= a.until || !e.hasStatus('armor')) {
         endArmor(ctx, a, false);
         continue;
       }

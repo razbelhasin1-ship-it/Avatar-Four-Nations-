@@ -65,7 +65,9 @@ registerTechnique({
     const dir = airDir(cast, hand);
     const length = fin ? 9.5 : 7.5;
     const dur = fin ? 0.3 : 0.22;
-    windBlade(ctx, hand, dir, { length, duration: dur + 0.08, r0: 0.45, r1: fin ? 3.2 : 2.3, height: fin ? 1.9 : 1.35, roll: step === 0 ? 0.3 : step === 1 ? -0.3 : 0, layers: fin || slip ? 3 : 2 });
+    windBlade(ctx, hand, dir, { length, duration: dur + 0.08, r0: 0.45, r1: fin ? 3.2 : 2.3, height: fin ? 1.9 : 1.35, roll: step === 0 ? 0.3 : step === 1 ? -0.3 : 0, layers: fin || slip ? 3 : 2, opacity: 1 });
+    // A short streaming gust behind each palm so the push reads as moving air, not a flat decal.
+    if (!fin) windCone(ctx, hand, dir, { length: 4.5 + step, radius: 1.1, duration: 0.26, opacity: slip ? 0.6 : 0.42 });
     if (fin) {
       windCone(ctx, hand, dir, { length: 8, radius: 2.4, duration: 0.36, opacity: 0.6 });
       windSpiral(ctx, c.position, { height: 2.2, r0: 0.7, r1: 1.4, duration: 0.45, turns: 1.4 });

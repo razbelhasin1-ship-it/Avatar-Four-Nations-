@@ -70,7 +70,7 @@ export function pillarGeometry(radius: number, height: number, variant = 0, radi
       pos.setXYZ(i, r > 1e-4 ? (x / r) * rr : x, ny, r > 1e-4 ? (z / r) * rr : z);
       const k = Math.min(1, y / height);
       const strata = 0.06 * Math.sin(y * 7.0 + seed);
-      const shade = 0.62 + k * 0.32 + strata + (top ? 0.08 : 0);
+      const shade = 0.8 + k * 0.26 + strata + (top ? 0.08 : 0);
       col.push(shade, shade * 0.97, shade * 0.92);
     }
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
@@ -103,7 +103,7 @@ export function wallGeometry(width: number, height: number, thick: number, varia
       pos.setXYZ(i, x, y, z);
       const k = Math.min(1, Math.max(0, y / height));
       const strata = 0.07 * Math.sin(y * 5.5 + x * 0.6 + seed);
-      const shade = 0.6 + k * 0.32 + strata + n * 0.1;
+      const shade = 0.78 + k * 0.28 + strata + n * 0.1;
       col.push(shade, shade * 0.97, shade * 0.92);
     }
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
@@ -126,7 +126,7 @@ export function spikeGeometry(variant = 0): THREE.BufferGeometry {
       const n = fbm3(x * 2 + seed, y * 3, z * 2, 2);
       const lean = rand01(variant + 9) * 0.25 - 0.12;
       pos.setXYZ(i, x * (1 + n * 0.3) + y * lean, y, z * (1 + n * 0.3));
-      const shade = 0.6 + y * 0.35 + n * 0.12;
+      const shade = 0.76 + y * 0.3 + n * 0.12;
       col.push(shade, shade * 0.97, shade * 0.93);
     }
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
@@ -153,9 +153,9 @@ export function stoneMaterial(tint = '#8a7860'): THREE.MeshStandardMaterial {
 }
 
 const TINTS: Partial<Record<SurfaceType, string>> = {
-  grass: '#86735a',
-  tallgrass: '#86735a',
-  dirt: '#8a6f52',
+  grass: '#a08e72',
+  tallgrass: '#a08e72',
+  dirt: '#9e8264',
   mud: '#6d5a44',
   gravel: '#8a8378',
   sand: '#c4a878',
@@ -166,7 +166,7 @@ const TINTS: Partial<Record<SurfaceType, string>> = {
   snow: '#9aa0a6',
   packedsnow: '#9aa0a6',
   ice: '#8f98a2',
-  wood: '#86735a',
+  wood: '#a08e72',
   ash: '#5a5350',
   lava: '#4a3a34',
   metal: '#8a8580',
