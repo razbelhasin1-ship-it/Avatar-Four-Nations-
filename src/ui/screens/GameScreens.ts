@@ -321,21 +321,35 @@ class MapScreen extends ModalScreen {
     }
     if (!best) return;
     const target = best;
+    const player = this.ctx.player;
+    if (player && this.ctx.entities.queryRadius(player.position, 35, { teams: ['hostile'], aliveOnly: true }).length > 0) {
+      this.ctx.events.emit('ui:notify', { text: 'You cannot fast travel while enemies are near.', kind: 'warning' });
+      return;
+    }
     this.ui.confirm(`Fast travel to ${target.name}?`, [
       {
         text: 'Travel',
         primary: true,
-        onClick: () => {
-          this.ui.closeAll();
-          const ctx = this.ctx;
-          const off = new THREE.Vector3(6, 0, 6);
-          const x = target.x + off.x, z = target.z + off.z;
-          ctx.player?.teleport(new THREE.Vector3(x, ctx.world.groundAt(x, z).y + 0.1, z));
-          ctx.events.emit('ui:notify', { text: `Arrived at ${target.name}`, kind: 'discovery' });
-        },
+        onClick: () => void this.travel(target),
       },
       { text: 'Cancel' },
     ]);
+  }
+
+  /** Streams the destination in behind the loading screen before placing the player, so regions exist when they land. */
+  private async travel(target: (typeof LANDMARKS)[number]): Promise<void> {
+    const ctx = this.ctx;
+    this.ui.closeAll();
+    if (ctx.companions.mounted) ctx.companions.dismount();
+    const x = target.x + 6, z = target.z + 6;
+    this.ui.showLoading(target.name);
+    try {
+      await ctx.world.preload(new THREE.Vector3(x, heightAt(x, z), z), (f, label) => this.ui.setLoadingProgress(f, label));
+    } finally {
+      this.ui.hideLoading();
+    }
+    ctx.player?.teleport(new THREE.Vector3(x, ctx.world.groundAt(x, z).y + 0.1, z));
+    ctx.events.emit('ui:notify', { text: `Arrived at ${target.name}`, kind: 'discovery' });
   }
 }
 
