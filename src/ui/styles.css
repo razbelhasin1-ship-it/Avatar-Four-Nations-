@@ -1016,7 +1016,7 @@ body {
 
 .banner {
   position: absolute;
-  top: 18%;
+  top: 30%;
   left: 50%;
   transform: translateX(-50%);
   text-align: center;

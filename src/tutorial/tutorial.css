@@ -1,0 +1,63 @@
+.tutorial-panel {
+  position: absolute;
+  left: 50%;
+  top: 52px;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  padding: 12px 16px 14px;
+  border-color: rgba(159, 216, 255, 0.45);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.tutorial-panel.tut-complete {
+  border-color: #7fd17a;
+  box-shadow: 0 0 24px rgba(127, 209, 122, 0.35);
+}
+
+.tut-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.tut-badge {
+  font-family: var(--font-title);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: #9fd8ff;
+}
+
+.tut-count {
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: 6px;
+}
+
+.tut-title {
+  font-family: var(--font-title);
+  font-size: 18px;
+  color: var(--gold-2);
+  margin-bottom: 4px;
+}
+
+.tut-text {
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.tut-progress {
+  margin-top: 8px;
+  font-size: 14px;
+  color: #b6f0ff;
+  min-height: 18px;
+}
+
+@media (max-width: 640px) {
+  .tutorial-panel {
+    top: 8px;
+  }
+  .tut-text {
+    font-size: 14px;
+  }
+}

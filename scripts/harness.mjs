@@ -38,7 +38,7 @@ async function startVite() {
   const proc = spawn(process.execPath, [path.join(ROOT, 'node_modules/vite/bin/vite.js'), '--port', String(port), '--strictPort', '--host', '127.0.0.1'], {
     cwd: ROOT,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, BROWSER: 'none' },
+    env: { ...process.env, BROWSER: 'none', A4N_TEST_SERVER: '1' },
   });
   let out = '';
   proc.stdout.on('data', (d) => (out += d));

@@ -1,4 +1,5 @@
 import type { GameContext, GameSystem } from './core/GameContext';
+import { TutorialSystem } from './tutorial/TutorialSystem';
 
 /**
  * Feature modules plug into the game here without editing Game.ts.
@@ -15,4 +16,6 @@ export interface GameModule {
   create(ctx: GameContext): GameSystem;
 }
 
-export const MODULES: GameModule[] = [];
+export const MODULES: GameModule[] = [
+  { name: 'tutorial', order: 85, create: () => new TutorialSystem() },
+];
