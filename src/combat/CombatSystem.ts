@@ -252,6 +252,16 @@ export class CombatSystem implements GameSystem {
     const chiCost = req.free ? 0 : def.chiCost * (caster.isPlayer && ctx.avatar.active ? 0.5 : 1);
     if (caster.chi < chiCost) return fail('chi', 'Not enough chi.');
     if (!def.airborne && caster.body && !caster.body.grounded && !caster.body.swimming) return fail('airborne', 'Must be grounded.');
+    // [additive: waterbending] Technique-specific precondition, before any cost is paid.
+    if (def.precheck) {
+      let pre: { reason: TechniqueFailReason; message: string } | null = null;
+      try {
+        pre = def.precheck(caster, ctx);
+      } catch (err) {
+        console.error('[Combat] precheck error', err);
+      }
+      if (pre) return fail(pre.reason, pre.message);
+    }
 
     // Aim
     const origin = caster.castOrigin('chest', new THREE.Vector3());
@@ -571,6 +581,80 @@ export class CombatSystem implements GameSystem {
 
   get projectileCount(): number {
     return this.projectiles.length;
+  }
+
+  // ---------------------------------------------------------------------------
+  // [additive: waterbending] Projectile queries for shields / constructs that
+  // stop or redirect projectiles. Does not change existing behaviour.
+  // ---------------------------------------------------------------------------
+
+  /** Live projectiles whose centre is within `radius` of `center` (any owner). */
+  projectilesInRadius(center: THREE.Vector3, radius: number, out: Projectile[] = []): Projectile[] {
+    out.length = 0;
+    for (const p of this.projectiles) {
+      if (!p.alive) continue;
+      const r = radius + p.spec.radius;
+      if (p.position.distanceToSquared(center) <= r * r) out.push(p);
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
+  // [additive: air/fire/earth bending] Projectile redirection (Air Shield,
+  // Wind Redirection) and detached damage sources. Does not change existing
+  // behaviour.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Hand a live projectile to a new owner (deflect / reflect). It keeps its spec
+   * (damage, statuses, visual) but now belongs to `by` via technique
+   * `techniqueId`: it can hit by's enemies — including its former owner — and no
+   * longer hits `by`. Hit memory is cleared and its life is extended.
+   * Projectile callbacks should use `p.cast` (not a captured cast) so follow-up
+   * explosions are attributed to the new owner.
+   */
+  redirectProjectile(
+    p: Projectile,
+    by: Combatant,
+    techniqueId: string,
+    velocity: THREE.Vector3,
+    opts: { target?: Entity | null; homing?: number; damageMul?: number; extraLife?: number } = {},
+  ): boolean {
+    const impl = p as ProjectileImpl;
+    if (!impl.alive) return false;
+    const def = TECHNIQUES.get(techniqueId) ?? impl.cast.def;
+    const dir = velocity.clone().normalize();
+    (impl as { cast: Cast }).cast = this.detachedCast(by, def, impl.position, dir, opts.target ?? null);
+    impl.velocity.copy(velocity);
+    impl.hitSet.clear();
+    impl.pierced = 0;
+    impl.age = Math.max(0, impl.age - (opts.extraLife ?? impl.spec.life * 0.6));
+    if (opts.damageMul) impl.spec.damage *= opts.damageMul;
+    if (opts.target !== undefined) {
+      impl.spec.target = opts.target;
+      if (opts.homing !== undefined) impl.spec.homing = opts.homing;
+    }
+    return true;
+  }
+
+  /**
+   * A cast that is not simulated (no windup/channel/recovery). Damage source for
+   * things that outlive their technique (reflected projectiles, lingering
+   * flames); hit()/areaHit() keep their own dedup set.
+   */
+  detachedCast(caster: Combatant, def: TechniqueDef, origin: THREE.Vector3, aimDir: THREE.Vector3, target: Entity | null = null): Cast {
+    const power = caster.powerMultiplier() * (caster.isPlayer ? this.playerDamageDealtMul : 1);
+    const water: WaterGrant = { amount: 0, from: null, sourceId: null, sourceType: null, frozen: false };
+    const aimPoint = origin.clone().addScaledVector(aimDir, def.range || 10);
+    const c = new CastImpl(this, this.ctx, def, caster, origin.clone(), aimDir.clone(), aimPoint, target, 0, power, 0, water);
+    c.released = true;
+    c.phase = 'done';
+    return c;
+  }
+
+  /** Casts currently simulated (tests check for runaway casts). */
+  get activeCastCount(): number {
+    return this.casts.length;
   }
 
   /** Clear all casts/projectiles (session end). */

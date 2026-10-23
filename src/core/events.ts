@@ -121,6 +121,12 @@ export interface GameEvents {
   'ui:screen': { screen: string | null };
   'camera:shake': { intensity: number; duration: number; position?: Vec3Like };
   'camera:impulse': { fovKick?: number; pullback?: number; duration: number };
+
+  // ---- bending environment (air / fire / earth module, additive) ----
+  /** Fire heats an area: ice constructs in range should melt, standing water steams. */
+  'bending:heat': { position: Vec3Like; radius: number; intensity: number; casterId: number };
+  /** Seismic Sense pulse: entity ids revealed (enemies, creatures, things tagged 'hidden'). */
+  'seismic:pulse': { position: Vec3Like; radius: number; casterId: number; revealed: number[] };
 }
 
 export type GameEventName = keyof GameEvents;

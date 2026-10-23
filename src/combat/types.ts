@@ -1,6 +1,6 @@
 import type * as THREE from 'three';
 import type { GameContext } from '../core/GameContext';
-import type { Element, ElementOrAvatar, WaterSourceType } from '../core/types';
+import type { Element, ElementOrAvatar, TechniqueFailReason, WaterSourceType } from '../core/types';
 import type { Humanoid } from '../character/Humanoid';
 import type { Entity, HitInfo, HitResult } from '../entities/Entity';
 
@@ -18,6 +18,13 @@ export interface WaterRequirement {
   allowLiquid?: boolean;
   /** Ultimate-only exception: may conjure water when the environment cannot supply enough. */
   canConjure?: boolean;
+  // --- Additive (waterbending) ----------------------------------------------
+  /** Only a large body of liquid water (ocean, river, lake, swamp) can supply this; the reserve and water skin cannot. */
+  largeSource?: boolean;
+  /** Maximum distance (m) to the source (default: the bender's draw range). */
+  maxRange?: number;
+  /** Prefer frozen sources (ice, sea ice, ice walls) when several are in range — ice techniques. */
+  preferFrozen?: boolean;
 }
 
 /**
@@ -71,6 +78,13 @@ export interface TechniqueDef {
   end?(cast: Cast, interrupted: boolean): void;
   /** Optional AI hint: should an AI caster use this now? */
   aiScore?(caster: Combatant, target: Entity, dist: number): number;
+  // --- Additive (waterbending) ----------------------------------------------
+  /**
+   * Optional precondition checked by CombatSystem.tryCast before any cost is
+   * paid or windup starts. Return a failure to refuse the cast with a clear
+   * message (e.g. "the air here is too dry"), or null to allow it.
+   */
+  precheck?(caster: Combatant, ctx: GameContext): { reason: TechniqueFailReason; message: string } | null;
 }
 
 /** Anything that can bend: the player and enemy/ally benders. */
