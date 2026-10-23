@@ -7,3 +7,4 @@ import './air';
 import './water';
 import './earth';
 import './fire';
+import './avatar';

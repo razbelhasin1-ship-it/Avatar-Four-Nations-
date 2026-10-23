@@ -171,6 +171,8 @@ export interface LoopWallOpts {
   key: string;
   arcs: number;
   segLen?: number;
+  /** Optional chunk key per segment (overrides key/arcs). */
+  chunkKey?: (a: P2, b: P2) => string;
 }
 
 /** Complement of gap ranges on a loop (gaps given as centre ± half). */
@@ -197,12 +199,10 @@ export function loopWall(chunks: ChunkSet, o: LoopWallOpts): void {
       const sa = s0 + ((s1 - s0) * i) / n, sb = s0 + ((s1 - s0) * (i + 1)) / n;
       const sm = (sa + sb) / 2;
       const a = o.path.at(sa), b = o.path.at(sb);
-      const pg = o.parapetGaps.some(([g0, g1]) => {
-        const m = ((sm % total) + total) % total;
-        return (m >= g0 && m <= g1) || (m + total >= g0 && m + total <= g1);
-      });
+      // Drop the inner parapet on any segment overlapping a gap (stair landings).
+      const pg = o.parapetGaps.some(([g0, g1]) => [0, total, -total, 2 * total].some((off) => sa + off < g1 && sb + off > g0));
       const arc = Math.min(o.arcs - 1, Math.floor((o.path.wrap(sm) / total) * o.arcs));
-      const c = chunks.named('major', `${o.key}:${arc}`);
+      const c = chunks.named('major', o.chunkKey ? o.chunkKey(a, b) : `${o.key}:${arc}`);
       const first = i === 0, last = i === n - 1;
       wallSegment(c.builder, a, b, o.path.outward((a.x + b.x) / 2, (a.z + b.z) / 2), o.baseY, o.style, pg, first || last ? 0.05 : 0.35);
     }

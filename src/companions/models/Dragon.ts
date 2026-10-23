@@ -60,7 +60,7 @@ function buildDragon(variant: number, detail: number): ModelTemplate {
       B.bone(`foot${id}${s}`, `fore${id}${s}`, 0, -0.74, 0.05);
     }
   }
-  B.anchor('seat', 'spine0', 0, 0.42, -0.25);
+  B.anchor('seat', 'spine0', 0, 0.9, -0.25); // saddle top
   B.anchor('mouth', 'head', 0, -0.12, 1.85);
   B.anchor('head', 'head', 0, 0.4, 0.6);
 

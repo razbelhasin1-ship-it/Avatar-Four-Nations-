@@ -86,7 +86,8 @@ nearest real source). Ice techniques may use ice; snow only with `water_snow_dra
 | `ult_cataclysm` | Avatar Cataclysm | combined | 4 | sphere | All four elements converge then release a battlefield-scale blast |
 
 Slot mapping while the Elements Sphere is active (Player.ts): 1 Hurricane, 2 Tsunami,
-3 Earthquake, 4 Fire Tornado, 5 Cataclysm.
+3 Earthquake, 4 Fire Tornado, 5 Cataclysm. Ultimates also cost Avatar spirit (15 each, 30 for
+the Cataclysm; `src/combat/techniques/avatar/common.ts`), checked before any cost is paid.
 
 ## Masters (lesson → technique) — implemented by the masters/training module
 

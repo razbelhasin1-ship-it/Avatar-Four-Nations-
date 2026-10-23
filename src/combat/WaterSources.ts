@@ -285,8 +285,9 @@ export class WaterSourceSystem implements GameSystem {
 
   /** Draw range for a caster (Avatar State extends it). */
   rangeFor(caster?: Combatant): number {
-    const avatar = caster?.isPlayer && this.ctx?.avatar?.active;
-    return this.drawRange * (avatar ? 1.8 : 1);
+    // [avatar] Avatar State extends the draw range (boost is 1 when inactive).
+    const k = caster?.isPlayer ? (this.ctx?.avatar?.boosts?.waterRange ?? 1) : 1;
+    return this.drawRange * k;
   }
 
   private effectiveRange(caster?: Combatant): number {

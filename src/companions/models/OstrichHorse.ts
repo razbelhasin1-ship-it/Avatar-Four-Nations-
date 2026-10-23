@@ -39,7 +39,7 @@ function buildOstrich(variant: number, detail: number): ModelTemplate {
     B.bone(`foot${s}`, `shin${s}`, ankle.x, ankle.y, ankle.z);
     B.bone(`toes${s}`, `foot${s}`, toes.x, toes.y, toes.z);
   }
-  B.anchor('seat', 'body', 0, 0.12, 0.0);
+  B.anchor('seat', 'body', 0, 0.5, 0.0); // saddle top
   B.anchor('mouth', 'head', 0, -0.08, 0.45);
   B.anchor('head', 'head', 0, 0.1, 0.1);
   const plumage = (p: THREE.Vector3, n: THREE.Vector3) => mix(v.body, v.back, smooth(0.0, 0.8, n.y) + (cnoise(p.x, p.y, p.z, 5) - 0.5) * 0.25);

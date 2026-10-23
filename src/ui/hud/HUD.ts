@@ -1,5 +1,7 @@
 import * as THREE from 'three';
+import { SPIRIT_TO_ENTER } from '../../avatar/AvatarStateSystem';
 import { getTechnique } from '../../combat/CombatSystem';
+import { SPIRIT_COST as ULT_SPIRIT } from '../../combat/techniques/avatar/common';
 import type { GameContext } from '../../core/GameContext';
 import { ELEMENTS, type Element } from '../../core/types';
 import { LANDMARKS } from '../../world/WorldLayout';
@@ -22,6 +24,8 @@ export class HUD {
   private chiFill: HTMLElement;
   private spiritFill: HTMLElement;
   private spiritRow: HTMLElement;
+  /** [avatar] Spirit % / active Avatar State boosts. */
+  private spiritInfo: HTMLElement = h('span.spirit-info', '');
   private waterRow: HTMLElement;
   private waterFill: HTMLElement;
   private waterLabel: HTMLElement;
@@ -61,7 +65,7 @@ export class HUD {
     this.waterFill = water.fill;
     this.nameEl = h('div.hud-name');
     this.waterLabel = h('span', '0');
-    this.spiritRow = h('div', h('div.bar-label', h('span', 'Avatar Spirit'), h('span', '')), spirit.el);
+    this.spiritRow = h('div', h('div.bar-label', h('span', 'Avatar Spirit'), this.spiritInfo), spirit.el);
     this.waterRow = h('div', h('div.bar-label', h('span', 'Water held'), this.waterLabel), water.el);
     const vitals = h('div.hud-vitals', this.nameEl, h('div', h('div.bar-label', h('span', 'Health'), h('span', '')), hp.el), h('div', h('div.bar-label', h('span', 'Chi'), h('span', '')), chi.el), this.spiritRow, this.waterRow);
     this.wheel = h('div.element-wheel');
@@ -181,6 +185,8 @@ export class HUD {
       cd.style.transform = `scaleY(${f.toFixed(3)})`;
       const def = getTechnique(id);
       if (def?.water && this.waterState) el.classList.toggle('nowater', !ctx.water.canSupply(p, def.water));
+      // [avatar] Ultimates dim when the spirit cannot pay for them.
+      if (def && (def.kind === 'ultimate' || def.kind === 'combined')) el.classList.toggle('nospirit', ctx.avatar.spirit < (ULT_SPIRIT[id] ?? 0));
     }
   }
 
@@ -259,6 +265,7 @@ export class HUD {
     this.chiFill.style.transform = `scaleX(${(p.chi / p.maxChi).toFixed(3)})`;
     this.spiritFill.style.transform = `scaleX(${(ctx.avatar.spirit / ctx.avatar.maxSpirit).toFixed(3)})`;
     this.spiritRow.style.opacity = ctx.avatar.active ? '1' : '0.75';
+    this.updateSpiritInfo();
     this.nameEl.textContent = `${p.characterName} · Lv ${ctx.progression.level}${ctx.avatar.sphereActive ? ' · Elements Sphere' : ctx.avatar.active ? ' · Avatar State' : ''}`;
     this.updateWater(dt);
     this.updateSlots();
@@ -303,6 +310,20 @@ export class HUD {
       const s = ctx.render.stats;
       this.fpsEl.textContent = `${s.fps.toFixed(0)} fps · ${s.frameMs.toFixed(1)} ms · ${s.drawCalls} calls · ${(s.triangles / 1000).toFixed(0)}k tris · ${ctx.entities.count} ent · ${ctx.vfx.particleCount} pts`;
     }
+  }
+
+  /** [avatar] Spirit readout; while active, the live Avatar State boosts. */
+  private updateSpiritInfo(): void {
+    const av = this.ctx.avatar;
+    let text: string;
+    if (av.active) {
+      const b = av.boosts;
+      const pct = (k: number) => `${Math.round((1 - k) * 100)}%`;
+      text = `${Math.round(av.spirit)}% · ×${b.power.toFixed(1)} power · −${pct(b.damageTaken)} dmg · −${pct(b.cooldown)} cd`;
+      this.spiritInfo.title = `Avatar State: ×${b.power} damage, ${pct(b.damageTaken)} less damage taken, ${pct(b.knockbackTaken)} less knockback, cooldowns −${pct(b.cooldown)}, chi costs −${pct(b.chiCost)}, +${b.chiRegen} chi/s, water reach ×${b.waterRange}`;
+    } else text = av.spirit < SPIRIT_TO_ENTER ? `${Math.round(av.spirit)}% · resting` : `${Math.round(av.spirit)}%`;
+    if (this.spiritInfo.textContent !== text) this.spiritInfo.textContent = text;
+    this.spiritInfo.classList.toggle('active', av.active);
   }
 
   /** Element switch helper for touch UI. */

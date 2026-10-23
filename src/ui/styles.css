@@ -839,6 +839,18 @@ body {
   box-shadow: 0 0 14px rgba(207, 239, 255, 0.6);
 }
 
+/* [avatar] ultimate without enough spirit; active Avatar State boosts readout */
+.slot.ultimate.nospirit {
+  opacity: 0.45;
+  box-shadow: none;
+}
+.spirit-info.active {
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--avatar);
+  text-shadow: 0 0 6px rgba(207, 239, 255, 0.8);
+}
+
 .hud-quest {
   position: absolute;
   top: 60px;

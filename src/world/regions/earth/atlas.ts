@@ -16,7 +16,7 @@ import type { UVRect } from './geom';
 
 export const ATLAS_W = 2048;
 export const ATLAS_H = 1024;
-export const PX = 32; // pixels per metre
+export const PX = 24; // pixels per metre
 const GLOW_SCALE = 0.25;
 const PAD = 4;
 
@@ -83,6 +83,7 @@ function mixHex(a: string, b: string, t: number): string {
 
 /** Shelf packer for atlas regions. */
 class Packer {
+  used = 0;
   private x = PAD;
   private y = PAD;
   private shelfH = 0;
@@ -96,6 +97,7 @@ class Packer {
       this.shelfH = 0;
     }
     if (this.y + h + PAD > this.H) throw new Error(`[EarthAtlas] out of space for ${w}x${h}`);
+    this.used = Math.max(this.used, this.y + h + PAD);
     const r = { x: this.x, y: this.y, w, h };
     this.x += w + PAD * 2;
     this.shelfH = Math.max(this.shelfH, h);
@@ -113,7 +115,7 @@ export class HouseAtlas {
   private readonly entries = new Map<string, AtlasEntry>();
   private readonly g: CanvasRenderingContext2D;
   private readonly gg: CanvasRenderingContext2D;
-  private readonly packer = new Packer(ATLAS_W, ATLAS_H);
+  readonly packer = new Packer(ATLAS_W, ATLAS_H);
   private readonly rnd = new Random(8821);
 
   constructor() {

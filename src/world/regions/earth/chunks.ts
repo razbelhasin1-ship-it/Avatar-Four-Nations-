@@ -37,6 +37,7 @@ export class Chunk {
   cx = 0;
   cz = 0;
   r = 0;
+  finished = false;
   constructor(ctx: GameContext, readonly key: string, readonly kind: ChunkKind, tag: string) {
     this.builder = new ContentBuilder(ctx, this.group, tag);
     this.group.name = key;
@@ -89,7 +90,7 @@ export class ChunkSet {
     return c;
   }
 
-  at(kind: ChunkKind, x: number, z: number, cell = this.cell): Chunk {
+  at(kind: ChunkKind, x: number, z: number, cell = kind === 'props' ? this.cell * 2 : kind === 'houses' ? this.cell * 1.5 : this.cell): Chunk {
     return this.named(kind, `${Math.floor(x / cell)}:${Math.floor(z / cell)}`);
   }
 
@@ -125,7 +126,15 @@ export class ChunkSet {
 
   /** Merge kit batches and house stamps; compute chunk bounds. */
   finish(houseMaterial: THREE.Material): void {
-    for (const c of this.map.values()) {
+    const it = this.finishSteps(houseMaterial);
+    while (!it.next().done);
+  }
+
+  /** finish() as a generator yielding after each chunk (time-sliced construction). */
+  *finishSteps(houseMaterial: THREE.Material): Generator<unknown, void, unknown> {
+    for (const c of [...this.map.values()]) {
+      if (c.finished) continue;
+      c.finished = true;
       c.builder.finish();
       if (c.stamps.length) {
         const geo = mergeStamps(c.stamps);
@@ -147,6 +156,8 @@ export class ChunkSet {
         c.cz = (box.min.z + box.max.z) / 2;
         c.r = Math.hypot(box.max.x - box.min.x, box.max.z - box.min.z) / 2;
       }
+      if (c.kind !== 'major') c.group.visible = false;
+      yield;
     }
   }
 

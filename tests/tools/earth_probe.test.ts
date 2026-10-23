@@ -68,6 +68,10 @@ describe.skipIf(!process.env.EARTH_PROBE)('earth probe', () => {
         out.push(id + ' ' + r1(ROADS.find((r) => r.id === id)));
       }
     }
+    if (mode === 'spots') {
+      const { EARTH_SPOTS } = await import('../../src/world/regions/earth/spots');
+      for (const [id, sp] of Object.entries(EARTH_SPOTS)) out.push(`${id}: (${sp.x.toFixed(1)}, ${(sp.y ?? NaN).toFixed(1)}, ${sp.z.toFixed(1)})${sp.r ? ` r=${sp.r}` : ''} ${sp.label ?? ''}`);
+    }
     writeFileSync(process.env.EARTH_OUT ?? 'earth_probe.txt', out.join('\n'));
   });
 });

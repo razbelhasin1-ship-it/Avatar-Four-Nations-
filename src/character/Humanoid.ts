@@ -88,6 +88,8 @@ export class Humanoid {
   private animAccum = 0;
   private eyeGlow = 0;
   private tattooGlow = 0;
+  /** [additive: avatar] World-space wind acceleration for hair / cloth chains (m/s²); zero = still air. */
+  readonly wind = new THREE.Vector3();
   private readonly glowColor = new THREE.Color('#bfe8ff');
   private flashTime = 0;
   private flashDur = 0.12;
@@ -361,7 +363,10 @@ export class Humanoid {
       ex[4].rotation.set(close - this.eyeGlow * 0.12, 0, 0);
       ex[5].rotation.set(close - this.eyeGlow * 0.12, 0, 0);
     }
-    if (this.secondary && this.lod === 0 && !far) this.secondary.update(dt);
+    if (this.secondary && this.lod === 0 && !far) {
+      this.secondary.wind.copy(this.wind);
+      this.secondary.update(dt);
+    }
     // Flash decay.
     const fl = this.material.cu.uFlash.value;
     if (this.flashTime > 0) {

@@ -75,6 +75,11 @@ export function polar(theta: number, r: number, c: P2 = C): P2 {
   return { x: c.x + Math.cos(theta) * r, z: c.z + Math.sin(theta) * r };
 }
 
+/** Quadrant of the city (relative to C) used to merge big static content into few chunks. */
+export function qkey(x: number, z: number): string {
+  return `${x < C.x ? 'w' : 'e'}${z < C.z ? 'n' : 's'}`;
+}
+
 export function dist(a: P2, b: P2): number {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
@@ -300,10 +305,10 @@ function loopPoints(t0: number, t1: number, step: number, y: number): Array<P2 &
 
 /** Station positions (deck centre). */
 export const STATIONS = {
-  lowerWest: { ...polar(205 * DEG, lowerMid(205 * DEG)), y: RAIL.deck, theta: 205 * DEG },
+  lowerWest: { ...polar(222 * DEG, lowerMid(222 * DEG)), y: RAIL.deck, theta: 222 * DEG },
   lowerNorth: { ...polar(270 * DEG, lowerMid(270 * DEG)), y: RAIL.deck, theta: 270 * DEG },
   lowerEast: { ...polar(338 * DEG, lowerMid(338 * DEG)), y: RAIL.deck, theta: 338 * DEG },
-  outerWest: { ...polar(205 * DEG, outerR(205 * DEG)), y: RAIL.wallDeck, theta: 205 * DEG },
+  outerWest: { ...polar(222 * DEG, outerR(222 * DEG)), y: RAIL.wallDeck, theta: 222 * DEG },
   outerEast: { ...polar(338 * DEG, outerR(338 * DEG)), y: RAIL.wallDeck, theta: 338 * DEG },
   outerSouth: { ...polar(84 * DEG, outerR(84 * DEG)), y: RAIL.wallDeck, theta: 84 * DEG },
 };
@@ -313,13 +318,13 @@ export const STATION_HALF = 7.5;
 
 export const RAIL_LINES: RailLine[] = [
   // Ring line through the Lower Ring (west → north → east).
-  { id: 'loop', points: loopPoints(196 * DEG, 352 * DEG, 3 * DEG, RAIL.deck) },
+  { id: 'loop', points: loopPoints(222 * DEG, 352 * DEG, 3 * DEG, RAIL.deck) },
   // Spurs from the outer wall stations to the loop / inner wall (straight, graded).
   {
     id: 'west_spur',
     points: [
-      { ...polar(205 * DEG, outerR(205 * DEG) - OUTER.thick / 2 - 4), y: RAIL.wallDeck },
-      { ...polar(205 * DEG, lowerMid(205 * DEG) + STATION_HALF), y: RAIL.deck },
+      { ...polar(222 * DEG, outerR(222 * DEG) - OUTER.thick / 2 - 4), y: RAIL.wallDeck },
+      { ...polar(222 * DEG, lowerMid(222 * DEG) + STATION_HALF), y: RAIL.deck },
     ],
   },
   {

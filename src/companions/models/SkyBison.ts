@@ -41,7 +41,7 @@ function buildBison(variant: number, detail: number): ModelTemplate {
       B.bone(`shin${l.id}${side}`, `thigh${l.id}${side}`, 0, -0.62, 0);
     }
   }
-  B.anchor('seat', 'body', 0, 1.06, 0.55);
+  B.anchor('seat', 'body', 0, 1.5, 0.35); // pelvis rests on the saddle platform top
   B.anchor('mouth', 'head', 0, -0.35, 1.55);
   B.anchor('head', 'head', 0, 0.4, 0.8);
   B.anchor('back', 'body', 0, 1.4, -0.5);

@@ -37,7 +37,7 @@ function buildBadgermole(variant: number, detail: number): ModelTemplate {
       B.bone(`paw${id}${s}`, `shin${id}${s}`, 0, -0.3, 0.05);
     }
   }
-  B.anchor('seat', 'body', 0, 0.42, 0.25);
+  B.anchor('seat', 'body', 0, 0.93, 0.28); // saddle top
   B.anchor('mouth', 'nose', 0, -0.05, 0.25);
   B.anchor('head', 'head', 0, 0.25, 0.2);
   const fur = (p: THREE.Vector3, n: THREE.Vector3) => mix(v.fur, v.belly, smooth(0.0, -0.8, n.y) + (cnoise(p.x, p.y, p.z, 3) - 0.5) * 0.35);

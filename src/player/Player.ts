@@ -374,7 +374,7 @@ export class Player extends Entity implements Combatant, Persistable {
     speed *= this.speedFactor;
     if (body.swimming) speed = Math.min(speed, 3.2);
     else if (body.inWater) speed *= 0.75;
-    if (ctx.avatar.active) speed *= 1.12;
+    speed *= ctx.avatar.boosts.speed; // [avatar] Avatar State boost (1 when inactive)
 
     // Dodge
     this.dodgeCooldown = Math.max(0, this.dodgeCooldown - dt);
@@ -428,7 +428,7 @@ export class Player extends Entity implements Combatant, Persistable {
     if (!locked && input.wasPressed('jump')) {
       const coyote = body.airTime < 0.12;
       if ((body.grounded || coyote) && !body.swimming) {
-        body.velocity.y = st.jump * (ctx.avatar.active ? 1.15 : 1);
+        body.velocity.y = st.jump * ctx.avatar.boosts.jump;
         body.grounded = false;
         this.airJumps = 0;
         anim.play('jump_start', { fadeIn: 0.05 });
@@ -519,8 +519,8 @@ export class Player extends Entity implements Combatant, Persistable {
   override receiveHit(hit: HitInfo, ctx: GameContext): HitResult {
     if (this.invuln > 0 || this.defeated) return { damage: 0, killed: false, blocked: false, staggered: false };
     const st = this.style;
-    if (hit.knockback) hit.knockback.multiplyScalar(st.stability * (ctx.avatar.active ? 0.4 : 1));
-    if (ctx.avatar.active) hit.damage *= 0.6;
+    if (hit.knockback) hit.knockback.multiplyScalar(st.stability * ctx.avatar.boosts.knockbackTaken);
+    hit.damage *= ctx.avatar.boosts.damageTaken;
     const res = super.receiveHit(hit, ctx);
     this.sinceCombat = 0;
     if (res.damage > 0) {

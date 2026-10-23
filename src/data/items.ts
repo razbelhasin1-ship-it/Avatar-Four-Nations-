@@ -61,6 +61,11 @@ export const ITEMS: ItemDef[] = [
   { id: 'pai_sho_tile', name: 'White Lotus Tile', category: 'collectible', description: 'A Pai Sho tile. Someone, somewhere, is collecting these.', icon: '🀄', stack: 40 },
   { id: 'air_scroll', name: 'Ancient Air Scroll', category: 'collectible', description: 'Lore of the Air Nomads.', icon: '📜', stack: 20 },
   { id: 'jade_shard', name: 'Jade Shard', category: 'material', description: 'A polished green stone.', icon: '💚', stack: 99, price: 30 },
+  // [additive: enemies] loot dropped by defeated foes (sellable trophies)
+  { id: 'fn_insignia', name: 'Fire Nation Insignia', category: 'material', description: 'A flame-crest badge torn from a Fire Nation uniform.', icon: '🔥', stack: 99, price: 12 },
+  { id: 'dai_li_seal', name: 'Dai Li Seal', category: 'material', description: 'A jade seal of the Dai Li. Few in Ba Sing Se will admit to recognising it.', icon: '🟩', stack: 99, price: 25 },
+  { id: 'pirate_chart', name: 'Pirate Sea Chart', category: 'collectible', description: 'A smudged chart of hidden coves along the southern coast.', icon: '🗺️', stack: 20, price: 18 },
+  { id: 'beast_claw', name: 'Beast Claw', category: 'material', description: 'Shed in the struggle — the beast itself ran off to lick its wounds.', icon: '🦴', stack: 99, price: 10 },
 ];
 
 export function itemById(id: string): ItemDef | undefined {

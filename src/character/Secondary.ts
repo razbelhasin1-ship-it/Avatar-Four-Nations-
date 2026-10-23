@@ -40,6 +40,8 @@ export class SecondaryMotion {
   private lastRoot = new THREE.Vector3();
   private rootVel = new THREE.Vector3();
   private initialised = false;
+  /** [additive: avatar] World-space wind acceleration (m/s²) on every link, scaled by the chain's drag (Avatar State updraft, gusts). */
+  readonly wind = new THREE.Vector3();
 
   constructor(specs: ChainSpec[], skeletonBones: THREE.Object3D[], private readonly root: THREE.Object3D) {
     for (const spec of specs) {
@@ -97,6 +99,7 @@ export class SecondaryMotion {
           l.prev.copy(l.tip);
           l.tip.add(_v);
           l.tip.y -= s.gravity * dt * dt * 0.5;
+          if (this.wind.x !== 0 || this.wind.y !== 0 || this.wind.z !== 0) l.tip.addScaledVector(this.wind, dt * dt * 0.5 * Math.max(0.3, s.drag));
           l.tip.addScaledVector(this.rootVel, -s.drag * dt * dt * 4);
           l.tip.lerp(_T, 1 - Math.pow(1 - s.stiffness, dt * 60 * 0.5));
         }

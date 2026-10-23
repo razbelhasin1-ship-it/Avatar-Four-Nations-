@@ -95,12 +95,15 @@ class CastImpl implements Cast {
   hit(target: Entity, hit: Partial<HitInfo> & { damage: number }, allowRepeat = false): HitResult | null {
     if (!allowRepeat && this.hitSet.has(target.id)) return null;
     this.hitSet.add(target.id);
+    // [avatar] Avatar State knockback boost for the player's hits (1 when inactive).
+    const kb = this.caster.isPlayer ? (this.ctx.avatar?.boosts?.knockback ?? 1) : 1;
     return this.sys.applyHit(this.caster, target, {
       attacker: this.caster,
       element: this.def.element,
       techniqueId: this.def.id,
       hitId: this.id,
       ...hit,
+      ...(kb !== 1 && hit.knockback ? { knockback: hit.knockback.clone().multiplyScalar(kb) } : {}),
       damage: hit.damage * this.power,
     });
   }
@@ -186,7 +189,7 @@ export class CombatSystem implements GameSystem {
   }
 
   private cooldownScale(c: Combatant): number {
-    return c.isPlayer && this.ctx.avatar?.active ? 0.6 : 1;
+    return c.isPlayer ? (this.ctx.avatar?.boosts?.cooldown ?? 1) : 1;
   }
 
   /** The caster's active cast, if any. */
@@ -249,7 +252,7 @@ export class CombatSystem implements GameSystem {
     if (caster.stunned > 0 || caster.hasStatus('freeze')) return fail('state');
     const now = ctx.time.elapsed;
     if (!req.free && (s.cooldowns.get(id) ?? 0) > now) return fail('cooldown', `${def.name} is recovering.`);
-    const chiCost = req.free ? 0 : def.chiCost * (caster.isPlayer && ctx.avatar.active ? 0.5 : 1);
+    const chiCost = req.free ? 0 : def.chiCost * (caster.isPlayer ? (ctx.avatar?.boosts?.chiCost ?? 1) : 1);
     if (caster.chi < chiCost) return fail('chi', 'Not enough chi.');
     if (!def.airborne && caster.body && !caster.body.grounded && !caster.body.swimming) return fail('airborne', 'Must be grounded.');
     // [additive: waterbending] Technique-specific precondition, before any cost is paid.

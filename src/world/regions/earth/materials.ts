@@ -191,9 +191,12 @@ function create(): EarthMaterials {
     water: new THREE.MeshStandardMaterial({ color: '#3f8fa8', roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.85 }),
   };
   const all: THREE.Material[] = [];
-  for (const v of Object.values(m)) {
+  for (const [k, v] of Object.entries(m)) {
     if (Array.isArray(v)) all.push(...v);
-    else all.push(v as THREE.Material);
+    else {
+      if (!(v as THREE.Material).name) (v as THREE.Material).name = `earth_${k}`;
+      all.push(v as THREE.Material);
+    }
   }
   return { ...m, all, textures };
 }

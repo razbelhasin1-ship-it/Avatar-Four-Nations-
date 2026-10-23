@@ -42,7 +42,7 @@ function buildBearDog(variant: number, detail: number): ModelTemplate {
       B.bone(`paw${id}${s}`, `shin${id}${s}`, 0, -0.42, 0.02);
     }
   }
-  B.anchor('seat', 'body', 0, 0.36, 0.12);
+  B.anchor('seat', 'body', 0, 0.8, 0.12); // saddle top
   B.anchor('mouth', 'head', 0, -0.12, 0.85);
   B.anchor('head', 'head', 0, 0.2, 0.3);
 
