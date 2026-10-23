@@ -61,3 +61,35 @@
     font-size: 14px;
   }
 }
+
+.hint-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  max-width: min(620px, calc(100vw - 32px));
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: rgba(14, 22, 30, 0.88);
+  border: 1px solid rgba(159, 216, 255, 0.5);
+  box-shadow: 0 0 22px rgba(159, 216, 255, 0.18);
+  font-size: 16px;
+  line-height: 1.4;
+  text-align: center;
+  animation: rise 0.3s ease;
+  transition: opacity 0.4s;
+  pointer-events: none;
+}
+
+.hint-toast.out {
+  opacity: 0;
+}
+
+.hint-icon {
+  color: #9fd8ff;
+  margin-right: 4px;
+}
+
+#ui.touch-on .hint-toast {
+  bottom: 250px;
+}

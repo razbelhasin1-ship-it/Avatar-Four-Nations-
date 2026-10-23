@@ -1,4 +1,5 @@
 import type { GameContext, GameSystem } from './core/GameContext';
+import { HintSystem } from './tutorial/HintSystem';
 import { TutorialSystem } from './tutorial/TutorialSystem';
 
 /**
@@ -18,4 +19,5 @@ export interface GameModule {
 
 export const MODULES: GameModule[] = [
   { name: 'tutorial', order: 85, create: () => new TutorialSystem() },
+  { name: 'hints', order: 86, create: () => new HintSystem() },
 ];
