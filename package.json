@@ -1,0 +1,29 @@
+{
+  "name": "avatar-four-nations",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Avatar: Four Nations \u2014 an open-world 3D bending action RPG for the browser.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "node tests/e2e/smoke.e2e.mjs"
+  },
+  "dependencies": {
+    "@fontsource/alegreya": "^5.3.0",
+    "@fontsource/cinzel": "^5.3.0",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.1",
+    "@types/three": "0.186.0",
+    "playwright": "1.56.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  }
+}
