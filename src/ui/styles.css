@@ -1383,3 +1383,22 @@ select {
     display: none;
   }
 }
+
+/* Touch layout: technique bar moves to the top centre, buttons own the bottom corners. */
+#ui.touch-on .hud-bottom {
+  display: none;
+}
+
+.touch .tbtn {
+  font-size: 11px;
+  text-align: center;
+  line-height: 1.1;
+}
+
+#ui.touch-on .compass {
+  display: none;
+}
+
+#ui.touch-on .toasts {
+  bottom: 250px;
+}

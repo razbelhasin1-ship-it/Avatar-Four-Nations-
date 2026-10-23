@@ -10,6 +10,7 @@ import { PauseScreen } from './screens/PauseScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { SaveLoadScreen } from './screens/SaveLoadScreen';
 import { registerGameScreens } from './screens/GameScreens';
+import { TouchControls } from './TouchControls';
 
 /**
  * A UI screen. Modal screens block gameplay input and release the mouse.
@@ -53,6 +54,7 @@ export class UIManager {
   private instances = new Map<string, Screen>();
   private stack: Screen[] = [];
   hud!: HUD;
+  touch!: TouchControls;
   private dialogueEl: HTMLElement | null = null;
   private dialogueChoices: Array<() => void> = [];
   private loadingEl: HTMLElement | null = null;
@@ -77,6 +79,8 @@ export class UIManager {
     this.hud = new HUD(this, ctx);
     this.layers.hud.appendChild(this.hud.el);
     this.hud.el.classList.add('hidden');
+    this.touch = new TouchControls(ctx);
+    this.layers.hud.appendChild(this.touch.el);
     this.registerScreen('mainMenu', (ui) => new MainMenu(ui));
     this.registerScreen('newGame', (ui) => new NewGameFlow(ui));
     this.registerScreen('pause', (ui) => new PauseScreen(ui));
@@ -237,7 +241,10 @@ export class UIManager {
         }
         if (input.wasPressed('pause') && !this.stack.length) ctx.game.setPaused(true);
       }
-      if (this.hudVisible) this.hud.update(dt);
+      if (this.hudVisible) {
+        this.hud.update(dt);
+        this.touch.update();
+      }
     }
   }
 
@@ -256,11 +263,13 @@ export class UIManager {
     this.hudVisible = true;
     this.hud.el.classList.remove('hidden');
     this.hud.onShow();
+    this.touch.refresh();
   }
 
   hideHUD(): void {
     this.hudVisible = false;
     this.hud.el.classList.add('hidden');
+    this.touch?.setVisible(false);
     this.hideDialogue();
     this.hideDefeat();
   }
