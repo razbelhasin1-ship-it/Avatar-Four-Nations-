@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { WaterSourceDef } from '../../../combat/WaterSources';
 import type { GameContext } from '../../../core/GameContext';
 import type { SurfaceType } from '../../../core/types';
 import { ContentBuilder, matrixFor } from '../../kit/Builder';
@@ -31,6 +32,8 @@ export interface Kit {
   extra: ContentBuilder;
   /** Standalone meshes (water) owned by the zone. */
   addMesh(mesh: THREE.Object3D, group?: 'main' | 'props' | 'extra'): void;
+  /** Register a water source owned by the region (unregistered on dispose). */
+  registerWater(def: WaterSourceDef): void;
 }
 
 export const am = (n: AirMaterialName): THREE.Material => airMat(n);
@@ -410,17 +413,15 @@ export function slopedWall(k: Kit, o: { a: P2; b: P2; y0: number; y1: number; ba
   const run = Math.hypot(dx, dz);
   if (run < 0.05) return;
   const yaw = alongYaw(dx, dz);
-  const s = new THREE.Shape();
-  s.moveTo(-run / 2, o.base);
-  s.lineTo(run / 2, o.base);
-  s.lineTo(run / 2, o.y1 + o.h);
-  s.lineTo(-run / 2, o.y0 + o.h);
-  s.lineTo(-run / 2, o.base);
-  const g = new THREE.ExtrudeGeometry(s, { depth: o.t, bevelEnabled: false });
-  g.translate(0, 0, -o.t / 2);
   const b = o.builder ?? k.main;
-  b.mesh(o.material ?? 'stone_white', g, { x: (o.a.x + o.b.x) / 2, y: 0, z: (o.a.z + o.b.z) / 2, yaw });
-  g.dispose();
+  // Hexahedron: flat bottom at `base`, top following the slope + h (built directly, no extrusion).
+  const ux = dx / run, uz = dz / run, nx = -uz * (o.t / 2), nz = ux * (o.t / 2);
+  const ta = o.y0 + o.h, tb = o.y1 + o.h;
+  const v = [
+    [o.a.x - nx, o.base, o.a.z - nz], [o.b.x - nx, o.base, o.b.z - nz], [o.b.x - nx, tb, o.b.z - nz], [o.a.x - nx, ta, o.a.z - nz],
+    [o.a.x + nx, o.base, o.a.z + nz], [o.b.x + nx, o.base, o.b.z + nz], [o.b.x + nx, tb, o.b.z + nz], [o.a.x + nx, ta, o.a.z + nz],
+  ];
+  b.mesh(o.material ?? 'stone_white', hexahedron(v), { x: 0, y: 0, z: 0 });
   // Coping along the top.
   const len = Math.hypot(run, o.y1 - o.y0);
   b.box('stone_light', { x: (o.a.x + o.b.x) / 2, y: (o.y0 + o.y1) / 2 + o.h + 0.07, z: (o.a.z + o.b.z) / 2, sx: len + 0.05, sy: 0.14, sz: o.t + 0.12, yaw, roll: Math.atan2(o.y1 - o.y0, run) });
@@ -441,6 +442,130 @@ export function slopedWall(k: Kit, o: { a: P2; b: P2; y0: number; y1: number; ba
       walkable: false,
       solid: true,
     });
+  }
+}
+
+/**
+ * Hexahedron from 8 corners (0-3 one side: bottom-a, bottom-b, top-b, top-a;
+ * 4-7 the other side in the same order). Flat-shaded, UVs in world metres / 2.
+ */
+export function hexahedron(v: number[][]): THREE.BufferGeometry {
+  const faces = [
+    [0, 1, 2, 3],
+    [5, 4, 7, 6],
+    [4, 0, 3, 7],
+    [1, 5, 6, 2],
+    [3, 2, 6, 7],
+    [4, 5, 1, 0],
+  ];
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const idx: number[] = [];
+  const e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), n = new THREE.Vector3();
+  for (const f of faces) {
+    const base = pos.length / 3;
+    const p = f.map((i) => new THREE.Vector3(v[i][0], v[i][1], v[i][2]));
+    e1.subVectors(p[1], p[0]);
+    e2.subVectors(p[3], p[0]);
+    n.crossVectors(e1, e2).normalize();
+    const w = p[0].distanceTo(p[1]), h = p[0].distanceTo(p[3]);
+    const fuv = [[0, 0], [w / 2, 0], [w / 2, h / 2], [0, h / 2]];
+    for (let i = 0; i < 4; i++) {
+      pos.push(p[i].x, p[i].y, p[i].z);
+      uv.push(fuv[i][0], fuv[i][1]);
+    }
+    idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  // Ensure outward winding: if the first face normal points inward, flip all.
+  const c = new THREE.Vector3();
+  for (const q of v) c.add(new THREE.Vector3(q[0], q[1], q[2]));
+  c.multiplyScalar(1 / 8);
+  const nrm = g.getAttribute('normal');
+  const p0 = new THREE.Vector3(pos[0], pos[1], pos[2]);
+  if (new THREE.Vector3(nrm.getX(0), nrm.getY(0), nrm.getZ(0)).dot(p0.sub(c)) < 0) {
+    const ia = g.getIndex()!;
+    for (let i = 0; i < ia.count; i += 3) {
+      const t = ia.getX(i + 1);
+      ia.setX(i + 1, ia.getX(i + 2));
+      ia.setX(i + 2, t);
+    }
+    g.computeVertexNormals();
+  }
+  return g;
+}
+
+/**
+ * Many boxes merged into one geometry without per-box BufferGeometry objects
+ * (stairs with hundreds of treads). Box transform as in ContentBuilder.box().
+ */
+export class BoxBatch {
+  private pos: number[] = [];
+  private nor: number[] = [];
+  private uv: number[] = [];
+  private idx: number[] = [];
+  private static tpl: { p: number[][]; n: number[][]; d: Array<[number, number]> } | null = null;
+  private m = new THREE.Matrix4();
+  private q = new THREE.Quaternion();
+  private v = new THREE.Vector3();
+  get count(): number {
+    return this.pos.length / 72;
+  }
+  add(t: { x: number; y: number; z: number; sx: number; sy: number; sz: number; yaw?: number; roll?: number; pitch?: number }, tile = 2): void {
+    if (!BoxBatch.tpl) {
+      const g = new THREE.BoxGeometry(1, 1, 1);
+      const pa = g.getAttribute('position'), na = g.getAttribute('normal');
+      const p: number[][] = [], n: number[][] = [];
+      for (let i = 0; i < pa.count; i++) {
+        p.push([pa.getX(i), pa.getY(i), pa.getZ(i)]);
+        n.push([na.getX(i), na.getY(i), na.getZ(i)]);
+      }
+      const ua = g.getAttribute('uv');
+      const d: Array<[number, number]> = [];
+      for (let i = 0; i < ua.count; i++) d.push([ua.getX(i), ua.getY(i)]);
+      BoxBatch.tpl = { p, n, d };
+      g.dispose();
+    }
+    const T = BoxBatch.tpl;
+    matrixFor(t, this.m);
+    this.q.setFromRotationMatrix(new THREE.Matrix4().extractRotation(this.m));
+    const base = this.pos.length / 3;
+    const dims: Array<[number, number]> = [[t.sz, t.sy], [t.sz, t.sy], [t.sx, t.sz], [t.sx, t.sz], [t.sx, t.sy], [t.sx, t.sy]];
+    for (let i = 0; i < 24; i++) {
+      this.v.set(T.p[i][0], T.p[i][1], T.p[i][2]).applyMatrix4(this.m);
+      this.pos.push(this.v.x, this.v.y, this.v.z);
+      this.v.set(T.n[i][0], T.n[i][1], T.n[i][2]).applyQuaternion(this.q);
+      this.nor.push(this.v.x, this.v.y, this.v.z);
+      const f = Math.floor(i / 4);
+      this.uv.push((T.d[i][0] * dims[f][0]) / tile, (T.d[i][1] * dims[f][1]) / tile);
+    }
+    for (let f = 0; f < 6; f++) {
+      const a = base + f * 4;
+      this.idx.push(a, a + 2, a + 1, a + 2, a + 3, a + 1);
+    }
+  }
+  geometry(): THREE.BufferGeometry {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
+    g.setIndex(this.idx);
+    return g;
+  }
+  /** Add the batch to a builder (merged with that material) and free it. */
+  flush(b: ContentBuilder, material: Mat): void {
+    if (!this.pos.length) return;
+    const g = this.geometry();
+    b.mesh(material as any, g, { x: 0, y: 0, z: 0 });
+    g.dispose();
+    this.pos = [];
+    this.nor = [];
+    this.uv = [];
+    this.idx = [];
   }
 }
 
@@ -572,7 +697,6 @@ export function arcade(k: Kit, o: ArcadeOpts): void {
     const slopeLen = Math.hypot(w, o.roof.height) + 0.8;
     // Roof plane: a thin tiled slab sloping down away from the arcade.
     const slab = new THREE.BoxGeometry(L + 1.2, 0.25, slopeLen);
-    G.mergeAll; // (keep import used for tree-shaking clarity)
     b.mesh(am('roof'), slab, { x: cx, y: o.y + o.top + 0.45 + o.roof.height / 2, z: cz, yaw, pitch: o.roof.side * tilt });
     slab.dispose();
   }
@@ -637,7 +761,7 @@ export function roundPool(k: Kit, o: { id: string; label: string; x: number; z: 
   water.renderOrder = 2;
   water.name = `water_${o.id}`;
   k.addMesh(water, 'main');
-  k.ctx.water.register({ id: o.id, type: o.type ?? 'pond', label: o.label, x: o.x, y: level, z: o.z, r: o.r, capacity: o.capacity ?? 140, regen: o.regen ?? 3 });
+  k.registerWater({ id: o.id, type: o.type ?? 'pond', label: o.label, x: o.x, y: level, z: o.z, r: o.r, capacity: o.capacity ?? 140, regen: o.regen ?? 3 });
   return water;
 }
 
@@ -683,7 +807,7 @@ export function waterfall(k: Kit, o: { id: string; label: string; x: number; y: 
   m.renderOrder = 3;
   m.name = `falls_${o.id}`;
   k.addMesh(m, 'main');
-  if (o.register !== false) k.ctx.water.register({ id: o.id, type: 'waterfall', label: o.label, x: o.x, y: o.y - 0.3, z: o.z, r: Math.max(0.8, o.width / 2), capacity: Infinity, regen: 0, size: 'medium' });
+  if (o.register !== false) k.registerWater({ id: o.id, type: 'waterfall', label: o.label, x: o.x, y: o.y - 0.3, z: o.z, r: Math.max(0.8, o.width / 2), capacity: Infinity, regen: 0, size: 'medium' });
   return m;
 }
 
@@ -709,7 +833,7 @@ export function canal(k: Kit, o: { id: string; label: string; a: P2; b: P2; y: n
   w.renderOrder = 2;
   k.addMesh(w, 'main');
   b.collider({ shape: 'box', x: mx, y: o.y, z: mz, hx: L / 2, hz: o.width / 2, hy: 0.12, yaw, walkable: true, solid: false, surface: 'stone' });
-  if (o.register !== false) k.ctx.water.register({ id: o.id, type: 'canal', label: o.label, x: mx, y: o.y + wallH - 0.15, z: mz, r: o.width / 2, path: [o.a, o.b], capacity: Infinity, regen: 0, size: 'medium' });
+  if (o.register !== false) k.registerWater({ id: o.id, type: 'canal', label: o.label, x: mx, y: o.y + wallH - 0.15, z: mz, r: o.width / 2, path: [o.a, o.b], capacity: Infinity, regen: 0, size: 'medium' });
 }
 
 // ---------------------------------------------------------------------------
@@ -749,13 +873,13 @@ export function prayerFlags(k: Kit, a: THREE.Vector3, b: THREE.Vector3, sag = 0.
     const len = p0.distanceTo(p1);
     const mid = p0.clone().add(p1).multiplyScalar(0.5);
     const pitch = Math.atan2(p1.y - p0.y, Math.hypot(p1.x - p0.x, p1.z - p0.z));
-    inst(k.extra, 'flag_rope', () => new THREE.BoxGeometry(1, 0.03, 0.03), am('rope'), { x: mid.x, y: mid.y, z: mid.z, yaw, roll: pitch, sx: len + 0.02 }, false);
+    inst(k.props, 'flag_rope', () => new THREE.BoxGeometry(1, 0.03, 0.03), am('rope'), { x: mid.x, y: mid.y, z: mid.z, yaw, roll: pitch, sx: len + 0.02 }, false);
   }
   const n = Math.floor(L / spacing);
   for (let i = 1; i < n; i++) {
     const p = at(i / n);
     const mat = FLAG_MATS[i % FLAG_MATS.length];
-    inst(k.extra, `flag_${mat}`, () => G.flagQuad(), mat, { x: p.x, y: p.y, z: p.z, yaw, roll: (Math.sin(i * 1.7) * 0.08) }, false);
+    inst(k.props, `flag_${mat}`, () => G.flagQuad(), mat, { x: p.x, y: p.y, z: p.z, yaw, roll: (Math.sin(i * 1.7) * 0.08) }, false);
   }
 }
 
@@ -846,10 +970,262 @@ export function pole(k: Kit, x: number, y: number, z: number, h: number): void {
 
 /** Flat paved slab with a walkable collider (top at y). */
 export function slab(k: Kit, x: number, z: number, y: number, sx: number, sz: number, yaw = 0, material: Mat = 'paving', thick = 0.5): void {
-  k.main.box(material, { x, y: y - thick / 2, z, sx, sy: thick, sz, yaw }, { collide: true, walkable: true, surface: 'stone' });
+  k.main.box(material, { x, y: y - thick / 2, z, sx, sy: thick, sz, yaw }, { collide: true, walkable: true, surface: 'stone', castShadow: false });
 }
 
 /** Round paved disc with a walkable cylinder collider (top at y). */
 export function disc(k: Kit, x: number, z: number, y: number, r: number, material: Mat = 'paving', thick = 0.5, segments = 40): void {
   k.main.cylinder(material, { x, z, y: y - thick, r, h: thick, segments }, { collide: true, walkable: true });
+}
+
+// ---------------------------------------------------------------------------
+// Frames, platforms, pavilions, cascades (additions)
+// ---------------------------------------------------------------------------
+
+/** Local frame: u along local +X, v along local +Z (front), origin o, yaw. */
+export interface Frame {
+  x: number;
+  z: number;
+  yaw: number;
+}
+
+/** World XZ of local (u, v) in a frame (three.js yaw convention). */
+export function fp(f: Frame, u: number, v: number): P2 {
+  const c = Math.cos(f.yaw), s = Math.sin(f.yaw);
+  return { x: f.x + c * u + s * v, z: f.z - s * u + c * v };
+}
+
+/** Round platform with concentric steps (each riser <= stepUp, so no ramps needed). Top at y + steps * stepH. */
+export function steppedDisc(k: Kit, o: { x: number; z: number; y: number; r: number; steps: number; stepH?: number; stepW?: number; material?: Mat; top?: Mat; segments?: number; base?: number }): number {
+  const sh = o.stepH ?? 0.3;
+  const sw = o.stepW ?? 0.55;
+  const seg = o.segments ?? 36;
+  const base = o.base ?? o.y - 0.4;
+  for (let i = 0; i < o.steps; i++) {
+    const r = o.r + (o.steps - 1 - i) * sw;
+    const top = o.y + (i + 1) * sh;
+    const mat = i === o.steps - 1 ? o.top ?? o.material ?? 'stone_white' : o.material ?? 'stone_white';
+    k.main.cylinder(mat, { x: o.x, z: o.z, y: base, r, h: top - base, segments: seg }, { collide: true, walkable: true });
+  }
+  return o.y + o.steps * sh;
+}
+
+/**
+ * Air Nomad pavilion (gazebo): slender columns on a stepped round platform,
+ * a teal frieze, a concave n-sided teal roof with a gold finial. Entrances are
+ * left open on the given yaw(s); other bays get a low railing.
+ */
+export function pavilion(k: Kit, o: { x: number; z: number; y: number; r: number; h: number; roofH?: number; sides?: number; steps?: number; entrances?: number[]; railing?: boolean; finial?: number }): number {
+  const sides = o.sides ?? 8;
+  const steps = o.steps ?? 3;
+  const floor = steppedDisc(k, { x: o.x, z: o.z, y: o.y, r: o.r + 0.6, steps, top: 'paving' });
+  const phase = Math.PI / sides;
+  const colR = o.r - 0.35;
+  const cols: P2[] = [];
+  for (let i = 0; i < sides; i++) {
+    const a = phase + (i / sides) * Math.PI * 2;
+    const p = { x: o.x + Math.cos(a) * colR, z: o.z + Math.sin(a) * colR };
+    cols.push(p);
+    inst(k.main, 'pav_col', () => G.lathe([[0.26, 0], [0.26, 0.25], [0.19, 0.4], [0.17, 0.9], [0.17, 0.97], [0.24, 1]], 10, 1), 'plaster_white', { x: p.x, y: floor, z: p.z, sy: o.h });
+    inst(k.main, 'pav_col_base', () => new THREE.CylinderGeometry(0.32, 0.36, 0.3, 10).translate(0, 0.15, 0), 'stone_light', { x: p.x, y: floor, z: p.z });
+    k.main.collider({ shape: 'cylinder', x: p.x, y: floor + o.h / 2, z: p.z, r: 0.28, hy: o.h / 2, walkable: false, solid: true });
+  }
+  // Frieze ring + ceiling (bottom cap), gold band.
+  k.main.cylinder(am('paintTeal'), { x: o.x, z: o.z, y: floor + o.h, r: o.r + 0.05, h: 0.7, segments: sides * 2 });
+  k.main.cylinder('gold', { x: o.x, z: o.z, y: floor + o.h + 0.7, r: o.r + 0.12, h: 0.12, segments: sides * 2 });
+  // Little round medallions on the frieze.
+  for (let i = 0; i < sides; i++) {
+    const a = (i / sides) * Math.PI * 2;
+    inst(k.props, 'pav_medal', () => new THREE.CylinderGeometry(0.22, 0.22, 0.06, 12).rotateX(Math.PI / 2), 'stone_white', { x: o.x + Math.cos(a) * (o.r + 0.08), y: floor + o.h + 0.35, z: o.z + Math.sin(a) * (o.r + 0.08), yaw: faceYaw(Math.cos(a), Math.sin(a)) }, false);
+  }
+  const roofH = o.roofH ?? o.r * 1.15;
+  const roof = G.polyRoof(o.r + 0.1, roofH, sides, 0.9, 0);
+  k.main.mesh(am('roof'), roof, { x: o.x, y: floor + o.h + 0.82, z: o.z });
+  roof.dispose();
+  const f = G.finialGeometry(o.finial ?? 0.7);
+  k.main.mesh('gold', f, { x: o.x, y: floor + o.h + 0.82 + roofH * 0.965, z: o.z });
+  f.dispose();
+  if (o.railing !== false) {
+    const ent = o.entrances ?? [0];
+    for (let i = 0; i < sides; i++) {
+      const a = cols[i], b = cols[(i + 1) % sides];
+      const mid = Math.atan2((a.z + b.z) / 2 - o.z, (a.x + b.x) / 2 - o.x);
+      // Bay direction in yaw terms: front (+Z local) facing (cos mid, sin mid).
+      const bayYaw = faceYaw(Math.cos(mid), Math.sin(mid));
+      const open = ent.some((e) => Math.abs(Math.atan2(Math.sin(bayYaw - e), Math.cos(bayYaw - e))) < Math.PI / sides + 0.01);
+      if (open) continue;
+      balustrade(k, [a, b], { y: floor, h: 0.75 });
+    }
+  }
+  return floor;
+}
+
+/**
+ * Waterfall cascading down the terrain from a lip: a ribbon that follows the
+ * slope (offset above the ground) or free-falls where the cliff overhangs.
+ * Registered as a waterfall water source at the lip.
+ */
+export function cascade(k: Kit, o: { id: string; label: string; x: number; z: number; y: number; dirX: number; dirZ: number; width: number; length: number; heightAt: (x: number, z: number) => number; minY?: number; register?: boolean }): THREE.Mesh {
+  const L = Math.hypot(o.dirX, o.dirZ);
+  const dx = o.dirX / L, dz = o.dirZ / L;
+  const nx = -dz, nz = dx;
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const fall: number[] = [];
+  const rapid: number[] = [];
+  const idx: number[] = [];
+  const step = 1.0;
+  const rows = Math.max(2, Math.ceil(o.length / step));
+  let y = o.y;
+  let vy = 0;
+  let vacc = 0;
+  let px = o.x, pz = o.z, py = o.y;
+  let gPrev = o.heightAt(o.x, o.z);
+  for (let j = 0; j <= rows; j++) {
+    const s = j * step;
+    const cx = o.x + dx * s, cz = o.z + dz * s;
+    const half = (o.width / 2) * (1 + 0.5 * (s / o.length));
+    let g = -Infinity;
+    for (const t of [-1, 0, 1]) g = Math.max(g, o.heightAt(cx + nx * half * t, cz + nz * half * t));
+    // Ballistic fall (horizontal speed ~4 m/s), never below the ground + offset.
+    if (j > 0) {
+      vy += 9.8 * (step / 4) * (step / 4) * 2;
+      y -= vy;
+    }
+    // Stand off steep rock more (coarse terrain LODs bulge past the true surface on cliffs).
+    const steep = Math.max(0, Math.min(2, (gPrev - g) / step)) / 2;
+    gPrev = g;
+    const floor = g + 0.5 + 2.4 * steep;
+    if (y < floor) {
+      y = floor;
+      vy = 0.4;
+    }
+    if (o.minY !== undefined && y < o.minY) break;
+    if (j > 0) vacc += Math.hypot(cx - px, y - py, cz - pz);
+    px = cx;
+    pz = cz;
+    py = y;
+    pos.push(cx - nx * half - o.x, y - o.y, cz - nz * half - o.z, cx + nx * half - o.x, y - o.y, cz + nz * half - o.z);
+    uv.push(0, vacc / 6, 1, vacc / 6);
+    fall.push(1, 1);
+    rapid.push(1, 1);
+  }
+  const n = pos.length / 6;
+  for (let j = 0; j < n - 1; j++) {
+    // Wound so the front face looks up/out, away from the rock.
+    const a = j * 2, b = a + 1, c = a + 2, d = a + 3;
+    idx.push(a, b, c, b, d, c);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setAttribute('fall', new THREE.Float32BufferAttribute(fall, 1));
+  geo.setAttribute('rapid', new THREE.Float32BufferAttribute(rapid, 1));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, am('falls'));
+  m.position.set(o.x, o.y, o.z);
+  m.renderOrder = 3;
+  m.name = `falls_${o.id}`;
+  k.addMesh(m, 'main');
+  if (o.register !== false) k.registerWater({ id: o.id, type: 'waterfall', label: o.label, x: o.x + dx * 1.5, y: o.y - 0.4, z: o.z + dz * 1.5, r: Math.max(1, o.width / 2), capacity: Infinity, regen: 0, size: 'medium' });
+  return m;
+}
+
+/** Balustrade along a circular arc (centre, radius, angle range), split into ~seg-metre pieces. */
+export function arcRail(k: Kit, cx: number, cz: number, r: number, a0: number, a1: number, y: number | ((x: number, z: number) => number), o: { seg?: number; h?: number; solid?: boolean } = {}): void {
+  const len = Math.abs(a1 - a0) * r;
+  const n = Math.max(1, Math.round(len / (o.seg ?? 4)));
+  const pts = arcPoints(cx, cz, r, a0, a1, n);
+  if (typeof y === 'number') {
+    balustrade(k, pts, { y, h: o.h, solid: o.solid });
+    return;
+  }
+  for (let i = 0; i < pts.length - 1; i++) {
+    const m = { x: (pts[i].x + pts[i + 1].x) / 2, z: (pts[i].z + pts[i + 1].z) / 2 };
+    balustrade(k, [pts[i], pts[i + 1]], { y: y(m.x, m.z), h: o.h, solid: o.solid });
+  }
+}
+
+/**
+ * Monks' quarters / refectory / scriptorium: a plastered house on a stone
+ * plinth with arched windows, a door portal facing local +Z, skirt roofs
+ * between floors and a teal hip roof. Solid (walkable roof) collider.
+ */
+export function quarters(k: Kit, o: { x: number; z: number; y: number; w: number; d: number; floors?: number; yaw?: number; roofH?: number; wall?: Mat }): void {
+  const yaw = o.yaw ?? 0;
+  const floors = o.floors ?? 2;
+  // Single-storey halls are taller so the door portal and its little roof sit under the eaves.
+  const fh = floors === 1 ? 4.7 : 3.4;
+  const h = floors * fh;
+  const roofH = o.roofH ?? Math.min(o.w, o.d) * 0.5;
+  const b = k.main;
+  const base = o.y + 0.45;
+  b.block('stone_white', { x: o.x, y: o.y - 0.4, z: o.z, sx: o.w + 0.9, sy: 0.85, sz: o.d + 0.9, yaw }, { collide: true, walkable: true });
+  b.block(o.wall ?? 'plaster_cream', { x: o.x, y: base, z: o.z, sx: o.w, sy: h, sz: o.d, yaw });
+  b.collider({ shape: 'box', x: o.x, y: base + (h + roofH * 0.4) / 2, z: o.z, hx: o.w / 2 + 0.1, hy: (h + roofH * 0.4) / 2, hz: o.d / 2 + 0.1, yaw, walkable: true, solid: true });
+  const cx = Math.cos(yaw), sz = -Math.sin(yaw), fx = Math.sin(yaw), fz = Math.cos(yaw);
+  for (let f = 1; f < floors; f++) {
+    const fy = base + f * fh;
+    b.box('stone_light', { x: o.x, y: fy, z: o.z, sx: o.w + 0.3, sy: 0.3, sz: o.d + 0.3, yaw });
+    b.roof(am('roof'), { x: o.x, y: fy + 0.12, z: o.z, w: o.w, d: o.d, height: 0.7, yaw, overhang: 0.85, style: 'hip', curve: 0.4, ridge: null });
+  }
+  // Corner pilasters.
+  for (const s1 of [-1, 1]) {
+    for (const s2 of [-1, 1]) {
+      b.box('stone_white', { x: o.x + cx * s1 * (o.w / 2) + fx * s2 * (o.d / 2), y: base + h / 2, z: o.z + sz * s1 * (o.w / 2) + fz * s2 * (o.d / 2), sx: 0.5, sy: h, sz: 0.5, yaw });
+    }
+  }
+  // Arched windows on the long faces.
+  const per = Math.max(1, Math.floor(o.w / 3.2));
+  for (let f = 0; f < floors; f++) {
+    const wy = base + f * fh + 1.25;
+    for (let i = 0; i < per; i++) {
+      const u = (i + 0.5) * (o.w / per) - o.w / 2;
+      if (f === 0 && Math.abs(u) < 1.3) continue; // door
+      for (const s of [-1, 1]) {
+        const off = s * (o.d / 2 + 0.02);
+        inst(k.props, 'q_window', () => archedWindowGeo(), am('window'), { x: o.x + cx * u + fx * off, y: wy, z: o.z + sz * u + fz * off, yaw: s > 0 ? yaw : yaw + Math.PI }, false);
+      }
+    }
+  }
+  portal(k, o.x + fx * (o.d / 2), base, o.z + fz * (o.d / 2), yaw, 1.8, 2.5);
+  b.roof(am('roof'), { x: o.x, y: base + h, z: o.z, w: o.w, d: o.d, height: roofH, yaw, style: 'hip', overhang: 0.8, curve: 0.35, ridge: am('roofTrim') });
+  const fin = G.finialGeometry(0.35);
+  for (const s of [-1, 1]) {
+    const ridge = Math.max(0.5, (o.w - o.d) / 2 + 0.5);
+    b.mesh('gold', fin, { x: o.x + cx * s * ridge, y: base + h + roofH + 0.1, z: o.z + sz * s * ridge });
+  }
+  fin.dispose();
+}
+
+/** Terrain-hugging lawn disc (visual): polar grid `lift` above the ground, UVs in world metres / tile. */
+export function lawnGeometry(cx: number, cz: number, r: number, heightAt: (x: number, z: number) => number, lift = 0.08, tile = 3): THREE.BufferGeometry {
+  const rings = 20, segs = 96;
+  const pos: number[] = [cx, heightAt(cx, cz) + lift, cz];
+  const uv: number[] = [cx / tile, cz / tile];
+  for (let i = 1; i <= rings; i++) {
+    const rr = (r * i) / rings;
+    for (let j = 0; j < segs; j++) {
+      const a = (j / segs) * Math.PI * 2;
+      const x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr;
+      pos.push(x, heightAt(x, z) + lift, z);
+      uv.push(x / tile, z / tile);
+    }
+  }
+  const idx: number[] = [];
+  for (let j = 0; j < segs; j++) idx.push(0, 1 + ((j + 1) % segs), 1 + j);
+  for (let i = 1; i < rings; i++) {
+    const r0 = 1 + (i - 1) * segs, r1 = 1 + i * segs;
+    for (let j = 0; j < segs; j++) {
+      const j1 = (j + 1) % segs;
+      idx.push(r0 + j, r0 + j1, r1 + j, r0 + j1, r1 + j1, r1 + j);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
 }

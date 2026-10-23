@@ -34,8 +34,9 @@ export class EnvironmentSystem implements GameSystem {
     this.cloudSea = new CloudSeaSystem(ctx, ctx.world.sky.noiseTexture);
     this.horizon = new HorizonSystem(ctx);
     this.ambient = new AmbientSystem(ctx);
-    ctx.world.addUpdatable(this.weather);
     ctx.world.addUpdatable(this.cloudSea);
+    ctx.world.addUpdatable({ update: () => (this.weather.fogBoost = this.cloudSea.mist) });
+    ctx.world.addUpdatable(this.weather);
     ctx.world.addUpdatable(this.horizon);
     ctx.world.addUpdatable(this.ambient);
     ctx.world.addUpdatable(this.vegetation);

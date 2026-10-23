@@ -200,7 +200,7 @@ export class EnvFXSystem implements EnvironmentFX, WorldUpdatable {
     }
     const run = kind === 'run';
     this.prints.spawn(
-      { x: pos.x, z: pos.z, sizeX: 0.3, sizeZ: run ? 0.42 : 0.37, yaw: yaw + (foot === 'L' ? 0.08 : -0.08), kind: run ? DECAL_KIND.run : DECAL_KIND.walk, life, mirror: foot === 'L' ? 1 : -1, surface: fam, intensity: depth },
+      { x: pos.x, z: pos.z, sizeX: 0.34, sizeZ: run ? 0.48 : 0.43, yaw: yaw + (foot === 'L' ? 0.08 : -0.08), kind: run ? DECAL_KIND.run : DECAL_KIND.walk, life, mirror: foot === 'L' ? 1 : -1, surface: fam, intensity: depth },
       now,
       h.fn,
       0.025,

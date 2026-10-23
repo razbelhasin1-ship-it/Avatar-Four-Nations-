@@ -19,9 +19,9 @@ import { attachEnvUniforms, ENV_NOISE_GLSL, ENV_PARS_GLSL, envUniforms, MAX_INTE
  * spacing and radius live (0 disables grass entirely).
  */
 
-const TILE = 16;
+const TILE = 12;
 const MAX_PER_TILE = 1600;
-const BLADES = 6;
+const BLADES = 7;
 
 interface TileData {
   key: string;
@@ -54,18 +54,18 @@ function hash2(x: number, z: number, s: number): number {
 /** One clump of curved, tapered blades (local space, base at y = 0, unit height). */
 function buildClumpGeometry(): { pos: Float32Array; nor: Float32Array; col: Float32Array; idx: Uint16Array } {
   const pos: number[] = [], nor: number[] = [], col: number[] = [], idx: number[] = [];
-  const segs = 3;
+  const segs = 2;
   for (let b = 0; b < BLADES; b++) {
     const a = (b / BLADES) * Math.PI * 2 + b * 0.9;
-    const r = 0.03 + (b % 3) * 0.06;
+    const r = 0.04 + (b % 3) * 0.085;
     const bx = Math.cos(a) * r, bz = Math.sin(a) * r;
     // Blade faces a random direction and leans outward.
     const face = a + 1.3 + b * 0.7;
     const sx = Math.cos(face), sz = Math.sin(face);
-    const lean = 0.18 + (b % 3) * 0.08;
+    const lean = 0.16 + (b % 3) * 0.09;
     const lx = Math.cos(a) * lean, lz = Math.sin(a) * lean;
-    const hgt = 0.72 + (b % 3) * 0.14;
-    const w = 0.055 + (b % 2) * 0.02;
+    const hgt = 0.7 + (b % 3) * 0.15;
+    const w = 0.06 + (b % 2) * 0.025;
     const base = pos.length / 3;
     for (let i = 0; i <= segs; i++) {
       const t = i / segs;
@@ -141,14 +141,16 @@ function createGrassMaterial(radius: { value: number }, keep: { value: number })
       .replace('#include <common>', '#include <common>\n' + GRASS_VERT_PARS)
       .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = normalize( vec3( 0.0, 1.0, 0.0 ) + normal * 0.25 );')
       .replace('#include <begin_vertex>', GRASS_BEGIN)
-      .replace('#include <color_vertex>', '#include <color_vertex>\n  vColor.rgb = aColor.rgb * mix( 0.62, 1.3, color.r ) * vec3( 1.0, 1.0, 0.92 ) + vec3( 0.02, 0.025, 0.0 ) * color.r;')
+      .replace('#include <color_vertex>', '#include <color_vertex>\n  vColor.rgb = aColor.rgb * mix( 0.78, 1.28, color.r ) * vec3( 1.0, 1.0, 0.92 ) + vec3( 0.02, 0.025, 0.0 ) * color.r;')
       .replace('#include <project_vertex>', GRASS_PROJECT)
       .replace('#include <worldpos_vertex>', 'vec4 worldPosition = vec4( transformed, 1.0 );');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying float vGrassH;')
+      // Both blade faces are lit like the ground (no flipped, black back faces).
+      .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n  normal = normalize( vNormal );')
       .replace('#include <opaque_fragment>', '  outgoingLight += diffuseColor.rgb * vGrassH * 0.12;\n#include <opaque_fragment>');
   };
-  mat.customProgramCacheKey = () => 'grass-v1';
+  mat.customProgramCacheKey = () => 'grass-v2';
   return mat;
 }
 
@@ -209,7 +211,7 @@ export class GrassSystem implements WorldUpdatable {
 
   /** Build the instance data of one tile from the terrain chunk detail. */
   private buildTile(tx: number, tz: number, det: ChunkDetail): TileData {
-    const spacing = 0.62 / Math.sqrt(Math.max(0.25, this.density));
+    const spacing = 0.46 / Math.sqrt(Math.max(0.25, this.density));
     const n = Math.min(Math.floor(TILE / spacing), Math.floor(Math.sqrt(MAX_PER_TILE)));
     const offs = new Float32Array(n * n * 4);
     const cols = new Float32Array(n * n * 4);

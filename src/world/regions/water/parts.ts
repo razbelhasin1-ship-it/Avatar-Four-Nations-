@@ -400,14 +400,16 @@ export function flight(cb: ContentBuilder, from: THREE.Vector3, to: THREE.Vector
 export function bridgeVault(span: number, extra: number, endDrop: number, rise: number, openW: number, openH: number, depth: number, segs = 10): THREE.BufferGeometry {
   const L = span / 2 + extra;
   const r = openW / 2;
-  const springY = Math.max(0, openH - r);
+  // Semicircular head when tall enough, otherwise a flattened (elliptic) arch.
+  const ry = Math.min(r, openH);
+  const springY = Math.max(0, openH - ry);
   const s = new THREE.Shape();
   s.moveTo(-L, 0);
   s.lineTo(-r, 0);
   s.lineTo(-r, springY);
   for (let i = 1; i < segs; i++) {
     const a = Math.PI - (i / segs) * Math.PI;
-    s.lineTo(Math.cos(a) * r, springY + Math.sin(a) * r);
+    s.lineTo(Math.cos(a) * r, springY + Math.sin(a) * ry);
   }
   s.lineTo(r, springY);
   s.lineTo(r, 0);

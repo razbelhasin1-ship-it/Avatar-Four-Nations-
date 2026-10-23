@@ -120,7 +120,7 @@ interface SkyKey {
 }
 
 const KEYS: SkyKey[] = [
-  { t: 0, zenith: '#050a1a', horizon: '#18233f', sun: '#8fa4d8', sunI: 0.32, hemiSky: '#2f4068', hemiGround: '#16161e', hemiI: 0.5 },
+  { t: 0, zenith: '#050a1a', horizon: '#18233f', sun: '#8fa4d8', sunI: 0.42, hemiSky: '#3a4c7a', hemiGround: '#1c1c26', hemiI: 0.72 },
   { t: 4.6, zenith: '#0b1430', horizon: '#363a62', sun: '#8fa4d8', sunI: 0.28, hemiSky: '#3a4670', hemiGround: '#1c1a22', hemiI: 0.5 },
   { t: 5.6, zenith: '#26386c', horizon: '#ef9e78', sun: '#ffa268', sunI: 0.75, hemiSky: '#9a8fb5', hemiGround: '#4a3a33', hemiI: 0.72 },
   { t: 6.6, zenith: '#4b78c0', horizon: '#ffc797', sun: '#ffc288', sunI: 1.8, hemiSky: '#b9c4e0', hemiGround: '#6b5845', hemiI: 0.95 },
@@ -129,8 +129,8 @@ const KEYS: SkyKey[] = [
   { t: 16, zenith: '#4580d0', horizon: '#d9e0e6', sun: '#ffe0b4', sunI: 2.55, hemiSky: '#c9d6ea', hemiGround: '#70593f', hemiI: 1.05 },
   { t: 18, zenith: '#4a6db2', horizon: '#ffc183', sun: '#ffb068', sunI: 2.0, hemiSky: '#c0b8c8', hemiGround: '#6e5038', hemiI: 0.92 },
   { t: 19.2, zenith: '#2b386e', horizon: '#ff8d58', sun: '#ff8648', sunI: 1.0, hemiSky: '#8d7898', hemiGround: '#42302a', hemiI: 0.72 },
-  { t: 20.4, zenith: '#0f1838', horizon: '#47395f', sun: '#8a98c8', sunI: 0.32, hemiSky: '#34416b', hemiGround: '#1a1a22', hemiI: 0.52 },
-  { t: 24, zenith: '#050a1a', horizon: '#18233f', sun: '#8fa4d8', sunI: 0.32, hemiSky: '#2f4068', hemiGround: '#16161e', hemiI: 0.5 },
+  { t: 20.4, zenith: '#0f1838', horizon: '#47395f', sun: '#8a98c8', sunI: 0.4, hemiSky: '#3a4a78', hemiGround: '#1e1e28', hemiI: 0.7 },
+  { t: 24, zenith: '#050a1a', horizon: '#18233f', sun: '#8fa4d8', sunI: 0.42, hemiSky: '#3a4c7a', hemiGround: '#1c1c26', hemiI: 0.72 },
 ];
 
 export interface SkyMood {

@@ -260,12 +260,20 @@ function grassTexture(base: string, seed: number): THREE.Texture {
   g.fillStyle = base;
   g.fillRect(0, 0, 256, 256);
   for (let i = 0; i < 30; i++) {
-    const x = r.range(0, 256), y = r.range(0, 256), rad = r.range(20, 70);
-    const grd = g.createRadialGradient(x, y, 0, x, y, rad);
-    grd.addColorStop(0, `rgba(${r.chance(0.5) ? '120,160,60' : '40,80,30'},0.25)`);
-    grd.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = grd;
-    g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    const x0 = r.range(0, 256), y0 = r.range(0, 256), rad = r.range(20, 70);
+    const tint = `rgba(${r.chance(0.5) ? '120,160,60' : '40,80,30'},0.09)`;
+    // Draw with wrap-around so the texture tiles seamlessly.
+    for (const ox of [-256, 0, 256]) {
+      for (const oy of [-256, 0, 256]) {
+        const x = x0 + ox, y = y0 + oy;
+        if (x + rad < 0 || x - rad > 256 || y + rad < 0 || y - rad > 256) continue;
+        const grd = g.createRadialGradient(x, y, 0, x, y, rad);
+        grd.addColorStop(0, tint);
+        grd.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = grd;
+        g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+      }
+    }
   }
   for (let i = 0; i < 2600; i++) {
     const x = r.range(0, 256), y = r.range(0, 256);
@@ -409,7 +417,7 @@ const DEFS: Record<WTMaterialName, Def> = {
   bone: { kind: 'plain', color: '#e7dcc2', rough: 0.6 },
   wood: { kind: 'uv', color: '#ffffff', tex: () => planks('#7a6450', 171), rough: 0.9 },
   rope: { kind: 'plain', color: '#a8916a', rough: 1 },
-  grass: { kind: 'tri', color: '#ffffff', tex: () => grassTexture('#5e9a3e', 7), ownTex: true, tile: 5, rough: 0.95, snow: 0 },
+  grass: { kind: 'tri', color: '#ffffff', tex: () => grassTexture('#64a042', 7), ownTex: true, tile: 6, rough: 0.95, snow: 0 },
   moss: { kind: 'tri', color: '#ffffff', tex: () => grassTexture('#4c7a3a', 8), ownTex: true, tile: 3, rough: 1, snow: 0 },
   rock: { kind: 'tri', color: '#ffffff', tex: () => rockTexture('#8a8f96', 21), ownTex: true, tile: 4, rough: 0.92, snow: 0.0 },
   rock_dark: { kind: 'tri', color: '#ffffff', tex: () => rockTexture('#5a5f66', 22), ownTex: true, tile: 4, rough: 0.92, snow: 0.0 },
@@ -680,12 +688,12 @@ export function animateWaterMaterials(ctx: GameContext): void {
   lastAnimFrame = ctx.time.frame;
   const t = ctx.time.elapsed;
   const sky = ctx.world.sky;
-  const sun = ctx.render.sunDir;
+  // Canal / pond water uses the world water shader, whose time, sun and sky
+  // uniforms are the shared environment uniforms (driven by World); only
+  // legacy uniforms, if present, are advanced here.
   for (const m of waterMats.values()) {
-    m.uniforms.uTime.value = t;
-    m.uniforms.uSunDir.value.copy(sun);
-    m.uniforms.uSky.value.copy(sky.horizonColor);
-    m.uniforms.uSunColor.value.copy(sky.sunColor);
+    const u = m.uniforms;
+    if (u.uTime) u.uTime.value = t;
   }
   if (waterfallMat) waterfallMat.uniforms.uTime.value = t;
   if (foamMat) foamMat.uniforms.uTime.value = t;

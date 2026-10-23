@@ -71,7 +71,9 @@ void main() {
   vec3 ambient = mix( vec3( skyL ), uSkyZenith, 0.35 ) * 0.55 + vec3( 0.22, 0.24, 0.28 );
   vec3 sunL = uSunColor * clamp( uSunDir.y * 1.6 + 0.25, 0.25, 1.0 );
   vec3 albedo = vec3( 0.96, 0.97, 1.0 );
-  vec3 col = albedo * ( ambient * mix( 0.75, 1.0, top ) + sunL * 0.62 * lit * mix( 0.55, 1.0, top ) );
+  vec3 col = albedo * ( ambient * mix( 0.58, 1.0, top ) + sunL * 0.7 * lit * mix( 0.3, 1.0, top ) );
+  // Cool blue-grey in the hollows between domes.
+  col = mix( col * vec3( 0.86, 0.9, 1.0 ), col, smoothstep( 0.2, 0.8, top ) );
   // Silver lining when looking toward the sun.
   float vdS = max( dot( normalize( vWorld - cameraPosition ), uSunDir ), 0.0 );
   col += uSunColor * pow( vdS, 8.0 ) * 0.3 * ( 1.0 - dens * 0.6 );
@@ -80,10 +82,18 @@ void main() {
   // Close to the camera the sheet becomes thin mist instead of a hard plane.
   float camD = abs( cameraPosition.y - uLayerY );
   alpha *= smoothstep( 0.0, 18.0, camD + length( vWorld.xz - cameraPosition.xz ) * 0.15 );
+  // Partial fog: the deck is a landmark that should read from afar, softened by haze rather than erased.
+  #ifdef USE_FOG
+    #ifdef FOG_EXP2
+      float cFog = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+    #else
+      float cFog = smoothstep( fogNear, fogFar * 1.8, vFogDepth );
+    #endif
+    col = mix( col, fogColor, cFog * 0.75 );
+  #endif
   gl_FragColor = vec4( col, alpha );
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
-  #include <fog_fragment>
 }
 `;
 
@@ -94,6 +104,8 @@ export class CloudSeaSystem implements WorldUpdatable {
   private readonly drift = new THREE.Vector2();
   private readonly center: THREE.Vector2;
   enabled = true;
+  /** 0..1 how deep the camera is inside the cloud deck (the weather turns it into mist). */
+  mist = 0;
 
   constructor(ctx: GameContext, noise: THREE.Texture) {
     this.group.name = 'cloud_sea';
@@ -143,10 +155,21 @@ export class CloudSeaSystem implements WorldUpdatable {
   update(dt: number, ctx: GameContext): void {
     const cam = ctx.camera.position;
     const dist = Math.hypot(cam.x - this.center.x, cam.z - this.center.y);
+    // Walking up the temple trail you climb through the deck: thick mist inside the band.
+    const top = BASE_Y + (LAYERS - 1) * STEP_Y;
+    const inBand = Math.min(1, Math.max(0, Math.min(cam.y - (BASE_Y - 10), top + 8 - cam.y) / 10));
+    const target = this.enabled ? inBand * (1 - Math.min(1, Math.max(0, (dist - RADIUS * 0.45) / (RADIUS * 0.3)))) : 0;
+    this.mist += (target - this.mist) * Math.min(1, dt * 1.5);
     // Visible from far away (it is a landmark) but not beyond the view distance.
-    const far = ctx.settings.data.graphics.drawDistance + RADIUS;
+    const g = ctx.settings.data.graphics;
+    const far = g.drawDistance + RADIUS;
     this.group.visible = this.enabled && dist < far;
     if (!this.group.visible) return;
+    // Low effects quality: three sheets instead of five (each sheet is a full-screen transparent pass).
+    const low = g.effectsQuality === 'low';
+    this.group.children.forEach((m, i) => {
+      m.visible = !low || i % 2 === 0;
+    });
     const w = ctx.world.sky.mood;
     // Drift with the wind (envUniforms.uWind: xy direction, z strength).
     const wv = envUniforms.uWind.value;

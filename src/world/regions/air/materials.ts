@@ -68,7 +68,7 @@ function canvasTex(w: number, h: number, draw: (g: CanvasRenderingContext2D) => 
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-  t.anisotropy = 4;
+  t.anisotropy = 8;
   ownTextures.push(t);
   return t;
 }
@@ -151,9 +151,9 @@ function labyrinthTexture(): THREE.Texture {
       g.fill();
     }
     // Circuit walls (grooves) with gaps, plus radial turning walls.
-    g.strokeStyle = '#8a7350';
+    g.strokeStyle = '#5f4a2e';
     g.lineCap = 'round';
-    g.lineWidth = 7;
+    g.lineWidth = 12;
     const gapsFor: number[] = [];
     for (let i = 0; i <= N; i++) {
       const gap = r.range(0, Math.PI * 2);

@@ -6,6 +6,7 @@ import type { Emitter, ParticlePreset, BurstOptions } from '../../../vfx/VFX';
 import type { Interactable } from '../../Interactables';
 import { ContentBuilder } from '../../kit/Builder';
 import type { RegionContent } from '../../RegionContent';
+import { allSpots } from '../../Spots';
 import type { P2 } from '../../WorldLayout';
 import { acquireWaterMaterials, animateWaterMaterials, releaseWaterMaterials } from './materials';
 
@@ -38,6 +39,20 @@ interface AmbientEmitter {
   range: number;
   /** Needs ambient effects enabled in settings (decorative). */
   ambient: boolean;
+}
+
+const WATER_REGIONS = ['northern_water_tribe', 'southern_water_tribe', 'meditation_isle'];
+const LIVE = new Set<WaterRegion>();
+
+/** Test hooks on window.__game.debug.water (spots, walk routes, built regions). */
+function installDebug(): void {
+  const g = typeof window !== 'undefined' ? (window as unknown as { __game?: { debug?: Record<string, unknown> } }).__game : undefined;
+  if (!g?.debug || g.debug.water) return;
+  g.debug.water = {
+    spots: () => Object.fromEntries(allSpots().filter(([, s]) => s.region && WATER_REGIONS.includes(s.region))),
+    built: () => [...LIVE].map((r) => r.id),
+    routes: () => Object.assign({}, ...[...LIVE].map((r) => (r as unknown as { routes?: Record<string, unknown> }).routes ?? {})),
+  };
 }
 
 export abstract class WaterRegion implements RegionContent {
@@ -119,6 +134,8 @@ export abstract class WaterRegion implements RegionContent {
     if (this.built) return;
     this.ctx = ctx;
     this.built = true;
+    LIVE.add(this);
+    installDebug();
     acquireWaterMaterials();
     this.construct(ctx);
     for (const b of this.builders) b.finish();
@@ -221,6 +238,7 @@ export abstract class WaterRegion implements RegionContent {
     this.main.clear();
     this.props.clear();
     releaseWaterMaterials();
+    LIVE.delete(this);
     this.built = false;
   }
 }

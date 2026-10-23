@@ -195,7 +195,7 @@ export class AmbientSystem implements WorldUpdatable {
       spores: new PrecipLayer({ name: 'spores', count: 380, box: [30, 10, 30], fall: 0.08, windFactor: 0.15, size: [0.04, 0.04], shape: 1, color: '#d8f0c0', opacity: 0.6, sway: 0.7 }, t),
       crystals: new PrecipLayer({ name: 'crystals', count: 600, box: [30, 14, 30], fall: -0.25, windFactor: 0.4, size: [0.03, 0.03], shape: 3, color: '#cfe6ff', opacity: 0.55, additive: true, sway: 0.6 }, t),
       embers: new PrecipLayer({ name: 'v_embers', count: 260, box: [32, 18, 32], fall: 0.9, windFactor: 0.4, size: [0.05, 0.05], shape: 3, color: '#ff8a3a', opacity: 0.9, additive: true, sway: 0.8 }, t),
-      fireflies: new PrecipLayer({ name: 'fireflies', count: 140, box: [36, 6, 36], fall: 0.0, windFactor: 0.05, size: [0.07, 0.07], shape: 3, color: '#d8ff7a', opacity: 0.9, additive: true, sway: 1.6 }, t),
+      fireflies: new PrecipLayer({ name: 'fireflies', count: 160, box: [36, 6, 36], fall: 0.0, windFactor: 0.05, size: [0.12, 0.12], shape: 3, color: '#e2ff8a', opacity: 1, additive: true, sway: 1.6 }, t),
     };
     for (const m of Object.values(this.motes)) this.group.add(m.mesh);
     this.birds = new BirdFlocks(t);

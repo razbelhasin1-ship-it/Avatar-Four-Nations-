@@ -300,7 +300,7 @@ function broadleaf(): LODs {
 
 function conifer(snow: boolean): LODs {
   const trunk0 = lin('#4a372a'), trunk1 = lin('#5d4535');
-  const base = snow ? lin('#2a4332') : lin('#22402d'), tip = snow ? lin('#3d5e44') : lin('#3b6844');
+  const base = snow ? lin('#2f4b38') : lin('#2a4c34'), tip = snow ? lin('#46694c') : lin('#4c7d50');
   const snowC = snow ? lin('#eef4fb') : null;
   const build = (lod: number): THREE.BufferGeometry => {
     const g = new GeoBuilder();
@@ -590,7 +590,7 @@ function flowers(): LODs {
 }
 
 function reeds(): LODs {
-  const c0 = lin('#4f6e2c'), c1 = lin('#a7a65a'), head = lin('#5a3d24');
+  const c0 = lin('#4f6e2c'), c1 = lin('#a7a65a'), head = lin('#8a5a34'), head1 = lin('#a56f42');
   const build = (lod: number): THREE.BufferGeometry => {
     const g = new GeoBuilder();
     const rng = new Random(95);
@@ -605,7 +605,7 @@ function reeds(): LODs {
       const side = V(-dir.z, 0, dir.x);
       const pts = [b, b.clone().add(V(dir.x * lean * 0.3, h * 0.55, dir.z * lean * 0.3)), b.clone().add(V(dir.x * lean, h, dir.z * lean))];
       g.strip(pts, [0.035, 0.025, 0.004], side, c0, c1, 0, 1, 1, 0);
-      if (i % 4 === 0) g.tube(pts[1].clone().add(V(0, h * 0.15, 0)), pts[1].clone().add(V(dir.x * lean * 0.2, h * 0.38, dir.z * lean * 0.2)), 0.045, 0.04, 4, head, head, 0.6, 0.8);
+      if (i % 4 === 0) g.tube(pts[1].clone().add(V(0, h * 0.15, 0)), pts[1].clone().add(V(dir.x * lean * 0.2, h * 0.38, dir.z * lean * 0.2)), 0.04, 0.034, lod === 0 ? 7 : 5, head, head1, 0.6, 0.8);
     }
     return g.build();
   };

@@ -177,7 +177,8 @@ void main() {
     vec2 sl = vSunL / sunLen;
     float slope = dot( grad, sl ) * 0.035 * ( 1.0 - clamp( vSunH, 0.0, 1.0 ) * 0.5 );
     float depth = clamp( -h0, 0.0, 1.0 );
-    float shade = 0.5 - depth * 0.13 + slope + max( h0, 0.0 ) * 0.05;
+    // Deeper prints in soft snow read through cool ambient occlusion at the bottom.
+    float shade = 0.5 - depth * 0.2 + slope * 1.3 + max( h0, 0.0 ) * 0.07;
     float wet = surf > 1.5 && surf < 2.5 ? depth * 0.12 : 0.0;
     shade -= wet;
     col = mix( vec3( shade ), vec3( shade ) * shadowTint * 1.08, smoothstep( 0.5, 0.3, shade ) );

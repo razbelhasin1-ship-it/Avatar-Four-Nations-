@@ -139,13 +139,14 @@ void main() {
   float bedSlope = length(vec2(dFdx(ground), dFdy(ground))) / max(wpx, 1e-4);
   float shoreK = smoothstep(0.004, 0.035, bedSlope);
   float shore = smoothstep(0.9, 0.0, depth) * smoothstep(0.3, 0.7, fn + 0.25 * sin(depth * 7.0 - t * 2.2)) * shoreK;
-  float crest = smoothstep(0.75, 1.0, vCrest) * smoothstep(0.45, 0.75, fn) * 0.6;
+  // Whitecaps: fewer and finer in sheltered polar water between the ice floes.
+  float crest = smoothstep(0.78, 1.0, vCrest) * smoothstep(0.5, 0.8, fn) * 0.55 * (1.0 - 0.75 * polar);
   float riverFoam = 0.0;
   if (uFlowSpeed > 0.0) {
     float streak = n3.b;
-    float edge = smoothstep(0.36, 0.5, abs(vUv.x - 0.5));
-    riverFoam = smoothstep(0.72, 0.95, streak) * 0.2 * (0.3 + edge) + edge * 0.4 * streak;
-    riverFoam += vRapid * smoothstep(0.35, 0.7, n3.a) * 0.9;
+    float edge = smoothstep(0.41, 0.5, abs(vUv.x - 0.5));
+    riverFoam = smoothstep(0.86, 0.98, streak) * 0.08 * (0.3 + edge) + edge * 0.28 * smoothstep(0.45, 0.85, streak);
+    riverFoam += vRapid * smoothstep(0.5, 0.8, n3.a) * 0.7;
     riverFoam += vFall * (0.6 + 0.4 * texture2D(uWaterTex, vec2(vUv.x * 1.6, vUv.y * 0.05 - t * 0.8)).b);
   }
   float foam = clamp((shore + crest) * uFoam + riverFoam, 0.0, 1.0);

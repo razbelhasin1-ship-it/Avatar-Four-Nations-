@@ -323,6 +323,8 @@ export class WeatherSystem implements WorldUpdatable {
   private windAngle = 0.6;
   private wetness = 0;
   private pendingSnap = true;
+  /** Extra fog from local effects (e.g. walking inside the Air Temple cloud deck), 0..1. */
+  fogBoost = 0;
   private readonly tmpTint = new THREE.Color();
   private readonly regionTint = new THREE.Color();
 
@@ -332,7 +334,7 @@ export class WeatherSystem implements WorldUpdatable {
     this.layers = {
       rain: new PrecipLayer({ name: 'rain', count: 8000, box: [34, 22, 34], fall: -17, windFactor: 0.6, size: [0.02, 0.9], shape: 0, color: '#c4d0dc', opacity: 0.5, sway: 0 }, t),
       snow: new PrecipLayer({ name: 'snow', count: 8000, box: [38, 22, 38], fall: -1.6, windFactor: 1.0, size: [0.1, 0.1], shape: 1, color: '#ffffff', opacity: 0.95, sway: 0.5 }, t),
-      ash: new PrecipLayer({ name: 'ash', count: 3500, box: [36, 20, 36], fall: -0.9, windFactor: 0.8, size: [0.07, 0.07], shape: 2, color: '#5a5350', opacity: 0.85, sway: 0.7 }, t),
+      ash: new PrecipLayer({ name: 'ash', count: 4000, box: [36, 20, 36], fall: -0.9, windFactor: 0.8, size: [0.045, 0.045], shape: 2, color: '#7a726d', opacity: 0.8, sway: 0.7 }, t),
       ember: new PrecipLayer({ name: 'ember', count: 500, box: [36, 20, 36], fall: 0.35, windFactor: 0.6, size: [0.06, 0.06], shape: 3, color: '#ff7a2a', opacity: 0.9, additive: true, sway: 0.9 }, t),
       sand: new PrecipLayer({ name: 'sand', count: 6000, box: [40, 12, 40], fall: -0.4, windFactor: 1.6, size: [0.06, 1.6], shape: 4, color: '#dcb57c', opacity: 0.55, sway: 0.2 }, t),
       leaves: new PrecipLayer({ name: 'leaves', count: 450, box: [40, 16, 40], fall: -0.8, windFactor: 1.1, size: [0.12, 0.12], shape: 5, color: '#ffffff', opacity: 1, sway: 1.1 }, t),
@@ -403,7 +405,8 @@ export class WeatherSystem implements WorldUpdatable {
     const rt = this.regionId ? REGION_TINT[this.regionId] : undefined;
     this.tmpTint.copy(this.cur.tint);
     if (rt) this.tmpTint.multiply(this.regionTint.set(rt));
-    sky.setMood({ cloudCover: this.cur.cloudCover, overcast: this.cur.overcast, fogScale: this.cur.fogScale, tint: this.tmpTint, cloudTint: this.cur.cloudTint });
+    const fogScale = this.cur.fogScale * (1 + this.fogBoost * 7);
+    sky.setMood({ cloudCover: this.cur.cloudCover, overcast: this.cur.overcast, fogScale, tint: this.tmpTint, cloudTint: this.cur.cloudTint });
     if (snap) sky.snapMood();
   }
 

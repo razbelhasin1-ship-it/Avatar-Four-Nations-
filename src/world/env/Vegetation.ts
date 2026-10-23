@@ -81,8 +81,11 @@ attribute vec4 aTint;
 uniform vec4 uFade;
 uniform float uFlex;
 uniform float uPush;
+uniform vec2 uCrown;
 varying float vFadeIn;
 varying float vFadeOut;
+varying float vLeaf;
+varying float vSeeThrough;
 ${ENV_PARS_GLSL}
 ${ENV_NOISE_GLSL}
 `;
@@ -95,6 +98,7 @@ vec3 instPos = vec3( 0.0 );
   instPos = instanceMatrix[ 3 ].xyz;
 #endif
 float vegW = veg.x;
+vLeaf = veg.y;
 if ( vegW > 0.0 ) {
   float phase = envHash( instPos.xz * 0.37 ) * 6.2831;
   mvPosition.xyz += envWindSway( instPos, uFlex * vegW, phase );
@@ -106,13 +110,22 @@ if ( vegW > 0.0 ) {
   }
 }
 float camD = length( instPos.xz - cameraPosition.xz );
+// Camera inside a crown (third-person camera pushed into a tree): thin the whole plant out.
+#ifdef USE_INSTANCING
+  float instScale = length( instanceMatrix[ 0 ].xyz );
+#else
+  float instScale = 1.0;
+#endif
+float inside = 1.0 - smoothstep( uCrown.x * instScale * 0.8, uCrown.x * instScale * 1.25 + 0.5, camD );
+inside *= step( instPos.y - 1.0, cameraPosition.y ) * step( cameraPosition.y, instPos.y + uCrown.y * instScale + 1.5 );
+vSeeThrough = 1.0 - 0.8 * inside;
 vFadeIn = clamp( ( camD - uFade.x ) / max( uFade.y - uFade.x, 1e-3 ), 0.0, 1.0 );
 vFadeOut = 1.0 - clamp( ( camD - uFade.z ) / max( uFade.w - uFade.z, 1e-3 ), 0.0, 1.0 );
 mvPosition = modelViewMatrix * mvPosition;
 gl_Position = projectionMatrix * mvPosition;
 `;
 
-function createVegMaterial(flex: number, push: number): THREE.MeshLambertMaterial {
+function createVegMaterial(flex: number, push: number, crown: THREE.Vector2): THREE.MeshLambertMaterial {
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const fade = new THREE.Vector4(-2, -1, 1e6, 1e6 + 1);
   mat.userData.fade = fade;
@@ -121,21 +134,27 @@ function createVegMaterial(flex: number, push: number): THREE.MeshLambertMateria
     shader.uniforms.uFade = { value: fade };
     shader.uniforms.uFlex = { value: flex };
     shader.uniforms.uPush = { value: push };
+    shader.uniforms.uCrown = { value: crown };
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\n' + VEG_VERT_PARS)
       .replace('#include <color_vertex>', '#include <color_vertex>\n  vColor.rgb *= mix( vec3( 1.0 ), aTint.rgb, veg.y );')
       .replace('#include <project_vertex>', VEG_PROJECT);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vFadeIn;\nvarying float vFadeOut;\n' + ENV_DITHER_GLSL)
+      .replace('#include <common>', '#include <common>\nvarying float vFadeIn;\nvarying float vFadeOut;\nvarying float vLeaf;\nvarying float vSeeThrough;\nuniform vec3 uSkyHorizon;\nuniform vec3 uSunColor;\nuniform float uDaylight;\n' + ENV_DITHER_GLSL)
+      // Foliage scatters light: lift shadowed leaves with sky fill and a little sun translucency.
+      .replace('#include <opaque_fragment>', '  outgoingLight += diffuseColor.rgb * vLeaf * ( uSkyHorizon * 0.16 + uSunColor * 0.12 * uDaylight );\n#include <opaque_fragment>')
       .replace(
         '#include <clipping_planes_fragment>',
         `#include <clipping_planes_fragment>
   float vegDither = envDither( gl_FragCoord.xy );
   if ( vFadeIn < 1.0 && vFadeIn <= 1.0 - vegDither ) discard;
-  if ( vFadeOut < 1.0 && vFadeOut <= vegDither ) discard;`,
+  if ( vFadeOut < 1.0 && vFadeOut <= vegDither ) discard;
+  if ( vSeeThrough < 1.0 && vSeeThrough <= vegDither ) discard;
+  // Never fill the screen with a leaf right in front of the lens.
+  if ( length( vViewPosition ) < 1.3 ) discard;`,
       );
   };
-  mat.customProgramCacheKey = () => 'veg-v1';
+  mat.customProgramCacheKey = () => 'veg-v3';
   return mat;
 }
 
@@ -167,6 +186,7 @@ export class VegetationSystem implements WorldUpdatable {
   private density = 1;
   private lodScale = 1;
   private shadows = true;
+  private shadowReach = 45;
   private drawDistance = 750;
   private dirty = true;
   private readonly lastCam = new THREE.Vector3(1e9, 0, 0);
@@ -181,6 +201,17 @@ export class VegetationSystem implements WorldUpdatable {
 
   constructor(private readonly ctx: GameContext) {
     this.group.name = 'vegetation';
+    ctx.world.group.add(this.group);
+    this.applySettings();
+    ctx.events.on('settings:changed', () => this.applySettings());
+  }
+
+  /**
+   * Species models and materials are built lazily (first preload / update) so
+   * they never weigh on page boot; the loading screen absorbs the cost.
+   */
+  private ensureBatches(): void {
+    if (this.batches.length) return;
     const geos = speciesGeometries();
     SPECIES_IDS.forEach((id, si) => {
       const lods = geos.get(id)!;
@@ -189,14 +220,16 @@ export class VegetationSystem implements WorldUpdatable {
       for (let l = 0; l < 3; l++) {
         const base = lods[l];
         if (!base) continue;
-        const material = createVegMaterial(def.flex * (l === 2 ? 0.6 : 1), def.push);
+        lods[0].computeBoundingBox();
+        const bb = lods[0].boundingBox!;
+        const crown = new THREE.Vector2(Math.max(-bb.min.x, bb.max.x, -bb.min.z, bb.max.z), bb.max.y);
+        const material = createVegMaterial(def.flex * (l === 2 ? 0.6 : 1), def.push, crown);
         row.push({ species: si, lod: l, category: def.category, base, mesh: null, geo: null, tint: null, capacity: 0, count: 0, material, fade: material.userData.fade as THREE.Vector4 });
       }
       this.batches.push(row);
     });
-    ctx.world.group.add(this.group);
-    this.applySettings();
-    ctx.events.on('settings:changed', () => this.applySettings());
+    this.updateFadeUniforms();
+    this.dirty = true;
   }
 
   private applySettings(): void {
@@ -208,9 +241,16 @@ export class VegetationSystem implements WorldUpdatable {
     }
     this.lodScale = 1 / (1 + g.lodBias);
     this.shadows = g.shadows !== 'off';
+    this.shadowReach = g.shadows === 'high' ? 95 : g.shadows === 'medium' ? 70 : g.shadows === 'low' ? 45 : 0;
     this.drawDistance = g.drawDistance;
     this.updateFadeUniforms();
     this.dirty = true;
+  }
+
+  /** Near LOD always casts; the mid LOD only when the shadow map reaches beyond the near range. */
+  private castsShadow(b: Batch): boolean {
+    if (!this.shadows || !SPECIES[SPECIES_IDS[b.species]].shadow) return false;
+    return b.lod === 0 || (b.lod === 1 && this.shadowReach > this.ranges(b.category)[0]);
   }
 
   private ranges(cat: SpeciesCategory): LodRanges {
@@ -232,8 +272,7 @@ export class VegetationSystem implements WorldUpdatable {
           if (hasL2) f.set(r0 - band, r0 + band, r1 - band, r1 + band);
           else f.set(r0 - band, r0 + band, rmax - band * 3, rmax);
         } else f.set(r1 - band, r1 + band, rmax - band * 4, rmax);
-        const castShadow = this.shadows && SPECIES[SPECIES_IDS[b.species]].shadow && b.lod <= 1;
-        if (b.mesh) b.mesh.castShadow = castShadow;
+        if (b.mesh) b.mesh.castShadow = this.castsShadow(b);
       }
     }
   }
@@ -406,7 +445,7 @@ export class VegetationSystem implements WorldUpdatable {
     mesh.frustumCulled = false;
     mesh.matrixAutoUpdate = false;
     mesh.receiveShadow = true;
-    mesh.castShadow = this.shadows && SPECIES[SPECIES_IDS[b.species]].shadow && b.lod <= 1;
+    mesh.castShadow = this.castsShadow(b);
     mesh.name = `veg_${SPECIES_IDS[b.species]}_${b.lod}`;
     mesh.count = 0;
     this.group.add(mesh);
@@ -464,6 +503,10 @@ export class VegetationSystem implements WorldUpdatable {
             const dx = a[o] - cam.x, dz = a[o + 2] - cam.z;
             const dist = Math.sqrt(dx * dx + dz * dz);
             if (dist > rr[2]) continue;
+            // Far thinning: beyond ~1.6x the mid-LOD range keep a shrinking share of the
+            // instances (by keep rank, so it is stable); fog hides the difference.
+            const thin0 = rr[1] * 1.6;
+            if (dist > thin0 && a[o + 9] >= density * (1 - 0.55 * Math.min(1, (dist - thin0) / (thin0 * 0.8)))) continue;
             const band = BAND[cat];
             const row = this.batches[sp];
             const hasL2 = row.length === 3;
@@ -521,6 +564,7 @@ export class VegetationSystem implements WorldUpdatable {
   // ---------------------------------------------------------------------------
 
   update(dt: number, ctx: GameContext, focus: THREE.Vector3): void {
+    this.ensureBatches();
     if (!this.enabled) {
       this.group.visible = false;
       return;
@@ -545,6 +589,7 @@ export class VegetationSystem implements WorldUpdatable {
   }
 
   preload(p: THREE.Vector3, budgetMs: number): number {
+    this.ensureBatches();
     if (!this.enabled) return 0;
     const pending = this.stream(p, budgetMs);
     if (pending === 0) {

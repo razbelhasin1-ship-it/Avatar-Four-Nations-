@@ -185,7 +185,7 @@ export function generateTerrainLayers(size = 256): TerrainLayerData {
     mixc([0.48, 0.45, 0.42], [0.66, 0.62, 0.56], w.id, tmp);
     tmp[0] *= 0.96 + 0.08 * warm; tmp[2] *= 1.03 - 0.08 * warm;
     const shade = 0.86 + 0.16 * dome;
-    for (let i = 0; i < 3; i++) c[i] = lerp([0.34, 0.31, 0.28][i], tmp[i] * shade, stone);
+    for (let i = 0; i < 3; i++) c[i] = lerp([0.4, 0.37, 0.33][i], tmp[i] * shade * 0.94, stone);
     c[3] = 0.12 + 0.78 * dome * stone;
   };
   // 9 paved flagstones (stone roads, plazas, trails).

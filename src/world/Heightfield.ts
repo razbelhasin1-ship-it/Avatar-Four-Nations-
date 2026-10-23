@@ -1194,7 +1194,7 @@ export function createTerrainSample(): TerrainSample {
 
 const roadScratch: RoadInfo = { lat: 99, half: 0, type: 0, s: 0 };
 
-export function sampleTerrain(x: number, z: number, h: number, slope: number, out: TerrainSample): TerrainSample {
+export function sampleTerrain(x: number, z: number, h: number, slope: number, out: TerrainSample, roadMargin = 8): TerrainSample {
   if (!initialized) initHeightfield();
   const b = biomeWeights(x, z, out.biome);
   const lw = localWaterAt(x, z, lwScratch);
@@ -1213,7 +1213,7 @@ export function sampleTerrain(x: number, z: number, h: number, slope: number, ou
   sr = mix(sr, 1.08, alpine); sg = mix(sg, 1.04, alpine); sb = mix(sb, 1.0, alpine);
   out.soil[0] = sr; out.soil[1] = sg; out.soil[2] = sb;
   out.litter = forestFactor(x, z, b) * out.w[0] * (1 - b.cold) * (1 - b.desert);
-  const road = roadAt(x, z, 8, roadScratch);
+  const road = roadAt(x, z, roadMargin, roadScratch);
   if (road) {
     out.roadLat = road.lat;
     out.roadHalf = road.half;

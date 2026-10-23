@@ -183,7 +183,9 @@ const TERRAIN_COLOR = /* glsl */ `
 {
   vec3 wp = vTerrWorld;
   float camDist = length(wp - cameraPosition);
-  float roadType = floor(vRoad.z + 0.5);
+  // vRoad.w < 1: the triangle mixes vertices with and without road data (only
+  // happens well outside the road), where the interpolated signed distance is meaningless.
+  float roadType = vRoad.w > 0.999 ? floor(vRoad.z + 0.5) : 0.0;
   float lat = abs(vRoad.x);
   float rhalf = vRoad.y;
   float roadW = 0.0;
@@ -195,14 +197,21 @@ const TERRAIN_COLOR = /* glsl */ `
 #if TERRAIN_DETAIL == 0
   // Low: CPU-blended vertex colour, modulated by the luminance detail of the
   // vertex's dominant material layer (one texture fetch).
-  // The generic detail layer (not the per-vertex dominant layer) so material
-  // borders stay smooth gradients instead of triangle-shaped steps.
-  vec4 dtex = texture(uTerrainTex, vec3(wp.xz / uLayerScale[12], 12.0));
+  // Dominant material chosen per pixel from the interpolated weights (not a flat
+  // per-vertex index), so material borders follow smooth curves instead of
+  // triangle-shaped steps; one texture fetch for its luminance detail.
+  float lw[9];
+  lw[0] = vSplatA.x; lw[1] = vSplatA.y; lw[2] = vSplatA.z; lw[3] = vSplatA.w;
+  lw[4] = vSplatB.x; lw[5] = vSplatB.y; lw[6] = vSplatB.z; lw[7] = vSplatB.w; lw[8] = vSplatC.x;
+  int ml = 0;
+  float best = lw[0];
+  for (int i = 1; i < 9; i++) { if (lw[i] > best) { best = lw[i]; ml = i; } }
+  if (roadType > 0.5 && abs(vRoad.x) < vRoad.y) ml = roadType < 1.5 ? 1 : roadType < 2.5 ? 9 : roadType < 3.5 ? 10 : 9;
+  vec4 dtex = texture(uTerrainTex, vec3(wp.xz / uLayerScale[ml], float(ml)));
   float dl = dot(dtex.rgb, vec3(0.2126, 0.7152, 0.0722));
-  float dt = clamp(dl / max(uLayerLum[12], 0.02), 0.45, 1.7);
-  vec4 dtex2 = texture(uTerrainTex, vec3(wp.xz / (uLayerScale[12] * 5.3), 12.0));
-  float dt2 = clamp(dot(dtex2.rgb, vec3(0.2126, 0.7152, 0.0722)) / max(uLayerLum[12], 0.02), 0.6, 1.4);
-  col = vVCol.rgb * mix(1.0, dt, 0.6) * mix(1.0, dt2, 0.35);
+  float dt = clamp(dl / max(uLayerLum[ml], 0.02), 0.45, 1.7);
+  float macroL = texture(uTerrainTex, vec3(wp.xz / uLayerScale[13], 13.0)).r;
+  col = vVCol.rgb * mix(1.0, dt, 0.75) * (0.9 + 0.2 * macroL);
   H = dtex.a;
   rough = vVCol.a;
   snowW = clamp(vSplatB.x + vSplatB.y, 0.0, 1.0);
@@ -534,12 +543,14 @@ export function* buildChunkJob(cx: number, cz: number, lod: number, cachedHeight
     nor[vi * 3] = nx;
     nor[vi * 3 + 1] = ny;
     nor[vi * 3 + 2] = nz;
-    const s = sampleTerrain(x0 + x, z0 + z, h, 1 - ny, sample);
+    // Road info reaches 1.5 grid cells past the margin so that triangles mixing
+    // road / no-road vertices always lie outside the road surface (see vRoad.w).
+    const s = sampleTerrain(x0 + x, z0 + z, h, 1 - ny, sample, 8 + spacing * 1.5);
     const w = s.w;
     spA[vi * 4] = w[0]; spA[vi * 4 + 1] = w[1]; spA[vi * 4 + 2] = w[2]; spA[vi * 4 + 3] = w[3];
     spB[vi * 4] = w[4]; spB[vi * 4 + 1] = w[5]; spB[vi * 4 + 2] = w[6]; spB[vi * 4 + 3] = w[7];
     spC[vi * 4] = w[8]; spC[vi * 4 + 1] = s.litter; spC[vi * 4 + 2] = s.waterRel; spC[vi * 4 + 3] = s.waterKind;
-    road[vi * 4] = s.roadType ? s.roadLat : 99; road[vi * 4 + 1] = s.roadHalf; road[vi * 4 + 2] = s.roadType; road[vi * 4 + 3] = 0;
+    road[vi * 4] = s.roadType ? s.roadLat : 99; road[vi * 4 + 1] = s.roadHalf; road[vi * 4 + 2] = s.roadType; road[vi * 4 + 3] = s.roadType ? 1 : 0;
     const tr = srgbToLinear(s.tint[0]), tg = srgbToLinear(s.tint[1]), tb = srgbToLinear(s.tint[2]);
     tint[vi * 3] = tr; tint[vi * 3 + 1] = tg; tint[vi * 3 + 2] = tb;
     soil[vi * 3] = s.soil[0]; soil[vi * 3 + 1] = s.soil[1]; soil[vi * 3 + 2] = s.soil[2];
