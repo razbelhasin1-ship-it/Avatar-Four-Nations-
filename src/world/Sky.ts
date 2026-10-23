@@ -33,6 +33,7 @@ uniform float uOvercast;
 uniform float uNight;
 uniform vec3 uCloudTint;
 uniform vec2 uCloudOffset;
+uniform float uHaze;
 uniform sampler2D uNoiseTex;
 varying vec3 vDir;
 float sHash(vec2 p) { p = fract(p * vec2(443.897, 441.423)); p += dot(p, p.yx + 19.19); return fract((p.x + p.y) * p.x); }
@@ -98,6 +99,8 @@ void main() {
     float cirrus = smoothstep(0.25, 0.55, ci) * (0.35 + 0.4 * (1.0 - cover)) * fade * (1.0 - dens);
     col = mix(col, uCloudTint * (uSunColor * 0.4 + uHorizon * 0.7) * mix(1.0, 0.2, uNight), cirrus * 0.45);
   }
+  // Weather haze (fog banks, sandstorms, blizzards): the sky melts toward the fog colour, most near the horizon.
+  col = mix(col, uGround, uHaze * (1.0 - 0.4 * smoothstep(0.0, 0.9, hh)));
   // Below the horizon blend into the fog colour so distant terrain melts into the sky.
   col = mix(col, uGround, smoothstep(0.03, -0.035, h));
   gl_FragColor = vec4(col, 1.0);
@@ -213,6 +216,7 @@ export class SkySystem {
         uCloudTint: { value: new THREE.Color('#ffffff') },
         uCloudOffset: { value: this.cloudOffset },
         uNoiseTex: { value: this.noiseTexture },
+        uHaze: { value: 0 },
       },
       vertexShader: skyVertex,
       fragmentShader: skyFragment,
@@ -330,6 +334,7 @@ export class SkySystem {
     const towardSun = Math.max(0, this.camDir.x * trueSun.x + this.camDir.z * trueSun.z) * (1 - night);
     fog.color.copy(this.horizonColor).lerp(this.zenithColor, 0.06).lerp(this.c2.copy(this.sunColor).multiply(this.horizonColor).multiplyScalar(1.4), towardSun * 0.18 * (1 - overcast));
     u.uGround.value.copy(fog.color);
+    u.uHaze.value = clamp01((this.mood.fogScale - 1.2) / 4.5) * 0.92;
     fog.far = drawDistance / Math.max(0.3, this.mood.fogScale);
     fog.near = Math.min(fog.far * 0.25, 220 / this.mood.fogScale);
 

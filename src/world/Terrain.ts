@@ -195,11 +195,14 @@ const TERRAIN_COLOR = /* glsl */ `
 #if TERRAIN_DETAIL == 0
   // Low: CPU-blended vertex colour, modulated by the luminance detail of the
   // vertex's dominant material layer (one texture fetch).
-  int ml = int(vMainLayer + 0.5);
-  vec4 dtex = texture(uTerrainTex, vec3(wp.xz / uLayerScale[ml], float(ml)));
+  // The generic detail layer (not the per-vertex dominant layer) so material
+  // borders stay smooth gradients instead of triangle-shaped steps.
+  vec4 dtex = texture(uTerrainTex, vec3(wp.xz / uLayerScale[12], 12.0));
   float dl = dot(dtex.rgb, vec3(0.2126, 0.7152, 0.0722));
-  float dt = clamp(dl / max(uLayerLum[ml], 0.02), 0.4, 1.8);
-  col = vVCol.rgb * mix(1.0, dt, 0.85);
+  float dt = clamp(dl / max(uLayerLum[12], 0.02), 0.45, 1.7);
+  vec4 dtex2 = texture(uTerrainTex, vec3(wp.xz / (uLayerScale[12] * 5.3), 12.0));
+  float dt2 = clamp(dot(dtex2.rgb, vec3(0.2126, 0.7152, 0.0722)) / max(uLayerLum[12], 0.02), 0.6, 1.4);
+  col = vVCol.rgb * mix(1.0, dt, 0.6) * mix(1.0, dt2, 0.35);
   H = dtex.a;
   rough = vVCol.a;
   snowW = clamp(vSplatB.x + vSplatB.y, 0.0, 1.0);

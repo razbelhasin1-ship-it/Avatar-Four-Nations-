@@ -111,6 +111,7 @@ export function buildHead(ctx: BuildCtx): void {
   b.skin = rigid(head);
   const nu = ctx.seg(48), nv = ctx.seg(36);
   const p = { x: 0, y: 0, z: 0 };
+  const headV0 = b.vertexCount;
   b.grid(
     nu,
     nv,
@@ -131,6 +132,20 @@ export function buildHead(ctx: BuildCtx): void {
     },
     { closedU: true },
   );
+  // Stylised face shading: blend the front of the head toward a smooth ellipsoid normal with
+  // a slight forward bias, so angular jaws/cheeks never read as dark "beard shadow" patches.
+  const cy = H[1] + HEAD_CY;
+  b.adjustNormals(headV0, b.vertexCount, (q, n) => {
+    let ex = (q.x - H[0]) / (f.rx * f.rx), ey = (q.y - cy) / (f.ry * f.ry), ez = (q.z - H[2]) / (f.rz * f.rz);
+    const el = Math.hypot(ex, ey, ez) || 1;
+    ex /= el;
+    ey /= el;
+    ez /= el;
+    const w = 0.78 * smooth01(-0.15, 0.45, ez) * smooth01(-1.02, -0.78, ey);
+    n.x = n.x * (1 - w) + ex * w;
+    n.y = n.y * (1 - w) + (ey * 0.8 + 0.18) * w;
+    n.z = n.z * (1 - w) + (ez + 0.35) * w;
+  });
   b.tattoo(TAT.NONE);
   ctx.crownY = H[1] + HEAD_CY + f.ry * (1 + 0.03 * f.cranium);
 

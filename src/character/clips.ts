@@ -1,4 +1,5 @@
 import { registerClip } from './Animator';
+import './combatClips';
 
 /**
  * Shared base clips (reactions, movement accents, social). Technique-specific
@@ -16,21 +17,7 @@ registerClip({
   ],
 });
 
-const dodge = (id: string, spin: number, low: number) =>
-  registerClip({
-    id,
-    duration: 0.38,
-    mask: 'full',
-    keys: [
-      { t: 0, pose: { spine: [0.3, spin * 0.3, 0], thighL: [-0.8, 0, 0.1], thighR: [0.4, 0, -0.1], shinL: [0.9, 0, 0], shinR: [0.6, 0, 0], upperArmL: [0.6, 0, 0.6], upperArmR: [0.6, 0, -0.6], hipsY: -low } },
-      { t: 0.19, pose: { spine: [0.45, spin, 0], thighL: [-1.1, 0, 0.2], thighR: [0.2, 0, -0.2], shinL: [1.4, 0, 0], shinR: [1.2, 0, 0], hipsY: -low * 1.4 }, ease: 'out' },
-      { t: 0.38, pose: { spine: [0.1, 0, 0], thighL: [-0.2, 0, 0.05], thighR: [-0.1, 0, -0.05], shinL: [0.3, 0, 0], shinR: [0.3, 0, 0], hipsY: 0 }, ease: 'inout' },
-    ],
-  });
-dodge('dodge_air', 2.2, 0.1);
-dodge('dodge_water', 1.2, 0.25);
-dodge('dodge_earth', 0.3, 0.35);
-dodge('dodge_fire', 0.6, 0.2);
+// Per-element dodges live in combatClips.ts with the reusable combat motion library.
 
 registerClip({
   id: 'knockdown',
@@ -58,6 +45,8 @@ registerClip({
   id: 'avatar_activate',
   duration: 0.9,
   mask: 'full',
+  desc: 'Avatar State entry: gather low, then burst upright with arms flung wide. "release" = the burst.',
+  events: [{ t: 0.55, name: 'release' }],
   keys: [
     { t: 0, pose: { spine: [0.2, 0, 0], upperArmL: [-0.2, 0, 0.2], upperArmR: [-0.2, 0, -0.2], hipsY: -0.1 } },
     { t: 0.3, pose: { spine: [0.35, 0, 0], head: [0.4, 0, 0], upperArmL: [-0.4, 0, 0.3], upperArmR: [-0.4, 0, -0.3], foreArmL: [-1.4, 0, 0], foreArmR: [-1.4, 0, 0], thighL: [-0.4, 0, 0.25], thighR: [-0.4, 0, -0.25], shinL: [0.8, 0, 0], shinR: [0.8, 0, 0], hipsY: -0.3 }, ease: 'in' },
@@ -70,6 +59,8 @@ registerClip({
   id: 'interact',
   duration: 0.6,
   mask: 'armR',
+  desc: 'Reach out with the right hand (pick up, open, touch). "release" = hand at full reach.',
+  events: [{ t: 0.25, name: 'release' }],
   keys: [
     { t: 0, pose: { upperArmR: [0, 0, 0], foreArmR: [0, 0, 0] } },
     { t: 0.25, pose: { upperArmR: [-1.0, 0, -0.1], foreArmR: [-0.4, 0, 0] }, ease: 'out' },

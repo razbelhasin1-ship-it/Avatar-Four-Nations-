@@ -393,14 +393,24 @@ function mangrove(): LODs {
   const build = (lod: number): THREE.BufferGeometry => {
     const g = new GeoBuilder();
     const rng = new Random(37);
-    g.tube(V(0, 1.4, 0), V(0.1, 4.2, 0), 0.26, 0.14, lod === 0 ? 6 : 4, bark0, bark1, 0.05, 0.25);
-    const roots = lod === 0 ? 7 : lod === 1 ? 4 : 3;
+    g.tube(V(0, 0.4, 0), V(0.1, 4.2, 0), 0.24, 0.13, lod === 0 ? 6 : 4, bark0, bark1, 0.0, 0.25);
+    // Arching prop roots springing from the lower trunk and curving down into the mud.
+    const roots = lod === 0 ? 11 : lod === 1 ? 6 : 4;
     for (let i = 0; i < roots; i++) {
-      const a = (i / roots) * Math.PI * 2 + rng.range(-0.3, 0.3);
-      const r = rng.range(1.4, 2.2);
-      const mid2 = V(Math.cos(a) * r * 0.6, 1.9, Math.sin(a) * r * 0.6);
-      g.tube(V(0, 1.6, 0), mid2, 0.1, 0.09, 4, bark1, bark1, 0.05, 0.05);
-      g.tube(mid2, V(Math.cos(a) * r, -0.5, Math.sin(a) * r), 0.09, 0.07, 4, bark1, bark0, 0.05, 0);
+      const a = (i / roots) * Math.PI * 2 + rng.range(-0.25, 0.25);
+      const r = rng.range(0.95, 1.75);
+      const y0 = rng.range(0.9, 2.1);
+      const ca = Math.cos(a), sa = Math.sin(a);
+      const p0 = V(ca * 0.14, y0, sa * 0.14);
+      const p1 = V(ca * r * 0.5, y0 + 0.22, sa * r * 0.5);
+      const p2 = V(ca * r * 0.88, y0 * 0.5, sa * r * 0.88);
+      const p3 = V(ca * r * 1.02, -0.45, sa * r * 1.02);
+      const seg = lod === 0 ? 4 : 3;
+      g.tube(p0, p1, 0.075, 0.06, seg, bark1, bark1, 0.02, 0.02);
+      if (lod < 2) {
+        g.tube(p1, p2, 0.06, 0.055, seg, bark1, bark0, 0.02, 0);
+        g.tube(p2, p3, 0.055, 0.05, seg, bark0, bark0, 0, 0);
+      } else g.tube(p1, p3, 0.06, 0.05, seg, bark1, bark0, 0.02, 0);
     }
     const nc = V(0, 4.8, 0);
     const col = foliageColor(dark, mid, light, 6.5, 3.6);

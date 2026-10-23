@@ -332,6 +332,14 @@ const _q = new THREE.Quaternion();
 const _e = new THREE.Euler();
 const _v = new THREE.Vector3();
 const _hip = new THREE.Vector3();
+const _q2 = new THREE.Quaternion();
+const _ank = new THREE.Vector3();
+const _seg = new THREE.Vector3();
+const wrapPi = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+const LEG_BONES: Record<'L' | 'R', ReadonlySet<BoneName>> = {
+  L: new Set<BoneName>(['thighL', 'shinL', 'footL']),
+  R: new Set<BoneName>(['thighR', 'shinR', 'footR']),
+};
 
 export interface LegIK {
   thighX: number;
@@ -345,21 +353,28 @@ export interface LegIK {
  * Pure 2-bone leg IK in the hips frame. (dx,dy,dz) = ankle target minus hip joint.
  * Returns pose offsets following the bone conventions above.
  */
-export function solveLegIK(dx: number, dy: number, dz: number, a: number, b: number, footPitch = 0, out?: LegIK): LegIK {
+export function solveLegIK(dx: number, dy: number, dz: number, a: number, b: number, footPitch = 0, out?: LegIK, twist = 0): LegIK {
   const o = out ?? { thighX: 0, thighZ: 0, shin: 0, foot: 0, reach: 0 };
   const len = Math.hypot(dx, dy, dz);
   const maxL = (a + b) * 0.9995;
   const d = Math.min(maxL, Math.max(Math.abs(a - b) + 1e-4, len));
   const cosKnee = (a * a + b * b - d * d) / (2 * a * b);
   const knee = Math.PI - Math.acos(Math.max(-1, Math.min(1, cosKnee)));
-  const cosA = (a * a + d * d - b * b) / (2 * a * d);
-  const alpha = Math.acos(Math.max(-1, Math.min(1, cosA)));
-  const inv = 1 / (len || 1);
-  const nx = dx * inv, ny = dy * inv, nz = dz * inv;
-  const roll = Math.asin(Math.max(-1, Math.min(1, nx)));
-  const pitch = Math.atan2(-nz, -ny);
-  o.thighX = pitch - alpha;
-  o.thighZ = roll;
+  const inv = len > 1e-6 ? 1 / len : 0;
+  const nx = dx * inv, ny = len > 1e-6 ? dy * inv : -1, nz = dz * inv;
+  // Hip→ankle direction expressed in the thigh frame for this knee bend (knee bends about local X).
+  const vy = -a - b * Math.cos(knee), vz = -b * Math.sin(knee);
+  const vl = Math.hypot(vy, vz) || 1;
+  const uy = vy / vl, uz = vz / vl;
+  // Exact Euler XYZ solve for a given thigh twist (y, e.g. toe-out): roll so the lateral
+  // component matches, then pitch in the sagittal plane.
+  const ct = Math.cos(twist), st = Math.sin(twist);
+  const den = uy * ct;
+  const Z = Math.asin(Math.max(-1, Math.min(1, den < -1e-4 ? (uz * st - nx) / den : nx)));
+  const wx = -uy * Math.sin(Z), wy = uy * Math.cos(Z);
+  const X = Math.atan2(nz, ny) - Math.atan2(-wx * st + uz * ct, wy);
+  o.thighX = Math.atan2(Math.sin(X), Math.cos(X));
+  o.thighZ = Z;
   o.shin = knee;
   o.foot = -(o.thighX + o.shin) + footPitch;
   o.reach = len / (a + b);
@@ -422,6 +437,11 @@ export class Animator {
   /** True while a full-body clip dominates (knockdown, dodges, heavy casts). */
   get busy(): boolean {
     return this.actions.some((a) => !a.ended && a.clip.mask === 'full' && a.weight > 0.5);
+  }
+
+  /** How much the feet are planted on the ground (0 airborne/swimming/mounted/gliding .. 1). */
+  get plantWeight(): number {
+    return (1 - this.airBlend) * (1 - this.swimBlend) * (1 - this.mountBlend) * (1 - this.glideBlend);
   }
 
   /** Eyes should be closed (meditation, knocked down). */
@@ -561,26 +581,64 @@ export class Animator {
 
   /** Solve one leg toward an ankle target given in the root frame (rest-relative). */
   private legTo(side: 1 | -1, tx: number, ty: number, tz: number, footPitch: number, w: number): void {
+    this.solveLeg(side, tx, ty, tz, footPitch, w, this.locoPose, this.hipsX, this.hipsY, this.hipsZ);
+  }
+
+  /** 2-bone leg IK into `pose` for the given hips offsets (hips rotation read from `pose.hips`). */
+  private solveLeg(side: 1 | -1, tx: number, ty: number, tz: number, footPitch: number, w: number, pose: Record<string, Euler3>, hx: number, hy: number, hz: number): void {
     const th = this.bones[side > 0 ? 'thighL' : 'thighR'];
     const sh = this.bones[side > 0 ? 'shinL' : 'shinR'];
     const ft = this.bones[side > 0 ? 'footL' : 'footR'];
     const a = Math.abs(sh.position.y) || 0.425;
     const b = Math.abs(ft.position.y) || 0.415;
     const hipsRest = this.restPos.get('hips')!;
-    const hp = this.locoPose.hips;
+    const hp = pose.hips;
     // Hip joint in root space and target in the hips frame.
     _e.set(hp[0], hp[1], hp[2]);
     _q.setFromEuler(_e);
     _hip.copy(th.position).applyQuaternion(_q);
-    _hip.x += hipsRest.x + this.hipsX;
-    _hip.y += hipsRest.y + this.hipsY;
-    _hip.z += hipsRest.z + this.hipsZ;
+    _hip.x += hipsRest.x + hx;
+    _hip.y += hipsRest.y + hy;
+    _hip.z += hipsRest.z + hz;
     _v.set(tx - _hip.x, ty - _hip.y, tz - _hip.z).applyQuaternion(_q.invert());
-    const ik = solveLegIK(_v.x, _v.y, _v.z, a, b, footPitch, this.ik);
     const n = side > 0 ? 'L' : 'R';
-    this.blendLoco(`thigh${n}` as BoneName, ik.thighX, this.locoPose[`thigh${n}` as BoneName][1], ik.thighZ, w);
-    this.blendLoco(`shin${n}` as BoneName, ik.shin, 0, 0, w);
-    this.blendLoco(`foot${n}` as BoneName, ik.foot, 0, -ik.thighZ * 0.8, w);
+    const ik = solveLegIK(_v.x, _v.y, _v.z, a, b, footPitch, this.ik, pose[`thigh${n}`][1]);
+    const blend = (bone: string, x: number, y: number, z: number) => {
+      const p = pose[bone];
+      p[0] = lerp(p[0], x, w);
+      p[1] = lerp(p[1], y, w);
+      p[2] = lerp(p[2], z, w);
+    };
+    blend(`thigh${n}`, ik.thighX, pose[`thigh${n}`][1], ik.thighZ);
+    blend(`shin${n}`, ik.shin, 0, 0);
+    blend(`foot${n}`, ik.foot, 0, -ik.thighZ * 0.8);
+  }
+
+  /**
+   * Keep a planted foot where locomotion put it when an action clip moves the hips
+   * (crouch, lunge, twist) without keying that leg: forward-kinematics of the
+   * locomotion leg gives the ankle, which is re-solved against the final hips.
+   */
+  private replant(side: 1 | -1, w: number, hx: number, hy: number, hz: number): void {
+    const n = side > 0 ? 'L' : 'R';
+    const th = this.bones[`thigh${n}` as BoneName];
+    const sh = this.bones[`shin${n}` as BoneName];
+    const ft = this.bones[`foot${n}` as BoneName];
+    const lp = this.locoPose;
+    const hipsRest = this.restPos.get('hips')!;
+    const lt = lp[`thigh${n}`], ls = lp[`shin${n}`], lf = lp[`foot${n}`], lh = lp.hips;
+    _q.setFromEuler(_e.set(lh[0], lh[1], lh[2]));
+    _ank.copy(th.position).applyQuaternion(_q);
+    _ank.x += hipsRest.x + this.hipsX;
+    _ank.y += hipsRest.y + this.hipsY;
+    _ank.z += hipsRest.z + this.hipsZ;
+    _q.multiply(_q2.setFromEuler(_e.set(lt[0], lt[1], lt[2])));
+    _ank.add(_seg.copy(sh.position).applyQuaternion(_q));
+    _q.multiply(_q2.setFromEuler(_e.set(ls[0], ls[1], ls[2])));
+    _ank.add(_seg.copy(ft.position).applyQuaternion(_q));
+    const worldPitch = lh[0] + lt[0] + ls[0] + lf[0];
+    const fh = this.finalPose.hips;
+    this.solveLeg(side, _ank.x, _ank.y, _ank.z, worldPitch - fh[0], w, this.finalPose, hx, hy, hz);
   }
 
   private computeLocomotion(dt: number): void {
@@ -979,6 +1037,9 @@ export class Animator {
     let fistR = this.styleFist;
 
     const tmp: Euler3 = [0, 0, 0];
+    let legWL = 0;
+    let legWR = 0;
+    let hipsRotW = 0;
     for (const a of this.actions) {
       // Advance time & weights.
       const prevT = a.time;
@@ -1008,6 +1069,14 @@ export class Animator {
       if (w <= 0) continue;
       for (const b of a.bones) {
         if (!this.samplePose(a.clip, ct, b, tmp)) continue;
+        if (LEG_BONES.L.has(b)) legWL = Math.max(legWL, w);
+        else if (LEG_BONES.R.has(b)) legWR = Math.max(legWR, w);
+        else if (b === 'hips') {
+          hipsRotW = Math.max(hipsRotW, w);
+          // Spins key the hips through ±2π: blend the yaw the short way round so a
+          // clip that ends at 2π (≡ 0) never unwinds the turn while fading out.
+          tmp[1] = this.finalPose.hips[1] + wrapPi(tmp[1] - this.finalPose.hips[1]);
+        }
         const fp = this.finalPose[b];
         fp[0] = lerp(fp[0], tmp[0], w);
         fp[1] = lerp(fp[1], tmp[1], w);
@@ -1043,6 +1112,16 @@ export class Animator {
 
     this.fist[0] = clamp01(fistL);
     this.fist[1] = clamp01(fistR);
+
+    // Planted feet stay planted when clips move the hips but not the legs.
+    // Mid-spin the legs follow the hips (pivot) instead of being re-planted.
+    const spinYaw = Math.abs(wrapPi(this.finalPose.hips[1] - this.locoPose.hips[1]));
+    const plant = this.plantWeight * (1 - clamp01((spinYaw - 0.5) / 0.6));
+    const hipsMoved = Math.abs(hipsY - this.hipsY) + Math.abs(hipsZ - this.hipsZ) + Math.abs(hipsX - this.hipsX) > 1e-4 || hipsRotW > 0;
+    if (plant > 0.01 && hipsMoved) {
+      if (legWL < 0.99) this.replant(1, plant * (1 - legWL), hipsX, hipsY, hipsZ);
+      if (legWR < 0.99) this.replant(-1, plant * (1 - legWR), hipsX, hipsY, hipsZ);
+    }
 
     // Apply to bones.
     for (const name of BONE_NAMES) {

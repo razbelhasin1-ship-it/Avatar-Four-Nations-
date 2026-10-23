@@ -192,6 +192,26 @@ export class CharMesh {
     this.partI = this.I.length;
   }
 
+  /** Post-adjust the normals of vertices [v0, v1) (stylised shading tweaks); `n` is renormalised after `fn`. */
+  adjustNormals(v0: number, v1: number, fn: (p: P3, n: P3) => void): void {
+    const p: P3 = { x: 0, y: 0, z: 0 };
+    const n: P3 = { x: 0, y: 0, z: 0 };
+    const P = this.P, N = this.N;
+    for (let i = v0; i < v1; i++) {
+      p.x = P[i * 3];
+      p.y = P[i * 3 + 1];
+      p.z = P[i * 3 + 2];
+      n.x = N[i * 3];
+      n.y = N[i * 3 + 1];
+      n.z = N[i * 3 + 2];
+      fn(p, n);
+      const l = Math.hypot(n.x, n.y, n.z) || 1;
+      N[i * 3] = n.x / l;
+      N[i * 3 + 1] = n.y / l;
+      N[i * 3 + 2] = n.z / l;
+    }
+  }
+
   /** Finish the current part: compute normals for its vertices. */
   end(smooth = true): void {
     this.computeNormals(this.partV, this.vertexCount, this.partI, this.I.length, smooth);

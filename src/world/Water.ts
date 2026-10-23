@@ -134,7 +134,11 @@ void main() {
   col += uSunColor * (pow(nh, 500.0) * 0.9 + pow(nh, 60.0) * 0.06) * (1.0 - uMarsh * 0.6);
   // Foam: shoreline band, wave crests, river banks, rapids and falls.
   float fn = n1.b * 0.55 + n2.b * 0.45;
-  float shore = smoothstep(1.1, 0.0, depth) * smoothstep(0.25, 0.65, fn + 0.25 * sin(depth * 7.0 - t * 2.2));
+  // Shore foam only where the bed actually rises toward a shore (flat shallow lagoons stay clear).
+  float wpx = length(vec2(dFdx(p.x), dFdy(p.x))) + length(vec2(dFdx(p.y), dFdy(p.y)));
+  float bedSlope = length(vec2(dFdx(ground), dFdy(ground))) / max(wpx, 1e-4);
+  float shoreK = smoothstep(0.004, 0.035, bedSlope);
+  float shore = smoothstep(0.9, 0.0, depth) * smoothstep(0.3, 0.7, fn + 0.25 * sin(depth * 7.0 - t * 2.2)) * shoreK;
   float crest = smoothstep(0.75, 1.0, vCrest) * smoothstep(0.45, 0.75, fn) * 0.6;
   float riverFoam = 0.0;
   if (uFlowSpeed > 0.0) {

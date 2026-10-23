@@ -4,6 +4,7 @@ import { bending } from './combat/techniques/bending/runtime';
 import { HintSystem } from './tutorial/HintSystem';
 import { TutorialSystem } from './tutorial/TutorialSystem';
 import { CharacterSystem } from './character/CharacterSystem';
+import { EnvironmentSystem } from './world/env/EnvironmentSystem';
 
 /**
  * Feature modules plug into the game here without editing Game.ts.
@@ -31,4 +32,6 @@ export const MODULES: GameModule[] = [
   { name: 'bending_fx', order: 850, create: () => bending.fx },
   // Character LOD/shadow distances from graphics settings + __game.debug.character lab.
   { name: 'character', order: 880, create: () => new CharacterSystem() },
+  // World environment: vegetation, grass, ground decals (world.fx), weather, cloud sea, ambient life (__game.debug.env).
+  { name: 'environment', order: 940, create: () => new EnvironmentSystem() },
 ];

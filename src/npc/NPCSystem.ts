@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { DEFAULT_APPEARANCE, type Appearance, cloneAppearance, HAIR_COLORS, SKIN_TONES } from '../character/Appearance';
 import { Humanoid } from '../character/Humanoid';
+import { npcLook } from '../character/looks';
 import type { GameContext, GameSystem } from '../core/GameContext';
 import { angleDiff, dampAngle } from '../core/MathUtil';
 import { Random } from '../core/Random';
@@ -39,37 +40,8 @@ const NATION_OUTFITS: Record<string, Array<Partial<Appearance['outfit']>>> = {
 
 /** Deterministic procedural appearance for background NPCs. */
 export function generateAppearance(seed: number, nation: string, role: string): Appearance {
-  const r = new Random(seed * 7919 + 13);
-  const baseEl: Element = nation === 'air' ? 'air' : nation === 'water' ? 'water' : nation === 'fire' ? 'fire' : 'earth';
-  const a = cloneAppearance(DEFAULT_APPEARANCE[baseEl]);
-  a.frame = r.pick(['slim', 'average', 'athletic', 'broad'] as const);
-  a.height = role === 'child' ? 0.68 : r.range(0.93, 1.06);
-  a.build = r.range(0.2, 0.8);
-  const skinPool = nation === 'water' ? SKIN_TONES.slice(4, 9) : nation === 'fire' ? SKIN_TONES.slice(0, 4) : nation === 'air' ? SKIN_TONES.slice(1, 6) : SKIN_TONES.slice(1, 8);
-  a.skinTone = r.pick(skinPool);
-  a.hair.color = role === 'elder' ? r.pick(['#8c8c8c', '#d8d8d8', '#b0b0b0']) : r.pick(HAIR_COLORS.slice(0, 7));
-  const hairByNation: Record<string, string[]> = {
-    air: ['bald'],
-    water: ['wolf_tail', 'hair_loops', 'long_braid', 'twin_braids', 'short_crop'],
-    earth: ['bun', 'double_buns', 'short_crop', 'messy_short', 'bob', 'long_loose', 'high_ponytail'],
-    fire: ['topknot', 'high_ponytail', 'long_loose', 'short_crop', 'bun'],
-    neutral: ['messy_short', 'long_braid', 'short_crop'],
-  };
-  a.hair.style = role === 'monk' ? 'bald' : r.pick(hairByNation[nation] ?? hairByNation.neutral);
-  a.brows.color = a.hair.color;
-  a.eyes.color = r.pick(nation === 'water' ? ['#3f6fa6', '#6aa6d6', '#5a3d25'] : nation === 'fire' ? ['#d9a520', '#c49a3a', '#3b2a1e'] : ['#3b2a1e', '#5a3d25', '#5d7a3a', '#7a5a32']);
-  a.facialHair = role === 'elder' && r.chance(0.6) ? r.pick(['beard_long', 'mustache', 'goatee']) : r.chance(0.12) ? r.pick(['goatee', 'beard_short', 'stubble']) : 'none';
-  a.tattoos = nation === 'air' && (role === 'monk' || role === 'master' || role === 'elder') ? 'arrows' : 'none';
-  const pal = r.pick(NATION_PALETTES[nation] ?? NATION_PALETTES.neutral);
-  a.colors = { primary: pal[0], secondary: pal[1], accent: pal[2], trim: pal[3] };
-  const outfit = r.pick(NATION_OUTFITS[nation] ?? NATION_OUTFITS.neutral);
-  a.outfit = { top: 'earth_tunic', bottom: 'earth_trousers', footwear: 'earth_boots', outer: 'none', gloves: 'none', belt: 'none', headwear: 'none', necklace: 'none', accessory: 'none', ...outfit };
-  if (role === 'guard' || role === 'soldier') {
-    if (nation === 'fire') a.outfit.top = 'fire_armor_light';
-    if (nation === 'earth') a.outfit.outer = 'earth_shoulder_guard';
-  }
-  if (nation === 'water' && r.chance(0.4)) a.outfit.necklace = r.pick(['water_betrothal', 'water_moon_pendant', 'water_shell']);
-  return a;
+  // Nation/role-appropriate citizens (outfit presets, palettes, hair, faces): src/character/looks.ts
+  return npcLook(seed, nation, role);
 }
 
 export class NPC extends Entity {

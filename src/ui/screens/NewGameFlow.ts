@@ -12,13 +12,16 @@ import {
   TATTOO_COLORS,
   TATTOO_STYLES,
   type Appearance,
+  type EyeShape,
   type OutfitSlots,
 } from '../../character/Appearance';
+import { FACE_PRESET_NAMES } from '../../character/CharShape';
 import { Humanoid } from '../../character/Humanoid';
+import { creatorPresets, NATION_NAMES, NATION_PALETTES, NAME_MAX, normalizeName, randomLook, suggestName, validateName, withPreset } from '../../character/looks';
 import type { GameContext } from '../../core/GameContext';
 import { Random } from '../../core/Random';
 import { ELEMENT_INFO, ELEMENTS, type Element } from '../../core/types';
-import { COSMETICS, type CosmeticSlot } from '../../data/cosmetics';
+import { COSMETICS, type CosmeticDef, type CosmeticSlot } from '../../data/cosmetics';
 import { STARTS, regionById } from '../../world/WorldLayout';
 import { clear, h } from '../dom';
 import { ELEMENT_COLORS, emblem } from '../icons';
@@ -31,32 +34,33 @@ const CARD_BG: Record<Element, string> = {
   fire: 'linear-gradient(160deg, #ffd8a0 0%, #d0362a 45%, #2a1010 100%)',
 };
 
-const STUDIO_BG: Record<Element, [string, string]> = {
-  air: ['#f2d9a0', '#7a8fb0'],
-  water: ['#cfe8f8', '#2a4a78'],
-  earth: ['#c8d8a0', '#3a4a2a'],
-  fire: ['#f0b080', '#3a1414'],
+/** Studio backdrop gradient (top, bottom), pedestal colour and accent ring colour per element. */
+const STUDIO: Record<Element, { top: string; bottom: string; pedestal: string; ring: string }> = {
+  air: { top: '#f6e2b4', bottom: '#6d86ab', pedestal: '#e6d6ae', ring: '#f2b640' },
+  water: { top: '#d8eefa', bottom: '#24446e', pedestal: '#e2eef6', ring: '#5fb2f0' },
+  earth: { top: '#d4e2ac', bottom: '#38482a', pedestal: '#8f7f5c', ring: '#7fbf4a' },
+  fire: { top: '#f4bc8a', bottom: '#3a1414', pedestal: '#5a2a20', ring: '#ff6a2a' },
 };
 
 const STARTER_ITEMS: Record<Element, Array<{ name: string; detail: string }>> = {
   water: [
-    { name: 'Northern Parka & Fur Boots', detail: 'Warm attire of the Northern Water Tribe.' },
-    { name: 'Carved Wave Choker', detail: 'A blue ribbon with the tribe’s carved stone.' },
+    { name: 'Water Tribe attire', detail: 'Warm parka and fur boots of the tribes.' },
+    { name: 'Water Skin', detail: 'Carry a little bendable water anywhere.' },
     { name: '3 × Healing Herbs, 5 × Sea Prunes', detail: 'Supplies for the road (and for polar bear dogs).' },
   ],
   earth: [
-    { name: 'Earth Kingdom Tunic & Boots', detail: 'Sturdy clothes from the Lower Ring.' },
+    { name: 'Earth Kingdom attire', detail: 'Sturdy clothes from the Lower Ring.' },
     { name: 'Jade Pendant', detail: 'A simple green stone for luck.' },
     { name: '3 × Healing Herbs, 5 × Cabbages', detail: 'Supplies — and badgermoles love cabbage.' },
   ],
   fire: [
-    { name: 'Fire Nation Tunic & Topknot Ornament', detail: 'Proper attire for the capital.' },
+    { name: 'Fire Nation attire', detail: 'Proper clothes for the capital.' },
     { name: 'Leather Bracers', detail: 'Protection for quick strikes.' },
     { name: '3 × Healing Herbs, 5 × Fire Flakes', detail: 'Spicy supplies. Some creatures adore them.' },
   ],
   air: [
-    { name: 'Air Nomad Robe & Mantle', detail: 'Light garments for running along the wind.' },
-    { name: 'Prayer Beads', detail: 'A gift from the temple elders.' },
+    { name: 'Air Nomad attire', detail: 'Light garments for running along the wind.' },
+    { name: 'Glider Staff', detail: 'A gift from the temple elders.' },
     { name: '3 × Healing Herbs, 5 × Moon Peaches', detail: 'Sky bison cannot resist moon peaches.' },
   ],
 };
@@ -68,7 +72,103 @@ const HOMELAND_CREATURES: Record<Element, string> = {
   air: 'Sky bison drift above the temple meadows. A gentle hand and moon peaches go a long way.',
 };
 
+/** Signature motion played by the "Strike a pose" button. */
+const SHOWCASE: Record<Element, string> = { air: 'spin_360', water: 'circle_arms', earth: 'stomp', fire: 'strike_r' };
+
+const BROW_NAMES = ['Natural', 'Arched', 'Angled', 'Bold', 'Fine', 'Soft'];
+const EYE_SHAPES: Array<{ id: EyeShape; name: string }> = [
+  { id: 'round', name: 'Round' },
+  { id: 'almond', name: 'Almond' },
+  { id: 'narrow', name: 'Narrow' },
+  { id: 'wide', name: 'Wide' },
+];
+const NATION_ORDER: Array<Element | 'any'> = ['air', 'water', 'earth', 'fire', 'any'];
+const SLOT_LABELS: Array<[keyof OutfitSlots, CosmeticSlot, string]> = [
+  ['top', 'top', 'TOP / ROBE'],
+  ['bottom', 'bottom', 'TROUSERS & SKIRTS'],
+  ['footwear', 'footwear', 'FOOTWEAR'],
+  ['outer', 'outer', 'OUTER LAYER'],
+  ['gloves', 'gloves', 'GLOVES & WRAPS'],
+  ['belt', 'belt', 'BELT / SASH'],
+  ['headwear', 'headwear', 'HEADWEAR'],
+  ['necklace', 'necklace', 'NECKLACE'],
+  ['accessory', 'accessory', 'CARRIED'],
+];
+const EMPTY_IDS = new Set(['none', 'none_gloves', 'none_belt', 'none_head', 'none_neck', 'none_acc']);
+/** Tabs and the camera view each one prefers. */
+const TABS: Array<{ id: string; label: string; view: 'body' | 'face' }> = [
+  { id: 'body', label: 'Body', view: 'body' },
+  { id: 'face', label: 'Face', view: 'face' },
+  { id: 'hair', label: 'Hair', view: 'face' },
+  { id: 'marks', label: 'Markings', view: 'body' },
+  { id: 'attire', label: 'Attire', view: 'body' },
+  { id: 'colors', label: 'Colours', view: 'body' },
+];
+
+const CSS = `
+.ngf-root { position: absolute; inset: 0; pointer-events: none; }
+.ngf-stage { position: absolute; inset: 0; pointer-events: auto; touch-action: none; cursor: grab; }
+.ngf-stage.dragging { cursor: grabbing; }
+.ngf-left, .ngf-right { position: absolute; top: 16px; bottom: 16px; display: flex; flex-direction: column; min-height: 0; padding: 14px; pointer-events: auto; box-sizing: border-box; }
+.ngf-left { left: 16px; width: min(390px, 36vw); }
+.ngf-right { right: 16px; width: min(290px, 25vw); }
+.ngf-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.ngf-head h2 { margin: 0; font-size: 20px; flex: 1; }
+.ngf-name { display: flex; gap: 6px; }
+.ngf-name input { flex: 1; min-width: 0; }
+.ngf-name button { flex: 0 0 auto; padding: 0 10px; }
+.ngf-error { color: #ffab8f; font-size: 13px; min-height: 16px; margin-top: 2px; }
+.ngf-error.ok { color: var(--muted); }
+.ngf-tabs { display: flex; gap: 4px; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; flex: 0 0 auto; }
+.ngf-tabs::-webkit-scrollbar { display: none; }
+.ngf-tabs .tab { flex: 0 0 auto; }
+.ngf-scroll { flex: 1; min-height: 0; overflow-y: auto; padding-right: 6px; margin-top: 10px; overscroll-behavior: contain; }
+.ngf-group { font-family: var(--font-title); font-size: 11px; letter-spacing: 0.12em; color: var(--muted); margin: 8px 0 4px; text-transform: uppercase; }
+.ngf-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.ngf-preset { text-align: left; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.3); color: var(--text); cursor: pointer; font: inherit; }
+.ngf-preset b { display: block; font-size: 14px; font-weight: normal; }
+.ngf-preset span { display: block; font-size: 12px; color: var(--muted); line-height: 1.25; margin-top: 2px; }
+.ngf-preset.active { border-color: var(--gold-2); background: rgba(214, 178, 94, 0.2); }
+.ngf-dots { display: flex; gap: 3px; margin-top: 5px; }
+.ngf-dots i { width: 13px; height: 13px; border-radius: 50%; display: inline-block; border: 1px solid rgba(255, 255, 255, 0.25); }
+.ngf-palettes { display: flex; flex-wrap: wrap; gap: 6px; }
+.ngf-pal { display: flex; gap: 2px; padding: 4px; border-radius: 8px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.3); cursor: pointer; }
+.ngf-pal i { width: 16px; height: 22px; border-radius: 3px; display: inline-block; }
+.ngf-pal.active { border-color: var(--gold-2); }
+.ngf-custom { width: 30px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; }
+.ngf-viewbar { position: absolute; bottom: 18px; display: flex; gap: 6px; pointer-events: auto; transform: translateX(-50%); }
+.ngf-viewbar .chip { backdrop-filter: blur(4px); white-space: nowrap; }
+body.ngf-studio .main-menu { visibility: hidden; }
+.ngf-hint { position: absolute; bottom: 56px; transform: translateX(-50%); color: var(--muted); font-size: 13px; text-shadow: 0 1px 4px #000; pointer-events: none; white-space: nowrap; }
+.ngf-actions { display: flex; gap: 8px; align-items: center; }
+.ngf-actions .grow { flex: 1; }
+.ngf-mobile { display: none; }
+.ngf-sum { font-size: 14px; line-height: 1.4; }
+@media (max-width: 860px), (max-aspect-ratio: 4/5) {
+  .ngf-left { left: 0; right: 0; bottom: 0; top: auto; width: auto; height: 57%; border-radius: 14px 14px 0 0; padding: 10px 12px 12px; }
+  .ngf-right { display: none; }
+  .ngf-head h2 { font-size: 17px; }
+  .ngf-viewbar { top: 10px; bottom: auto; }
+  .ngf-viewbar .chip { padding: 4px 9px; font-size: 13px; }
+  .ngf-hint { display: none; }
+  .ngf-mobile { display: flex; padding-top: 8px; }
+  .ngf-presets { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .ngf-left.ngf-preview-sheet { height: 50%; }
+}
+`;
+
 type Step = 'element' | 'creator' | 'preview';
+type View = 'body' | 'face';
+
+interface Studio {
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  humanoid: Humanoid;
+  bgMat: THREE.ShaderMaterial;
+  pedestalMat: THREE.MeshStandardMaterial;
+  ringMat: THREE.MeshBasicMaterial;
+  disposables: Array<{ dispose(): void }>;
+}
 
 export class NewGameFlow implements Screen {
   readonly id = 'newGame';
@@ -77,17 +177,25 @@ export class NewGameFlow implements Screen {
   private ctx!: GameContext;
   private step: Step = 'element';
   private element: Element = 'water';
-  private name = 'Avatar';
+  private name = '';
   private app: Appearance = cloneAppearance(DEFAULT_APPEARANCE.water);
-  private studio: { scene: THREE.Scene; camera: THREE.PerspectiveCamera; humanoid: Humanoid; pedestal: THREE.Mesh; bg: THREE.Mesh } | null = null;
-  private yaw = 0.4;
+  private studio: Studio | null = null;
+  private yaw = 0.35;
   private zoom = 0;
+  private zoomTarget = 0;
+  private view: View = 'body';
+  private autoSpin = true;
   private dragging = false;
   private lastX = 0;
   private tab = 'body';
   private leftPanel: HTMLElement | null = null;
+  private rightPanel: HTMLElement | null = null;
+  private viewBar: HTMLElement | null = null;
+  private hint: HTMLElement | null = null;
   private rebuildTimer = 0;
   private dirty = false;
+  private nameError: HTMLElement | null = null;
+  private continueBtns: HTMLButtonElement[] = [];
 
   constructor(private readonly ui: UIManager) {
     this.el = h('div.layer.interactive');
@@ -96,7 +204,9 @@ export class NewGameFlow implements Screen {
   onOpen(ctx: GameContext): void {
     this.ctx = ctx;
     this.step = 'element';
+    if (!document.getElementById('ngf-style')) document.head.append(h('style#ngf-style', CSS));
     this.render();
+    this.installDebug();
   }
 
   onClose(): void {
@@ -105,6 +215,7 @@ export class NewGameFlow implements Screen {
 
   private render(): void {
     clear(this.el);
+    this.leftPanel = this.rightPanel = this.viewBar = this.hint = null;
     if (this.step === 'element') this.renderElementSelect();
     else if (this.step === 'creator') this.renderCreator();
     else this.renderPreview();
@@ -165,15 +276,22 @@ export class NewGameFlow implements Screen {
   private chooseElement(e: Element): void {
     this.ctx.audio.play('ui_confirm', { bus: 'ui' });
     if (e !== this.element || this.step === 'element') {
+      const changedElement = e !== this.element;
       this.element = e;
       this.app = cloneAppearance(DEFAULT_APPEARANCE[e]);
+      if (changedElement || !this.name) this.name = suggestName(e);
+      this.dirty = true;
+      this.rebuildTimer = 0;
     }
     this.step = 'creator';
+    this.tab = 'body';
+    this.setView('body');
     this.render();
+    this.studio?.humanoid.animator.play('bow', { fadeIn: 0.2 });
   }
 
   // ---------------------------------------------------------------------------
-  // Step 2: creator
+  // Studio (3D preview)
   // ---------------------------------------------------------------------------
 
   private ensureStudio(): void {
@@ -182,80 +300,150 @@ export class NewGameFlow implements Screen {
       return;
     }
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(32, window.innerWidth / window.innerHeight, 0.05, 100);
-    scene.add(new THREE.HemisphereLight(0xfff4e0, 0x404050, 1.4));
-    const key = new THREE.DirectionalLight(0xffffff, 2.4);
-    key.position.set(2, 4, 3);
+    const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.05, 100);
+    const disposables: Array<{ dispose(): void }> = [];
+    scene.add(new THREE.HemisphereLight(0xfff2e0, 0x3a3440, 1.15));
+    const key = new THREE.DirectionalLight(0xfff1e0, 2.5);
+    key.position.set(2.2, 4.2, 3.4);
     scene.add(key);
-    const rim = new THREE.DirectionalLight(0xbfd8ff, 1.6);
-    rim.position.set(-3, 2.5, -3);
+    const fill = new THREE.DirectionalLight(0xc6dcff, 0.75);
+    fill.position.set(-3, 1.8, 2.2);
+    scene.add(fill);
+    const rim = new THREE.DirectionalLight(0xd8e8ff, 1.9);
+    rim.position.set(-1.6, 3, -3.6);
     scene.add(rim);
     const bgMat = new THREE.ShaderMaterial({
       uniforms: { top: { value: new THREE.Color() }, bottom: { value: new THREE.Color() } },
-      vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-      fragmentShader: 'uniform vec3 top; uniform vec3 bottom; varying vec3 vP; void main(){ float t = clamp(normalize(vP).y*0.8+0.5,0.0,1.0); gl_FragColor = vec4(mix(bottom, top, t),1.0); #include <colorspace_fragment> }',
+      vertexShader: 'varying vec3 vP;\nvoid main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+      fragmentShader: 'uniform vec3 top;\nuniform vec3 bottom;\nvarying vec3 vP;\nvoid main(){ float t = clamp(normalize(vP).y*0.85+0.42,0.0,1.0); gl_FragColor = vec4(mix(bottom, top, t),1.0);\n#include <colorspace_fragment>\n}',
       side: THREE.BackSide,
       depthWrite: false,
     });
-    const bg = new THREE.Mesh(new THREE.SphereGeometry(30, 32, 16), bgMat);
-    scene.add(bg);
-    const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.0, 0.18, 48), new THREE.MeshStandardMaterial({ color: '#c8b48a', roughness: 0.8 }));
-    pedestal.position.y = -0.09;
+    const bgGeo = new THREE.SphereGeometry(30, 32, 16);
+    scene.add(new THREE.Mesh(bgGeo, bgMat));
+    const pedGeo = new THREE.CylinderGeometry(0.78, 0.86, 0.16, 56);
+    const pedestalMat = new THREE.MeshStandardMaterial({ color: '#c8b48a', roughness: 0.75 });
+    const pedestal = new THREE.Mesh(pedGeo, pedestalMat);
+    pedestal.position.y = -0.08;
     scene.add(pedestal);
-    const humanoid = new Humanoid(this.app, { castShadow: false });
+    const ringGeo = new THREE.TorusGeometry(0.8, 0.012, 8, 72);
+    const ringMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.002;
+    scene.add(ring);
+    // Soft contact shadow (no shadow maps needed).
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 64;
+    const g = cv.getContext('2d')!;
+    const grad = g.createRadialGradient(32, 32, 2, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(0,0,0,0.55)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    const shadowTex = new THREE.CanvasTexture(cv);
+    const shadowGeo = new THREE.PlaneGeometry(1.1, 1.1);
+    const shadowMat = new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false });
+    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = 0.004;
+    scene.add(shadow);
+    disposables.push(bgGeo, bgMat, pedGeo, pedestalMat, ringGeo, ringMat, shadowTex, shadowGeo, shadowMat);
+    const humanoid = new Humanoid(cloneAppearance(this.app), { castShadow: false, lod: 'high' });
     scene.add(humanoid.root);
-    this.studio = { scene, camera, humanoid, pedestal, bg };
+    this.studio = { scene, camera, humanoid, bgMat, pedestalMat, ringMat, disposables };
+    document.body.classList.add('ngf-studio');
+    this.dirty = false;
     this.applyStudioTheme();
     this.ctx.game.setStage({ scene, camera });
-    const canvas = this.ctx.render.canvas;
-    canvas.addEventListener('pointerdown', this.onDown);
-    window.addEventListener('pointermove', this.onMove);
-    window.addEventListener('pointerup', this.onUp);
-    canvas.addEventListener('wheel', this.onWheel, { passive: true });
   }
 
   private applyStudioTheme(): void {
     if (!this.studio) return;
-    const [top, bottom] = STUDIO_BG[this.element];
-    const u = (this.studio.bg.material as THREE.ShaderMaterial).uniforms;
-    u.top.value.set(top);
-    u.bottom.value.set(bottom);
-    (this.studio.pedestal.material as THREE.MeshStandardMaterial).color.set(this.element === 'water' ? '#dfeef8' : this.element === 'fire' ? '#5a2a20' : this.element === 'earth' ? '#8a7a5a' : '#e8d8b0');
+    const t = STUDIO[this.element];
+    this.studio.bgMat.uniforms.top.value.set(t.top);
+    this.studio.bgMat.uniforms.bottom.value.set(t.bottom);
+    this.studio.pedestalMat.color.set(t.pedestal);
+    this.studio.ringMat.color.set(t.ring);
   }
-
-  private onDown = (e: PointerEvent) => {
-    this.dragging = true;
-    this.lastX = e.clientX;
-  };
-  private onMove = (e: PointerEvent) => {
-    if (!this.dragging) return;
-    this.yaw += (e.clientX - this.lastX) * 0.01;
-    this.lastX = e.clientX;
-  };
-  private onUp = () => {
-    this.dragging = false;
-  };
-  private onWheel = (e: WheelEvent) => {
-    this.zoom = Math.max(0, Math.min(1, this.zoom + (e.deltaY < 0 ? 0.15 : -0.15)));
-  };
 
   private disposeStudio(): void {
     if (!this.studio) return;
-    const canvas = this.ctx.render.canvas;
-    canvas.removeEventListener('pointerdown', this.onDown);
-    window.removeEventListener('pointermove', this.onMove);
-    window.removeEventListener('pointerup', this.onUp);
-    canvas.removeEventListener('wheel', this.onWheel);
     this.studio.humanoid.dispose();
-    this.studio.scene.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.isMesh) {
-        m.geometry.dispose();
-        (m.material as THREE.Material).dispose();
-      }
-    });
+    for (const d of this.studio.disposables) d.dispose();
     this.studio = null;
+    document.body.classList.remove('ngf-studio');
     this.ctx.game.setStage(null);
+  }
+
+  private stageEl(): HTMLElement {
+    const stage = h('div.ngf-stage', {
+      onpointerdown: (e: PointerEvent) => {
+        this.dragging = true;
+        this.autoSpin = false;
+        this.lastX = e.clientX;
+        stage.classList.add('dragging');
+        stage.setPointerCapture?.(e.pointerId);
+      },
+      onpointermove: (e: PointerEvent) => {
+        if (!this.dragging) return;
+        this.yaw += (e.clientX - this.lastX) * 0.012;
+        this.lastX = e.clientX;
+      },
+      onpointerup: () => {
+        this.dragging = false;
+        stage.classList.remove('dragging');
+      },
+      onpointercancel: () => {
+        this.dragging = false;
+        stage.classList.remove('dragging');
+      },
+      onwheel: (e: WheelEvent) => {
+        e.preventDefault();
+        this.zoomTarget = Math.max(0, Math.min(1, this.zoomTarget + (e.deltaY < 0 ? 0.2 : -0.2)));
+        this.view = this.zoomTarget > 0.5 ? 'face' : 'body';
+        this.refreshViewBar();
+      },
+      ondblclick: () => this.setView(this.view === 'face' ? 'body' : 'face'),
+    });
+    return stage;
+  }
+
+  private setView(v: View): void {
+    this.view = v;
+    this.zoomTarget = v === 'face' ? 1 : 0;
+    this.refreshViewBar();
+  }
+
+  private refreshViewBar(): void {
+    if (!this.viewBar) return;
+    for (const b of Array.from(this.viewBar.querySelectorAll<HTMLButtonElement>('button[data-view]'))) b.classList.toggle('active', b.dataset.view === this.view);
+  }
+
+  private viewBarEl(): HTMLElement {
+    this.viewBar = h(
+      'div.ngf-viewbar',
+      h('button.chip', { 'data-view': 'body', title: 'Full body', onclick: () => this.setView('body') }, 'Full Body'),
+      h('button.chip', { 'data-view': 'face', title: 'Face close-up', onclick: () => this.setView('face') }, 'Face'),
+      h('button.chip', { title: 'Turn around', onclick: () => { this.autoSpin = false; this.yaw += Math.PI / 2; } }, '⟳ Turn'),
+      h('button.chip', { title: 'Strike a pose', 'data-action': 'creator-pose', onclick: () => this.studio?.humanoid.animator.play(SHOWCASE[this.element], { fadeIn: 0.12 }) }, 'Pose'),
+    );
+    this.refreshViewBar();
+    return this.viewBar;
+  }
+
+  /** Screen-space rectangle not covered by panels (the character is framed inside it). */
+  private freeRect(): { x: number; y: number; w: number; h: number } {
+    const W = window.innerWidth, H = window.innerHeight;
+    const L = this.leftPanel?.getBoundingClientRect();
+    const R = this.rightPanel?.getBoundingClientRect();
+    if (L && L.width > W * 0.85) {
+      // Phone: bottom sheet.
+      return { x: 0, y: 0, w: W, h: Math.max(120, L.top) };
+    }
+    const x0 = L && L.width > 0 ? L.right : 0;
+    const x1 = R && R.width > 0 ? R.left : W;
+    return { x: x0, y: 0, w: Math.max(120, x1 - x0), h: H };
   }
 
   update(dt: number): void {
@@ -268,81 +456,220 @@ export class NewGameFlow implements Screen {
         s.humanoid.setAppearance(cloneAppearance(this.app));
       }
     }
-    if (!this.dragging) this.yaw += dt * 0.15;
+    if (this.autoSpin && !this.dragging) this.yaw += dt * 0.18;
     s.humanoid.root.rotation.y = this.yaw;
     s.humanoid.animator.loco.style = this.element;
     s.humanoid.update(dt);
-    const hgt = s.humanoid.height;
-    const focusY = THREE.MathUtils.lerp(hgt * 0.55, hgt * 0.92, this.zoom);
-    const dist = THREE.MathUtils.lerp(4.4, 1.3, this.zoom);
-    // Shift the character to the screen centre between the panels.
-    s.camera.position.set(0, focusY + 0.1, dist);
-    s.camera.lookAt(0, focusY, 0);
-    s.camera.aspect = window.innerWidth / window.innerHeight;
-    s.camera.updateProjectionMatrix();
+    this.zoom += (this.zoomTarget - this.zoom) * Math.min(1, dt * 6);
+    this.frameCamera();
+  }
+
+  private frameCamera(): void {
+    if (!this.studio) return;
+    const cam = this.studio.camera;
+    const W = Math.max(1, window.innerWidth), H = Math.max(1, window.innerHeight);
+    const fr = this.freeRect();
+    const hgt = this.studio.humanoid.height;
+    const z = this.zoom;
+    const focusY = THREE.MathUtils.lerp(hgt * 0.5, hgt * 0.925, z);
+    const span = THREE.MathUtils.lerp(hgt * 1.16 + 0.12, 0.44, z);
+    const spanW = THREE.MathUtils.lerp(0.95, 0.4, z);
+    // Shift the projection centre to the middle of the free area.
+    const cx = fr.x + fr.w / 2, cy = fr.y + fr.h / 2;
+    const dx = cx - W / 2, dy = cy - H / 2;
+    const fullW = W + 2 * Math.abs(dx), fullH = H + 2 * Math.abs(dy);
+    cam.aspect = fullW / fullH;
+    cam.setViewOffset(fullW, fullH, Math.abs(dx) - dx, Math.abs(dy) - dy, W, H);
+    const tanH = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2);
+    const pxPerUnitAt1 = fullH / (2 * tanH);
+    const dist = Math.max((span * pxPerUnitAt1) / (fr.h * 0.9), (spanW * pxPerUnitAt1) / (fr.w * 0.9));
+    cam.position.set(0, focusY + dist * THREE.MathUtils.lerp(0.06, 0.015, z), dist);
+    cam.lookAt(0, focusY, 0);
+    cam.updateProjectionMatrix();
+    if (this.viewBar) this.viewBar.style.left = `${cx}px`;
+    if (this.hint) this.hint.style.left = `${cx}px`;
   }
 
   private changed(): void {
     this.dirty = true;
-    this.rebuildTimer = 0.05;
+    this.rebuildTimer = 0.04;
   }
+
+  // ---------------------------------------------------------------------------
+  // Step 2: creator
+  // ---------------------------------------------------------------------------
 
   private renderCreator(): void {
     this.ensureStudio();
-    this.leftPanel = h('div.panel.side');
-    const tabs: Array<[string, string]> = [
-      ['body', 'Body'],
-      ['face', 'Face'],
-      ['hair', 'Hair'],
-      ['marks', 'Markings'],
-      ['attire', 'Attire'],
-      ['colors', 'Colours'],
-    ];
-    const tabBar = h('div.tabs');
-    const content = h('div.scroll', { style: { flex: '1', minHeight: '0', paddingRight: '6px', marginTop: '10px' } });
+    const left = h('div.panel.ngf-left');
+    this.leftPanel = left;
+    const tabBar = h('div.ngf-tabs');
+    const content = h('div.ngf-scroll');
     const renderTab = () => {
       clear(tabBar);
-      for (const [id, label] of tabs) tabBar.append(h(`button.tab${this.tab === id ? '.active' : ''}`, { onclick: () => { this.tab = id; renderTab(); } }, label));
+      for (const t of TABS) {
+        tabBar.append(
+          h(`button.tab${this.tab === t.id ? '.active' : ''}`, {
+            'data-tab': t.id,
+            onclick: () => {
+              this.tab = t.id;
+              this.setView(t.view);
+              renderTab();
+              content.scrollTop = 0;
+            },
+          }, t.label),
+        );
+      }
+      const top = content.scrollTop;
       clear(content);
       content.append(...this.tabContent(this.tab, renderTab));
+      content.scrollTop = top;
     };
     renderTab();
-    const nameInput = h('input', { type: 'text', value: this.name, maxlength: 24, oninput: (e: Event) => (this.name = (e.target as HTMLInputElement).value) }) as HTMLInputElement;
-    this.leftPanel.append(
-      h('h2.title', { style: { margin: '0 0 8px', fontSize: '20px' } }, 'Create Your Avatar'),
-      h('div.field', h('label', 'NAME'), nameInput),
+    left.append(
+      h('div.ngf-head', emblem(this.element, 'emblem'), h('h2.title', 'Create Your Avatar')),
+      this.nameField(),
       tabBar,
       content,
+      h(
+        'div.ngf-actions.ngf-mobile',
+        h('button.btn', { onclick: () => this.back() }, 'Back'),
+        h('button.btn', { onclick: () => this.randomize() }, 'Randomize'),
+        h('div.grow'),
+        this.continueButton(),
+      ),
     );
     const start = STARTS[this.element];
     const right = h(
-      'div.panel.side',
+      'div.panel.ngf-right',
       h('div.row', emblem(this.element, 'emblem'), h('div', h('div.title', { style: { fontSize: '17px' } }, `${ELEMENT_INFO[this.element].name} Avatar`), h('div.muted', { style: { fontSize: '14px' } }, regionById(start.regionId)?.name ?? ''))),
       h('div.divider'),
-      h('p.muted', { style: { fontSize: '14px', lineHeight: '1.4' } }, 'Drag to rotate the preview. Scroll to zoom on the face. Your look stays the same everywhere — in battle, while riding, and in the Avatar State.'),
+      h('p.muted.ngf-sum', 'Drag the preview to turn your Avatar, scroll or use Face for a close-up. Every choice updates the preview immediately, and your look stays the same in battle, while riding and in the Avatar State.'),
       h('div.spacer'),
-      h('button.btn', { onclick: () => this.randomize(), style: { marginBottom: '8px' } }, 'Randomize'),
+      h('button.btn', { 'data-action': 'creator-randomize', onclick: () => this.randomize(), style: { marginBottom: '8px' } }, 'Randomize'),
       h('button.btn', { onclick: () => { this.app = cloneAppearance(DEFAULT_APPEARANCE[this.element]); this.changed(); this.render(); }, style: { marginBottom: '8px' } }, 'Reset Look'),
-      h('div.row', h('button.btn', { onclick: () => { this.step = 'element'; this.render(); } }, 'Back'), h('div.spacer'), h('button.btn.primary', { 'data-action': 'creator-continue', onclick: () => { this.step = 'preview'; this.render(); } }, 'Continue')),
+      h('div.ngf-actions', h('button.btn', { onclick: () => this.back() }, 'Back'), h('div.grow'), this.continueButton()),
     );
-    (right as HTMLElement).style.display = 'flex';
-    (right as HTMLElement).style.flexDirection = 'column';
-    this.el.append(h('div.creator', this.leftPanel, h('div.preview-hint', '⟲ drag to rotate · scroll to zoom'), right));
+    this.rightPanel = right;
+    this.hint = h('div.ngf-hint', '⟲ drag to turn · scroll to zoom · double-click for the face');
+    this.el.append(h('div.ngf-root', this.stageEl(), left, right, this.viewBarEl(), this.hint));
+    this.validate();
   }
 
-  private swatchRow(colors: string[], current: string, set: (c: string) => void, rerender: () => void): HTMLElement {
+  private back(): void {
+    if (this.step === 'preview') this.step = 'creator';
+    else this.step = 'element';
+    this.render();
+  }
+
+  private nameField(): HTMLElement {
+    const input = h('input', {
+      type: 'text',
+      value: this.name,
+      maxlength: NAME_MAX + 4,
+      autocomplete: 'off',
+      spellcheck: false,
+      'aria-label': 'Character name',
+      'data-field': 'name',
+      oninput: (e: Event) => {
+        this.name = (e.target as HTMLInputElement).value;
+        this.validate();
+      },
+      onblur: () => {
+        if (!validateName(this.name)) {
+          this.name = normalizeName(this.name);
+          input.value = this.name;
+        }
+      },
+    }) as HTMLInputElement;
+    this.nameError = h('div.ngf-error', { 'data-field': 'name-error' });
     return h(
+      'div.field',
+      { style: { marginBottom: '8px' } },
+      h('label', 'NAME'),
+      h('div.ngf-name', input, h('button.btn', { title: 'Suggest a name', onclick: () => { this.name = suggestName(this.element); input.value = this.name; this.validate(); } }, '🎲')),
+      this.nameError,
+    );
+  }
+
+  private continueButton(): HTMLButtonElement {
+    const b = h('button.btn.primary', { 'data-action': 'creator-continue', onclick: () => this.goPreview() }, 'Continue') as HTMLButtonElement;
+    this.continueBtns.push(b);
+    return b;
+  }
+
+  /** Validate the name; updates the error line and the Continue buttons. Returns true when valid. */
+  private validate(): boolean {
+    const err = validateName(this.name);
+    this.continueBtns = this.continueBtns.filter((b) => b.isConnected);
+    for (const b of this.continueBtns) b.disabled = !!err;
+    if (this.nameError) {
+      this.nameError.textContent = err ?? `${normalizeName(this.name)} of the ${NATION_NAMES[this.element]}`;
+      this.nameError.classList.toggle('ok', !err);
+    }
+    return !err;
+  }
+
+  private goPreview(): void {
+    if (!this.validate()) return;
+    this.name = normalizeName(this.name);
+    this.step = 'preview';
+    this.setView('body');
+    this.autoSpin = true;
+    this.render();
+    this.studio?.humanoid.animator.play(SHOWCASE[this.element], { fadeIn: 0.15 });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Controls
+  // ---------------------------------------------------------------------------
+
+  private swatchRow(colors: string[], current: string, set: (c: string) => void, rerender: () => void, custom = true): HTMLElement {
+    const row = h(
       'div.swatches',
       colors.map((c) => h(`div.swatch${c.toLowerCase() === current.toLowerCase() ? '.active' : ''}`, { style: { background: c }, title: c, onclick: () => { set(c); this.changed(); rerender(); } })),
     );
+    if (custom) {
+      row.append(
+        h('input.ngf-custom', {
+          type: 'color',
+          value: /^#[0-9a-f]{6}$/i.test(current) ? current : '#888888',
+          title: 'Custom colour',
+          oninput: (e: Event) => {
+            set((e.target as HTMLInputElement).value);
+            this.changed();
+          },
+          onchange: () => rerender(),
+        }),
+      );
+    }
+    return row;
   }
 
-  private chipRow<T extends string>(items: Array<{ id: T; name: string }>, current: T, set: (v: T) => void, rerender: () => void): HTMLElement {
-    return h('div.chips', items.map((it) => h(`button.chip${it.id === current ? '.active' : ''}`, { onclick: () => { set(it.id); this.changed(); rerender(); } }, it.name)));
+  private chipRow<T extends string>(items: Array<{ id: T; name: string }>, current: T, set: (v: T) => void, rerender: () => void, attr?: string): HTMLElement {
+    return h('div.chips', items.map((it) => h(`button.chip${it.id === current ? '.active' : ''}`, { 'data-opt': attr ? `${attr}:${it.id}` : undefined, onclick: () => { set(it.id); this.changed(); rerender(); } }, it.name)));
   }
 
-  private slider(label: string, value: number, min: number, max: number, step: number, set: (v: number) => void): HTMLElement {
-    return h('div.field', h('label', label), h('input', { type: 'range', min, max, step, value, oninput: (e: Event) => { set(Number((e.target as HTMLInputElement).value)); this.changed(); } }));
+  private slider(label: string, value: number, min: number, max: number, step: number, set: (v: number) => void, attr?: string): HTMLElement {
+    const out = h('span.muted', { style: { float: 'right', fontSize: '12px' } }, value.toFixed(2));
+    return h(
+      'div.field',
+      h('label', label, out),
+      h('input', {
+        type: 'range',
+        min,
+        max,
+        step,
+        value,
+        'data-opt': attr,
+        oninput: (e: Event) => {
+          const v = Number((e.target as HTMLInputElement).value);
+          out.textContent = v.toFixed(2);
+          set(v);
+          this.changed();
+        },
+      }),
+    );
   }
 
   private tabContent(tab: string, rerender: () => void): HTMLElement[] {
@@ -350,73 +677,143 @@ export class NewGameFlow implements Screen {
     switch (tab) {
       case 'body':
         return [
-          h('div.field', h('label', 'FRAME'), this.chipRow(FRAME_OPTIONS, a.frame, (v) => (a.frame = v), rerender)),
-          this.slider('HEIGHT', a.height, 0.9, 1.1, 0.01, (v) => (a.height = v)),
-          this.slider('BUILD', a.build, 0, 1, 0.01, (v) => (a.build = v)),
+          h('div.field', h('label', 'FRAME'), this.chipRow(FRAME_OPTIONS, a.frame, (v) => (a.frame = v), rerender, 'frame')),
+          this.slider('HEIGHT', a.height, 0.9, 1.1, 0.01, (v) => (a.height = v), 'height'),
+          this.slider('BUILD', a.build, 0, 1, 0.01, (v) => (a.build = v), 'build'),
           h('div.field', h('label', 'SKIN TONE'), this.swatchRow(SKIN_TONES, a.skinTone, (c) => (a.skinTone = c), rerender)),
         ];
       case 'face':
         return [
-          h('div.field', h('label', 'FACE PRESET'), this.chipRow([0, 1, 2, 3, 4, 5].map((i) => ({ id: String(i), name: `Face ${i + 1}` })), String(a.face.preset), (v) => (a.face.preset = Number(v)), rerender)),
-          this.slider('JAW', a.face.jaw, -1, 1, 0.05, (v) => (a.face.jaw = v)),
-          this.slider('CHEEKBONES', a.face.cheeks, -1, 1, 0.05, (v) => (a.face.cheeks = v)),
-          this.slider('NOSE', a.face.nose, -1, 1, 0.05, (v) => (a.face.nose = v)),
-          this.slider('EYE SPACING', a.face.eyeSpacing, -1, 1, 0.05, (v) => (a.face.eyeSpacing = v)),
-          h('div.field', h('label', 'EYE SHAPE'), this.chipRow([{ id: 'round', name: 'Round' }, { id: 'almond', name: 'Almond' }, { id: 'narrow', name: 'Narrow' }, { id: 'wide', name: 'Wide' }] as const as any, a.eyes.shape, (v) => (a.eyes.shape = v as any), rerender)),
+          h('div.field', h('label', 'FACE SHAPE'), this.chipRow(FACE_PRESET_NAMES.map((n, i) => ({ id: String(i), name: n })), String(a.face.preset), (v) => (a.face.preset = Number(v)), rerender, 'face')),
+          this.slider('JAW', a.face.jaw, -1, 1, 0.05, (v) => (a.face.jaw = v), 'jaw'),
+          this.slider('CHEEKBONES', a.face.cheeks, -1, 1, 0.05, (v) => (a.face.cheeks = v), 'cheeks'),
+          this.slider('NOSE', a.face.nose, -1, 1, 0.05, (v) => (a.face.nose = v), 'nose'),
+          this.slider('EYE SPACING', a.face.eyeSpacing, -1, 1, 0.05, (v) => (a.face.eyeSpacing = v), 'eyeSpacing'),
+          h('div.field', h('label', 'EYE SHAPE'), this.chipRow(EYE_SHAPES, a.eyes.shape, (v) => (a.eyes.shape = v), rerender, 'eyes')),
           h('div.field', h('label', 'EYE COLOUR'), this.swatchRow(EYE_COLORS, a.eyes.color, (c) => (a.eyes.color = c), rerender)),
-          h('div.field', h('label', 'EYEBROWS'), this.chipRow([0, 1, 2, 3, 4, 5].map((i) => ({ id: String(i), name: `Style ${i + 1}` })), String(a.brows.style), (v) => (a.brows.style = Number(v)), rerender)),
-          this.slider('BROW THICKNESS', a.brows.thickness, 0, 1, 0.05, (v) => (a.brows.thickness = v)),
+          h('div.field', h('label', 'EYEBROWS'), this.chipRow(BROW_NAMES.map((n, i) => ({ id: String(i), name: n })), String(a.brows.style), (v) => (a.brows.style = Number(v)), rerender, 'brows')),
+          this.slider('BROW THICKNESS', a.brows.thickness, 0, 1, 0.05, (v) => (a.brows.thickness = v), 'browThickness'),
         ];
-      case 'hair':
+      case 'hair': {
+        const byNation = (n: Element | undefined) => HAIRSTYLES.filter((s) => s.nation === n);
+        const groups: Array<[string, typeof HAIRSTYLES]> = [
+          ['Traditional', HAIRSTYLES.filter((s) => s.nation)],
+          ['Any nation', byNation(undefined)],
+        ];
         return [
-          h('div.field', h('label', 'HAIRSTYLE'), this.chipRow(HAIRSTYLES, a.hair.style, (v) => (a.hair.style = v), rerender)),
+          h('div.field', h('label', 'HAIRSTYLE'), ...groups.map(([g, list]) => [h('div.ngf-group', g), this.chipRow(list, a.hair.style, (v) => (a.hair.style = v), rerender, 'hair')])),
           h('div.field', h('label', 'HAIR COLOUR'), this.swatchRow(HAIR_COLORS, a.hair.color, (c) => { a.hair.color = c; a.brows.color = c; }, rerender)),
-          h('div.field', h('label', 'FACIAL HAIR'), this.chipRow(FACIAL_HAIR, a.facialHair, (v) => (a.facialHair = v), rerender)),
+          h('div.field', h('label', 'FACIAL HAIR'), this.chipRow(FACIAL_HAIR, a.facialHair, (v) => (a.facialHair = v), rerender, 'facialHair')),
         ];
+      }
       case 'marks':
         return [
-          h('div.field', h('label', 'AIR NOMAD TATTOOS'), this.chipRow(TATTOO_STYLES, a.tattoos, (v) => (a.tattoos = v), rerender), h('div.muted', { style: { fontSize: '13px' } }, TATTOO_STYLES.find((t) => t.id === a.tattoos)?.desc ?? '')),
+          h('div.field', h('label', 'AIR NOMAD TATTOOS'), this.chipRow(TATTOO_STYLES, a.tattoos, (v) => (a.tattoos = v), rerender, 'tattoos'), h('div.muted', { style: { fontSize: '13px' } }, TATTOO_STYLES.find((t) => t.id === a.tattoos)?.desc ?? '')),
           h('div.field', h('label', 'TATTOO COLOUR'), this.swatchRow(TATTOO_COLORS, a.tattooColor, (c) => (a.tattooColor = c), rerender)),
-          h('div.field', h('label', 'SCARS'), h('div.chips', SCARS.map((s) => h(`button.chip${a.scars.includes(s.id) ? '.active' : ''}`, { onclick: () => { a.scars = a.scars.includes(s.id) ? a.scars.filter((x) => x !== s.id) : [...a.scars, s.id]; this.changed(); rerender(); } }, s.name)))),
+          h('div.field', h('label', 'SCARS'), h('div.chips', SCARS.map((s) => h(`button.chip${a.scars.includes(s.id) ? '.active' : ''}`, { 'data-opt': `scar:${s.id}`, onclick: () => { a.scars = a.scars.includes(s.id) ? a.scars.filter((x) => x !== s.id) : [...a.scars, s.id]; this.changed(); rerender(); } }, s.name)))),
         ];
-      case 'attire': {
-        const slots: Array<[keyof OutfitSlots, CosmeticSlot, string]> = [
-          ['top', 'top', 'TOP / ROBE'],
-          ['bottom', 'bottom', 'TROUSERS'],
-          ['footwear', 'footwear', 'FOOTWEAR'],
-          ['outer', 'outer', 'OUTER LAYER'],
-          ['gloves', 'gloves', 'GLOVES & WRAPS'],
-          ['belt', 'belt', 'BELT / SASH'],
-          ['headwear', 'headwear', 'HEADWEAR'],
-          ['necklace', 'necklace', 'NECKLACE'],
-          ['accessory', 'accessory', 'ACCESSORY'],
-        ];
-        return slots.map(([key, slot, label]) => {
-          const items = COSMETICS.filter((c) => c.slot === slot && c.unlock === 'start');
-          return h('div.field', h('label', label), this.chipRow(items.map((c) => ({ id: c.id, name: c.name })), a.outfit[key] === 'none' ? items[0]?.id ?? 'none' : a.outfit[key], (v) => (a.outfit[key] = v), rerender));
-        });
-      }
+      case 'attire':
+        return this.attireTab(rerender);
       case 'colors':
-      default: {
-        const palette = ['#e8a33a', '#c8642a', '#f4d48a', '#2f5f9e', '#1e3a66', '#e9eef5', '#4f7f3a', '#2f4f25', '#c9b27a', '#a8241c', '#2a1a18', '#d4a43a', '#6b4a2a', '#7a3a1a', '#5a1410', '#3a3a3a', '#e8e2d0', '#8a7a5a'];
-        return (['primary', 'secondary', 'accent', 'trim'] as const).map((k) => h('div.field', h('label', `${k.toUpperCase()} COLOUR`), this.swatchRow(palette, a.colors[k], (c) => (a.colors[k] = c), rerender)));
-      }
+      default:
+        return this.colorsTab(rerender);
     }
   }
 
-  private randomize(): void {
-    const r = new Random((Math.random() * 1e9) | 0);
+  private attireTab(rerender: () => void): HTMLElement[] {
     const a = this.app;
-    a.frame = r.pick(FRAME_OPTIONS).id;
-    a.height = r.range(0.93, 1.07);
-    a.build = r.range(0.2, 0.8);
-    a.skinTone = r.pick(SKIN_TONES);
-    a.face = { preset: r.int(0, 5), jaw: r.range(-0.6, 0.6), cheeks: r.range(-0.6, 0.6), nose: r.range(-0.6, 0.6), eyeSpacing: r.range(-0.5, 0.5) };
-    a.eyes = { color: r.pick(EYE_COLORS), shape: r.pick(['round', 'almond', 'narrow', 'wide'] as const) };
-    a.hair = { style: r.pick(HAIRSTYLES).id, color: r.pick(HAIR_COLORS) };
-    a.brows = { style: r.int(0, 5), thickness: r.range(0.2, 0.9), color: a.hair.color };
-    a.facialHair = r.chance(0.25) ? r.pick(FACIAL_HAIR).id : 'none';
-    a.tattoos = this.element === 'air' ? r.pick(['arrows', 'arrows_head', 'none', 'arrow_partial'] as const) : r.chance(0.15) ? 'arrows' : 'none';
+    const out: HTMLElement[] = [];
+    // Complete nation outfits first (home nation first).
+    const nations: Element[] = [this.element, ...ELEMENTS.filter((e) => e !== this.element)];
+    const presetsField = h('div.field', h('label', 'NATION OUTFITS'));
+    for (const n of nations) {
+      presetsField.append(h('div.ngf-group', NATION_NAMES[n]));
+      presetsField.append(
+        h(
+          'div.ngf-presets',
+          creatorPresets(n).map((p) => {
+            const active = (Object.keys(p.outfit) as Array<keyof OutfitSlots>).every((k) => sameItem(a.outfit[k], p.outfit[k]));
+            return h(
+              `button.ngf-preset${active ? '.active' : ''}`,
+              { 'data-preset': p.id, onclick: () => { this.app = withPreset(this.app, p.id); this.changed(); rerender(); } },
+              h('b', p.name),
+              h('span', p.blurb),
+              h('div.ngf-dots', [p.colors.primary, p.colors.secondary, p.colors.accent, p.colors.trim].map((c) => h('i', { style: { background: c } }))),
+            );
+          }),
+        ),
+      );
+    }
+    out.push(presetsField);
+    // Individual slots, items grouped by nation.
+    for (const [key, slot, label] of SLOT_LABELS) {
+      const items = COSMETICS.filter((c) => c.slot === slot && c.unlock === 'start');
+      const current = EMPTY_IDS.has(a.outfit[key]) ? items.find((c) => EMPTY_IDS.has(c.id))?.id ?? a.outfit[key] : a.outfit[key];
+      const field = h('div.field', h('label', label));
+      const empty = items.filter((c) => EMPTY_IDS.has(c.id));
+      if (empty.length) field.append(this.itemChips(empty, current, key, rerender));
+      for (const n of NATION_ORDER) {
+        const group = items.filter((c) => c.nation === n && !EMPTY_IDS.has(c.id));
+        if (!group.length) continue;
+        field.append(h('div.ngf-group', n === 'any' ? 'Any nation' : NATION_NAMES[n]), this.itemChips(group, current, key, rerender));
+      }
+      out.push(field);
+    }
+    return out;
+  }
+
+  private itemChips(items: CosmeticDef[], current: string, key: keyof OutfitSlots, rerender: () => void): HTMLElement {
+    return h(
+      'div.chips',
+      items.map((c) =>
+        h(
+          `button.chip${c.id === current ? '.active' : ''}`,
+          {
+            title: c.description,
+            'data-item': c.id,
+            onclick: () => {
+              this.app.outfit[key] = c.id;
+              this.changed();
+              rerender();
+            },
+          },
+          c.name,
+        ),
+      ),
+    );
+  }
+
+  private colorsTab(rerender: () => void): HTMLElement[] {
+    const a = this.app;
+    const palettes = h('div.field', h('label', 'NATION PALETTES'));
+    for (const n of [this.element, ...ELEMENTS.filter((e) => e !== this.element)]) {
+      palettes.append(h('div.ngf-group', NATION_NAMES[n]));
+      palettes.append(
+        h(
+          'div.ngf-palettes',
+          NATION_PALETTES[n].map((p) => {
+            const active = (['primary', 'secondary', 'accent', 'trim'] as const).every((k) => a.colors[k].toLowerCase() === p[k].toLowerCase());
+            return h(
+              `div.ngf-pal${active ? '.active' : ''}`,
+              { title: `${NATION_NAMES[n]} palette`, onclick: () => { a.colors = { ...p }; this.changed(); rerender(); } },
+              [p.primary, p.secondary, p.accent, p.trim].map((c) => h('i', { style: { background: c } })),
+            );
+          }),
+        ),
+      );
+    }
+    const swatches = ['#e8a33a', '#c8642a', '#f4d48a', '#7a3a1a', '#2f5f9e', '#1e3a66', '#6aa6d6', '#e9eef5', '#4f7f3a', '#2f4f25', '#c9b27a', '#6b4a2a', '#a8241c', '#2a1a18', '#d4a43a', '#5a1410', '#e8e2d0', '#3a3a3a', '#8a7a5a', '#5a6a7a'];
+    const names: Record<string, string> = { primary: 'PRIMARY (main cloth)', secondary: 'SECONDARY (trousers, sash)', accent: 'ACCENT (patterns, linings)', trim: 'TRIM (edges, embroidery)' };
+    return [
+      palettes,
+      ...(['primary', 'secondary', 'accent', 'trim'] as const).map((k) => h('div.field', h('label', names[k]), this.swatchRow(swatches, a.colors[k], (c) => (a.colors[k] = c), rerender))),
+    ];
+  }
+
+  private randomize(): void {
+    const keepName = this.name;
+    this.app = randomLook(this.element, new Random((Math.random() * 1e9) | 0));
+    this.name = keepName;
     this.changed();
     this.render();
   }
@@ -430,22 +827,24 @@ export class NewGameFlow implements Screen {
     const e = this.element;
     const start = STARTS[e];
     const panel = h(
-      'div.panel.side',
-      { style: { display: 'flex', flexDirection: 'column' } },
-      h('h2.title', { style: { margin: '0 0 6px', fontSize: '20px' } }, 'Your Journey Begins'),
-      h('div.row', emblem(e, 'emblem'), h('div', h('div', { style: { fontSize: '18px' } }, this.name || 'Avatar'), h('div.muted', start.title))),
-      h('div.divider'),
-      h('div.title', { style: { fontSize: '14px', marginBottom: '6px' } }, 'Starting Equipment'),
-      ...STARTER_ITEMS[e].map((it) => h('div', { style: { marginBottom: '6px' } }, h('div', it.name), h('div.muted', { style: { fontSize: '13px' } }, it.detail))),
-      h('div.divider'),
-      h('div.title', { style: { fontSize: '14px', marginBottom: '6px' } }, 'Companions of your Homeland'),
-      h('p.muted', { style: { fontSize: '14px', lineHeight: '1.4', margin: '0' } }, HOMELAND_CREATURES[e]),
-      h('div.divider'),
-      h('p.muted', { style: { fontSize: '14px', lineHeight: '1.4' } }, `You begin with ${ELEMENT_INFO[e].name}bending. As the Avatar you can learn ${ELEMENTS.filter((x) => x !== e).map((x) => ELEMENT_INFO[x].name).join(', ')} from masters across the world — and enter the Avatar State at will.`),
-      h('div.spacer'),
-      h('div.row', h('button.btn', { onclick: () => { this.step = 'creator'; this.render(); } }, 'Back'), h('div.spacer'), h('button.btn.primary', { 'data-action': 'confirm-journey', onclick: () => this.confirm() }, 'Begin Journey')),
+      'div.panel.ngf-left.ngf-preview-sheet',
+      h('div.ngf-head', emblem(e, 'emblem'), h('h2.title', 'Your Journey Begins')),
+      h('div.ngf-scroll', { style: { marginTop: '0' } },
+        h('div', { style: { fontSize: '20px' } }, this.name || 'Avatar'),
+        h('div.muted', { style: { marginBottom: '4px' } }, `${ELEMENT_INFO[e].name}bender · ${start.title}`),
+        h('div.divider'),
+        h('div.title', { style: { fontSize: '14px', marginBottom: '6px' } }, 'Starting Equipment'),
+        ...STARTER_ITEMS[e].map((it) => h('div', { style: { marginBottom: '6px' } }, h('div', it.name), h('div.muted', { style: { fontSize: '13px' } }, it.detail))),
+        h('div.divider'),
+        h('div.title', { style: { fontSize: '14px', marginBottom: '6px' } }, 'Companions of your Homeland'),
+        h('p.muted', { style: { fontSize: '14px', lineHeight: '1.4', margin: '0' } }, HOMELAND_CREATURES[e]),
+        h('div.divider'),
+        h('p.muted', { style: { fontSize: '14px', lineHeight: '1.4' } }, `You begin with ${ELEMENT_INFO[e].name}bending. As the Avatar you can learn ${ELEMENTS.filter((x) => x !== e).map((x) => ELEMENT_INFO[x].name).join(', ')} from masters across the world — and enter the Avatar State at will.`),
+      ),
+      h('div.ngf-actions', { style: { paddingTop: '8px' } }, h('button.btn', { onclick: () => this.back() }, 'Back'), h('div.grow'), h('button.btn.primary', { 'data-action': 'confirm-journey', onclick: () => this.confirm() }, 'Begin Journey')),
     );
-    this.el.append(h('div.creator', panel, h('div.preview-hint', ''), h('div')));
+    this.leftPanel = panel;
+    this.el.append(h('div.ngf-root', this.stageEl(), panel, this.viewBarEl()));
   }
 
   private confirm(): void {
@@ -468,7 +867,8 @@ export class NewGameFlow implements Screen {
   }
 
   private launch(slot: string): void {
-    const cfg = { element: this.element, name: this.name.trim() || 'Avatar', appearance: cloneAppearance(this.app), slot };
+    const name = validateName(this.name) ? 'Avatar' : normalizeName(this.name);
+    const cfg = { element: this.element, name, appearance: cloneAppearance(this.app), slot };
     this.disposeStudio();
     this.ui.close(this.id);
     this.ui.close('mainMenu');
@@ -483,16 +883,58 @@ export class NewGameFlow implements Screen {
   }
 
   onKey(e: KeyboardEvent): boolean {
+    if ((e.target as HTMLElement | null)?.tagName === 'INPUT' && e.key !== 'Escape') return false;
     if (e.key === 'Escape') {
-      if (this.step === 'preview') this.step = 'creator';
-      else if (this.step === 'creator') this.step = 'element';
-      else {
+      if (this.step === 'element') {
         this.ui.close();
         return true;
       }
-      this.render();
+      this.back();
       return true;
     }
     return false;
   }
+
+  /** Test hooks: window.__game.debug.creator */
+  private installDebug(): void {
+    const api = (window as unknown as { __game?: { debug?: Record<string, unknown> } }).__game;
+    if (!api) return;
+    api.debug = api.debug ?? {};
+    api.debug.creator = {
+      state: () => ({ step: this.step, element: this.element, name: this.name, view: this.view, zoom: +this.zoom.toFixed(2), appearance: cloneAppearance(this.app), height: this.studio?.humanoid.height ?? 0, stats: this.studio?.humanoid.stats ?? null }),
+      setAppearance: (a: Appearance) => {
+        this.app = cloneAppearance(a);
+        this.changed();
+        this.render();
+      },
+      flush: () => {
+        if (this.studio && this.dirty) {
+          this.dirty = false;
+          this.studio.humanoid.setAppearance(cloneAppearance(this.app));
+        }
+        return this.studio?.humanoid.stats ?? null;
+      },
+      setYaw: (y: number) => {
+        this.autoSpin = false;
+        this.yaw = y;
+      },
+      setView: (v: View) => {
+        this.setView(v);
+        this.zoom = this.zoomTarget;
+      },
+      /** Checksum of the preview mesh geometry (changes when a slider reshapes the body/face). */
+      geomHash: () => {
+        const m = this.studio?.humanoid.root.getObjectByName('humanoid_mesh') as THREE.Mesh | undefined;
+        const pos = m?.geometry.getAttribute('position');
+        if (!pos) return 0;
+        let s = 0;
+        for (let i = 0; i < pos.array.length; i += 7) s += (pos.array[i] as number) * ((i % 13) + 1);
+        return +s.toFixed(4);
+      },
+    };
+  }
+}
+
+function sameItem(a: string, b: string): boolean {
+  return a === b || (EMPTY_IDS.has(a) && EMPTY_IDS.has(b));
 }

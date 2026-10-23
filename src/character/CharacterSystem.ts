@@ -45,7 +45,9 @@ export class CharacterSystem implements GameSystem {
     const g = this.ctx.settings.data.graphics;
     // lodBias: 0 (best) .. 1 (cheapest).
     const bias = Math.min(1, Math.max(0, g.lodBias ?? 0.3));
-    Humanoid.lodDistance = 30 - bias * 16;
+    // NPC crowds: the cheap LOD (~7k tris) reads well beyond ~15 m; the player is always close.
+    Humanoid.lodDistance = 20 - bias * 10;
+    Humanoid.lodBuildBudgetMs = 6 + (1 - bias) * 8;
     Humanoid.shadowDistance = g.shadows === 'off' ? 0 : 40 + (1 - bias) * 30;
     Humanoid.animLodDistance = 40 - bias * 14;
   }

@@ -1,4 +1,5 @@
 import type { Element } from '../core/types';
+import { cosmeticById, EMPTY_SLOT_IDS } from '../data/cosmetics';
 
 /**
  * Character appearance — pure data, saved verbatim. The Humanoid renderer turns
@@ -223,46 +224,62 @@ export function cloneAppearance(a: Appearance): Appearance {
   return JSON.parse(JSON.stringify(a));
 }
 
-/** Validate/repair loaded appearance data (save migration safety). */
+/** Validate/repair loaded appearance data (save migration safety). Never throws; unknown fields fall back to `fallback`. */
 export function sanitizeAppearance(raw: unknown, fallback: Appearance): Appearance {
   const a = cloneAppearance(fallback);
   if (!raw || typeof raw !== 'object') return a;
   const r = raw as any;
-  const str = (v: any, d: string) => (typeof v === 'string' && v.length < 64 ? v : d);
   const num = (v: any, d: number, lo: number, hi: number) => (typeof v === 'number' && isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d);
-  a.frame = (['slim', 'average', 'athletic', 'broad'] as const).includes(r.frame) ? r.frame : a.frame;
+  const color = (v: any, d: string) => (typeof v === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v) ? v.toLowerCase() : d);
+  const oneOf = <T extends string>(v: any, ids: readonly T[], d: T): T => (typeof v === 'string' && (ids as readonly string[]).includes(v) ? (v as T) : d);
+  const obj = (v: any) => (v && typeof v === 'object' ? v : null);
+  a.frame = oneOf(r.frame, FRAME_OPTIONS.map((f) => f.id), a.frame);
   a.height = num(r.height, a.height, 0.88, 1.12);
   a.build = num(r.build, a.build, 0, 1);
-  a.skinTone = str(r.skinTone, a.skinTone);
-  if (r.face) {
-    a.face.preset = Math.round(num(r.face.preset, a.face.preset, 0, 5));
-    a.face.jaw = num(r.face.jaw, a.face.jaw, -1, 1);
-    a.face.cheeks = num(r.face.cheeks, a.face.cheeks, -1, 1);
-    a.face.nose = num(r.face.nose, a.face.nose, -1, 1);
-    a.face.eyeSpacing = num(r.face.eyeSpacing, a.face.eyeSpacing, -1, 1);
+  a.skinTone = color(r.skinTone, a.skinTone);
+  const face = obj(r.face);
+  if (face) {
+    a.face.preset = Math.round(num(face.preset, a.face.preset, 0, 5));
+    a.face.jaw = num(face.jaw, a.face.jaw, -1, 1);
+    a.face.cheeks = num(face.cheeks, a.face.cheeks, -1, 1);
+    a.face.nose = num(face.nose, a.face.nose, -1, 1);
+    a.face.eyeSpacing = num(face.eyeSpacing, a.face.eyeSpacing, -1, 1);
   }
-  if (r.eyes) {
-    a.eyes.color = str(r.eyes.color, a.eyes.color);
-    a.eyes.shape = (['round', 'almond', 'narrow', 'wide'] as const).includes(r.eyes.shape) ? r.eyes.shape : a.eyes.shape;
+  const eyes = obj(r.eyes);
+  if (eyes) {
+    a.eyes.color = color(eyes.color, a.eyes.color);
+    a.eyes.shape = oneOf(eyes.shape, ['round', 'almond', 'narrow', 'wide'] as const, a.eyes.shape);
   }
-  if (r.brows) {
-    a.brows.style = Math.round(num(r.brows.style, a.brows.style, 0, 5));
-    a.brows.thickness = num(r.brows.thickness, a.brows.thickness, 0, 1);
-    a.brows.color = str(r.brows.color, a.brows.color);
+  const brows = obj(r.brows);
+  if (brows) {
+    a.brows.style = Math.round(num(brows.style, a.brows.style, 0, 5));
+    a.brows.thickness = num(brows.thickness, a.brows.thickness, 0, 1);
+    a.brows.color = color(brows.color, a.brows.color);
   }
-  if (r.hair) {
-    a.hair.style = str(r.hair.style, a.hair.style);
-    a.hair.color = str(r.hair.color, a.hair.color);
+  const hair = obj(r.hair);
+  if (hair) {
+    a.hair.style = oneOf(hair.style, HAIRSTYLES.map((x) => x.id), a.hair.style);
+    a.hair.color = color(hair.color, a.hair.color);
   }
-  a.facialHair = str(r.facialHair, a.facialHair);
-  a.scars = Array.isArray(r.scars) ? r.scars.filter((s: any) => typeof s === 'string').slice(0, 6) : a.scars;
-  a.tattoos = TATTOO_STYLES.some((t) => t.id === r.tattoos) ? r.tattoos : a.tattoos;
-  a.tattooColor = str(r.tattooColor, a.tattooColor);
-  if (r.outfit && typeof r.outfit === 'object') {
-    for (const k of Object.keys(a.outfit) as Array<keyof OutfitSlots>) a.outfit[k] = str(r.outfit[k], a.outfit[k]);
+  a.facialHair = oneOf(r.facialHair, FACIAL_HAIR.map((x) => x.id), a.facialHair);
+  if (Array.isArray(r.scars)) {
+    const ids = SCARS.map((x) => x.id);
+    a.scars = [...new Set<string>(r.scars.filter((x: any) => typeof x === 'string' && ids.includes(x)))].slice(0, SCARS.length);
   }
-  if (r.colors && typeof r.colors === 'object') {
-    for (const k of Object.keys(a.colors) as Array<keyof Appearance['colors']>) a.colors[k] = str(r.colors[k], a.colors[k]);
+  a.tattoos = oneOf(r.tattoos, TATTOO_STYLES.map((t) => t.id), a.tattoos);
+  a.tattooColor = color(r.tattooColor, a.tattooColor);
+  const outfit = obj(r.outfit);
+  if (outfit) {
+    for (const k of Object.keys(a.outfit) as Array<keyof OutfitSlots>) {
+      const id = outfit[k];
+      if (typeof id !== 'string') continue;
+      const def = cosmeticById(id);
+      if (EMPTY_SLOT_IDS.has(id) || (def && def.slot === k)) a.outfit[k] = id;
+    }
+  }
+  const colors = obj(r.colors);
+  if (colors) {
+    for (const k of Object.keys(a.colors) as Array<keyof Appearance['colors']>) a.colors[k] = color(colors[k], a.colors[k]);
   }
   return a;
 }

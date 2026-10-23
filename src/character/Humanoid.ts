@@ -48,6 +48,21 @@ export class Humanoid {
   static shadowDistance = 55;
   /** Beyond this distance the animator updates at a reduced rate. */
   static animLodDistance = 30;
+  /**
+   * LOD rebuild budget (ms of mesh building per 1/60 s, token bucket shared by all
+   * humanoids). 'auto' humanoids are built at the cheap LOD first and upgraded when the
+   * camera comes close, so streaming in a crowd never stalls a frame for long.
+   */
+  static lodBuildBudgetMs = 10;
+  private static bucket = 0;
+  private static bucketT = 0;
+  private static lodBudget(): boolean {
+    const now = performance.now();
+    const elapsed = Math.min(100, Math.max(0, now - Humanoid.bucketT));
+    Humanoid.bucketT = now;
+    Humanoid.bucket = Math.min(Humanoid.lodBuildBudgetMs * 3, Humanoid.bucket + (elapsed * Humanoid.lodBuildBudgetMs) / 16.7);
+    return Humanoid.bucket > 0;
+  }
 
   readonly root = new THREE.Group();
   readonly bones = {} as Record<BoneName, THREE.Object3D>;
@@ -87,7 +102,8 @@ export class Humanoid {
     this.castShadow = opts.castShadow ?? true;
     this.lodMode = opts.lod ?? 'auto';
     this.secondaryEnabled = opts.secondaryMotion ?? true;
-    this.lod = this.lodMode === 'low' ? 1 : 0;
+    // 'auto' starts at the cheap LOD and upgrades once the camera distance is known.
+    this.lod = this.lodMode === 'high' ? 0 : 1;
     this.wantLod = this.lod;
     this.root.name = 'humanoid';
     for (const name of BONE_NAMES) {
@@ -304,10 +320,13 @@ export class Humanoid {
       const d = Humanoid.lodDistance;
       if (this.lod === 0 && this.camDist > d + 3) this.wantLod = 1;
       else if (this.lod === 1 && this.camDist < d - 3) this.wantLod = 0;
-      if (this.wantLod !== this.lod) {
+      // Close-ups (the player, dialogue partners) upgrade immediately; the rest share the budget.
+      if (this.wantLod !== this.lod && (this.camDist < 6 || Humanoid.lodBudget())) {
+        const t0 = performance.now();
         this.lod = this.wantLod;
         this.rebuild();
         this.applyColors();
+        Humanoid.bucket -= performance.now() - t0;
       }
       if (this.mesh) this.mesh.castShadow = this.castShadow && this.camDist < Humanoid.shadowDistance;
     }

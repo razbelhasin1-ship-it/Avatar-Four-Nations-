@@ -1,4 +1,5 @@
 import { COSMETICS } from '../data/cosmetics';
+import { OUTFIT_PRESETS, withPreset } from './looks';
 import { cloneAppearance, DEFAULT_APPEARANCE, FACIAL_HAIR, HAIRSTYLES, SCARS, TATTOO_STYLES, type Appearance } from './Appearance';
 
 /**
@@ -23,6 +24,14 @@ export function lookSet(name: string): Appearance[] {
   switch (name) {
     case 'defaults':
       return [base('air'), base('water'), base('earth'), base('fire')];
+    case 'presets':
+      // Every nation outfit preset on its nation's default body (creator + NPC looks).
+      return OUTFIT_PRESETS.map((p) => withPreset(base(p.nation), p.id));
+    case 'air':
+    case 'water':
+    case 'earth':
+    case 'fire':
+      return [base(name)];
     case 'hairstyles':
       return HAIRSTYLES.map((h, i) => {
         const a = base(i % 2 ? 'earth' : 'water');
