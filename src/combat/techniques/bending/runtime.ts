@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { GameContext, GameSystem } from '../../../core/GameContext';
 import type { Action } from '../../../core/Input';
+import type { Element } from '../../../core/types';
 import type { Entity } from '../../../entities/Entity';
 import type { Player } from '../../../player/Player';
 import { constructCount, liveConstructs } from '../../../vfx/effects/constructs';
@@ -69,6 +70,11 @@ export interface BenderState {
   seismicReady: number;
 }
 
+export interface ChargeFx {
+  update(dt: number, charge: number): void;
+  end(): void;
+}
+
 export interface RuntimeHook {
   init?(ctx: GameContext): void;
   sessionStart?(ctx: GameContext): void;
@@ -110,6 +116,44 @@ class BendingRuntime {
   hook(h: RuntimeHook): void {
     this.hooks.push(h);
     if (this.ctx) h.init?.(this.ctx);
+  }
+
+  /**
+   * Gathering visual + held pose while the player charges a heavy technique of
+   * `element` (hold Aim). The release itself is the technique's job.
+   */
+  chargeVisual(element: Element, make: (ctx: GameContext, p: Player) => ChargeFx, clip?: string): void {
+    let fx: ChargeFx | null = null;
+    let clipOn = false;
+    const stop = (p: Player | null) => {
+      if (fx) {
+        try {
+          fx.end();
+        } catch (err) {
+          console.error('[bending] charge fx end failed', err);
+        }
+      }
+      fx = null;
+      if (clipOn && clip && p) p.humanoid.animator.stop(clip, 0.12);
+      clipOn = false;
+    };
+    this.hook({
+      post: (dt, ctx) => {
+        const p = ctx.player as Player | null;
+        const charge = p && p.element === element && !p.defeated ? p.charging : 0;
+        if (p && charge > 0) {
+          if (!fx) {
+            fx = make(ctx, p);
+            if (clip) {
+              p.humanoid.animator.play(clip, { hold: true, fadeIn: 0.14 });
+              clipOn = true;
+            }
+          }
+          fx.update(dt, charge);
+        } else if (fx) stop(p);
+      },
+      sessionEnd: (ctx) => stop(ctx.player as Player | null),
+    });
   }
 
   private init(ctx: GameContext): void {

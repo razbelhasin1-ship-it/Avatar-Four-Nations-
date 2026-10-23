@@ -7,8 +7,9 @@ import { CollisionWorld } from './Collision';
 import { biomeAt, heightAt, initHeightfield, normalAt, terrainSurfaceAt, waterAt, type WaterHit } from './Heightfield';
 import type { RegionContent, RegionFactory } from './RegionContent';
 import { REGION_FACTORIES } from './regions';
+import { envUniforms } from './env/EnvShared';
 import { SkySystem } from './Sky';
-import { TerrainManager } from './Terrain';
+import { ICE_TOP, TerrainManager } from './Terrain';
 import { WaterRenderer } from './Water';
 import { LANDMARKS, REGIONS, type LandmarkDef, type RegionDef } from './WorldLayout';
 
@@ -53,6 +54,11 @@ export interface GroundSample {
 
 export interface WorldUpdatable {
   update(dt: number, ctx: GameContext, focus: THREE.Vector3): void;
+  /**
+   * Optional loading-screen work around `p` (vegetation, grass...). Do up to
+   * `budgetMs` of work and return how many work items are still pending.
+   */
+  preload?(p: THREE.Vector3, budgetMs: number): number;
   dispose?(): void;
 }
 
@@ -83,6 +89,7 @@ export class World implements PhysicsWorld, Persistable {
     this.group.name = 'world';
     ctx.scene.add(this.group);
     this.group.add(this.terrain.group);
+    envUniforms.uHeightTex.value = this.terrain.heightTex.texture;
     this.water = new WaterRenderer();
     this.group.add(this.water.group);
     this.sky = new SkySystem(ctx.render);
@@ -96,6 +103,10 @@ export class World implements PhysicsWorld, Persistable {
     this.terrain.drawDistance = g.drawDistance;
     this.terrain.lodBias = g.lodBias;
     this.terrain.castShadows = g.shadows !== 'off';
+    // Terrain shading tier: 0 = vertex colours + detail (Low), 1 = splat, 2 = splat + anti-tiling.
+    const detail = g.effectsQuality === 'low' || g.lodBias >= 0.5 ? 0 : g.effectsQuality === 'high' ? 2 : 1;
+    this.terrain.setQuality(detail, detail === 0 ? 1 : detail === 1 ? 4 : 8);
+    this.water?.setQuality(g.effectsQuality);
   }
 
   addRegion(factory: RegionFactory): void {
@@ -151,14 +162,28 @@ export class World implements PhysicsWorld, Persistable {
     let pending = this.terrain.update(p, 25);
     const total = Math.max(1, pending + this.terrain.chunkCount);
     let guard = 0;
-    while (pending > 0 && guard++ < 400) {
+    while (pending > 0 && guard++ < 2000) {
       pending = this.terrain.update(p, 30);
-      onProgress?.(0.05 + 0.65 * (1 - pending / total), 'Shaping the land…');
+      onProgress?.(0.05 + 0.55 * (1 - pending / total), 'Shaping the land…');
       await new Promise((r) => setTimeout(r, 0));
     }
-    onProgress?.(0.72, 'Raising cities and temples…');
+    onProgress?.(0.62, 'Raising cities and temples…');
     await new Promise((r) => setTimeout(r, 0));
     this.ensureRegionsAround(p);
+    // Environment systems (vegetation, grass...) populate around the spawn.
+    const pre = this.updatables.filter((u) => u.preload);
+    if (pre.length) {
+      let envPending = 0;
+      for (const u of pre) envPending += u.preload!(p, 25);
+      const envTotal = Math.max(1, envPending);
+      guard = 0;
+      while (envPending > 0 && guard++ < 2000) {
+        envPending = 0;
+        for (const u of pre) envPending += u.preload!(p, 30);
+        onProgress?.(0.66 + 0.28 * (1 - envPending / envTotal), 'Growing forests and meadows…');
+        await new Promise((r) => setTimeout(r, 0));
+      }
+    }
     onProgress?.(0.95, 'Breathing life into the world…');
     await new Promise((r) => setTimeout(r, 0));
   }
@@ -174,6 +199,7 @@ export class World implements PhysicsWorld, Persistable {
 
   update(dt: number, focus: THREE.Vector3): void {
     this.focus.copy(focus);
+    envUniforms.uEnvTime.value = (envUniforms.uEnvTime.value + dt) % 3600;
     this.terrain.update(focus, 3);
     this.ensureRegionsAround(focus);
     const cam = this.ctx.camera;
@@ -192,6 +218,7 @@ export class World implements PhysicsWorld, Persistable {
   /** Update while in menus (sky/water animation only). */
   updateAmbient(dt: number, focus: THREE.Vector3): void {
     this.focus.copy(focus);
+    envUniforms.uEnvTime.value = (envUniforms.uEnvTime.value + dt) % 3600;
     this.terrain.update(focus, 2);
     const cam = this.ctx.camera;
     this.sky.update(dt, cam, this.ctx.settings.data.graphics.drawDistance);
@@ -236,8 +263,8 @@ export class World implements PhysicsWorld, Persistable {
     let surface: SurfaceType | null = null;
     let colliderId = 0;
     const w = waterAt(x, z, th);
-    if (w && w.frozen && w.level > y) {
-      y = w.level;
+    if (w && w.frozen && w.level + ICE_TOP > y) {
+      y = w.level + ICE_TOP;
       surface = 'ice';
     }
     const c = this.collision.groundAt(x, z, maxY);
@@ -248,7 +275,8 @@ export class World implements PhysicsWorld, Persistable {
     }
     if (colliderId) return { y, surface: surface!, nx: 0, ny: 1, nz: 0, colliderId };
     const n = normalAt(x, z, 0.75, this.tmpN);
-    return { y, surface: surface ?? terrainSurfaceAt(x, z), nx: n.x, ny: n.y, nz: n.z, colliderId: 0 };
+    if (!surface) surface = w ? (w.frozen ? 'ice' : 'water') : terrainSurfaceAt(x, z, th, n.y);
+    return { y, surface, nx: n.x, ny: n.y, nz: n.z, colliderId: 0 };
   }
 
   liquidAt(x: number, z: number): { level: number } | null {

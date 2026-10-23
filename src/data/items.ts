@@ -53,6 +53,9 @@ export const ITEMS: ItemDef[] = [
   { id: 'fire_flakes', name: 'Fire Flakes', category: 'food', description: 'Spicy snack from the Fire Nation. Some say dragons can smell them for miles.', icon: '🌶️', stack: 30, price: 12 },
   { id: 'glowing_mushroom', name: 'Glowing Mushroom', category: 'food', description: 'Found in caves. Badgermoles are fond of them.', icon: '🍄', stack: 30, price: 15 },
   { id: 'raw_fish', name: 'Fresh Fish', category: 'food', description: 'Caught in cold waters.', icon: '🐟', stack: 30, price: 6 },
+  // [additive: companions] food for winged lemurs and turtle-ducks
+  { id: 'lychee_nuts', name: 'Lychee Nuts', category: 'food', description: 'Small sweet fruit. Winged lemurs go wild for them.', icon: '🍒', stack: 30, price: 6 },
+  { id: 'bread_crumbs', name: 'Bread Crumbs', category: 'food', description: 'Turtle-ducks paddle over the moment they hear the bag rustle.', icon: '🍞', stack: 30, price: 3 },
   { id: 'sun_stone', name: 'Sun Stone Fragment', category: 'quest', description: 'A warm shard from the Sun Warrior ruins. Dragons respect those who carry it.', icon: '🔶', stack: 5 },
   { id: 'spirit_water', name: 'Spirit Oasis Water', category: 'quest', description: 'Water from the Spirit Oasis. It glows faintly.', icon: '💧', stack: 3 },
   { id: 'pai_sho_tile', name: 'White Lotus Tile', category: 'collectible', description: 'A Pai Sho tile. Someone, somewhere, is collecting these.', icon: '🀄', stack: 40 },

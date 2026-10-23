@@ -66,7 +66,7 @@ export function rigLayout(frame: Frame): RigLayout {
     spine: [0, 0.1, 0],
     chest: [0, 0.2, 0],
     neck: [0, 0.235, 0],
-    head: [0, 0.085, 0.01],
+    head: [0, 0.076, 0.01],
     shoulderL: [d.shoulder - 0.045, 0.165, -0.01],
     upperArmL: [0.045, 0, 0],
     foreArmL: [0, -0.275, 0],
@@ -159,6 +159,14 @@ const clampN = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi
 export function faceParams(face: Appearance['face'], eyeShape: EyeShape): FaceParams {
   const base = PRESETS[clampN(Math.round(face.preset), 0, PRESETS.length - 1)];
   const f: FaceParams = { ...base };
+  // Stylised proportions: slightly larger heads than life.
+  const HS = 1.06;
+  f.rx *= HS;
+  f.ry *= HS;
+  f.rz *= HS;
+  f.eyeR *= HS * 1.12;
+  f.eyeX *= HS * 1.04;
+  f.eyeOpen *= 1.12;
   const jaw = clampN(face.jaw, -1, 1);
   const cheeks = clampN(face.cheeks, -1, 1);
   const nose = clampN(face.nose, -1, 1);
@@ -185,10 +193,11 @@ export function faceParams(face: Appearance['face'], eyeShape: EyeShape): FacePa
       f.eyeU *= 1.06;
       break;
     case 'narrow':
-      f.eyeOpen *= 0.58;
-      f.eyeTilt += 0.04;
-      f.eyeRound = 0.55;
-      f.eyeU *= 1.02;
+      f.eyeOpen *= 0.74;
+      f.irisA *= 0.92;
+      f.eyeTilt += 0.07;
+      f.eyeRound = 0.4;
+      f.eyeU *= 1.06;
       break;
     case 'wide':
       f.eyeOpen *= 1.2;
@@ -254,6 +263,21 @@ export function headPoint(f: FaceParams, dx: number, dy: number, dz: number, out
   // Temples: slight flattening at the sides above the eyes.
   const tmp = Math.exp(-(((ax - 0.85) / 0.2) ** 2) - (((dy - 0.25) / 0.25) ** 2)) * sstep(-0.2, 0.5, dz);
   x *= 1 - 0.035 * tmp;
+  // Eye sockets: the skin recedes around the eyes so eyeballs and lids sit in the face.
+  if (dz > 0.4) {
+    const yawE = Math.asin(Math.min(0.9, f.eyeX / f.rx));
+    const yaw = Math.atan2(dx, dz);
+    const pitch = Math.asin(Math.max(-1, Math.min(1, dy)));
+    const pe = -0.05;
+    const dyw = (Math.abs(yaw) - yawE) / 0.24;
+    const dp = (pitch - pe) / (pitch > pe ? 0.2 : 0.15);
+    const dent = Math.exp(-(dyw * dyw + dp * dp)) * f.eyeR * 0.45;
+    const r = Math.hypot(x, y, z) || 1;
+    const k = (r - dent) / r;
+    x *= k;
+    y *= k;
+    z *= k;
+  }
   out.x = x;
   out.y = HEAD_CY + y;
   out.z = z;

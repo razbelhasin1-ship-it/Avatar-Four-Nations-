@@ -41,6 +41,8 @@ export class HUD {
   private questSig = '';
   private waterCheck = 0;
   private waterState: { label: string; ok: boolean } | null = null;
+  private lastWaterMsg = '';
+  private lastWaterMsgT = -99;
 
   constructor(private readonly ui: UIManager, private readonly ctx: GameContext) {
     const bar = (cls: string) => {
@@ -95,7 +97,14 @@ export class HUD {
       this.spawnDamage(new THREE.Vector3(e.position.x, e.position.y + 0.4, e.position.z), Math.round(e.damage), e.targetKind === 'player' ? '#ff8a7a' : e.blocked ? '#bbb' : '#fff');
     });
     ctx.events.on('water:unavailable', () => {
-      this.ui.notify('No nearby water source — find a river, the sea, a pond or snow.', 'warning', 2.5);
+      // [waterbending] Precise reason from the source system, throttled so spamming a technique doesn't stack toasts.
+      const msg = ctx.water.lastFailure?.message ?? 'No nearby water source — find a river, the sea or a pond.';
+      const now = ctx.time.real;
+      if (msg === this.lastWaterMsg && now - this.lastWaterMsgT < 2.5) return;
+      this.lastWaterMsg = msg;
+      this.lastWaterMsgT = now;
+      this.ui.notify(msg, 'warning', 2.5);
+      this.flash(this.waterInd);
     });
     ctx.events.on('technique:failed', (e) => {
       if (e.reason === 'chi') this.flash(this.chiFill.parentElement!);
@@ -171,7 +180,7 @@ export class HUD {
       const f = ctx.combat.cooldownFraction(p, id);
       cd.style.transform = `scaleY(${f.toFixed(3)})`;
       const def = getTechnique(id);
-      if (def?.water && this.waterState) el.classList.toggle('nowater', !this.waterState.ok && p.waterReserve < def.water.amount);
+      if (def?.water && this.waterState) el.classList.toggle('nowater', !ctx.water.canSupply(p, def.water));
     }
   }
 
@@ -222,13 +231,15 @@ export class HUD {
     const show = p.element === 'water';
     this.waterRow.style.display = ctx.progression.canBend('water') ? '' : 'none';
     this.waterFill.style.transform = `scaleX(${(p.waterReserve / p.maxWaterReserve).toFixed(3)})`;
-    this.waterLabel.textContent = `${Math.round(p.waterReserve)}`;
+    const skin = (ctx.extra.get('waterbending') as { hasFlask?(): boolean; flask?: { amount: number } } | undefined) ?? null;
+    this.waterLabel.textContent = skin?.hasFlask?.() && skin.flask ? `${Math.round(p.waterReserve)} · skin ${Math.round(skin.flask.amount)}` : `${Math.round(p.waterReserve)}`;
     this.waterCheck -= dt;
     if (this.waterCheck <= 0) {
       this.waterCheck = 0.3;
       if (ctx.progression.canBend('water')) {
-        const hit = ctx.water.findBest(p.position, ctx.water.drawRange * (ctx.avatar.active ? 1.8 : 1), { allowLiquid: true, allowIce: true, allowSnow: ctx.progression.knows('water_snow_draw') });
-        this.waterState = hit ? { label: `${hit.label} nearby (${hit.distance.toFixed(0)} m)`, ok: true } : { label: p.waterReserve > 0.5 ? 'No source nearby — using water you carry' : 'No nearby water source', ok: p.waterReserve > 0.5 };
+        // [waterbending] What Draw Water would use here (finite sources show their fill %, ice/snow explained).
+        const d = ctx.water.describe(p);
+        this.waterState = { label: d.label, ok: d.ok };
       } else this.waterState = null;
     }
     if (show && this.waterState) {

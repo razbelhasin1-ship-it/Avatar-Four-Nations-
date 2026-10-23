@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Entity, HitInfo } from '../../../entities/Entity';
+import type { Entity, HitInfo, HitResult } from '../../../entities/Entity';
 import { registerTechnique } from '../../CombatSystem';
 import { clamp01, easeIn, easeInOut, easeOut, PathSampler } from '../../water/Curve';
 import { capTaper } from '../../water/FlowTube';
@@ -39,7 +39,7 @@ export interface WhipOptions {
   ice: number;
   /** Fraction of the water that snaps back into the reserve afterwards. */
   returnFrac: number;
-  onHit?(e: Entity, point: THREE.Vector3, cast: Cast): void;
+  onHit?(e: Entity, point: THREE.Vector3, cast: Cast, res: HitResult): void;
   /** Called once when the swing completes (tip position). */
   onFinish?(tip: THREE.Vector3, cast: Cast): void;
 }
@@ -282,7 +282,7 @@ export class WhipEffect implements WaterEffect {
     this.hits.push({ id: c.e.id, frame: cast.ctx.time.frame, point: c.point.toArray() });
     douse(cast, c.e);
     this.fx.splash(c.point, o.style === 'overhead' ? 1.1 : 0.75, { ice: o.ice > 0.5, volume: 0.6 });
-    o.onHit?.(c.e, c.point, cast);
+    o.onHit?.(c.e, c.point, cast, res);
   }
 
   private endWater(): void {

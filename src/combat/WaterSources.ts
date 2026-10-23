@@ -506,6 +506,9 @@ export class WaterSourceSystem implements GameSystem {
       score *= 1.35 - 0.35 * dot;
     }
     if (o.preferFrozen && h.frozen) score *= 0.55;
+    // Snow and rain are weak sources: real liquid water nearby wins.
+    else if (h.type === 'snow') score = score * 1.5 + 6;
+    else if (h.type === 'rain') score = score * 1.5 + 9;
     // Prefer unlimited / well-stocked sources over nearly empty ones.
     if (Number.isFinite(h.capacity ?? Infinity) && (h.capacity ?? 0) > 0) score *= 1.4 - 0.4 * Math.min(1, h.available / (h.capacity ?? 1));
     return score;

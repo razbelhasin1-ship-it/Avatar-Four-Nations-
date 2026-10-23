@@ -114,6 +114,8 @@ export interface FlameOptions {
   seed?: number;
   side?: THREE.Side;
   depthTest?: boolean;
+  /** 'add' (glowing, default) or 'normal' (painterly flame that never saturates to white). */
+  blend?: 'add' | 'normal';
 }
 
 export function flameMaterial(o: FlameOptions = {}): THREE.ShaderMaterial {
@@ -145,7 +147,7 @@ export function flameMaterial(o: FlameOptions = {}): THREE.ShaderMaterial {
     transparent: true,
     depthWrite: false,
     depthTest: o.depthTest ?? true,
-    blending: THREE.AdditiveBlending,
+    blending: o.blend === 'normal' ? THREE.NormalBlending : THREE.AdditiveBlending,
     side: o.side ?? THREE.DoubleSide,
   });
 }

@@ -32,7 +32,7 @@ try {
     await h.newGame('water');
     await h.eval((g) => g.teleport(-120, -1600));
     const near = await h.eval((g) => g.waterNearby(16));
-    const r = await h.eval((g) => g.cast('water_lash', null));
+    const r = await h.eval((g) => g.cast('water_whip', null));
     if (near.filter((n) => !n.frozen && n.type !== 'snow').length === 0) assert.equal(r.reason, 'water', JSON.stringify(r));
   });
   await check('water: river source → technique succeeds and reports source', async () => {
@@ -40,7 +40,7 @@ try {
     await h.step(5);
     const near = await h.eval((g) => g.waterNearby(16));
     assert.ok(near.length > 0, 'expected a nearby river: ' + JSON.stringify(near));
-    const r = await h.eval((g) => g.cast('water_lash', null));
+    const r = await h.eval((g) => g.cast('water_whip', null));
     assert.ok(r.ok, JSON.stringify(r));
     assert.ok(r.water && r.water.source !== 'conjured', JSON.stringify(r));
   });

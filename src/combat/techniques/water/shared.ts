@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { GameContext } from '../../../core/GameContext';
 import type { Entity } from '../../../entities/Entity';
 import { clamp01, easeOut, PathSampler } from '../../water/Curve';
 import { capTaper } from '../../water/FlowTube';
@@ -131,6 +132,17 @@ export function douse(cast: Cast, e: Entity): void {
 export function shake(cast: Cast, intensity: number, duration = 0.2): void {
   if (!cast.isPlayer) return;
   cast.ctx.events.emit('camera:shake', { intensity, duration });
+}
+
+const lastNotice = new Map<string, number>();
+
+/** Toast for the player only (technique refusals the HUD does not show), throttled per message. */
+export function notifyPlayer(caster: Combatant, ctx: GameContext, text: string, kind: 'warning' | 'info' = 'warning'): void {
+  if (!caster.isPlayer) return;
+  const now = ctx.time.real;
+  if ((lastNotice.get(text) ?? -99) > now - 1.5) return;
+  lastNotice.set(text, now);
+  ctx.events.emit('ui:notify', { text, kind, duration: 2.5 });
 }
 
 export function isFrozenGrant(cast: Cast): boolean {

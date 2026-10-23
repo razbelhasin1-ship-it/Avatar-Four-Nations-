@@ -1,5 +1,6 @@
 import type { GameContext, GameSystem } from '../core/GameContext';
 import type { Persistable } from '../core/Save';
+import { ModelViewer } from './debugViewer';
 
 /**
  * Animal companions: species habitats, wild creature spawning, discovery,
@@ -34,9 +35,27 @@ export class CompanionSystem implements GameSystem, Persistable {
   mountedFlying = false;
   /** Creature ids the player has discovered (journal/bestiary). */
   readonly discoveredSpecies = new Set<string>();
+  private viewer!: ModelViewer;
 
   init(ctx: GameContext): void {
     this.ctx = ctx;
+    this.viewer = new ModelViewer(ctx);
+    queueMicrotask(() => {
+      const g = (window as any).__game;
+      if (!g) return;
+      g.debug.companions = {
+        viewModel: (species: string, opts?: any) => this.viewer.show(species, opts),
+        clearModels: () => this.viewer.clear(),
+      };
+    });
+  }
+
+  update(dt: number): void {
+    this.viewer.update(dt);
+  }
+
+  onSessionEnd(): void {
+    this.viewer.clear();
   }
 
   bondedCount(speciesId?: string): number {

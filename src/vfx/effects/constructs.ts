@@ -132,7 +132,7 @@ export abstract class EarthConstruct implements LiveEffect {
   protected onSink(): void {
     const p = this.group.position;
     this.ctx.vfx.burst('dust', tmpV.set(p.x, this.baseY + 0.2, p.z), { count: 8, radius: 0.8, speed: 0.6 });
-    this.ctx.audio.play('earth_sink', { position: p, volume: 0.5 });
+    this.ctx.audio.play('bend_earth_sink', { position: p, volume: 0.5 });
   }
 
   /** Ground height under the construct. */
@@ -146,7 +146,7 @@ export abstract class EarthConstruct implements LiveEffect {
     debris(c, chunks, { spread: 1.4, speed: 7, size: 0.22, radius: this.visualHeight * 0.3, color: this.tint, life: 2 });
     this.ctx.vfx.burst('dust', c, { count: 14, radius: 1.2, speed: 1.2 });
     this.ctx.vfx.burst('debris', c, { count: 10, color: this.tint });
-    this.ctx.audio.play('earth_crumble', { position: c, volume: 0.8 });
+    this.ctx.audio.play('bend_earth_crumble', { position: c, volume: 0.8 });
     this.phase = 'gone';
   }
 
@@ -231,7 +231,7 @@ export class RockPillar extends EarthConstruct {
     ctx.vfx.burst('dust', base, { count: 16, radius: this.radius * 1.2, speed: 1.4 });
     debris(base, ctx.vfx.quality === 'low' ? 6 : 12, { spread: 0.9, speed: 8, size: 0.16, radius: this.radius, color: tint });
     ctx.world.fx.crack(base, this.radius * 2.2);
-    ctx.audio.play('earth_rise', { position: base, volume: 0.9 });
+    ctx.audio.play('bend_earth_rise', { position: base, volume: 0.9 });
   }
 
   protected apply(prevLevel: number, _dt: number): void {
@@ -305,7 +305,7 @@ export class StoneWall extends EarthConstruct {
       debris(p, ctx.vfx.quality === 'low' ? 2 : 4, { spread: 0.9, speed: 7, size: 0.15, radius: 0.4, color: tint });
     }
     ctx.world.fx.crack(base, this.width * 0.6, o.yaw);
-    ctx.audio.play('earth_rise', { position: base, volume: 1, pitch: 0.8 });
+    ctx.audio.play('bend_earth_rise', { position: base, volume: 1, pitch: 0.8 });
   }
 
   /** World-space direction along the wall's length. */
@@ -357,7 +357,7 @@ export class StoneWall extends EarthConstruct {
     this.ctx.vfx.burst('dust', new THREE.Vector3(p.x, this.baseY + 0.3, p.z), { count: 18, radius: this.width * 0.4, speed: 2 });
   }
 
-  protected move(dt: number): void {
+  protected override move(dt: number): void {
     const f = this.flight!;
     f.left -= dt;
     const p = this.group.position;
@@ -482,7 +482,7 @@ export class Boulder extends EarthConstruct {
     ctx.vfx.burst('dust', base, { count: 18, radius: this.radius, speed: 1.6 });
     debris(base, ctx.vfx.quality === 'low' ? 6 : 12, { spread: 1.0, speed: 8, size: 0.2, radius: this.radius, color: tint });
     ctx.world.fx.crack(base, this.radius * 2.4);
-    ctx.audio.play('earth_rise', { position: base, volume: 1, pitch: 0.65 });
+    ctx.audio.play('bend_earth_rise', { position: base, volume: 1, pitch: 0.65 });
   }
 
   get center(): THREE.Vector3 {
@@ -510,7 +510,7 @@ export class Boulder extends EarthConstruct {
     return !!this.roll;
   }
 
-  protected move(dt: number): void {
+  protected override move(dt: number): void {
     const r = this.roll!;
     r.left -= dt;
     r.speed = Math.min(r.maxSpeed, r.speed + r.accel * dt);

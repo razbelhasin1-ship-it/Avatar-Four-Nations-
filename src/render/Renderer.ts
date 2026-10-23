@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import type { EventBus } from '../core/EventBus';
 import type { SettingsManager, ShadowQuality } from '../core/Settings';
 
@@ -12,6 +12,158 @@ const SHADOW_CONFIG: Record<ShadowQuality, { size: number; radius: number }> = {
   medium: { size: 2048, radius: 70 },
   high: { size: 4096, radius: 95 },
 };
+
+let fogPatched = false;
+
+/**
+ * Atmospheric perspective for every material that uses fog: the stock fog
+ * chunks are replaced with a height-aware version (thinner air above the
+ * viewer so distant peaks stay visible as silhouettes, hazier valleys below),
+ * using radial distance, plus an optional sun in-scattering tint that world
+ * shaders enable through `envFogSun` (zero — i.e. off — for other materials).
+ * Only data every program already has is required (cameraPosition, viewMatrix,
+ * mvPosition), so all built-in and custom fogged materials stay compatible.
+ */
+export function installAtmosphereFog(): void {
+  if (fogPatched) return;
+  fogPatched = true;
+  THREE.ShaderChunk.fog_pars_vertex = /* glsl */ `
+#ifdef USE_FOG
+  varying float vFogDepth;
+  varying vec3 vFogWorldPos;
+#endif
+`;
+  THREE.ShaderChunk.fog_vertex = /* glsl */ `
+#ifdef USE_FOG
+  vFogDepth = length( mvPosition.xyz );
+  vFogWorldPos = cameraPosition + transpose( mat3( viewMatrix ) ) * mvPosition.xyz;
+#endif
+`;
+  THREE.ShaderChunk.fog_pars_fragment = /* glsl */ `
+#ifdef USE_FOG
+  uniform vec3 fogColor;
+  varying float vFogDepth;
+  varying vec3 vFogWorldPos;
+  uniform vec4 envFogSun;
+  uniform vec3 envFogSunDir;
+  #ifdef FOG_EXP2
+    uniform float fogDensity;
+  #else
+    uniform float fogNear;
+    uniform float fogFar;
+  #endif
+#endif
+`;
+  THREE.ShaderChunk.fog_fragment = /* glsl */ `
+#ifdef USE_FOG
+  float fogK = clamp( ( vFogWorldPos.y - cameraPosition.y ) / 150.0, -1.1, 6.0 );
+  float fogHF = abs( fogK ) < 1e-3 ? 1.0 : ( 1.0 - exp( - fogK ) ) / fogK;
+  float fogD = vFogDepth * fogHF;
+  #ifdef FOG_EXP2
+    float fogFactor = 1.0 - exp( - fogDensity * fogDensity * fogD * fogD );
+  #else
+    float fogFactor = smoothstep( fogNear, fogFar, fogD );
+  #endif
+  vec3 fogCol = fogColor;
+  if ( envFogSun.a > 0.0 ) {
+    vec3 fogV = normalize( vFogWorldPos - cameraPosition );
+    float fogS = pow( max( dot( fogV, envFogSunDir ), 0.0 ), 5.0 );
+    fogCol = mix( fogCol, envFogSun.rgb, fogS * envFogSun.a );
+  }
+  gl_FragColor.rgb = mix( gl_FragColor.rgb, fogCol, fogFactor );
+#endif
+`;
+}
+
+/**
+ * Final pass: tone mapping + colour space (like OutputPass) plus a painterly
+ * grade — gentle warm highlights / cool shadows split toning, a touch of extra
+ * saturation, soft contrast and a vignette.
+ */
+class GradeOutputPass extends ShaderPass {
+  private toneMappingKey = -1;
+  constructor() {
+    super(
+      new THREE.RawShaderMaterial({
+        name: 'GradeOutputShader',
+        uniforms: {
+          tDiffuse: { value: null },
+          toneMappingExposure: { value: 1 },
+          uSaturation: { value: 1.03 },
+          uWarm: { value: new THREE.Vector3(1.035, 1.0, 0.95) },
+          uCool: { value: new THREE.Vector3(0.95, 0.985, 1.05) },
+          uVignette: { value: 0.26 },
+          uContrast: { value: 1.04 },
+        },
+        vertexShader: /* glsl */ `
+          precision highp float;
+          uniform mat4 modelViewMatrix;
+          uniform mat4 projectionMatrix;
+          attribute vec3 position;
+          attribute vec2 uv;
+          varying vec2 vUv;
+          void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: /* glsl */ `
+          precision highp float;
+          uniform sampler2D tDiffuse;
+          uniform float uSaturation;
+          uniform vec3 uWarm;
+          uniform vec3 uCool;
+          uniform float uVignette;
+          uniform float uContrast;
+          varying vec2 vUv;
+          #include <tonemapping_pars_fragment>
+          #include <colorspace_pars_fragment>
+          void main() {
+            vec4 c = texture2D(tDiffuse, vUv);
+            #ifdef LINEAR_TONE_MAPPING
+              c.rgb = LinearToneMapping(c.rgb);
+            #elif defined(REINHARD_TONE_MAPPING)
+              c.rgb = ReinhardToneMapping(c.rgb);
+            #elif defined(CINEON_TONE_MAPPING)
+              c.rgb = CineonToneMapping(c.rgb);
+            #elif defined(ACES_FILMIC_TONE_MAPPING)
+              c.rgb = ACESFilmicToneMapping(c.rgb);
+            #elif defined(AGX_TONE_MAPPING)
+              c.rgb = AgXToneMapping(c.rgb);
+            #elif defined(NEUTRAL_TONE_MAPPING)
+              c.rgb = NeutralToneMapping(c.rgb);
+            #endif
+            float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+            c.rgb = mix(vec3(l), c.rgb, uSaturation);
+            c.rgb *= mix(uCool, uWarm, smoothstep(0.05, 0.7, l));
+            c.rgb = clamp((c.rgb - 0.5) * uContrast + 0.5, 0.0, 1.0);
+            vec2 d = vUv - 0.5;
+            c.rgb *= 1.0 - uVignette * smoothstep(0.25, 0.85, dot(d, d) * 2.2);
+            #ifdef SRGB_TRANSFER
+              c = sRGBTransferOETF(c);
+            #endif
+            gl_FragColor = c;
+          }`,
+      }),
+    );
+  }
+
+  override render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget, deltaTime: number, maskActive: boolean): void {
+    this.uniforms.toneMappingExposure.value = renderer.toneMappingExposure;
+    const key = renderer.toneMapping * 10 + (THREE.ColorManagement.getTransfer(renderer.outputColorSpace) === THREE.SRGBTransfer ? 1 : 0);
+    if (key !== this.toneMappingKey) {
+      this.toneMappingKey = key;
+      const defs: Record<string, string> = {};
+      if (THREE.ColorManagement.getTransfer(renderer.outputColorSpace) === THREE.SRGBTransfer) defs.SRGB_TRANSFER = '';
+      const tm = renderer.toneMapping;
+      if (tm === THREE.LinearToneMapping) defs.LINEAR_TONE_MAPPING = '';
+      else if (tm === THREE.ReinhardToneMapping) defs.REINHARD_TONE_MAPPING = '';
+      else if (tm === THREE.CineonToneMapping) defs.CINEON_TONE_MAPPING = '';
+      else if (tm === THREE.ACESFilmicToneMapping) defs.ACES_FILMIC_TONE_MAPPING = '';
+      else if (tm === THREE.AgXToneMapping) defs.AGX_TONE_MAPPING = '';
+      else if (tm === THREE.NeutralToneMapping) defs.NEUTRAL_TONE_MAPPING = '';
+      this.material.defines = defs;
+      this.material.needsUpdate = true;
+    }
+    super.render(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
+  }
+}
 
 /**
  * Owns the WebGLRenderer, scene, main camera, global lights and the
@@ -32,7 +184,7 @@ export class RenderPipeline {
   private composer: EffectComposer | null = null;
   private renderPass: RenderPass | null = null;
   private bloomPass: UnrealBloomPass | null = null;
-  private outputPass: OutputPass | null = null;
+  private outputPass: GradeOutputPass | null = null;
   private shadowRadius = 0;
   private readonly shadowCenter = new THREE.Vector3();
   private width = 1;
@@ -51,6 +203,7 @@ export class RenderPipeline {
     private readonly settings: SettingsManager,
     private readonly events: EventBus,
   ) {
+    installAtmosphereFog();
     const g = settings.data.graphics;
     this.renderer = new THREE.WebGLRenderer({
       canvas,
@@ -169,7 +322,7 @@ export class RenderPipeline {
     this.composer.addPass(this.renderPass);
     this.bloomPass = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.5, 0.86);
     this.composer.addPass(this.bloomPass);
-    this.outputPass = new OutputPass();
+    this.outputPass = new GradeOutputPass();
     this.composer.addPass(this.outputPass);
   }
 

@@ -27,6 +27,14 @@ export interface WaterEffect {
   trace?(): Record<string, unknown> | null;
 }
 
+/** Ice construct that fire heat can melt ('bending:heat'). */
+export interface Meltable {
+  readonly position: THREE.Vector3;
+  readonly radius: number;
+  /** Apply heat; intensity ≈ 1 for a fire blast. */
+  melt(intensity: number): void;
+}
+
 export interface TraceFrame {
   frame: number;
   time: number;
@@ -54,6 +62,7 @@ export class WaterFX {
   readonly tubes: TubePool;
   private effects: WaterEffect[] = [];
   private readonly reserves = new Map<Combatant, ReserveVisual>();
+  private readonly meltables = new Set<Meltable>();
   time = 0;
   traceOn = false;
   traceLog: TraceFrame[] = [];
@@ -140,6 +149,35 @@ export class WaterFX {
       }
       r.update(dt);
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Meltable ice constructs
+  // ---------------------------------------------------------------------------
+
+  addMeltable(m: Meltable): () => void {
+    this.meltables.add(m);
+    return () => this.meltables.delete(m);
+  }
+
+  /** Heat at a point melts nearby ice constructs. Returns how many were affected. */
+  meltNear(pos: THREE.Vector3, radius: number, intensity: number): number {
+    let n = 0;
+    for (const m of [...this.meltables]) {
+      if (m.position.distanceTo(pos) <= radius + m.radius) {
+        try {
+          m.melt(intensity);
+          n++;
+        } catch (err) {
+          console.error('[WaterFX] melt failed', err);
+        }
+      }
+    }
+    return n;
+  }
+
+  get meltableCount(): number {
+    return this.meltables.size;
   }
 
   // ---------------------------------------------------------------------------
@@ -232,6 +270,7 @@ export class WaterFX {
     this.effects = [];
     for (const r of this.reserves.values()) r.dispose();
     this.reserves.clear();
+    this.meltables.clear();
     this.traceLog = [];
   }
 }

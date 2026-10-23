@@ -475,8 +475,8 @@ function specialLandforms(x: number, z: number, h: number): number {
       const p = (x * 0.8 + z * 0.6) / 46 + 2.2 * noise.noise2(x / 300, z / 300) + 0.6 * noiseD.noise2(x / 90, z / 90);
       const f = p - Math.floor(p);
       // Sawtooth-ish: slow rise over 78% of the wavelength, steep slip face after the crest.
-      const prof = f < 0.78 ? sstep(0, 0.78, f) : 1 - sstep(0.78, 1, f);
-      const amp = 6 + 5 * noiseB.noise2(x / 220, z / 220);
+      const prof = f < 0.7 ? sstep(0, 0.7, f) : 1 - sstep(0.7, 1, f);
+      const amp = 5 + 3.5 * noiseB.noise2(x / 220, z / 220);
       const erg = 5 * (0.5 + 0.5 * noiseC.fbm2(x / 380, z / 380, 2));
       h += w * (prof * amp + erg);
     }
@@ -1093,7 +1093,9 @@ function materials9(x: number, z: number, h: number, slope: number, waterRel: nu
   const n2 = noiseB.noise2(x / 70, z / 70);
 
   // slope: 0 flat .. 1 vertical (1 - normal.y)
-  const rock = clamp01(sstep(0.22, 0.42, slope + n1 * 0.05) + sstep(200, 260, h) * 0.5 * (1 - b.cold));
+  // Sand holds steep dune faces: in the desert rock only shows on real cliffs.
+  const rockSlope = mix(0.22, 0.46, b.desert);
+  const rock = clamp01(sstep(rockSlope, rockSlope + 0.2, slope + n1 * 0.05) + sstep(200, 260, h) * 0.5 * (1 - b.cold));
   const beach = sstep(SEA_LEVEL + 2.6, SEA_LEVEL + 0.8, h) * (1 - b.cold) * (1 - b.swamp);
   const snowCap = sstep(250, 310, h + n2 * 20);
   const snow = clamp01(Math.max(b.cold, snowCap) * (1 - rock * 0.75));
@@ -1132,7 +1134,7 @@ function materials9(x: number, z: number, h: number, slope: number, waterRel: nu
   for (let i = 0; i < 9; i++) w[i] /= sum;
 
   // Grass tint: lush green -> boreal dark -> dry gold -> tropical vivid -> swamp olive
-  let r = 0.33, g = 0.52, bl = 0.2;
+  let r = 0.37, g = 0.53, bl = 0.22;
   r = mix(r, 0.22, b.boreal); g = mix(g, 0.4, b.boreal); bl = mix(bl, 0.22, b.boreal);
   r = mix(r, 0.6, b.dry * 0.8); g = mix(g, 0.56, b.dry * 0.8); bl = mix(bl, 0.26, b.dry * 0.8);
   r = mix(r, 0.28, b.tropical); g = mix(g, 0.6, b.tropical); bl = mix(bl, 0.16, b.tropical);

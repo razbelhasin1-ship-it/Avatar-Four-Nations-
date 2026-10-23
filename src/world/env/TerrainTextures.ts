@@ -22,11 +22,17 @@ export const TERRAIN_LAYER = {
   paved: 9,
   packedSnow: 10,
   litter: 11,
+  /** Generic grain/detail luminance (Low quality path). */
+  detail: 12,
+  /** Macro variation: R low-frequency, G mid-frequency, B high-frequency edge noise. */
+  macro: 13,
 } as const;
-export const TERRAIN_LAYER_COUNT = 12;
+export const TERRAIN_LAYER_COUNT = 14;
+/** Number of material layers (the rest are utility layers). */
+export const TERRAIN_MATERIAL_LAYERS = 12;
 
 /** World metres covered by one texture tile per layer (shader uniform). */
-export const TERRAIN_LAYER_SCALE = [4.5, 5.5, 9, 6.5, 9, 9, 6, 6, 3.2, 4.2, 6, 3.6];
+export const TERRAIN_LAYER_SCALE = [4.5, 5.5, 9, 6.5, 9, 9, 6, 6, 3.2, 4.2, 6, 3.6, 5, 160];
 
 type RGBH = [number, number, number, number];
 
@@ -60,19 +66,21 @@ export function generateTerrainLayers(size = 256): TerrainLayerData {
 
   const gen: Array<(u: number, v: number, x: number, y: number) => void> = [];
 
-  // 0 grass — neutral luminance with clumps; tinted per vertex in the shader.
+  // 0 grass — neutral luminance with soft clumps, blades and dry strands; tinted per vertex in the shader.
   gen[0] = (u, v, x, y) => {
-    const lo = fLo.px(x, y), mid = fMid.px(x + 37, y + 11), hi = fHi.px(x, y);
-    worley(u, v, 22, 401, 0.9, w);
-    const clump = 1 - smooth(0, 0.75, w.f1);
-    let lum = 0.62 + 0.1 * lo + 0.07 * mid + 0.07 * hi + 0.1 * (clump - 0.5);
-    lum *= 0.82 + 0.18 * smooth(0.05, 0.45, w.f2 - w.f1);
-    const warm = 0.5 + 0.5 * fLo.px(x + 100, y + 50);
-    if (hash2i(x, y, 3) > 0.982) lum *= 1.22;
-    c[0] = lum * (0.9 + 0.2 * warm);
-    c[1] = lum;
-    c[2] = lum * (0.96 - 0.16 * warm);
-    c[3] = 0.42 + 0.32 * clump + 0.14 * hi;
+    const lo = fLo.px(x, y), mid = fMid.px(x + 37, y + 11), hi = fHi.px(x, y), hi2 = fHi.px(x + 97, y + 41);
+    worley(u + 0.02 * mid, v + 0.02 * lo, 34, 401, 0.9, w);
+    const clump = 1 - smooth(0, 0.95, w.f1);
+    let lum = 0.6 + 0.07 * lo + 0.08 * mid + 0.11 * hi + 0.06 * hi2 + 0.05 * (clump - 0.5);
+    const blade = hash2i(x, y, 3);
+    if (blade > 0.975) lum *= 1.15;
+    else if (blade < 0.03) lum *= 0.85;
+    const warm = smooth(0.15, 0.85, 0.5 + 0.5 * fLo.px(x + 100, y + 50));
+    const dry = smooth(0.55, 0.85, 0.5 + 0.5 * fMid.px(x + 150, y + 90)) * 0.5;
+    c[0] = lum * (0.94 + 0.12 * warm + 0.25 * dry);
+    c[1] = lum * (1.0 + 0.04 * dry);
+    c[2] = lum * (0.97 - 0.12 * warm - 0.2 * dry);
+    c[3] = 0.45 + 0.2 * clump + 0.22 * hi + 0.08 * mid;
   };
   // 1 dirt — warm brown with damp patches and pebbles.
   gen[1] = (u, v, x, y) => {
@@ -95,16 +103,16 @@ export function generateTerrainLayers(size = 256): TerrainLayerData {
     const bv = hash2i(bandId, 0, 222);
     mixc([0.47, 0.44, 0.41], [0.63, 0.58, 0.52], 0.25 + 0.5 * bv + 0.25 * band, c);
     if (bv > 0.7) { c[0] *= 1.07; c[1] *= 1.0; c[2] *= 0.92; }
-    worley(u, v, 7, 77, 0.95, w);
-    const crack = smooth(0.07, 0.0, w.f2 - w.f1);
-    worley(u, v, 19, 79, 0.9, w2);
-    const fine = smooth(0.04, 0.0, w2.f2 - w2.f1) * 0.5;
+    worley(u + 0.06 * mid + 0.03 * hi, v + 0.06 * lo, 6, 77, 0.95, w);
+    const crack = smooth(0.05, 0.0, w.f2 - w.f1) * smooth(-0.3, 0.4, fMid.px(x + 60, y + 9));
+    worley(u + 0.05 * lo, v + 0.04 * mid, 17, 79, 0.9, w2);
+    const fine = smooth(0.03, 0.0, w2.f2 - w2.f1) * 0.4;
     const lichen = smooth(0.5, 0.75, fMid.px(x + 140, y + 140)) * (hash2i(x >> 1, y >> 1, 8) > 0.35 ? 1 : 0.4);
-    const shade = (0.86 + 0.18 * hi) * (1 - 0.5 * crack) * (1 - 0.3 * fine);
+    const shade = (0.86 + 0.18 * hi) * (1 - 0.32 * crack) * (1 - 0.2 * fine);
     c[0] = lerp(c[0], 0.46, lichen * 0.35) * shade;
     c[1] = lerp(c[1], 0.5, lichen * 0.35) * shade;
     c[2] = lerp(c[2], 0.32, lichen * 0.35) * shade;
-    c[3] = clamp01(0.5 + 0.22 * (band - 0.5) + 0.18 * hi + 0.1 * lo - 0.45 * crack - 0.15 * fine);
+    c[3] = clamp01(0.5 + 0.22 * (band - 0.5) + 0.18 * hi + 0.1 * lo - 0.3 * crack - 0.1 * fine);
   };
   // 3 sand — asymmetric wind ripples and grains.
   gen[3] = (u, v, x, y) => {
@@ -115,7 +123,7 @@ export function generateTerrainLayers(size = 256): TerrainLayerData {
     mixc([0.82, 0.7, 0.5], [0.92, 0.82, 0.62], 0.5 + 0.5 * fLo.px(x + 99, y + 9), c);
     const shade = 0.93 + 0.1 * prof;
     const g = hash2i(x, y, 9);
-    const speck = g > 0.975 ? 0.72 : g < 0.02 ? 1.12 : 1;
+    const speck = g > 0.985 ? 0.86 : g < 0.015 ? 1.08 : 1;
     for (let i = 0; i < 3; i++) c[i] *= shade * speck;
     c[3] = 0.3 + 0.5 * prof + 0.08 * hi;
   };
@@ -174,10 +182,10 @@ export function generateTerrainLayers(size = 256): TerrainLayerData {
     const stone = smooth(0.5, 0.32, w.f1);
     const dome = Math.sqrt(Math.max(0, 1 - (w.f1 / 0.5) ** 2));
     const warm = hash2i(Math.floor(w.id * 9973), 1, 18);
-    mixc([0.4, 0.38, 0.37], [0.67, 0.63, 0.57], w.id, tmp);
-    tmp[0] *= 0.95 + 0.1 * warm; tmp[2] *= 1.04 - 0.1 * warm;
-    const shade = 0.82 + 0.22 * dome;
-    for (let i = 0; i < 3; i++) c[i] = lerp([0.2, 0.18, 0.16][i], tmp[i] * shade, stone);
+    mixc([0.48, 0.45, 0.42], [0.66, 0.62, 0.56], w.id, tmp);
+    tmp[0] *= 0.96 + 0.08 * warm; tmp[2] *= 1.03 - 0.08 * warm;
+    const shade = 0.86 + 0.16 * dome;
+    for (let i = 0; i < 3; i++) c[i] = lerp([0.34, 0.31, 0.28][i], tmp[i] * shade, stone);
     c[3] = 0.12 + 0.78 * dome * stone;
   };
   // 9 paved flagstones (stone roads, plazas, trails).
@@ -230,6 +238,25 @@ export function generateTerrainLayers(size = 256): TerrainLayerData {
     c[3] = 0.3 + 0.45 * leaf + 0.12 * hi + 0.1 * moss;
   };
 
+  // 12 generic detail — pebbles, cracks and grain as luminance (cheap path).
+  gen[12] = (u, v, x, y) => {
+    const mid = fMid.px(x + 3, y + 33), hi = fHi.px(x + 33, y + 3);
+    worley(u, v, 30, 1212, 0.9, w);
+    const peb = smooth(0.3, 0.15, w.f1) * (w.id > 0.5 ? 1 : 0);
+    worley(u, v, 9, 1213, 0.9, w2);
+    const crack = smooth(0.05, 0.0, w2.f2 - w2.f1);
+    const l = 0.55 + 0.14 * mid + 0.12 * hi + 0.18 * peb - 0.22 * crack + 0.06 * (hash2i(x, y, 23) - 0.5);
+    c[0] = c[1] = c[2] = clamp01(l);
+    c[3] = clamp01(0.5 + 0.2 * mid + 0.15 * hi + 0.3 * peb - 0.3 * crack);
+  };
+  // 13 macro variation fields (sampled at a very large scale).
+  gen[13] = (u, v, x, y) => {
+    c[0] = 0.5 + 0.5 * fLo.px(x + 300, y + 7);
+    c[1] = 0.5 + 0.5 * fMid.px(x + 7, y + 300);
+    c[2] = 0.5 + 0.5 * pfbm(u, v, 32, 2, 1313);
+    c[3] = 0.5 + 0.5 * fLo.px(x + 150, y + 150);
+  };
+
   for (let l = 0; l < L; l++) {
     const base = l * S * S * 4;
     const fn = gen[l];
@@ -248,6 +275,33 @@ export function generateTerrainLayers(size = 256): TerrainLayerData {
 }
 
 let cached: TerrainLayerData | null = null;
+let means: Float32Array | null = null;
+
+function srgbToLinear(c: number): number {
+  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+
+/** Mean linear RGB of each layer (for per-vertex colours on the Low quality path). */
+export function terrainLayerMeans(): Float32Array {
+  if (means) return means;
+  const d = terrainLayerData();
+  const S = d.size;
+  means = new Float32Array(d.layers * 3);
+  for (let l = 0; l < d.layers; l++) {
+    let r = 0, g = 0, b = 0, n = 0;
+    const base = l * S * S * 4;
+    for (let i = 0; i < S * S; i += 7) {
+      r += srgbToLinear(d.data[base + i * 4] / 255);
+      g += srgbToLinear(d.data[base + i * 4 + 1] / 255);
+      b += srgbToLinear(d.data[base + i * 4 + 2] / 255);
+      n++;
+    }
+    means[l * 3] = r / n;
+    means[l * 3 + 1] = g / n;
+    means[l * 3 + 2] = b / n;
+  }
+  return means;
+}
 
 /** Shared (lazily generated) layer data. */
 export function terrainLayerData(): TerrainLayerData {

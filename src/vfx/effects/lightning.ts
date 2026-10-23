@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import type { GameContext } from '../../core/GameContext';
+import { effect } from './loop';
 import { boltMaterial } from './materials';
 
 /**
@@ -160,4 +162,45 @@ export class LightningBolt {
     this.geo.dispose();
     this.material.dispose();
   }
+}
+
+/**
+ * Fire-and-forget lightning strike from `a` to `b`: re-forks a few times for
+ * flicker, then fades. Returns the bolt (path points are valid on return).
+ */
+export function strikeBolt(
+  ctx: GameContext,
+  a: THREE.Vector3,
+  b: THREE.Vector3,
+  o: { width?: number; life?: number; branches?: number; jag?: number; core?: THREE.ColorRepresentation; glow?: THREE.ColorRepresentation; reforks?: number } = {},
+): LightningBolt {
+  const low = ctx.vfx.quality === 'low';
+  const bolt = new LightningBolt({ maxSegments: low ? 90 : 160, core: o.core, glow: o.glow });
+  const width = o.width ?? 0.5;
+  const life = o.life ?? 0.32;
+  const depth = low ? 4 : 5;
+  const gen = () => bolt.generate(a, b, { width, branches: o.branches ?? (low ? 2 : 4), jag: o.jag ?? 0.2, depth });
+  gen();
+  bolt.update(ctx.camera.position);
+  ctx.vfx.group.add(bolt.mesh);
+  let t = 0;
+  let next = life / Math.max(1, o.reforks ?? 3);
+  effect(
+    (dt) => {
+      t += dt;
+      if (t >= next && t < life * 0.8) {
+        next += life / Math.max(1, o.reforks ?? 3);
+        gen();
+      }
+      const k = t / life;
+      bolt.opacity = (k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4) * (0.75 + Math.random() * 0.25);
+      bolt.update(ctx.camera.position);
+      return t < life;
+    },
+    () => {
+      bolt.mesh.removeFromParent();
+      bolt.dispose();
+    },
+  );
+  return bolt;
 }

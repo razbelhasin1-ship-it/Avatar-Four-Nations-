@@ -7,7 +7,7 @@ import { envGain, noiseSrc, oscSrc, registerLoop, registerSound } from '../../..
  */
 
 // ---------------------------------------------------------------- AIR
-registerSound('air_puff', (ac, out, t, o) => {
+registerSound('bend_air_puff', (ac, out, t, o) => {
   const { filter } = noiseSrc(ac, o.noise, t, 0.35, 'bandpass', 700 * o.pitch, 1.1);
   filter.frequency.exponentialRampToValueAtTime(2800 * o.pitch, t + 0.07);
   filter.frequency.exponentialRampToValueAtTime(900 * o.pitch, t + 0.3);
@@ -20,7 +20,7 @@ registerSound('air_puff', (ac, out, t, o) => {
   return 0.4;
 });
 
-registerSound('air_blast', (ac, out, t, o) => {
+registerSound('bend_air_blast', (ac, out, t, o) => {
   const { filter } = noiseSrc(ac, o.noise, t, 0.8, 'bandpass', 320 * o.pitch, 0.8);
   filter.frequency.exponentialRampToValueAtTime(1600 * o.pitch, t + 0.12);
   filter.frequency.exponentialRampToValueAtTime(380 * o.pitch, t + 0.7);
@@ -36,7 +36,7 @@ registerSound('air_blast', (ac, out, t, o) => {
   return 0.9;
 });
 
-registerSound('air_swirl', (ac, out, t, o) => {
+registerSound('bend_air_swirl', (ac, out, t, o) => {
   const { filter } = noiseSrc(ac, o.noise, t, 0.75, 'bandpass', 900 * o.pitch, 2.2);
   const lfo = oscSrc(ac, t, 0.75, 'sine', 9);
   const lg = ac.createGain();
@@ -48,7 +48,7 @@ registerSound('air_swirl', (ac, out, t, o) => {
   return 0.8;
 });
 
-registerSound('air_dash', (ac, out, t, o) => {
+registerSound('bend_air_dash', (ac, out, t, o) => {
   const { filter } = noiseSrc(ac, o.noise, t, 0.4, 'bandpass', 400 * o.pitch, 1.4);
   filter.frequency.exponentialRampToValueAtTime(3400 * o.pitch, t + 0.16);
   filter.frequency.exponentialRampToValueAtTime(1200 * o.pitch, t + 0.36);
@@ -57,7 +57,7 @@ registerSound('air_dash', (ac, out, t, o) => {
   return 0.45;
 });
 
-registerSound('air_deflect', (ac, out, t, o) => {
+registerSound('bend_air_deflect', (ac, out, t, o) => {
   const { filter } = noiseSrc(ac, o.noise, t, 0.4, 'bandpass', 1400 * o.pitch, 3);
   filter.frequency.exponentialRampToValueAtTime(3800 * o.pitch, t + 0.12);
   const g = envGain(ac, t, 0.005, 0.05, 0.3, 0.6 * o.volume);
@@ -70,7 +70,7 @@ registerSound('air_deflect', (ac, out, t, o) => {
   return 0.6;
 });
 
-registerLoop('wind_loop', (ac, out, o) => {
+registerLoop('bend_wind_loop', (ac, out, o) => {
   const src = ac.createBufferSource();
   src.buffer = o.noise;
   src.loop = true;
@@ -110,7 +110,7 @@ function crackle(ac: AudioContext, out: AudioNode, noise: AudioBuffer, t: number
   }
 }
 
-registerSound('fire_puff', (ac, out, t, o) => {
+registerSound('bend_fire_puff', (ac, out, t, o) => {
   const { filter } = noiseSrc(ac, o.noise, t, 0.35, 'lowpass', 3400 * o.pitch, 0.9);
   filter.frequency.exponentialRampToValueAtTime(500, t + 0.28);
   const g = envGain(ac, t, 0.006, 0.05, 0.24, 0.6 * o.volume);
@@ -123,7 +123,7 @@ registerSound('fire_puff', (ac, out, t, o) => {
   return 0.4;
 });
 
-registerSound('fire_whoosh', (ac, out, t, o) => {
+registerSound('bend_fire_whoosh', (ac, out, t, o) => {
   const { filter } = noiseSrc(ac, o.noise, t, 0.8, 'lowpass', 2000 * o.pitch, 1.1);
   filter.frequency.exponentialRampToValueAtTime(320, t + 0.7);
   const g = envGain(ac, t, 0.03, 0.15, 0.55, 0.8 * o.volume);
@@ -136,7 +136,7 @@ registerSound('fire_whoosh', (ac, out, t, o) => {
   return 0.9;
 });
 
-registerSound('explosion', (ac, out, t, o) => {
+registerSound('bend_explosion', (ac, out, t, o) => {
   const th = oscSrc(ac, t, 1.0, 'sine', 62 * o.pitch);
   th.frequency.exponentialRampToValueAtTime(26, t + 0.9);
   const g = envGain(ac, t, 0.004, 0.12, 0.8, 1.0 * o.volume);
@@ -149,7 +149,7 @@ registerSound('explosion', (ac, out, t, o) => {
   return 1.5;
 });
 
-registerLoop('flame_loop', (ac, out, o) => {
+registerLoop('bend_flame_loop', (ac, out, o) => {
   const src = ac.createBufferSource();
   src.buffer = o.noise;
   src.loop = true;
@@ -183,7 +183,7 @@ registerLoop('flame_loop', (ac, out, o) => {
   };
 });
 
-registerSound('lightning_charge', (ac, out, t, o) => {
+registerSound('bend_lightning_charge', (ac, out, t, o) => {
   const osc = oscSrc(ac, t, 0.9, 'sawtooth', 160 * o.pitch);
   osc.frequency.exponentialRampToValueAtTime(900 * o.pitch, t + 0.8);
   const bp = ac.createBiquadFilter();
@@ -196,7 +196,7 @@ registerSound('lightning_charge', (ac, out, t, o) => {
   return 0.95;
 });
 
-registerSound('lightning_strike', (ac, out, t, o) => {
+registerSound('bend_lightning_strike', (ac, out, t, o) => {
   const { filter } = noiseSrc(ac, o.noise, t, 0.08, 'highpass', 1800, 0.6);
   const g = envGain(ac, t, 0.001, 0.02, 0.06, 1.1 * o.volume);
   filter.connect(g).connect(out);
@@ -214,7 +214,7 @@ registerSound('lightning_strike', (ac, out, t, o) => {
   return 1.5;
 });
 
-registerSound('steam', (ac, out, t, o) => {
+registerSound('bend_steam', (ac, out, t, o) => {
   const { filter } = noiseSrc(ac, o.noise, t, 0.9, 'highpass', 2600 * o.pitch, 0.5);
   const g = envGain(ac, t, 0.02, 0.15, 0.7, 0.45 * o.volume);
   filter.connect(g).connect(out);
@@ -222,7 +222,7 @@ registerSound('steam', (ac, out, t, o) => {
 });
 
 // ---------------------------------------------------------------- EARTH
-registerSound('earth_rise', (ac, out, t, o) => {
+registerSound('bend_earth_rise', (ac, out, t, o) => {
   const { filter } = noiseSrc(ac, o.noise, t, 0.6, 'lowpass', 180 * o.pitch, 1.2);
   filter.frequency.exponentialRampToValueAtTime(900 * o.pitch, t + 0.35);
   const g = envGain(ac, t, 0.03, 0.18, 0.35, 0.85 * o.volume);
@@ -234,7 +234,7 @@ registerSound('earth_rise', (ac, out, t, o) => {
   return 0.7;
 });
 
-registerSound('earth_slam', (ac, out, t, o) => {
+registerSound('bend_earth_slam', (ac, out, t, o) => {
   const th = oscSrc(ac, t, 0.8, 'sine', 52 * o.pitch);
   th.frequency.exponentialRampToValueAtTime(24, t + 0.7);
   const g = envGain(ac, t, 0.003, 0.1, 0.6, 1.0 * o.volume);
@@ -246,7 +246,7 @@ registerSound('earth_slam', (ac, out, t, o) => {
   return 1;
 });
 
-registerSound('earth_crumble', (ac, out, t, o) => {
+registerSound('bend_earth_crumble', (ac, out, t, o) => {
   for (let i = 0; i < 9; i++) {
     const tt = t + i * 0.05 + Math.random() * 0.06;
     const { filter } = noiseSrc(ac, o.noise, tt, 0.12, 'lowpass', (500 + Math.random() * 900) * o.pitch, 1.5);
@@ -260,7 +260,7 @@ registerSound('earth_crumble', (ac, out, t, o) => {
   return 0.8;
 });
 
-registerSound('earth_sink', (ac, out, t, o) => {
+registerSound('bend_earth_sink', (ac, out, t, o) => {
   const { filter } = noiseSrc(ac, o.noise, t, 0.7, 'lowpass', 600 * o.pitch, 1);
   filter.frequency.exponentialRampToValueAtTime(140, t + 0.6);
   const g = envGain(ac, t, 0.05, 0.2, 0.4, 0.45 * o.volume);
@@ -268,7 +268,7 @@ registerSound('earth_sink', (ac, out, t, o) => {
   return 0.75;
 });
 
-registerSound('rock_throw', (ac, out, t, o) => {
+registerSound('bend_rock_throw', (ac, out, t, o) => {
   const { filter } = noiseSrc(ac, o.noise, t, 0.3, 'bandpass', 300 * o.pitch, 1.2);
   filter.frequency.exponentialRampToValueAtTime(1100 * o.pitch, t + 0.12);
   filter.frequency.exponentialRampToValueAtTime(400 * o.pitch, t + 0.28);
@@ -277,7 +277,7 @@ registerSound('rock_throw', (ac, out, t, o) => {
   return 0.35;
 });
 
-registerSound('stone_block', (ac, out, t, o) => {
+registerSound('bend_stone_block', (ac, out, t, o) => {
   const { filter } = noiseSrc(ac, o.noise, t, 0.12, 'bandpass', 1900 * o.pitch, 5);
   const g = envGain(ac, t, 0.001, 0.015, 0.09, 0.8 * o.volume);
   filter.connect(g).connect(out);
@@ -288,7 +288,7 @@ registerSound('stone_block', (ac, out, t, o) => {
   return 0.25;
 });
 
-registerSound('perfect_block', (ac, out, t, o) => {
+registerSound('bend_perfect_block', (ac, out, t, o) => {
   for (const [f, d] of [
     [880, 0.6],
     [1320, 0.45],
@@ -304,7 +304,7 @@ registerSound('perfect_block', (ac, out, t, o) => {
   return 0.7;
 });
 
-registerSound('seismic_pulse', (ac, out, t, o) => {
+registerSound('bend_seismic_pulse', (ac, out, t, o) => {
   const th = oscSrc(ac, t, 0.5, 'sine', 48 * o.pitch);
   th.frequency.exponentialRampToValueAtTime(30, t + 0.4);
   const g = envGain(ac, t, 0.004, 0.06, 0.4, 0.7 * o.volume);
@@ -315,7 +315,7 @@ registerSound('seismic_pulse', (ac, out, t, o) => {
   return 1.5;
 });
 
-registerLoop('rumble_loop', (ac, out, o) => {
+registerLoop('bend_rumble_loop', (ac, out, o) => {
   const src = ac.createBufferSource();
   src.buffer = o.noise;
   src.loop = true;

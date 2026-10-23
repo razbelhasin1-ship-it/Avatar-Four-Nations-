@@ -207,6 +207,86 @@ export function sweep(cast: Cast, o: SweepOptions): LiveEffect {
   });
 }
 
+export interface RingSweepOptions {
+  center: THREE.Vector3;
+  /** Facing of the arc (default: caster facing). */
+  dir?: THREE.Vector3;
+  /** Arc angle (radians, default full circle). */
+  arc?: number;
+  r0: number;
+  r1: number;
+  duration: number;
+  /** Vertical half-height tolerance around center.y. */
+  height: number;
+  /** Require line of sight from the centre (walls shield targets). Default true. */
+  occlude?: boolean;
+  hit: (e: Entity, away: THREE.Vector3, radius: number) => HitSpec | null;
+  onHit?(e: Entity): void;
+  onStep?(radius: number, t: number): void;
+}
+
+/** Expanding ring / arc front (shockwaves, flame arcs, vortex rings). One hit per entity per cast. */
+export function ringSweep(cast: Cast, o: RingSweepOptions): LiveEffect {
+  const ctx = cast.ctx;
+  const center = o.center.clone();
+  const dir = o.dir ? flatDir(o.dir, cast.caster.yaw) : forwardOf(cast.caster);
+  const half = (o.arc ?? Math.PI * 2) / 2;
+  const eye = center.clone().setY(center.y + 0.6);
+  let age = 0;
+  return effect((dt) => {
+    age += dt;
+    const t = Math.min(1, age / Math.max(0.001, o.duration));
+    const r = o.r0 + (o.r1 - o.r0) * (1 - (1 - t) * (1 - t));
+    for (const e of [...ctx.entities.queryRadius(center, r + 1.5, undefined, scratch)]) {
+      if (e === cast.caster || !ctx.combat.canHarm(cast.caster, e)) continue;
+      const dx = e.position.x - center.x, dz = e.position.z - center.z;
+      const d = Math.hypot(dx, dz);
+      if (d > r + e.radius) continue;
+      const ap = e.aimPoint(tA);
+      if (Math.abs(ap.y - center.y) > o.height + e.height * 0.5) continue;
+      if (half < Math.PI - 1e-3 && d > 0.6) {
+        const dot = (dx * dir.x + dz * dir.z) / d;
+        if (Math.acos(Math.max(-1, Math.min(1, dot))) > half + 0.15) continue;
+      }
+      if (o.occlude !== false && d > 1.2 && !ctx.world.hasLineOfSight(eye, ap)) continue;
+      const away = d > 1e-3 ? new THREE.Vector3(dx / d, 0, dz / d) : dir.clone();
+      const spec = o.hit(e, away, r);
+      if (!spec) continue;
+      if (cast.hit(e, { point: ap.clone(), ...spec })) o.onHit?.(e);
+    }
+    o.onStep?.(r, t);
+    return t < 1;
+  });
+}
+
+/** Desired movement direction: the player's camera-relative move input, else the aim. */
+export function moveIntent(cast: Cast, out = new THREE.Vector3()): THREE.Vector3 {
+  const ctx = cast.ctx;
+  if (cast.isPlayer) {
+    const mv = ctx.input.move;
+    if (Math.hypot(mv.x, mv.y) > 0.25) {
+      const f = ctx.camera.getWorldDirection(tA).setY(0);
+      if (f.lengthSq() < 1e-6) f.set(0, 0, 1);
+      f.normalize();
+      const r = tB.set(-f.z, 0, f.x);
+      return out.set(0, 0, 0).addScaledVector(f, mv.y).addScaledVector(r, mv.x).normalize();
+    }
+  }
+  return aimFlat(cast, out);
+}
+
+/** World position of a humanoid anchor (falls back to castOrigin). */
+export function anchorPos(c: Combatant, name: 'footL' | 'footR' | 'head' | 'eyes' | 'handL' | 'handR' | 'chest', out = new THREE.Vector3()): THREE.Vector3 {
+  const h = c.humanoid;
+  if (h) {
+    h.root.updateWorldMatrix(true, true);
+    return h.anchors[name].getWorldPosition(out);
+  }
+  if (name === 'handL' || name === 'handR' || name === 'chest') return c.castOrigin(name, out);
+  if (name === 'footL' || name === 'footR') return c.castOrigin('feet', out).setY(c.position.y + 0.3);
+  return c.castOrigin('chest', out).setY(c.position.y + c.height * 0.92);
+}
+
 /** Random point offset on the XZ plane. */
 export function jitter(p: THREE.Vector3, r: number, out = new THREE.Vector3()): THREE.Vector3 {
   const a = Math.random() * Math.PI * 2;
