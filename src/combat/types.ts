@@ -4,7 +4,8 @@ import type { Element, ElementOrAvatar, WaterSourceType } from '../core/types';
 import type { Humanoid } from '../character/Humanoid';
 import type { Entity, HitInfo, HitResult } from '../entities/Entity';
 
-export type TechniqueKind = 'basic' | 'heavy' | 'ability' | 'movement' | 'defense' | 'ultimate' | 'combined';
+/** 'passive' techniques are never cast; knowing them enables behaviour (e.g. drawing water from snow). */
+export type TechniqueKind = 'basic' | 'heavy' | 'ability' | 'movement' | 'defense' | 'ultimate' | 'combined' | 'passive';
 
 export interface WaterRequirement {
   /** Water units needed (from the bender's reserve and/or a nearby source). */
