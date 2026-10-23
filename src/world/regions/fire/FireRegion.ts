@@ -1,12 +1,15 @@
 import * as THREE from 'three';
 import type { WaterSourceDef } from '../../../combat/WaterSources';
 import type { GameContext } from '../../../core/GameContext';
+import type { NPCDef } from '../../../npc/NPCTypes';
+import type { Interactable } from '../../Interactables';
 import type { Emitter, ParticlePreset } from '../../../vfx/VFX';
 import { ContentBuilder } from '../../kit/Builder';
 import type { RegionContent } from '../../RegionContent';
 import type { P2 } from '../../WorldLayout';
 import { FlameField } from './flames';
 import { lavaMat } from './materials';
+import { FIRE_SPOTS } from './spots';
 
 /**
  * Base class for the Fire Nation region modules (capital, harbour, causeway,
@@ -36,6 +39,7 @@ interface Layer {
   far: boolean;
   shadows: boolean;
   decor: 'extra' | null;
+  finished: boolean;
 }
 
 export interface AmbientSite {
@@ -69,8 +73,12 @@ function installDebug(): void {
         flames: r.flameCount,
         water: r.waterSourceIds,
         colliders: r.colliderCount,
+        npcs: r.npcCount,
+        interactables: r.interactableIds,
       })),
     region: (id: string) => REGISTRY.get(id) ?? null,
+    /** All spots published by the Fire Nation modules. */
+    spots: () => JSON.parse(JSON.stringify(FIRE_SPOTS)),
   };
 }
 
@@ -92,6 +100,9 @@ export abstract class FireRegion implements RegionContent {
   private detail: 'full' | 'far' | 'hidden' = 'full';
   private offSettings: (() => void) | null = null;
   private lavaPhase = 0;
+  private readonly npcDefs: NPCDef[] = [];
+  private readonly interactables: Interactable[] = [];
+  private interactOffs: Array<() => void> = [];
   buildMs = 0;
 
   build(ctx: GameContext): void {
@@ -99,19 +110,67 @@ export abstract class FireRegion implements RegionContent {
     this.group.name = `region_${this.id}`;
     const t0 = performance.now();
     this.construct(ctx);
-    for (const l of this.layers) {
-      l.b.finish();
-      for (const m of l.b.meshes) {
-        m.castShadow = l.shadows && (m as THREE.Mesh).castShadow;
-        if (!l.shadows) m.castShadow = false;
-      }
+    // Deferred construction: drained now when the player is close (spawn, fast travel
+    // into the region), otherwise time-sliced in update() so walking in never hitches.
+    const p = ctx.player?.position;
+    const near = !p || Math.hypot(p.x - this.center.x, p.z - this.center.z) < this.loadRadius * 0.5;
+    if (this.pending && near) {
+      while (!this.pending.next().done);
+      this.pending = null;
     }
+    this.finishLayers();
+    this.liftPlayerOut(ctx);
     this.flames.build(this.group);
     this.applySettings();
     this.offSettings = ctx.events.on('settings:changed', () => this.applySettings());
     this.buildMs = performance.now() - t0;
     REGISTRY.set(this.id, this);
     installDebug();
+  }
+
+  private pending: Iterator<unknown> | null = null;
+
+  /** Register a step-wise construction (a generator yielding between chunks of work). */
+  protected deferBuild(steps: Iterator<unknown>): void {
+    this.pending = steps;
+  }
+
+  /** Merge every layer not merged yet (after construct and after deferred steps). */
+  private finishLayers(): void {
+    for (const l of this.layers) {
+      if (l.finished) continue;
+      l.finished = true;
+      l.b.finish();
+      for (const m of l.b.meshes) {
+        m.castShadow = l.shadows && (m as THREE.Mesh).castShadow;
+        if (!l.shadows) m.castShadow = false;
+      }
+    }
+  }
+
+  /**
+   * If the region was built around a player standing at terrain height inside one of
+   * its walkable solids (fast travel lands before the region streams in), put them on
+   * top instead of letting the push-out shove them sideways (possibly into the sea).
+   */
+  private liftPlayerOut(ctx: GameContext): void {
+    const pl = ctx.player;
+    if (!pl) return;
+    const pos = pl.position;
+    const col = ctx.world.collision;
+    let top = -Infinity;
+    col.query(pos.x, pos.z, 0.3, (c) => {
+      if (c.tag !== this.id || !c.solid || !c.walkable) return;
+      const t = col.topAt(c, pos.x, pos.z);
+      if (t === -Infinity) return;
+      if (pos.y > c.y - c.hy - 0.5 && pos.y < t - 0.05) top = Math.max(top, t);
+    });
+    if (top > -Infinity && top - pos.y < 40) pl.teleport(new THREE.Vector3(pos.x, top + 0.05, pos.z));
+  }
+
+  /** True while deferred construction is still running. */
+  get building(): boolean {
+    return this.pending !== null;
   }
 
   /** Build all static content (layers, colliders, water sources, spots). */
@@ -130,11 +189,14 @@ export abstract class FireRegion implements RegionContent {
 
   /** New geometry layer (district). */
   protected layer(name: string, o: LayerOptions = {}): ContentBuilder {
+    // Same name → same layer (districts can share one merged batch set).
+    const existing = this.layers.find((l) => l.name === name);
+    if (existing) return existing.b;
     const g = new THREE.Group();
     g.name = `${this.id}:${name}`;
     this.group.add(g);
     const b = new ContentBuilder(this.ctx, g, this.id);
-    this.layers.push({ name, b, g, far: o.far ?? false, shadows: o.shadows ?? (o.far ?? false), decor: o.decor ?? null });
+    this.layers.push({ name, b, g, far: o.far ?? false, shadows: o.shadows ?? (o.far ?? false), decor: o.decor ?? null, finished: false });
     return b;
   }
 
@@ -160,6 +222,16 @@ export abstract class FireRegion implements RegionContent {
     this.ctx.water.register(def);
     this.waterIds.push(def.id);
     return def.id;
+  }
+
+  /** Ambient NPC (registered with the NPC system at session start; streamed by distance). */
+  protected npc(def: NPCDef): void {
+    this.npcDefs.push(def);
+  }
+
+  /** E-prompt interaction registered for the session. */
+  protected interactable(i: Interactable): void {
+    this.interactables.push(i);
   }
 
   /** Ambient particle site (smoke from stacks/vents, embers over braziers). */
@@ -200,6 +272,17 @@ export abstract class FireRegion implements RegionContent {
   }
 
   update(dt: number, ctx: GameContext): void {
+    if (this.pending) {
+      const t0 = performance.now();
+      while (performance.now() - t0 < 4) {
+        if (this.pending.next().done) {
+          this.pending = null;
+          this.finishLayers();
+          this.applyVisibility();
+          break;
+        }
+      }
+    }
     FlameField.tick(ctx.time.elapsed);
     // Lava glow breathes slowly (shared material, idempotent per frame).
     this.lavaPhase = ctx.time.elapsed;
@@ -242,16 +325,30 @@ export abstract class FireRegion implements RegionContent {
 
   onSessionStart(ctx: GameContext): void {
     this.ambientTimer = 0;
+    for (const d of this.npcDefs) ctx.npcs.addDef(d);
+    for (const off of this.interactOffs) off();
+    this.interactOffs = this.interactables.map((i) => ctx.interactions.register(i));
     this.sessionStart(ctx);
   }
 
   onSessionEnd(ctx: GameContext): void {
     for (const em of this.liveEmitters.values()) em.stop();
     this.liveEmitters.clear();
+    for (const off of this.interactOffs) off();
+    this.interactOffs = [];
     this.sessionEnd(ctx);
   }
 
+  get npcCount(): number {
+    return this.npcDefs.length;
+  }
+
+  get interactableIds(): string[] {
+    return this.interactables.map((i) => i.id);
+  }
+
   dispose(ctx: GameContext): void {
+    this.pending = null;
     this.onSessionEnd(ctx);
     for (const l of this.layers) {
       l.b.dispose();
@@ -259,7 +356,12 @@ export abstract class FireRegion implements RegionContent {
     }
     this.layers.length = 0;
     this.flames.dispose();
-    for (const o of this.ownedObjects) o.removeFromParent();
+    for (const o of this.ownedObjects) {
+      o.removeFromParent();
+      o.traverse((c) => {
+        if ((c as THREE.InstancedMesh).isInstancedMesh) (c as THREE.InstancedMesh).dispose();
+      });
+    }
     for (const g of this.ownedGeos) g.dispose();
     for (const m of this.ownedMats) m.dispose();
     this.ownedObjects.length = 0;

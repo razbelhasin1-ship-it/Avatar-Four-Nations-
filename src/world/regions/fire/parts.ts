@@ -99,6 +99,25 @@ export function slab(b: ContentBuilder, mat: Mat, o: { x: number; z: number; w: 
 }
 
 /**
+ * Sloped walkway slab from p0 to p1 (tops at p0.y / p1.y): a tilted box for the
+ * visual and a ramp collider whose top follows the slope exactly, so chains of
+ * slabs over uneven ground stay smoothly walkable (no step-up limits).
+ */
+export function rampSlab(b: ContentBuilder, mat: Mat, p0: { x: number; y: number; z: number }, p1: { x: number; y: number; z: number }, width: number, o: { thick?: number; surface?: SurfaceType; castShadow?: boolean } = {}): void {
+  const dx = p1.x - p0.x, dz = p1.z - p0.z;
+  const L = Math.hypot(dx, dz);
+  if (L < 0.01) return;
+  const yaw = Math.atan2(-dz, dx);
+  const rise = p1.y - p0.y;
+  const th = o.thick ?? 1;
+  const mx = (p0.x + p1.x) / 2, mz = (p0.z + p1.z) / 2;
+  b.box(mat, { x: mx, y: (p0.y + p1.y) / 2 - th / 2, z: mz, sx: L + 0.06, sy: th, sz: width, yaw, roll: Math.atan2(rise, L) }, { castShadow: o.castShadow ?? false });
+  const hy = th * 0.8 + Math.abs(rise) / 2;
+  const topHi = Math.max(p0.y, p1.y);
+  b.collider({ shape: 'box', x: mx, y: topHi - hy, z: mz, hx: L / 2, hy, hz: width / 2, yaw: rise >= 0 ? yaw : yaw + Math.PI, slopeRise: Math.abs(rise) > 0.005 ? Math.abs(rise) : undefined, walkable: true, solid: true, surface: o.surface ?? 'stone' });
+}
+
+/**
  * Fill a rectangle (axis-aligned, world) with walkable slabs except where
  * `hole(x,z)` is true, using row runs merged into rectangles (few colliders).
  * Visual boxes use `mat` (null = colliders only).
@@ -273,6 +292,8 @@ export interface HouseSpec {
   upperWall?: Mat;
   roofMat?: Mat;
   post?: Mat;
+  /** Front door material (default wood_red). */
+  door?: Mat;
   base?: Mat | null;
   /** Foundation depth below y (cliff / slope houses). */
   foundation?: number;
@@ -313,7 +334,7 @@ export function house(b: ContentBuilder, o: HouseSpec, detail?: ContentBuilder):
   b.box('wood_dark', { x: o.x, y: top - 0.15, z: o.z, sx: o.w + 0.1, sy: 0.3, sz: o.d + 0.1, yaw });
   // Front: door + paper windows.
   const front = local(o.x, o.z, yaw, 0, o.d / 2 + 0.03);
-  b.box('wood_red', { x: front.x, y: o.y + 1.15, z: front.z, sx: 1.3, sy: 2.2, sz: 0.08, yaw });
+  b.box(o.door ?? 'wood_red', { x: front.x, y: o.y + 1.15, z: front.z, sx: 1.3, sy: 2.2, sz: 0.08, yaw });
   for (let f = 0; f < floors; f++) {
     const wy = o.y + f * fh + (f === 0 ? 1.65 : 1.8);
     const nwin = Math.max(1, Math.floor(o.w / 3.2));
@@ -684,7 +705,8 @@ export type TreeKind = 'pine' | 'willow' | 'maple' | 'palm' | 'jungle' | 'bush';
 
 /** Instanced tree (trunk + canopy) with a trunk collider. s = total height (m). */
 export function tree(b: ContentBuilder, kind: TreeKind, o: { x: number; y: number; z: number; s: number; yaw?: number; variant?: number; collide?: boolean }): void {
-  const v = (o.variant ?? 0) % 3;
+  // Two shape variants per kind (each variant is one instanced draw call per layer).
+  const v = (o.variant ?? 0) % 2;
   const yaw = o.yaw ?? 0;
   const m = new THREE.Matrix4().compose(new THREE.Vector3(o.x, o.y, o.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), new THREE.Vector3(o.s, o.s, o.s));
   const seed = 100 + v * 17;
@@ -718,7 +740,7 @@ export function tree(b: ContentBuilder, kind: TreeKind, o: { x: number; y: numbe
 
 /** Rock / boulder (instanced, optional collider). */
 export function rock(b: ContentBuilder, o: { x: number; y: number; z: number; s: number; sy?: number; yaw?: number; variant?: number; mat?: Mat; collide?: boolean }): void {
-  const v = (o.variant ?? 0) % 4;
+  const v = (o.variant ?? 0) % 2;
   const m = new THREE.Matrix4().compose(new THREE.Vector3(o.x, o.y, o.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), o.yaw ?? 0), new THREE.Vector3(o.s, o.sy ?? o.s * 0.7, o.s));
   const matKey = typeof o.mat === 'string' ? o.mat : o.mat ? o.mat.uuid.slice(0, 8) : 'stone_grey';
   b.instance(`fire_rock_${v}_${matKey}`, () => rockGeo(31 + v * 13), o.mat ?? 'stone_grey', m);

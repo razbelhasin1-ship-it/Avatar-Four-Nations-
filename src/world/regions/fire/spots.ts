@@ -25,6 +25,7 @@ export const FIRE_SPOTS: Record<string, Spot> = {
   // --- Capital: points of interest ---
   shrine_fire_sages: { x: C.temple.x + C.temple.podX / 2 - 4.5, z: C.temple.z, y: 45.2, yaw: Math.PI / 2, r: 4, label: "Fire Sages' Temple steps", region: 'fire_nation_capital' },
   viewpoint_fn_palace_stair: { x: C.cx, z: C.terrace.z1 + 0.5, y: C.terrace.y, yaw: 0, r: 5, label: 'Top of the Grand Stair', region: 'fire_nation_capital' },
+  viewpoint_fn_rim_gate: { x: C.rimGate.x, z: C.rimGate.z, r: 24, label: 'Rim gate of the caldera', region: 'fire_nation_capital' },
   habitat_turtleduck_1: { x: C.pond.x, z: C.pond.z, y: C.pond.y, r: C.pond.r, label: 'Turtle-Duck Pond', region: 'fire_nation_capital' },
 };
 

@@ -31,8 +31,8 @@ import {
   yawTo,
 } from './parts';
 import { boulevardStall, CAPITAL } from './layout';
-import { buildCityRing } from './cityRing';
-import { buildRimGate } from './rimGate';
+import { buildCityRing, type RingStair } from './cityRing';
+import { buildRimGate, RIM_GATE } from './rimGate';
 
 const C = CAPITAL;
 
@@ -56,6 +56,9 @@ export class FireCapital extends FireRegion {
   private pondWater: THREE.Mesh | null = null;
   private pondLevel: number = C.pond.y;
   private ducks: Array<{ obj: THREE.Object3D; a: number; r: number; speed: number; phase: number }> = [];
+  private duckMeshes: THREE.InstancedMesh[] = [];
+  /** Terrace stairs of the city ring (debug/tests). */
+  ringStairs: RingStair[] = [];
 
   protected construct(ctx: GameContext): void {
     this.buildPlaza();
@@ -65,7 +68,9 @@ export class FireCapital extends FireRegion {
     this.buildArena();
     this.buildTemple();
     this.buildBoulevard();
-    buildCityRing(this.ctx, (n, o) => this.layer(n, o), this.flames, (s) => this.ambient(s));
+    this.ambientLife();
+    // The terraced ring is the heaviest part: built over several frames when the player is far.
+    this.deferBuild(buildCityRing(this.ctx, (n, o) => this.layer(n, o), this.flames, (s) => this.ambient(s), this.ringStairs));
     buildRimGate(this.ctx, (n, o) => this.layer(n, o), this.flames, (s) => this.ambient(s));
     void ctx;
   }
@@ -75,8 +80,8 @@ export class FireCapital extends FireRegion {
   // -------------------------------------------------------------------------
 
   private buildPlaza(): void {
-    const s = this.layer('plaza', { far: true });
-    const d = this.layer('plaza_detail');
+    const s = this.layer('core', { far: true });
+    const d = this.layer('core_detail');
     const pz = C.plaza;
     const PY = pz.y;
     const inCanal = (x: number, z: number) => pz.canals.some((c) => x > c.x0 && x < c.x1 && z > pz.canalZ0 && z < pz.canalZ1);
@@ -187,8 +192,8 @@ export class FireCapital extends FireRegion {
   // -------------------------------------------------------------------------
 
   private buildPalaceTerrace(): void {
-    const s = this.layer('terrace', { far: true });
-    const d = this.layer('terrace_detail');
+    const s = this.layer('core', { far: true });
+    const d = this.layer('core_detail');
     const t = C.terrace;
     const TY = t.y;
     const cx = (t.x0 + t.x1) / 2, cz = (t.z0 + t.z1) / 2;
@@ -248,8 +253,8 @@ export class FireCapital extends FireRegion {
   // -------------------------------------------------------------------------
 
   private buildPalace(): void {
-    const s = this.layer('palace', { far: true });
-    const d = this.layer('palace_detail');
+    const s = this.layer('core', { far: true });
+    const d = this.layer('core_detail');
     const TY = C.terrace.y;
     const g = C.gate;
     // --- Gate of Agni (gatehouse over the top of the stair) ---
@@ -386,8 +391,8 @@ export class FireCapital extends FireRegion {
   // -------------------------------------------------------------------------
 
   private buildGarden(): void {
-    const s = this.layer('garden', { far: true });
-    const d = this.layer('garden_detail');
+    const s = this.layer('core', { far: true });
+    const d = this.layer('core_detail');
     const g = C.garden;
     const pond = C.pond;
     const TY = C.terrace.y;
@@ -397,17 +402,18 @@ export class FireCapital extends FireRegion {
     for (let i = 0; i <= N; i++) {
       const a = (i / N) * Math.PI * 2;
       const r = pondR(a) + 0.5;
-      const px = Math.cos(a) * r, py = Math.sin(a) * r;
+      // Shape Y = -world Z so that rotateX(-PI/2) (normal up) maps it back to +Z.
+      const px = Math.cos(a) * r, py = -Math.sin(a) * r;
       if (i === 0) shape.moveTo(px, py);
       else shape.lineTo(px, py);
     }
     const bedGeo = new THREE.ShapeGeometry(shape, 1);
-    bedGeo.rotateX(Math.PI / 2);
+    bedGeo.rotateX(-Math.PI / 2);
     const bed = new THREE.Mesh(bedGeo, pondBedMat());
     bed.position.set(pond.x, TY - 0.98, pond.z);
     this.own(bed);
     const waterGeo = new THREE.ShapeGeometry(shape, 1);
-    waterGeo.rotateX(Math.PI / 2);
+    waterGeo.rotateX(-Math.PI / 2);
     const water = new THREE.Mesh(waterGeo, pondWaterMat());
     water.position.set(pond.x, pond.y, pond.z);
     water.renderOrder = 2;
@@ -439,8 +445,9 @@ export class FireCapital extends FireRegion {
     }
     // Arched red bridge across the west part of the pond.
     s.bridge({ a: new THREE.Vector3(pond.x - 5, TY, pond.z + 11.5), b: new THREE.Vector3(pond.x - 5, TY, pond.z - 11.5), width: 2.4, deck: 'wood_red', rail: lacquerRedMat(), arch: 1.3, surface: 'wood' });
-    // Small red pagoda pavilion on the west bank.
+    // Small red pagoda pavilion on the west bank, a three-tier red pagoda across the water.
     this.pavilion(s, d, g.pavilion.x, TY, g.pavilion.z);
+    pagodaTower(s, { x: -1377, y: TY, z: 1061.5, size: 4.2, tiers: 3, tierH: 2.6, wall: crimsonMat(), roofMat: 'roof_red', spire: 2.2 });
     // Garden walls: east side (moon gate opening) and north side, with tiled coping.
     const wallH = 2.6;
     const gw = (pts: Array<{ x: number; z: number }>) => {
@@ -477,29 +484,40 @@ export class FireCapital extends FireRegion {
     stoneLantern(d, { x: lm.x - 5.4, y: TY, z: lm.z + 2.5 });
     // Trees: the great pine by the water, willows over the pond, red maples, pines along the walls.
     tree(d, 'pine', { x: pond.x + 10, y: TY, z: pond.z - 7, s: 10, variant: 0 });
-    tree(d, 'willow', { x: pond.x + 11.5, y: TY, z: pond.z + 2, s: 9, variant: 1 });
-    tree(d, 'willow', { x: pond.x - 2, y: TY, z: pond.z - 12.5, s: 8, variant: 2 });
+    tree(d, 'willow', { x: pond.x + 11.5, y: TY, z: pond.z + 2, s: 9, variant: 0 });
+    tree(d, 'willow', { x: pond.x - 2, y: TY, z: pond.z - 12.5, s: 8, variant: 0 });
     tree(d, 'maple', { x: g.x0 + 4, y: TY, z: g.z1 - 5, s: 7, variant: 0 });
-    tree(d, 'maple', { x: g.x1 - 5, y: TY, z: g.z1 - 4, s: 6.5, variant: 1 });
-    tree(d, 'maple', { x: g.x1 - 4, y: TY, z: g.z0 + 5, s: 7, variant: 2 });
-    tree(d, 'pine', { x: g.x0 + 4, y: TY, z: g.z0 + 4, s: 9, variant: 1 });
-    tree(d, 'pine', { x: g.x0 + 3.5, y: TY, z: g.z1 - 17, s: 8, variant: 2 });
+    tree(d, 'maple', { x: g.x1 - 5, y: TY, z: g.z1 - 4, s: 6.5, variant: 0 });
+    tree(d, 'maple', { x: g.x1 - 4, y: TY, z: g.z0 + 5, s: 7, variant: 0 });
+    tree(d, 'pine', { x: g.x0 + 4, y: TY, z: g.z0 + 4, s: 9, variant: 0 });
+    tree(d, 'pine', { x: g.x0 + 3.5, y: TY, z: g.z1 - 17, s: 8, variant: 0 });
     tree(d, 'pine', { x: (g.x0 + g.x1) / 2 + 6, y: TY, z: g.z0 + 3.5, s: 8.5, variant: 0 });
-    for (let i = 0; i < 8; i++) tree(d, 'bush', { x: g.x0 + 2 + rr() * (g.x1 - g.x0 - 4), y: TY, z: g.z1 - 2 - rr() * 10, s: 1.6 + rr() * 0.8, variant: i, collide: false });
-    for (let i = 0; i < 6; i++) rock(d, { x: g.x0 + 3 + rr() * 8, y: TY - 0.1, z: g.z0 + 10 + rr() * 30, s: 1.0 + rr() * 1.2, variant: i, mat: 'stone_grey', collide: true });
+    for (let i = 0; i < 8; i++) tree(d, 'bush', { x: g.x0 + 2 + rr() * (g.x1 - g.x0 - 4), y: TY, z: g.z1 - 2 - rr() * 10, s: 1.6 + rr() * 0.8, variant: 0, collide: false });
+    for (let i = 0; i < 6; i++) rock(d, { x: g.x0 + 3 + rr() * 8, y: TY - 0.1, z: g.z0 + 10 + rr() * 30, s: 1.0 + rr() * 1.2, variant: 0, mat: 'stone_grey', collide: true });
     // Turtle-ducks.
     const tdg = turtleDuckGeo();
     const shellMat = this.ownMaterial(new THREE.MeshStandardMaterial({ color: '#5a7a3a', roughness: 0.6 }));
     const bodyMat = this.ownMaterial(new THREE.MeshStandardMaterial({ color: '#e8c25a', roughness: 0.7 }));
+    // Two instanced meshes (shell, body) for the whole family: 2 draw calls instead of 10.
+    const shellIM = this.own(new THREE.InstancedMesh(tdg.shell, shellMat, 5));
+    const bodyIM = this.own(new THREE.InstancedMesh(tdg.body, bodyMat, 5));
+    shellIM.name = 'turtleducks_shell';
+    bodyIM.name = 'turtleducks_body';
+    shellIM.castShadow = bodyIM.castShadow = false;
+    this.duckMeshes = [shellIM, bodyIM];
     for (let i = 0; i < 5; i++) {
-      const grp = new THREE.Group();
-      const sh = new THREE.Mesh(i === 0 ? tdg.shell : tdg.shell.clone(), shellMat);
-      const bd = new THREE.Mesh(i === 0 ? tdg.body : tdg.body.clone(), bodyMat);
-      grp.add(sh, bd);
-      const sc = i < 2 ? 1 : 0.55; // two parents, three ducklings
-      grp.scale.setScalar(sc);
-      this.own(grp);
-      this.ducks.push({ obj: grp, a: (i / 5) * Math.PI * 2, r: 3 + (i % 3) * 1.6, speed: 0.12 + (i % 2) * 0.05, phase: i * 1.7 });
+      const obj = new THREE.Object3D();
+      obj.scale.setScalar(i < 2 ? 1 : 0.55); // two parents, three ducklings
+      const a0 = (i / 5) * Math.PI * 2, r0 = 3 + (i % 3) * 1.6;
+      obj.position.set(pond.x + Math.cos(a0) * r0, pond.y, pond.z + Math.sin(a0) * r0);
+      obj.updateMatrix();
+      shellIM.setMatrixAt(i, obj.matrix);
+      bodyIM.setMatrixAt(i, obj.matrix);
+      this.ducks.push({ obj, a: a0, r: r0, speed: 0.12 + (i % 2) * 0.05, phase: i * 1.7 });
+    }
+    for (const m of this.duckMeshes) {
+      m.instanceMatrix.needsUpdate = true;
+      m.computeBoundingSphere();
     }
   }
 
@@ -523,8 +541,8 @@ export class FireCapital extends FireRegion {
   // -------------------------------------------------------------------------
 
   private buildArena(): void {
-    const s = this.layer('arena', { far: true });
-    const d = this.layer('arena_detail');
+    const s = this.layer('core', { far: true });
+    const d = this.layer('core_detail');
     const a = C.arena;
     const DY = a.y;
     // Dais (duel floor) with gold border and an inlaid emblem.
@@ -569,9 +587,12 @@ export class FireCapital extends FireRegion {
     s.block(crimsonMat(), { x: a.x, y: 42 + H + 2.4, z: a.z, sx: a.hall * 0.55, sy: 3.4, sz: a.hall * 0.55 });
     s.box(goldMat(), { x: a.x, y: 42 + H + 5.5, z: a.z, sx: a.hall * 0.55 + 0.2, sy: 0.15, sz: a.hall * 0.55 + 0.2 }, { castShadow: false });
     roof(s, { x: a.x, y: 42 + H + 5.8, z: a.z, w: a.hall * 0.55, d: a.hall * 0.55, h: 5.2, mat: 'roof_dark', overhang: 2.2, curve: 1.4, horns: 2.6, tips: 1.4, crest: 2.4, segU: 8, segT: 4 });
-    // Spectator stands (stepped seating) on the west & north edges outside the dais.
-    for (let k = 0; k < 3; k++) {
-      s.block('stone_light', { x: a.x - half + 2.2 - k * 0.0, y: 41.8, z: a.z + 4, sx: 1.6 + k * 0.0, sy: 0.6 + k * 0.55, sz: a.dais - 14 }, { collide: true, walkable: true });
+    // Spectator stands (three stepped rows) between the hall columns and the dais on the
+    // west side, split around the west stair so the duel floor stays reachable.
+    for (const [z0, z1] of [[a.z - a.dais / 2 + 1, a.z - 7.5], [a.z + 7.5, a.z + a.dais / 2 - 1]]) {
+      for (let k = 0; k < 3; k++) {
+        s.block('stone_light', { x: a.x - a.dais / 2 - 2.6 - k * 1.25, y: 41.8, z: (z0 + z1) / 2, sx: 1.25, sy: 0.75 + k * 0.5, sz: z1 - z0 }, { collide: true, walkable: true });
+      }
     }
     // Braziers at the dais corners and banners.
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
@@ -586,8 +607,8 @@ export class FireCapital extends FireRegion {
   // -------------------------------------------------------------------------
 
   private buildTemple(): void {
-    const s = this.layer('temple', { far: true });
-    const d = this.layer('temple_detail');
+    const s = this.layer('core', { far: true });
+    const d = this.layer('core_detail');
     const t = C.temple;
     const yaw = Math.PI / 2; // front faces +X (the plaza)
     // Training court (paved) in front.
@@ -636,8 +657,8 @@ export class FireCapital extends FireRegion {
   // -------------------------------------------------------------------------
 
   private buildBoulevard(): void {
-    const s = this.layer('boulevard', { far: true });
-    const d = this.layer('boulevard_detail');
+    const s = this.layer('core', { far: true });
+    const d = this.layer('core_detail');
     const bv = C.boulevard;
     // Junction square between the plaza's north-east corner, the arena and the road end.
     slab(s, 'paving', { x: bv.square.x, z: bv.square.z, w: bv.square.w, d: bv.square.d, top: 42.25, thick: 0.5 });
@@ -680,20 +701,84 @@ export class FireCapital extends FireRegion {
   }
 
   // -------------------------------------------------------------------------
-  // Animation
+  // Ambient life: palace guards, a parade formation, sages, citizens
   // -------------------------------------------------------------------------
+
+  private ambientLife(): void {
+    const R = 'fire_nation_capital';
+    const TY = C.terrace.y;
+    let seed = 9100;
+    const add = (id: string, name: string, role: 'guard' | 'soldier' | 'villager' | 'elder' | 'noble' | 'student', x: number, z: number, y: number, yaw: number, behavior: { type: 'idle'; variant?: 'stand' | 'sit' | 'meditate' | 'kneel' | 'work' | 'guard' } | { type: 'wander'; radius: number } | { type: 'train' }) =>
+      this.npc({ id: `fn_amb_${id}`, name, role, nation: 'fire', element: role === 'soldier' || role === 'guard' || role === 'student' ? 'fire' : undefined, appearanceSeed: seed++, x, z, y, yaw, behavior, region: R, marker: 'none' });
+    // Gate of Agni guards (outside the passage, facing the stair).
+    for (const sx of [-1, 1]) add(`gate_guard_${sx}`, 'Palace Guard', 'guard', C.cx + sx * (C.gate.passage / 2 - 1.1), C.gate.z + C.gate.d / 2 - 1.4, TY, 0, { type: 'idle', variant: 'guard' });
+    // A parade formation drilling on the west side of the parade ground (facing the palace).
+    for (let row = 0; row < 2; row++) for (let col = 0; col < 4; col++) {
+      add(`parade_${row}_${col}`, 'Fire Nation Soldier', 'soldier', -1357 + col * 3.6, 1252 + row * 3.6, C.plaza.y, Math.PI, row === 0 && col === 0 ? { type: 'train' } : { type: 'idle', variant: 'guard' });
+    }
+    // Fire Sages meditating beside the temple steps.
+    for (const sz of [-1, 1]) add(`sage_${sz}`, 'Fire Sage', 'elder', C.temple.x + C.temple.podX / 2 + 4.5, C.temple.z + sz * 11.5, 42.3, -Math.PI / 2, { type: 'idle', variant: 'meditate' });
+    // Citizens: the boulevard square, the plaza's south steps, the terrace walkways.
+    add('citizen_square', 'Capital Citizen', 'villager', C.boulevard.square.x, C.boulevard.square.z, 42.25, 0, { type: 'wander', radius: 9 });
+    add('citizen_south', 'Capital Citizen', 'noble', -1300, 1300, 42, Math.PI, { type: 'wander', radius: 8 });
+    add('citizen_garden', 'Palace Gardener', 'villager', C.garden.x0 + 8, C.garden.z1 - 8, TY, 0, { type: 'idle', variant: 'work' });
+    // Rim gate sentries on the outer face of the gatehouse.
+    for (const side of [-1, 1]) {
+      const g = local(RIM_GATE.x, RIM_GATE.z, RIM_GATE.yaw, side * (RIM_GATE.passage / 2 + 3.4), -RIM_GATE.depth / 2 - 4.5);
+      add(`rim_guard_${side}`, 'Gate Sentry', 'guard', g.x, g.z, heightAt(g.x, g.z), RIM_GATE.yaw + Math.PI, { type: 'idle', variant: 'guard' });
+    }
+    // Arena: two duellists practising on the north steps.
+    add('duellist_a', 'Agni Kai Duellist', 'student', C.arena.x - 6, C.arena.z - C.arena.dais / 2 - 4, 42, 0, { type: 'train' });
+
+    // Interactions: feeding the turtle-ducks pulls them to the bank for a while.
+    const lm = C.landmarks.pond;
+    this.interactable({
+      id: 'fn_feed_turtleducks',
+      position: new THREE.Vector3(lm.x - 2, TY + 1, lm.z - 4),
+      radius: 4,
+      label: 'Feed the turtle-ducks',
+      enabled: () => this.ctx.time.elapsed > this.duckLureUntil,
+      interact: (ctx) => {
+        const p = ctx.player?.position;
+        if (!p) return;
+        this.duckLure.set(p.x, p.z);
+        this.duckLureUntil = ctx.time.elapsed + 12;
+        ctx.events.emit('ui:notify', { text: 'The turtle-ducks paddle over, quacking for bread.', kind: 'info', duration: 3 });
+      },
+    });
+  }
+
+  private duckLure = new THREE.Vector2();
+  private duckLureUntil = -1;
+
 
   protected override animate(dt: number, ctx: GameContext): void {
     const p = C.pond;
     const t = ctx.time.elapsed;
+    const lured = t < this.duckLureUntil;
     for (const dk of this.ducks) {
       dk.a += dk.speed * dt;
       const wob = Math.sin(t * 0.4 + dk.phase) * 0.8;
-      const x = p.x + Math.cos(dk.a) * (dk.r + wob);
-      const z = p.z + Math.sin(dk.a) * (dk.r + wob);
+      let x = p.x + Math.cos(dk.a) * (dk.r + wob);
+      let z = p.z + Math.sin(dk.a) * (dk.r + wob);
+      if (lured) {
+        // Gather near the bank closest to the feeder (stay inside the pond).
+        const la = Math.atan2(this.duckLure.y - p.z, this.duckLure.x - p.x);
+        const rr = pondR(la) - 1.6 - (dk.phase % 1.2);
+        const tx = p.x + Math.cos(la + (dk.phase - 3) * 0.12) * rr, tz = p.z + Math.sin(la + (dk.phase - 3) * 0.12) * rr;
+        const k = Math.min(1, (this.duckLureUntil - t) > 10 ? (12 - (this.duckLureUntil - t)) / 2 : 1);
+        x += (tx - x) * k;
+        z += (tz - z) * k;
+      }
+      const prev = dk.obj.position;
+      const dx = x - prev.x, dz = z - prev.z;
       dk.obj.position.set(x, this.pondLevel + Math.sin(t * 2 + dk.phase) * 0.02, z);
-      dk.obj.rotation.y = Math.atan2(-Math.sin(dk.a), Math.cos(dk.a)) + Math.PI;
+      if (dx * dx + dz * dz > 1e-6) dk.obj.rotation.y = Math.atan2(dx, dz) + Math.PI;
+      dk.obj.updateMatrix();
+      const i = this.ducks.indexOf(dk);
+      for (const m of this.duckMeshes) m.setMatrixAt(i, dk.obj.matrix);
     }
+    for (const m of this.duckMeshes) m.instanceMatrix.needsUpdate = true;
   }
 }
 
