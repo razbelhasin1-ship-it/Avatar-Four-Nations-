@@ -18,6 +18,15 @@ npm run build      # typecheck + production build in dist/
 npm run preview    # serve the production build
 ```
 
+### Android app
+
+Download the latest APK on your phone:
+https://github.com/razbelhasin1-ship-it/Avatar-Four-Nations-/releases/latest/download/avatar-four-nations.apk
+Open the downloaded file and allow your browser to install apps when Android asks (Android 8 or newer).
+The app runs the same game full-screen in landscape; the back button opens the pause menu (press it twice
+quickly to leave). Every push rebuilds it (`.github/workflows/android-apk.yml`), and new builds install over
+old ones, keeping your saves. The wrapper lives in `android/`.
+
 Requires a WebGL2 browser (current Chrome, Edge, Firefox, Safari). On phones, landscape is the
 intended orientation; the main menu and Settings have a fullscreen toggle where the browser
 supports it.

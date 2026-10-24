@@ -44,7 +44,11 @@ public class MainActivity extends Activity {
         web.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                return loader.shouldInterceptRequest(request.getUrl());
+                WebResourceResponse res = loader.shouldInterceptRequest(request.getUrl());
+                if (res == null) return null;
+                // Module scripts are only executed with a JavaScript MIME type: never rely on guessing.
+                String type = mimeFor(request.getUrl().getPath());
+                return type == null ? res : new WebResourceResponse(type, "utf-8", res.getData());
             }
         });
         setContentView(web);
@@ -52,6 +56,17 @@ public class MainActivity extends Activity {
 
         if (state != null) web.restoreState(state);
         else web.loadUrl(START_URL);
+    }
+
+    private static String mimeFor(String path) {
+        if (path == null) return null;
+        if (path.endsWith(".js") || path.endsWith(".mjs")) return "text/javascript";
+        if (path.endsWith(".css")) return "text/css";
+        if (path.endsWith(".html")) return "text/html";
+        if (path.endsWith(".woff2")) return "font/woff2";
+        if (path.endsWith(".woff")) return "font/woff";
+        if (path.endsWith(".json")) return "application/json";
+        return null;
     }
 
     /** Back opens the game's pause menu (Escape); pressing it twice quickly leaves the app. */
