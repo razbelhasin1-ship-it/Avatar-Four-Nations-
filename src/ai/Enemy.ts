@@ -245,6 +245,8 @@ export class Enemy extends Entity implements Combatant {
   /** Begin a telegraphed attack. Returns false when it cannot start now. */
   beginAttack(ctx: GameContext, tech: EnemyTechnique, target: Entity | null): boolean {
     if (this.attack || this.defeated || this.stunned > 0 || this.knockT > 0 || this.staggerT > 0) return false;
+    // Dust or a harrying lemur in the eyes: no new attacks until it clears.
+    if (this.hasStatus('blind')) return false;
     if (ctx.combat.isBusy(this)) return false;
     const ai = tech.id.startsWith('atk_') ? aiAttack(tech.id) ?? null : null;
     if (!ai && !getTechnique(tech.id)) return false;

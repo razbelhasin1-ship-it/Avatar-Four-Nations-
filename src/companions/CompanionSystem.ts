@@ -83,6 +83,11 @@ export class CompanionSystem implements GameSystem, Persistable {
   private upkeepT = 0;
   private lastPlayerPos = new THREE.Vector3();
   private guardCd = 0;
+  private distractCd = 0;
+  /** Scout/tracker sniffing interval, rest-by-water timer and dive cooldown. */
+  private senseT = 20;
+  private restT = 0;
+  private diveCd = 0;
   private petUnreg = new Map<string, () => void>();
   private readonly frustum = new THREE.Frustum();
   private readonly projM = new THREE.Matrix4();
@@ -98,6 +103,25 @@ export class CompanionSystem implements GameSystem, Persistable {
       const p = ctx.player;
       if (!p) return;
       if (this.mounted && e.amount >= Math.max(30, (p.health?.maxHp ?? 100) * 0.22)) this.riding.onHeavyHit();
+      // Distract perk: a winged lemur harries whoever hurt you and leaves them blinded.
+      if (e.sourceId && this.distractCd <= 0) {
+        const src = ctx.entities.get(e.sourceId);
+        if (src && src.alive && src.team === 'hostile') {
+          for (const c of this.companionCreatures()) {
+            const rec = this.record(c.companionId!);
+            if (!rec || !rec.abilities.includes('distract') || c.state === 'ridden' || c.position.distanceTo(src.position) > 30) continue;
+            this.distractCd = 9;
+            if (c.state === 'perch') {
+              c.body!.kinematic = false;
+              c.setState('follow');
+            }
+            c.takeOff(src.position.y + 2.2);
+            ctx.combat.applyHit(c, src, { attacker: c, damage: 1, element: 'air', techniqueId: 'companion_distract', stagger: 12, status: [{ type: 'blind', duration: 3 }] });
+            ctx.events.emit('ui:notify', { text: `${rec.name} harries your attacker — they can't see straight!`, kind: 'info', duration: 3, icon: '🐒' });
+            break;
+          }
+        }
+      }
       // Guardian perk: companions strike back.
       if (e.sourceId && this.guardCd <= 0) {
         const src = ctx.entities.get(e.sourceId);
@@ -222,6 +246,7 @@ export class CompanionSystem implements GameSystem, Persistable {
     const p = ctx.player;
     if (!p || !ctx.session.active) return;
     this.guardCd = Math.max(0, this.guardCd - dt);
+    this.distractCd = Math.max(0, this.distractCd - dt);
     this.habitats.update(dt);
     this.habitats.updateProps();
     this.taming.update(dt);
@@ -622,7 +647,72 @@ export class CompanionSystem implements GameSystem, Persistable {
         }
       }
       if (c.def.id === 'turtle_duck' && r.abilities.includes('comfort') && d < 8 && p.health && !p.defeated) p.health.heal(2 * dt);
+      // Sky Carrier: a pet rides along on the saddle of a carry-trained mount instead of being left behind.
+      const mount = this.riding.mount;
+      if (mount && (c.def.id === 'winged_lemur' || c.def.id === 'turtle_duck') && this.record(mount.companionId ?? '')?.abilities.includes('carry')) {
+        const seat = (mount.model.seat ?? mount.model.root).getWorldPosition(new THREE.Vector3());
+        const yaw = mount.yaw;
+        seat.x -= Math.sin(yaw) * 0.9;
+        seat.z -= Math.cos(yaw) * 0.9;
+        seat.y += 0.15;
+        if (c.state !== 'perch') c.setState('perch');
+        c.placeAt(seat, yaw);
+        c.flying = false;
+        c.body!.kinematic = true;
+      }
     }
+    this.senseNearby(dt);
+    this.diveForTrinkets(dt, speed);
+  }
+
+  /** Scout (lemur) / Tracker (bear dog): every so often point you at a wild creature you have not bonded with yet. */
+  private senseNearby(dt: number): void {
+    this.senseT -= dt;
+    if (this.senseT > 0) return;
+    this.senseT = 25;
+    const p = this.ctx.player!;
+    const sniffer = this.companionCreatures().find((c) => {
+      const r = this.record(c.companionId!);
+      return !!r && (r.abilities.includes('scout') || r.abilities.includes('tracker')) && c.state !== 'leave';
+    });
+    if (!sniffer) return;
+    let best: Creature | null = null;
+    let bestScore = Infinity;
+    for (const w of this.wildCreatures()) {
+      if (this.bondedCount(w.def.id) > 0) continue;
+      const d = Math.hypot(w.position.x - p.position.x, w.position.z - p.position.z);
+      if (d < 30 || d > 220) continue;
+      const score = d * (this.discoveredSpecies.has(w.def.id) ? 1.6 : 1);
+      if (score < bestScore) {
+        bestScore = score;
+        best = w;
+      }
+    }
+    if (!best) return;
+    const dx = best.position.x - p.position.x, dz = best.position.z - p.position.z;
+    const dirs = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+    // North is -Z, east is +X.
+    const dir = dirs[(Math.round(Math.atan2(dx, -dz) / (Math.PI / 4)) + 8) % 8];
+    const name = this.record(sniffer.companionId!)!.name;
+    const what = this.discoveredSpecies.has(best.def.id) ? `a ${best.def.name.toLowerCase()}` : 'an unfamiliar creature';
+    this.ctx.events.emit('ui:notify', { text: `${name} catches a scent: ${what}, about ${Math.round(Math.hypot(dx, dz) / 10) * 10} m to the ${dir}.`, kind: 'discovery', duration: 5, icon: '🐾' });
+  }
+
+  /** Dive: rest beside water with your turtle-duck near and it surfaces with a trinket now and then. */
+  private diveForTrinkets(dt: number, speed: number): void {
+    this.diveCd = Math.max(0, this.diveCd - dt);
+    const p = this.ctx.player!;
+    const duck = this.companionCreatures().find((c) => c.def.id === 'turtle_duck' && this.record(c.companionId!)?.abilities.includes('dive') && c.position.distanceTo(p.position) < 10);
+    const resting = !!duck && speed < 0.4 && !this.mounted && !p.defeated && this.ctx.water.findAll(p.position, 12).some((s) => !s.frozen);
+    this.restT = resting ? this.restT + dt : 0;
+    if (!duck || this.restT < 10 || this.diveCd > 0) return;
+    this.restT = 0;
+    this.diveCd = 120;
+    const roll = Math.random();
+    const item = roll < 0.35 ? 'raw_fish' : roll < 0.75 ? 'jade_shard' : 'pai_sho_tile';
+    this.ctx.inventory.add(item, 1, true);
+    const rec = this.record(duck.companionId!)!;
+    this.ctx.events.emit('ui:notify', { text: `${rec.name} dives and surfaces with something shiny!`, kind: 'info', duration: 3, icon: '🦆' });
   }
 
   private checkDiscovery(): void {
