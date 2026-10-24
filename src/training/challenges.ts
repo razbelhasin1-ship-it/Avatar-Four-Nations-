@@ -474,7 +474,8 @@ class TargetsChallenge extends Challenge {
     const tech = d.type === 'waterTargets' ? null : d.technique ?? null;
     const elementFilter: Element = d.type === 'waterTargets' ? 'water' : env.element;
     const accepts = (hit: HitInfo) => hit.attacker === this.ctx.player && (tech ? hit.techniqueId === tech : hit.element === elementFilter);
-    const hp = d.type === 'targets' ? d.hp ?? 12 : 10;
+    // A lesson target breaks on one clean hit with the taught technique; free practice (awakenings, trials) needs real damage.
+    const hp = d.type === 'targets' ? d.hp ?? (tech ? 1 : 8) : 1;
     const pts = this.layout();
     const roles: TargetRole[] = [];
     if (d.type === 'precision') {
@@ -801,19 +802,17 @@ class RingsChallenge extends Challenge {
           break;
         }
         case 'circle': {
-          const rr = Math.min(d.radius ?? 9, r * 0.85);
+          const rr = Math.min(d.radius ?? 9, r * 0.7);
           const a = (i / d.count) * Math.PI * 2 + Math.PI;
-          const c = this.field(rr + 1, 0);
-          const p = this.field(0, 0);
-          p.set(c.x + Math.cos(a) * rr * Math.sign(1), 0, c.z + Math.sin(a) * rr);
-          pts.push({ p, h: 1.3 });
+          const c = this.field(rr * 0.6 + 0.5, 0);
+          pts.push({ p: new THREE.Vector3(c.x + Math.cos(a) * rr, 0, c.z + Math.sin(a) * rr), h: 1.3 });
           break;
         }
         case 'zigzag':
           pts.push({ p: this.field(4 + i * (r * 1.3) / d.count, i % 2 ? r * 0.35 : -r * 0.35), h: 1.3 });
           break;
         default:
-          pts.push({ p: this.field(4.5 + i * 3.6, 0), h: 1.3 });
+          pts.push({ p: this.field(4.5 + i * 3.0, 0), h: 1.3 });
       }
     }
     for (let i = 0; i < pts.length; i++) {
@@ -1110,7 +1109,7 @@ class StanceChallenge extends Challenge {
   }
 
   override hint(): string {
-    return 'Hold Block to brace · earthbenders stand firmest';
+    return 'Step back into the circle after each gust · Stone Guard / Rock Armor brace you';
   }
 
   start(): void {

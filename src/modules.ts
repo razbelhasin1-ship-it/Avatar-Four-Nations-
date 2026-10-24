@@ -6,6 +6,9 @@ import { TutorialSystem } from './tutorial/TutorialSystem';
 import { CharacterSystem } from './character/CharacterSystem';
 import { EnvironmentSystem } from './world/env/EnvironmentSystem';
 import { EncounterDirector } from './ai/EncounterDirector';
+import { TrainingSystem } from './training/TrainingSystem';
+import { ShopSystem } from './shop/ShopSystem';
+import { QuestWorld } from './training/QuestWorld';
 import { AmbienceDirector } from './audio/AmbienceDirector';
 import { MusicSystem } from './audio/MusicSystem';
 import { AudioEvents } from './audio/AudioEvents';
@@ -42,6 +45,13 @@ export const MODULES: GameModule[] = [
   { name: 'environment', order: 940, create: () => new EnvironmentSystem() },
   // Enemies, combat AI and encounters: camps/patrols/ambushes/bosses, attack tokens, loot, enemy HUD, sparring API (__game.debug.enemies).
   { name: 'encounters', order: 70, create: () => new EncounterDirector() },
+  // Masters (NPCs at master_<name> spots), lessons = demonstration + interactive challenges at training_<name>,
+  // element awakenings, Mastery Trials, Elements Sphere vision, master ✦ markers, journal page (__game.debug.training).
+  { name: 'training', order: 75, create: () => new TrainingSystem() },
+  // Merchants at merchant_<id> spots + buy/sell shop screen (dialogue action 'shop'; __game.debug.shop).
+  { name: 'shop', order: 76, create: () => new ShopSystem() },
+  // Spot-placed quest givers & city life NPCs, quest props (pickups, clue tablets, bells, braziers) + their markers (__game.debug.quests).
+  { name: 'quest_world', order: 77, create: () => new QuestWorld() },
   // Audio (src/audio, SOUNDS.md): layered ambience by place/time/weather, region music + combat layer + stingers,
   // event→sound bindings and UI sounds. They tick on the audio engine (menu included) (__game.debug.audio).
   { name: 'audio_ambience', order: 970, create: () => new AmbienceDirector() },

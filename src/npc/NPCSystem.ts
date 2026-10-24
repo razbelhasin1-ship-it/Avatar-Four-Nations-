@@ -265,7 +265,7 @@ export class NPCSystem implements GameSystem {
     ctx.events.on('hit', (e) => {
       if (e.targetKind === 'target' || e.targetKind === 'npc') return;
       const a = ctx.entities.get(e.attackerId), t = ctx.entities.get(e.targetId);
-      if (a?.tags.has('sparring') || t?.tags.has('sparring')) return;
+      if (a?.tags.has('sparring') || t?.tags.has('sparring') || a?.tags.has('training_launcher')) return;
       this.alarm(e.position.x, e.position.z);
     });
   }
@@ -342,6 +342,7 @@ export class NPCSystem implements GameSystem {
       const step = def?.steps[prog.step];
       if (step?.objectives.some((o, i) => !prog.done[i] && ((o.type === 'talk' && o.npc === d.id) || (o.type === 'training' && o.master === d.id)))) return 'quest';
     }
+    if (d.offers && !q.isActive(d.offers) && !q.isComplete(d.offers)) return 'quest';
     if (d.role === 'master') return 'master';
     if (d.role === 'merchant') return 'merchant';
     return 'none';

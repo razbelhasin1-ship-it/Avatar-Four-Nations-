@@ -52,6 +52,18 @@ export function offlineAvailable(): boolean {
   return !!ctor();
 }
 
+// AudioBuffers are not tied to a context: share one noise set per sample rate across renders
+// (verifyAll renders ~300 contexts; fresh 2 s noise buffers each would churn ~1 MB per render).
+const sharedRes = new Map<number, ReturnType<typeof makeResources>>();
+function resourcesFor(ac: BaseAudioContext): ReturnType<typeof makeResources> {
+  let r = sharedRes.get(ac.sampleRate);
+  if (!r) {
+    r = makeResources(ac);
+    sharedRes.set(ac.sampleRate, r);
+  }
+  return r;
+}
+
 /** Render one registered one-shot and analyse it. */
 export async function renderSound(id: string, o: { pitch?: number; volume?: number; seed?: number; sampleRate?: number } = {}): Promise<RenderReport> {
   const t0 = nowMs();
@@ -70,7 +82,7 @@ export async function renderSound(id: string, o: { pitch?: number; volume?: numb
   const declaredGuess = meta.duration ?? 4;
   const len = Math.min(14, declaredGuess + 1.5);
   const oac = new OAC(2, Math.ceil(sr * len), sr);
-  const res = makeResources(oac);
+  const res = resourcesFor(oac);
   const merger = oac.createChannelMerger(2);
   merger.connect(oac.destination);
   // Same per-voice gain staging as AudioEngine.play (trims.ts).
@@ -149,7 +161,7 @@ export async function renderLoop(id: string, o: { seconds?: number; level?: numb
   const run = o.seconds ?? 4;
   const tail = 1.6;
   const oac = new OAC(1, Math.ceil(sr * (run + tail)), sr);
-  const res = makeResources(oac);
+  const res = resourcesFor(oac);
   // Like AudioEngine.loop: a per-loop gain (trim) that fades on stop().
   const out = oac.createGain();
   out.gain.value = soundTrim(id);

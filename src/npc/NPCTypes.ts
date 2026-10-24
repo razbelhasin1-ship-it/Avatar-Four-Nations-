@@ -54,6 +54,8 @@ export interface NPCDef {
   // and a cheap day/night routine ('day' NPCs go indoors at night, 'night' ones only appear then).
   condition?: DialogueCondition;
   schedule?: 'day' | 'night' | 'always';
+  /** [additive: quests] Quest this NPC offers: shows '!' until it is started. */
+  offers?: string;
 }
 
 export type DialogueCondition = {

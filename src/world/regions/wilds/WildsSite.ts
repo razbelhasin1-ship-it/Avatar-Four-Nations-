@@ -4,6 +4,7 @@ import type { RegionContent } from '../../RegionContent';
 import type { P2 } from '../../WorldLayout';
 import { ContentBuilder } from '../../kit/Builder';
 import type { Emitter } from '../../../vfx/VFX';
+import { WILDS_SPOTS } from './layout';
 import { acquireWildsMaterials, releaseWildsMaterials } from './materials';
 
 /**
@@ -214,5 +215,6 @@ function installDebug(): void {
     sites: () => wildsSites().map((s) => s.stats()),
     site: (id: string) => REGISTRY.get(id) ?? null,
     marks: (id: string) => (REGISTRY.get(id) ? JSON.parse(JSON.stringify(REGISTRY.get(id)!.marks)) : null),
+    spots: () => JSON.parse(JSON.stringify(WILDS_SPOTS)),
   };
 }

@@ -1,4 +1,5 @@
 import type { DialogueDef } from '../npc/NPCTypes';
+import { LIFE_DIALOGUES } from './dialogues_life';
 
 /** Dialogue catalog (see npc/NPCTypes.ts for the node format). */
 export const DIALOGUES: DialogueDef[] = [
@@ -70,4 +71,6 @@ export const DIALOGUES: DialogueDef[] = [
       later: { text: 'May the wind be at your back.', end: true },
     },
   },
+  // [additive: quests/NPC life] side-quest givers and city flavour dialogues
+  ...LIFE_DIALOGUES,
 ];

@@ -79,8 +79,9 @@ export class AudioEvents implements GameSystem {
   private glide: LoopHandle | null = null;
   private glideGen = -1;
   private talking: { npcId: string; voice: string } | null = null;
-  private lastFail = 0;
-  private lastDraw = 0;
+  private lastFail = -9;
+  private lastDraw = -9;
+  private readonly lastNotify: Partial<Record<NotifyKind, number>> = {};
   private lastHover: Element | null = null;
   private lastHoverAt = 0;
   private lastSlider = 0;
@@ -243,9 +244,15 @@ export class AudioEvents implements GameSystem {
       ui.notify = (text: string, kind: NotifyKind = 'info', ...rest: unknown[]) => {
         a.suppress('notify', { frames: 2 });
         this.counts['ui.notify'] = (this.counts['ui.notify'] ?? 0) + 1;
-        // Discovery/quest/learn toasts usually accompany a fanfare: keep them soft.
-        const soft = kind === 'discovery' || kind === 'learn' || kind === 'quest';
-        a.play(NOTIFY_IDS[kind] ?? 'ui.notify.info', { bus: 'ui', volume: soft ? 0.35 : 0.6 });
+        const t = this.ctx.time.real;
+        // Rate-limit per kind (toast spam) and let a just-played failure sound speak for error toasts.
+        const quiet = t - (this.lastNotify[kind] ?? -9) < 0.35 || (kind === 'error' && t - this.lastFail < 0.3);
+        if (!quiet) {
+          this.lastNotify[kind] = t;
+          // Discovery/quest/learn toasts usually accompany a fanfare: keep them soft.
+          const soft = kind === 'discovery' || kind === 'learn' || kind === 'quest';
+          a.play(NOTIFY_IDS[kind] ?? 'ui.notify.info', { bus: 'ui', volume: soft ? 0.35 : 0.6 });
+        }
         return notify.call(this.ctx.ui, text, kind, ...rest);
       };
     }

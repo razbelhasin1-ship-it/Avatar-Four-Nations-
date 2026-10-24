@@ -1,4 +1,6 @@
 import type { QuestDef } from '../quests/QuestTypes';
+import { MAIN_QUESTS } from './quests_main';
+import { SIDE_QUESTS } from './quests_side';
 
 /**
  * Quest catalog. Opening quests auto-start based on the starting element.
@@ -61,4 +63,7 @@ export const QUESTS: QuestDef[] = [
     ],
     rewards: { xp: 120, currency: 50, items: [{ id: 'moon_peaches', count: 5 }] },
   },
+  // [additive: training/quests] main line, element seek & mastery quests, hidden masters, side quests
+  ...MAIN_QUESTS,
+  ...SIDE_QUESTS,
 ];

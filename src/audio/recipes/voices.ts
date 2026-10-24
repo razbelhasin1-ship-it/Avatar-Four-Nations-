@@ -361,6 +361,83 @@ registerSound(
   { duration: 0.7, maxVoices: 3, cooldown: 0.15, range: 120, desc: 'large wing beat (dragon, eel-hound… any big flyer)' },
 );
 
+// Wildlife calls referenced by src/data/creatures.ts.
+
+registerSound(
+  'creature.otterpenguin.honk',
+  (ac, out, t, o) => {
+    const n = chance(0.6) ? 2 : 1;
+    for (let i = 0; i < n; i++) {
+      const tt = t + i * 0.2;
+      call(ac, out, tt, o, { wave: 'square', f: [[0, 380], [0.05, 430], [0.16, 300]], dur: 0.17, vowels: [VOWELS.a, VOWELS.o], fscale: 1.25, peak: 0.24, lp: 4200 });
+    }
+    return 0.2 + (n - 1) * 0.2;
+  },
+  { duration: 0.7, maxVoices: 3, cooldown: 0.25, range: 60, desc: 'otter-penguin honk (bright, nasal, one or two)' },
+);
+
+registerSound(
+  'creature.hogmonkey.squeal',
+  (ac, out, t, o) => {
+    call(ac, out, t, o, { wave: 'sawtooth', f: [[0, 520], [0.12, 900], [0.35, 640], [0.5, 380]], dur: 0.5, vowels: [VOWELS.i, VOWELS.e, VOWELS.uh], fscale: 1.35, peak: 0.22, rough: 0.3, roughRate: 45, lp: 5200 });
+    noiseHit(ac, out, o.noise, t, 'bandpass', 800 * o.pitch, 1.5, 0.004, 0.06, 0.12 * o.volume);
+    return 0.55;
+  },
+  { duration: 0.8, maxVoices: 2, cooldown: 0.3, range: 60, desc: 'hog-monkey squeal (snort + rising squeal)' },
+);
+
+registerSound(
+  'creature.elephantkoi.splash',
+  (ac, out, t, o) => {
+    const p = o.pitch;
+    const v = o.volume;
+    thump(ac, out, t, 80 * p, 38 * p, 0.35, 0.4 * v);
+    const sv = noiseAHR(ac, out, o.noise, t, 'bandpass', 1500 * p, 0.7, 0.004, 0.05, 0.6, 0.32 * v);
+    sv.frequency.exponentialRampToValueAtTime(500 * p, t + 0.6);
+    const fz = noiseAHR(ac, out, o.white, t + 0.02, 'highpass', 3000 * p, 0.6, 0.01, 0.05, 0.5, 0.08 * v);
+    fz.frequency.exponentialRampToValueAtTime(1800 * p, t + 0.5);
+    for (let i = 0; i < 10; i++) {
+      const tt = t + 0.08 + Math.random() * 0.8;
+      const s = osc(ac, 'sine', rand(600, 1700) * p, tt, 0.08);
+      glide(s.frequency, tt, rand(600, 1700) * p, rand(1500, 3200) * p, 0.05);
+      const g = perc(ac, tt, 0.002, 0.05, rand(0.02, 0.05) * v);
+      s.connect(g).connect(out);
+    }
+    return 1.0;
+  },
+  { duration: 1.3, maxVoices: 2, cooldown: 0.4, range: 90, desc: 'elephant koi breaching splash' },
+);
+
+registerSound(
+  'creature.catowl.hoot',
+  (ac, out, t, o) => {
+    for (let i = 0; i < 2; i++) {
+      const tt = t + i * 0.42;
+      call(ac, out, tt, o, { wave: 'triangle', f: [[0, 340], [0.08, 380], [0.3, 300]], dur: 0.32, vowels: [VOWELS.u, VOWELS.o], fscale: 0.9, peak: 0.26, breath: 0.25, lp: 1800 });
+    }
+    // A short cat-like trill to close.
+    call(ac, out, t + 0.9, o, { wave: 'sawtooth', f: [[0, 600], [0.12, 760], [0.25, 520]], dur: 0.25, vowels: [VOWELS.e, VOWELS.a], fscale: 1.2, peak: 0.12, rough: 0.5, roughRate: 28, lp: 3800 });
+    return 1.2;
+  },
+  { duration: 1.5, maxVoices: 2, cooldown: 0.6, range: 90, desc: 'cat-owl hoots with a purring trill' },
+);
+
+registerSound(
+  'creature.armadillolizard.hiss',
+  (ac, out, t, o) => {
+    const p = o.pitch;
+    const h = noiseAHR(ac, out, o.white, t, 'bandpass', 4200 * p, 1.2, 0.04, 0.35, 0.35, 0.22 * o.volume);
+    h.frequency.exponentialRampToValueAtTime(3000 * p, t + 0.7);
+    // Scales rattling.
+    for (let i = 0; i < 9; i++) {
+      const tt = t + 0.05 + i * 0.045;
+      noiseHit(ac, out, o.white, tt, 'bandpass', rand(2000, 3500) * p, 3, 0.001, 0.015, 0.05 * o.volume);
+    }
+    return 0.75;
+  },
+  { duration: 1.0, maxVoices: 2, cooldown: 0.4, range: 50, desc: 'armadillo-lizard hiss with rattling scales' },
+);
+
 registerLoop(
   'loop.wings',
   (ac, out, o) => {

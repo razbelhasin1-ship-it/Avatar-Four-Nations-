@@ -91,6 +91,11 @@ class JournalScreen extends ModalScreen {
         );
       }
       this.body.append(h('p.muted', pr.elementsSphereUnlocked ? 'The Elements Sphere is awakened. Enter the Avatar State to wield it.' : 'Master all four elements to awaken the Elements Sphere.'));
+    } else if ((ctx.extra.get('training') as { renderJournal?(el: HTMLElement): void } | undefined)?.renderJournal) {
+      // [additive: training] Known Masters page rendered by the masters/training module.
+      const holder = h('div');
+      this.body.append(holder);
+      (ctx.extra.get('training') as { renderJournal(el: HTMLElement): void }).renderJournal(holder);
     } else {
       const masters = [...ctx.npcs.allDefs()].filter((d) => d.role === 'master');
       if (!masters.length) this.body.append(h('p.muted', 'No masters known yet.'));

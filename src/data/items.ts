@@ -66,6 +66,14 @@ export const ITEMS: ItemDef[] = [
   { id: 'dai_li_seal', name: 'Dai Li Seal', category: 'material', description: 'A jade seal of the Dai Li. Few in Ba Sing Se will admit to recognising it.', icon: '🟩', stack: 99, price: 25 },
   { id: 'pirate_chart', name: 'Pirate Sea Chart', category: 'collectible', description: 'A smudged chart of hidden coves along the southern coast.', icon: '🗺️', stack: 20, price: 18 },
   { id: 'beast_claw', name: 'Beast Claw', category: 'material', description: 'Shed in the struggle — the beast itself ran off to lick its wounds.', icon: '🦴', stack: 99, price: 10 },
+  // [additive: quests] side-quest objects (not sellable)
+  { id: 'stray_cabbage', name: 'Runaway Cabbage', category: 'quest', description: 'One of the cabbage merchant\'s cabbages. It has seen things.', icon: '🥬', stack: 10 },
+  { id: 'lost_turtleduck', name: 'Lost Turtle-Duck', category: 'quest', description: 'A very small, very indignant turtle-duck.', icon: '🐤', stack: 1 },
+  { id: 'sealed_letter', name: 'Sealed Letter', category: 'quest', description: 'A letter sealed with the wave of the Northern Water Tribe, for the Chief of the South.', icon: '✉️', stack: 1 },
+  { id: 'glacier_crystal', name: 'Glacier Crystal', category: 'quest', description: 'A crystal from deep in the glacier caves. It glows like moonlight.', icon: '💎', stack: 1 },
+  { id: 'library_scroll', name: 'Scroll of the Owl', category: 'quest', description: 'An ancient scroll from the Buried Library, dry as the desert.', icon: '📜', stack: 1 },
+  { id: 'kyoshi_fan', name: 'Kyoshi War Fan', category: 'quest', description: 'A golden war fan of the Kyoshi Warriors.', icon: '🪭', stack: 5 },
+  { id: 'script_page', name: 'Script Page', category: 'quest', description: '"Love Amongst the Dragons", act II. The writing is... ambitious.', icon: '📄', stack: 5 },
 ];
 
 export function itemById(id: string): ItemDef | undefined {

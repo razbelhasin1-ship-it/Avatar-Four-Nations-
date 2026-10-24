@@ -28,7 +28,7 @@ function softBell(ac: AC, out: AudioNode, o: RecipeOpts, t: number, midi: number
  * engine keeps voices alive for this long, so tails are never cut (no clicks).
  */
 const TAIL: Record<string, number> = {
-  'ui.confirm': 1.45,
+  'ui.confirm': 1.8,
   'ui.open': 1.3,
   'ui.notify': 2.75,
   'ui.notify.info': 2.75,
