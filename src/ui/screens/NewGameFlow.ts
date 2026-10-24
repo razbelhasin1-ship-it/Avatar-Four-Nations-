@@ -39,7 +39,7 @@ const COMPANION: Record<Element, { species: string; scale: number; x: number; z:
   air: { species: 'sky_bison', scale: 0.5, x: 2.1, z: -2.2, yaw: -0.7 },
   water: { species: 'polar_bear_dog', scale: 0.75, x: 1.7, z: -1.4, yaw: -0.8 },
   earth: { species: 'badgermole', scale: 0.8, x: 1.7, z: -1.3, yaw: -0.8 },
-  fire: { species: 'dragon', scale: 0.16, x: 2.0, z: -1.9, yaw: -0.9 },
+  fire: { species: 'dragon', scale: 0.15, x: 1.8, z: -2.1, yaw: -0.35 },
 };
 
 /** The master who teaches in the start city, and the opening quest (data-driven). */

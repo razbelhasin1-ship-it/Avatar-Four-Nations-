@@ -28,8 +28,8 @@ const mixInto = (c: RGB, t: RGB, k: number) => {
   c[2] += (t[2] - c[2]) * k;
 };
 
-const T_TEMPERATE: RGB = [196, 201, 146];
-const T_FOREST: RGB = [168, 184, 128];
+const T_TEMPERATE: RGB = [204, 206, 156];
+const T_FOREST: RGB = [176, 190, 136];
 const T_FARM: RGB = [214, 206, 148];
 const T_COLD: RGB = [241, 243, 238];
 const T_DESERT: RGB = [232, 200, 136];
@@ -97,6 +97,7 @@ export function colorize(g: MapGrids): Uint8ClampedArray {
   const lx = -0.55, ly = 0.62, lz = -0.55;
   const ll = Math.hypot(lx, ly, lz);
   const exaggerate = 2.4;
+  const flatDot = ly / ll;
   const H = g.height, W = g.water, LV = g.level;
   for (let py = 0; py < n; py++) {
     const z = -WORLD_HALF + (py + 0.5) * cell;
@@ -130,13 +131,13 @@ export function colorize(g: MapGrids): Uint8ClampedArray {
         mixInto(t, T_ROCK, sstep(150, 230, hh));
         mixInto(t, T_SNOWCAP, sstep(250, 300, hh));
         mixInto(t, T_COLD, bw.cold);
-        mixInto(c, t, 0.72);
+        mixInto(c, t, 0.6);
         // Hill shade from the height grid.
         const gx = ((H[iR] - H[iL]) / (2 * cell)) * exaggerate;
         const gz = ((H[iD] - H[iU]) / (2 * cell)) * exaggerate;
         const nl = Math.hypot(gx, 1, gz);
         const dot = (-gx * lx + ly - gz * lz) / (nl * ll);
-        const shade = clamp(0.6 + 0.62 * (dot - 0.55), 0.62, 1.14);
+        const shade = clamp(1 + 1.25 * (dot - flatDot), 0.66, 1.12);
         c[0] *= shade;
         c[1] *= shade;
         c[2] *= shade * 0.98;

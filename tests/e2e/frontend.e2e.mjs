@@ -17,15 +17,31 @@ const check = async (name, fn) => {
     await fn();
     results.push(['PASS', name, `${((Date.now() - t0) / 1000).toFixed(1)}s`]);
   } catch (e) {
-    results.push(['FAIL', name, e.message.split('\n')[0]]);
+    const lines = e.message.split('\n');
+    const where = lines.find((l) => /waiting for|locator|selector/.test(l)) ?? '';
+    results.push(['FAIL', name, lines[0] + (where ? ` [${where.trim()}]` : '')]);
   }
 };
 
 const LONG = { timeout: 240000 };
 
+/** Screenshot artifact (never fails a check: software WebGL can be too slow to deliver a frame in time). */
+async function snap(page, name) {
+  if (!SHOT_DIR) return;
+  await settle(page);
+  await page.screenshot({ path: `${SHOT_DIR}/${name}.png`, timeout: 90000 }).catch((e) => console.log(`[shot] ${name} skipped: ${e.message.split('\n')[0]}`));
+}
+
+/** Let entry animations (fade/rise) finish so screenshots show the settled screen. */
+async function settle(page) {
+  await page
+    .waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity || (a.currentTime ?? 0) > 2500), null, { timeout: 8000 })
+    .catch(() => {});
+}
+
 async function desktop() {
   const h = await launch({ width: 1440, height: 900 });
-  const shot = async (name) => SHOT_DIR && (await h.page.screenshot({ path: `${SHOT_DIR}/desktop_${name}.png`, timeout: 90000 }));
+  const shot = (name) => snap(h.page, `desktop_${name}`);
   const menu = () => h.eval((g) => g.debug.menu.state());
   const settings = () => h.eval((g) => g.ctx.settings.data);
   try {
@@ -126,10 +142,17 @@ async function desktop() {
       b = (await settings()).controls.bindings;
       assert.ok(b.dodge.includes('Pad4') && !b.dodge.includes('Pad1'), JSON.stringify(b.dodge));
       assert.ok(!b.elementPrev.includes('Pad4'));
-      await h.page.click('[data-bind="lockOn"][data-device="kbm"]');
+      // Mouse buttons are captured too; taking Lock-On's middle button asks first, and Cancel keeps everything.
+      await h.page.click('[data-bind="interact"][data-device="kbm"]');
+      assert.deepEqual(await h.eval((g) => g.debug.settings.listening()), { action: 'interact', device: 'kbm' });
       await h.page.mouse.click(700, 450, { button: 'middle' });
+      await h.page.waitForSelector('.confirm');
+      assert.match(await h.page.textContent('.confirm'), /MMB.*Lock-On/s);
+      await h.page.click('.confirm button:has-text("Cancel")');
       b = (await settings()).controls.bindings;
-      assert.equal(b.lockOn[0], 'Mouse1', 'mouse button capture');
+      assert.equal(b.interact[0], 'KeyE');
+      assert.equal(b.lockOn[0], 'Mouse1');
+      assert.equal(await h.eval((g) => g.debug.settings.listening()), null, 'capture should end');
       await shot('03_settings_controls');
       await h.page.click('[data-action="reset-bindings"]');
       await h.page.click('.confirm button:has-text("Reset")');
@@ -288,10 +311,14 @@ async function desktop() {
     });
 
     await check('desktop: exit to menu, Continue / Load, overwrite guard, delete with confirm', async () => {
-      await h.page.click('.pause-menu [data-action="exit"]');
+      await h.page.click('.modal-backdrop [data-action="exit"]');
       await h.page.click('.confirm button:has-text("Save & Exit")');
       await h.page.waitForFunction(() => window.__game.state().mode === 'menu', null, LONG);
       await h.eval((g) => g.debug.menu.hold(true));
+      // Back from a session the backdrop streams the first tour location in behind a dark veil, then fades in.
+      const veil = await h.eval((g) => g.debug.menu.state());
+      assert.ok(veil.overlay === 1 || veil.phase === 'play', 'dark veil while the menu backdrop streams in');
+      await h.page.waitForFunction(() => window.__game.debug.menu.state().phase === 'play', null, LONG);
       await h.page.click('[data-action="enter"]');
       const cont = await h.page.textContent('[data-action="continue"]');
       assert.match(cont, /Ember · Fire Avatar/);
@@ -354,7 +381,7 @@ async function desktop() {
 
 async function phone() {
   const h = await launch({ width: 390, height: 844, hasTouch: true, isMobile: true });
-  const shot = async (name) => SHOT_DIR && (await h.page.screenshot({ path: `${SHOT_DIR}/phone_${name}.png`, timeout: 90000 }));
+  const shot = (name) => snap(h.page, `phone_${name}`);
   const overflow = () => h.page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   const inView = (sel) => h.page.$$eval(sel, (els) => els.filter((e) => e.offsetParent !== null).every((e) => { const r = e.getBoundingClientRect(); return r.left >= -1 && r.right <= innerWidth + 1 && r.top >= -1 && r.bottom <= innerHeight + 1; }));
   try {
@@ -380,6 +407,7 @@ async function phone() {
       await h.page.tap('[data-element="water"]');
       await h.page.waitForSelector('.ngf-mobile [data-action="creator-continue"]');
       assert.ok(await inView('.ngf-left'), 'creator sheet off-screen');
+      assert.equal(await h.page.isVisible('.touch .tbtn[data-touch="jump"]'), false, 'touch controls must not cover menus / the creator');
       const c = (fn) => h.eval((g, src) => new Function('return (' + src + ')')()(g.debug.creator), fn.toString());
       await c((x) => x.flush());
       const g0 = await c((x) => x.geomHash());

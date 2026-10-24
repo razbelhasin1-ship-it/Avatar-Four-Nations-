@@ -19,6 +19,10 @@ export class TouchControls {
   private lookId: number | null = null;
   private lookLast = { x: 0, y: 0 };
   private visible = false;
+  private touchSeen = false;
+  private sideL: HTMLElement[] = [];
+  private sideR: HTMLElement[] = [];
+  private layoutTimer = 0;
 
   constructor(private readonly ctx: GameContext) {
     this.nub = h('div.nub');
@@ -57,13 +61,11 @@ export class TouchControls {
       btn('3', 'ability3', R(24, 164)),
       btn('4', 'ability4', R(94, 164)),
       btn('E', 'interact', R(164, 164)),
-      btn('◐', 'elementNext', { right: '24px', top: '150px' }),
-      btn('AVTR', 'avatarState', { right: '24px', top: '218px' }),
-      btn('WATER', 'drawWater', { right: '24px', top: '286px' }, true),
-      btn('MAP', 'map', { left: '24px', top: '218px' }),
-      btn('☰', 'pause', { left: '24px', top: '150px' }),
-      btn('F', 'companion', { left: '24px', top: '286px' }),
     );
+    // Side columns: placed under the HUD blocks by layoutSides().
+    this.sideR = [btn('◐', 'elementNext', { right: '24px', top: '150px' }), btn('AVTR', 'avatarState', { right: '24px', top: '218px' }), btn('DRAW', 'drawWater', { right: '24px', top: '286px' }, true)];
+    this.sideL = [btn('☰', 'pause', { left: '24px', top: '150px' }), btn('MAP', 'map', { left: '24px', top: '218px' }), btn('F', 'companion', { left: '24px', top: '286px' })];
+    this.el.append(...this.sideR, ...this.sideL);
     // Movement stick: anywhere on the left 40% of the screen.
     const surface = h('div', { style: { position: 'absolute', left: '0', top: '0', width: '42%', height: '100%', pointerEvents: 'auto', touchAction: 'none' } });
     const lookSurface = h('div', { style: { position: 'absolute', right: '0', top: '0', width: '58%', height: '100%', pointerEvents: 'auto', touchAction: 'none' } });
@@ -111,7 +113,9 @@ export class TouchControls {
     lookSurface.addEventListener('pointercancel', endLook);
     ctx.events.on('settings:changed', () => this.refresh());
     window.addEventListener('pointerdown', (e) => {
-      if (e.pointerType === 'touch' && ctx.settings.data.controls.touchControls === 'auto') this.refresh(true);
+      if (e.pointerType !== 'touch') return;
+      this.touchSeen = true;
+      if (ctx.settings.data.controls.touchControls === 'auto') this.refresh();
     });
   }
 
@@ -127,11 +131,13 @@ export class TouchControls {
     this.ctx.input.setVirtual('sprint', len > max * 1.15);
   }
 
-  /** Decide visibility from settings and device. */
+  /** Decide visibility from settings and device; only ever shown in play (never over menus or the creator). */
   refresh(touchSeen = false): void {
+    if (touchSeen) this.touchSeen = true;
     const mode = this.ctx.settings.data.controls.touchControls;
     const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
-    const show = mode === 'on' || (mode === 'auto' && (coarse || touchSeen || this.ctx.input.lastDevice === 'touch'));
+    const inGame = this.ctx.session.active && this.ctx.game.mode === 'play';
+    const show = inGame && (mode === 'on' || (mode === 'auto' && (coarse || this.touchSeen || this.ctx.input.lastDevice === 'touch')));
     this.setVisible(show);
   }
 
@@ -139,6 +145,30 @@ export class TouchControls {
     this.visible = v;
     this.el.classList.toggle('hidden', !v);
     document.getElementById('ui')?.classList.toggle('touch-on', v);
+    if (v) this.layoutSides();
+  }
+
+  /**
+   * Keep the side button columns clear of the HUD: the left column starts under
+   * the vitals, the right one under the quest tracker (both change size with
+   * UI scale and quest text), without running into the bottom action cluster.
+   */
+  private layoutSides(): void {
+    const H = window.innerHeight;
+    const step = 66;
+    const clusterTop = H - 24 - 164 - 58; // top edge of the bottom-right action cluster / move stick zone
+    const below = (sel: string, fallback: number) => {
+      const el = document.querySelector(sel) as HTMLElement | null;
+      if (!el || el.offsetParent === null) return fallback;
+      const r = el.getBoundingClientRect();
+      return r.height > 0 ? Math.max(fallback, r.bottom + 10) : fallback;
+    };
+    const place = (col: HTMLElement[], top: number) => {
+      const t = Math.max(8, Math.min(top, clusterTop - 10 - col.length * step));
+      col.forEach((b, i) => (b.style.top = `${Math.round(t + i * step)}px`));
+    };
+    place(this.sideL, below('.hud-vitals', 96));
+    place(this.sideR, below('.hud-quest', 96));
   }
 
   get shown(): boolean {
@@ -151,6 +181,11 @@ export class TouchControls {
     if (!this.visible) return;
     const p = this.ctx.player;
     if (!p) return;
+    const now = performance.now();
+    if (now - this.layoutTimer > 500) {
+      this.layoutTimer = now;
+      this.layoutSides();
+    }
     const sphere = this.ctx.avatar.sphereActive;
     const ids = sphere ? ['ult_hurricane', 'ult_tsunami', 'ult_earthquake', 'ult_fire_tornado'] : this.ctx.progression.slotsFor(p.element);
     const sig = `${p.element}|${ids.join(',')}`;

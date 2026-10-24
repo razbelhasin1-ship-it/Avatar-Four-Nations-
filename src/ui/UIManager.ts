@@ -207,6 +207,7 @@ export class UIManager {
     if (this.confirmEl && e.key === 'Escape') {
       this.confirmEl.remove();
       this.confirmEl = null;
+      this.escapeUsed = true;
       return;
     }
     if (this.dialogueEl) {
@@ -226,14 +227,22 @@ export class UIManager {
     if (top?.onKey?.(e)) return;
     if (e.key === 'Escape' && top) {
       if (top.id === 'mainMenu') return;
+      this.escapeUsed = true;
       if (top.id === 'pause') this.ctx.game.setPaused(false);
       else this.close();
     }
   }
 
+  /** [ui] Escape already closed something this frame: the same press must not also open the pause menu. */
+  private escapeUsed = false;
+
   /** Called each frame by Game. */
   update(dt: number): void {
     const ctx = this.ctx;
+    if (this.escapeUsed) {
+      this.escapeUsed = false;
+      ctx.input.consume('pause');
+    }
     for (const s of this.stack) s.update?.(dt);
     if (ctx.game.mode === 'play') {
       const input = ctx.input;

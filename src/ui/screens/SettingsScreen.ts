@@ -289,11 +289,10 @@ export class SettingsScreen implements Screen {
     // Keys and gamepad buttons come through Input; mouse buttons / wheel are caught here (the panel sits above the canvas).
     this.ctx.input.captureNextCode((code) => this.captured(code));
     if (device === 'kbm') {
-      setTimeout(() => {
-        if (this.listening?.action !== action) return;
-        window.addEventListener('mousedown', this.onMouse, true);
-        window.addEventListener('wheel', this.onWheel, { capture: true, passive: false });
-      }, 0);
+      // Attached synchronously: the click that started listening has already had its mousedown,
+      // and a deferred attach could miss the very next press (input outranks timers).
+      window.addEventListener('mousedown', this.onMouse, true);
+      window.addEventListener('wheel', this.onWheel, { capture: true, passive: false });
     }
   }
 
