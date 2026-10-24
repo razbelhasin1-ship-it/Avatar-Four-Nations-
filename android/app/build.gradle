@@ -1,0 +1,42 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'io.github.razbelhasin1.avatarfournations'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'io.github.razbelhasin1.avatarfournations'
+        minSdk 26
+        targetSdk 34
+        // CI builds count up so a new APK installs over the previous one.
+        versionCode((System.getenv('GITHUB_RUN_NUMBER') ?: '1').toInteger())
+        versionName "1.0.${System.getenv('GITHUB_RUN_NUMBER') ?: '0'}"
+    }
+
+    signingConfigs {
+        // A fixed (non-secret) debug key kept in the repo, so every build is signed alike and updates install in place.
+        debug {
+            storeFile file('a4n-debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.11.0'
+}

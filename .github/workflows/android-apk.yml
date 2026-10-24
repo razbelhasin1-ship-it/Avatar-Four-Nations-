@@ -1,0 +1,73 @@
+# Builds the Android app (a full-screen WebView around the web build) and publishes the APK to a GitHub
+# Release, so the latest build is always at:
+#   https://github.com/razbelhasin1-ship-it/Avatar-Four-Nations-/releases/latest/download/avatar-four-nations.apk
+name: Android APK
+
+on:
+  push:
+    branches: [ccr-bee3c9ee-5j48is, main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build the web game
+        run: |
+          npm ci
+          npm run build
+
+      - name: Bundle the game into the Android app
+        run: |
+          rm -rf android/app/src/main/assets/game
+          mkdir -p android/app/src/main/assets/game
+          cp -r dist/. android/app/src/main/assets/game/
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build the APK
+        working-directory: android
+        run: gradle --no-daemon assembleDebug
+
+      - name: Name the APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk avatar-four-nations.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: avatar-four-nations-apk
+          path: avatar-four-nations.apk
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-build-${{ github.run_number }}
+          name: Android build ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          files: avatar-four-nations.apk
+          body: |
+            Avatar: The Four Nations for Android (unofficial fan game).
+
+            Install: open this page on your Android phone, tap **avatar-four-nations.apk**, then allow
+            your browser to install unknown apps when Android asks. Newer builds install over older ones.

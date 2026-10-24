@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Four element arcs (air, water, earth, fire) around a bright centre, inside the 66 dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M58,27.3 A27,27 0 0,1 80.7,50" android:strokeColor="#F4E7C0" android:strokeWidth="7" android:strokeLineCap="round" android:fillColor="#00000000" />
+    <path android:pathData="M80.7,58 A27,27 0 0,1 58,80.7" android:strokeColor="#5FB4F0" android:strokeWidth="7" android:strokeLineCap="round" android:fillColor="#00000000" />
+    <path android:pathData="M50,80.7 A27,27 0 0,1 27.3,58" android:strokeColor="#7FB36A" android:strokeWidth="7" android:strokeLineCap="round" android:fillColor="#00000000" />
+    <path android:pathData="M27.3,50 A27,27 0 0,1 50,27.3" android:strokeColor="#F07A3C" android:strokeWidth="7" android:strokeLineCap="round" android:fillColor="#00000000" />
+    <path android:pathData="M54,46 A8,8 0 1,1 53.99,46 Z" android:fillColor="#FFFFFF" />
+</vector>
