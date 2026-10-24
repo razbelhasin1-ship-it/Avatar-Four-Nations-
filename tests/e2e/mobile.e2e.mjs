@@ -32,7 +32,12 @@ const check = async (name, fn) => {
 
 const h = await launch({ width: 390, height: 844, hasTouch: true, isMobile: true, preset: null, userAgent: UA });
 const page = h.page;
-const cdp = await page.context().newCDPSession(page);
+// Raw CDP touch events report (0, 0) pointer coordinates after an emulated rotation; a fresh session fixes that.
+let cdp = await page.context().newCDPSession(page);
+const rotate = async (vp) => {
+  await page.setViewportSize(vp);
+  cdp = await page.context().newCDPSession(page);
+};
 const PORTRAIT = { width: 390, height: 844 };
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -206,7 +211,7 @@ try {
     await h.step(20);
     assert.deepEqual(await h.eval((g) => g.ctx.camera.position.toArray()), cam0, 'the arrival waits while the card is up');
     await shot('04_rotate_hint');
-    await page.setViewportSize(LANDSCAPE);
+    await rotate(LANDSCAPE);
     await page.waitForFunction(() => !document.querySelector('.rotate-hint'), null, { timeout: 30000 });
     assert.notEqual((await h.state()).ui.screen, 'rotateHint');
     // Skip the arrival sweep by touch (tap where the button is), then let simulated time settle it deterministically.
@@ -420,7 +425,7 @@ try {
     await page.tap('[data-action="close-saveload"]');
     const report = {};
     for (const vp of [LANDSCAPE, PORTRAIT]) {
-      await page.setViewportSize(vp);
+      await rotate(vp);
       await h.step(2);
       for (const id of ['map', 'journal', 'techniques', 'inventory', 'companions']) {
         const tile = await page.$(`.ps-menu [data-open="${id}"]`);
@@ -436,7 +441,7 @@ try {
       }
     }
     console.log('[screens audit]', JSON.stringify(report));
-    await page.setViewportSize(LANDSCAPE);
+    await rotate(LANDSCAPE);
     await page.tap('.ps-menu [data-action="resume"]');
     await h.step(3);
     assert.equal((await h.state()).paused, false);

@@ -584,6 +584,9 @@ try {
       assert.ok(Math.abs(y1 - y0) > 0.3, `finger drag turns the preview: ${y0} → ${y1}`);
       await tap('.gs-chip[data-slot="headwear"]', 1);
       const id = await h.page.$eval('.wd-card:not(.locked):not(.equipped)', (e) => e.dataset.cosmetic);
+      // The card list scrolls on a landscape phone: bring the card into view like a player would.
+      await h.page.$eval(`.wd-card[data-cosmetic="${id}"]`, (e) => e.scrollIntoView({ block: 'center' }));
+      await h.step(2);
       await tap(`.wd-card[data-cosmetic="${id}"] h4`, 1);
       // Gesture taps can land late under software rendering: poll for the preview state.
       const ok = await h.page.waitForFunction((id) => document.querySelector(`.wd-card[data-cosmetic="${id}"]`)?.classList.contains('trying'), id, { timeout: 8000, polling: 100 }).then(() => true, () => false);
