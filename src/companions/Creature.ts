@@ -828,7 +828,9 @@ export class Creature extends Entity {
       this.stopMoving();
       return;
     }
-    const far = this.followDist + 3;
+    // Following idles a few metres off; a called mount (arrive) comes within mounting reach
+    // (CompanionSystem mounts within radius + 4.5 m), or pressing F would only whistle again.
+    const far = this.state === 'arrive' && this.def.rideable ? this.radius + 3.5 : this.followDist + 3;
     if (this.state === 'arrive' && d <= far) this.setState('follow');
     if (d > far) {
       if (this.state !== 'arrive' && this.state !== 'follow') this.setState('follow');
