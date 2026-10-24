@@ -73,7 +73,8 @@ export class TutorialSystem implements GameSystem {
   private buildPanel(): void {
     this.panel?.remove();
     this.titleEl = h('div.tut-title');
-    this.textEl = h('div.tut-text');
+    // On phones the text folds to two lines; tap it to read the rest.
+    this.textEl = h('div.tut-text', { onclick: () => this.panel?.classList.toggle('tut-open') });
     this.progEl = h('div.tut-progress');
     this.countEl = h('span.tut-count');
     this.panel = h(
@@ -101,7 +102,9 @@ export class TutorialSystem implements GameSystem {
     if (!this.panel || this.index < 0) return;
     const step = TUTORIAL_STEPS[this.index];
     this.titleEl.textContent = step.title;
-    this.textEl.innerHTML = this.formatText(step.text);
+    const touch = this.ctx.ui.layers.hud.closest('#ui')?.classList.contains('touch-on') ?? false;
+    this.textEl.innerHTML = this.formatText(touch && step.touch ? step.touch : step.text);
+    this.panel.classList.remove('tut-open');
     this.countEl.textContent = `${this.index + 1} / ${TUTORIAL_STEPS.length}`;
   }
 
@@ -123,7 +126,8 @@ export class TutorialSystem implements GameSystem {
     this.renderText();
     this.progEl.textContent = '';
     this.panel?.classList.remove('tut-complete');
-    this.panel?.animate([{ transform: 'translateY(-6px)', opacity: 0.4 }, { transform: 'translateY(0)', opacity: 1 }], { duration: 260 });
+    // Keep the CSS centring (translateX(-50%)) while the animation overrides transform.
+    this.panel?.animate([{ transform: 'translate(-50%, -6px)', opacity: 0.4 }, { transform: 'translate(-50%, 0)', opacity: 1 }], { duration: 260 });
   }
 
   next(): void {

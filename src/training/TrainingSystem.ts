@@ -654,7 +654,8 @@ export class TrainingSystem implements GameSystem {
     const tech = run.lesson?.technique;
     if (tech && run.kind === 'lesson') {
       const slot = this.ctx.progression.slotsFor(run.master.element).indexOf(tech);
-      if (slot >= 0) hint += `  ·  key [${this.ctx.input.label(`ability${slot + 1}` as never)}]`;
+      const touch = document.getElementById('ui')?.classList.contains('touch-on') ?? false;
+      if (slot >= 0) hint += touch ? `  ·  button ${slot + 1}` : `  ·  key [${this.ctx.input.label(`ability${slot + 1}` as never)}]`;
       else if (getTechnique(tech)?.kind === 'passive') hint += '  ·  (passive — always active)';
     }
     const base = { kind: kindLabel, title, hint, say: run.phase === 'demo' || run.phase === 'countdown' ? run.say || undefined : undefined };

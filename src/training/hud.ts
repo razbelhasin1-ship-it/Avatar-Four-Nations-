@@ -10,6 +10,9 @@ const CSS = `
   padding:6px 14px 8px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);
   font-family:var(--font-body);text-align:center;pointer-events:none;box-shadow:0 6px 24px rgba(0,0,0,.35);z-index:5}
 .trn-hud.hidden{display:none}
+#ui.touch-on .trn-hud{top:calc(64px + env(safe-area-inset-top,0px));min-width:0;max-width:min(420px,52vw);padding:4px 10px 6px;background:rgba(12,16,22,.72)}
+#ui.touch-on .trn-hud .trn-say,#ui.touch-on .trn-hud .trn-hint{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#ui.touch-on .trn-hud .trn-count{font-size:15px}
 .trn-hud .trn-kind{font-family:var(--font-title);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
 .trn-hud .trn-title{font-family:var(--font-title);font-size:15px;color:var(--gold-2);margin:1px 0 2px}
 .trn-hud .trn-obj{font-size:14px}

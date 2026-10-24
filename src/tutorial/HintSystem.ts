@@ -12,19 +12,21 @@ import { h } from '../ui/dom';
 interface HintDef {
   id: string;
   text: string;
+  /** Wording for touch screens (on-screen buttons instead of keys). */
+  touch?: string;
 }
 
 const HINTS: Record<string, HintDef> = {
-  start: { id: 'start', text: 'Follow the ◆ marker on your compass to your objective. Press {journal} for your journal and {map} for the world map.' },
-  near_water: { id: 'near_water', text: 'Water nearby! Hold {drawWater} to draw it to you — waterbending needs real water.' },
+  start: { id: 'start', text: 'Follow the ◆ marker on your compass to your objective. Press {journal} for your journal and {map} for the world map.', touch: 'Follow the ◆ marker on your compass to your objective. Tap MAP for the world map and MENU for your journal.' },
+  near_water: { id: 'near_water', text: 'Water nearby! Hold {drawWater} to draw it to you — waterbending needs real water.', touch: 'Water nearby! Hold DRAW to pull it into your hands — waterbending needs real water.' },
   no_water: { id: 'no_water', text: 'No water within reach. Find a river, the sea, a pond or ice — or draw water beforehand and carry it with you.' },
-  glide: { id: 'glide', text: 'Hold {jump} while falling to glide on the wind.' },
-  new_element: { id: 'new_element', text: 'You can bend a new element! Press {elementNext} or scroll to switch elements.' },
-  master: { id: 'master', text: 'Masters (✦) teach techniques you cannot learn anywhere else. Press {interact} to speak with them.' },
-  combat: { id: 'combat', text: 'Under attack! {dodge} to dodge, {lockOn} to lock on, hold {aim} to charge a heavy technique.' },
-  learned: { id: 'learned', text: 'New techniques go into slots {ability1}–{ability4}. Rearrange them in the Technique Library ({techniques}).' },
-  avatar: { id: 'avatar', text: 'In danger? Press {avatarState} to enter the Avatar State.' },
-  sphere: { id: 'sphere', text: 'The Elements Sphere! Unleash Hurricane, Tsunami, Earthquake and Fire Tornado with {ability1}–{ability4}, and the Avatar Cataclysm with {ability5}.' },
+  glide: { id: 'glide', text: 'Hold {jump} while falling to glide on the wind.', touch: 'Hold JUMP while falling to glide on the wind.' },
+  new_element: { id: 'new_element', text: 'You can bend a new element! Press {elementNext} or scroll to switch elements.', touch: 'You can bend a new element! Tap the element button on the left to switch.' },
+  master: { id: 'master', text: 'Masters (✦) teach techniques you cannot learn anywhere else. Press {interact} to speak with them.', touch: 'Masters (✦) teach techniques you cannot learn anywhere else. Walk up and tap the speech button to talk to them.' },
+  combat: { id: 'combat', text: 'Under attack! {dodge} to dodge, {lockOn} to lock on, hold {aim} to charge a heavy technique.', touch: 'Under attack! Tap DODGE to dodge, LOCK to lock on, and hold HEAVY to charge a heavy technique.' },
+  learned: { id: 'learned', text: 'New techniques go into slots {ability1}–{ability4}. Rearrange them in the Technique Library ({techniques}).', touch: 'New techniques fill your technique buttons. Rearrange them in MENU → Techniques.' },
+  avatar: { id: 'avatar', text: 'In danger? Press {avatarState} to enter the Avatar State.', touch: 'In danger? Tap AVATAR at the top of the screen to enter the Avatar State.' },
+  sphere: { id: 'sphere', text: 'The Elements Sphere! Unleash Hurricane, Tsunami, Earthquake and Fire Tornado with {ability1}–{ability4}, and the Avatar Cataclysm with {ability5}.', touch: 'The Elements Sphere! Unleash Hurricane, Tsunami, Earthquake and Fire Tornado with your technique buttons, and the Avatar Cataclysm with the fifth.' },
   defeated: { id: 'defeated', text: 'The Avatar recovers at the last safe place. Nothing is lost.' },
 };
 
@@ -77,7 +79,8 @@ export class HintSystem implements GameSystem, Persistable {
 
   private render(def: HintDef): void {
     this.el?.remove();
-    const text = def.text.replace(/\{(\w+)\}/g, (_m, a: string) => `<span class="kbd">${this.ctx.input.label(a as Action)}</span>`);
+    const touch = document.getElementById('ui')?.classList.contains('touch-on') ?? false;
+    const text = (touch && def.touch ? def.touch : def.text).replace(/\{(\w+)\}/g, (_m, a: string) => `<span class="kbd">${this.ctx.input.label(a as Action)}</span>`);
     this.el = h('div.hint-toast', { html: `<span class="hint-icon">✦</span> ${text}` });
     this.ctx.ui.layers.overlay.appendChild(this.el);
     this.showTimer = 8;

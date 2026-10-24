@@ -26,6 +26,8 @@ export interface TutorialStep {
   id: string;
   title: string;
   text: string;
+  /** Wording for touch screens, when the keyboard/mouse text does not fit. */
+  touch?: string;
   /** Optional element to switch to when the step starts. */
   element?: Element;
   /** Setup (spawn dummies, set reserve...). */
@@ -73,6 +75,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'look',
     title: 'Look Around',
     text: 'Click the game to capture the mouse, then move it to look around. (Gamepad: right stick. Touch: drag on the right side.)',
+    touch: 'Drag your finger on the right side of the screen to look around.',
     check: (rt) => c(rt, 'look') > 400,
     progress: (rt) => `${Math.min(100, Math.round(c(rt, 'look') / 4))}%`,
   },
@@ -233,6 +236,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'menus',
     title: 'Your Journey',
     text: 'Open the World Map with {map} (fast travel to discovered places), the Journal with {journal} (quests, masters, mastery) and your Inventory with {inventory}. Find masters marked ✦ across the world to learn new techniques. Your journey autosaves; save manually from the pause menu ({pause}).',
+    touch: 'Tap MAP for the World Map (fast travel to discovered places) or MENU for the Journal and Inventory. Masters marked ✦ teach new techniques. Your journey autosaves.',
     onEvent: { 'ui:screen': (_rt, p) => (p.screen === 'map' || p.screen === 'journal' || p.screen === 'inventory' ? 'opened' : null) },
     check: (rt) => c(rt, 'opened') >= 1,
   },
