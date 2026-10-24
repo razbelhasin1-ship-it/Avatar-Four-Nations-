@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import '../../src/combat/techniques';
 import { allTechniques, getTechnique } from '../../src/combat/CombatSystem';
+import { ACTION_LABELS, keyHints } from '../../src/core/Input';
 import { ELEMENTS } from '../../src/core/types';
+import { SPECIES } from '../../src/data/creatures';
 import { cosmeticById } from '../../src/data/cosmetics';
 import { DIALOGUES } from '../../src/data/dialogues';
 import { itemById } from '../../src/data/items';
@@ -87,6 +89,15 @@ describe('quests, NPCs, dialogues, props, shops', () => {
       const i = cycle.indexOf(e);
       expect(starts, e).toEqual([1, 2, 3].map((k) => `mq_seek_${cycle[(i + k) % 4]}`));
     }
+  });
+
+  it('hints and ability texts name controls through {action} placeholders, never hard-coded keys (touch players see button names)', () => {
+    const texts = [...Object.values(AWAKENINGS).map((a) => a.hint), ...MASTERS.flatMap((m) => m.lessons.map((l) => l.hint)), ...SPECIES.flatMap((sp) => sp.bondUnlocks.map((u) => u.description))];
+    for (const t of texts) {
+      expect(t, t).not.toMatch(/\b(LMB|RMB)\b|Hold Shift|Press [EFQT]\b|\((Q|E|F|T)\)/);
+      for (const m of t.matchAll(/\{(\w+)\}/g)) expect(m[1] in ACTION_LABELS, `{${m[1]}} in "${t}"`).toBe(true);
+    }
+    expect(keyHints({ label: (a) => `<${a}>` }, 'Hold {sprint}, then {nope}')).toBe('Hold <sprint>, then {nope}');
   });
 
   it('NPC dialogues exist and dialogue quest actions reference real quests/items', () => {

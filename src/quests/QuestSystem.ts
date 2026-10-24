@@ -301,7 +301,7 @@ export class QuestSystem implements GameSystem, Persistable {
       try {
         switch (a.type) {
           case 'startQuest':
-            if (this.start(a.quest) && !firstMain && this.defs.get(a.quest)?.category === 'main') firstMain = a.quest;
+            if (this.start(a.quest) && !firstMain && this.active.has(a.quest) && this.defs.get(a.quest)?.category === 'main') firstMain = a.quest;
             break;
           case 'setFlag':
             this.setFlag(a.flag);

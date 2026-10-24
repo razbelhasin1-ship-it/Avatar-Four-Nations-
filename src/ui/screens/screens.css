@@ -379,6 +379,7 @@
 
 .gs-chips {
   display: flex;
+  flex: none;
   flex-wrap: wrap;
   gap: 6px;
 }
@@ -1825,7 +1826,8 @@
 
 /* ---------- Responsive ---------- */
 
-@media (max-width: 900px) {
+/* Narrow portrait screens stack the panes; landscape phones keep them side by side (see max-height: 500px). */
+@media (max-width: 900px) and (orientation: portrait) {
   .gs-body.gs-panes,
   .gs-hub .gs-body.gs-panes {
     grid-template-columns: 1fr;
@@ -1858,6 +1860,8 @@
     border-radius: 0;
     border-left: 0;
     border-right: 0;
+    /* notch / home indicator */
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
   }
   .gs-frame::after {
     display: none;
@@ -1966,8 +1970,188 @@
   visibility: hidden;
 }
 
-/* The 3D studio replaces the world view: the HUD has nothing to say there. */
+/* The 3D studio replaces the world view: the HUD has nothing to say there, and a
+   pause menu underneath (wardrobe opened from it) must not show through the preview. */
 #ui:has(.gs-staged) .hud,
-#ui:has(.gs-staged) .touch {
+#ui:has(.gs-staged) .touch,
+#ui:has(.gs-staged) .ps-backdrop {
   visibility: hidden;
+}
+
+/* Wardrobe: card previewed by a tap (touch has no hover). */
+.wd-card.trying {
+  border-color: var(--gold-2);
+  box-shadow: inset 0 0 0 1px var(--gold-2), 0 0 14px rgba(241, 212, 138, 0.25);
+}
+
+/* ---------- Landscape phones (the main touch orientation) ----------
+   Full-bleed frame inside the safe area, compact chrome, panes kept side by side. */
+@media (max-height: 500px) {
+  .gs-frame,
+  .gs-map .gs-frame {
+    width: 100vw;
+    height: 100%;
+    border-radius: 0;
+    border: 0;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+  .gs-frame::after {
+    display: none;
+  }
+  .gs-head {
+    gap: 10px;
+    padding: 4px 10px 0 14px;
+  }
+  .gs-titlewrap {
+    padding-bottom: 6px;
+  }
+  .gs-title {
+    font-size: 1.05em;
+  }
+  .gs-orn {
+    display: none;
+  }
+  .gs-close {
+    margin-bottom: 4px;
+  }
+  .gs-body {
+    gap: 8px;
+    padding: 8px 10px 6px;
+  }
+  .gs-body.gs-panes,
+  .gs-hub .gs-body.gs-panes {
+    grid-template-columns: minmax(190px, 36%) minmax(0, 1fr);
+    gap: 10px;
+  }
+  .gs-body.mp-body {
+    grid-template-columns: minmax(0, 1fr) minmax(200px, 30%);
+    gap: 8px;
+    padding: 6px 8px;
+  }
+  .gs-body.iv-staged {
+    grid-template-columns: minmax(140px, 28%) minmax(0, 1fr);
+    gap: 10px;
+  }
+  .gs-foot {
+    display: none;
+  }
+  .gs-detail {
+    padding: 10px 14px;
+  }
+  .gs-h {
+    font-size: 1.2em;
+  }
+  .mp-info {
+    padding: 10px 12px;
+  }
+  .tq-loadout {
+    margin-bottom: 4px;
+    padding: 6px 8px 8px;
+  }
+  .tq-loadout-label {
+    margin-bottom: 5px;
+    font-size: 0.85em;
+  }
+  .tq-slots {
+    gap: 6px;
+  }
+  .tq-slot {
+    min-height: 54px;
+    padding: 13px 4px 4px;
+    gap: 2px;
+  }
+  .tq-slot-icon,
+  .tq-slot-icon svg {
+    width: 22px;
+    height: 22px;
+  }
+  .tq-slot-name {
+    font-size: 0.8em;
+  }
+  .ps-menu {
+    width: min(780px, calc(100vw - 16px));
+    max-height: calc(100% - 12px);
+    padding: 10px 16px 12px;
+  }
+  .ps-head {
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+  }
+  .ps-head h2 {
+    font-size: 1.3em;
+  }
+  .ps-emblem {
+    width: 34px;
+    height: 34px;
+  }
+  .ps-grid {
+    gap: 14px;
+  }
+  .ps-col {
+    gap: 6px;
+  }
+  .ps-tile {
+    padding: 6px 4px;
+  }
+  .ps-tile-icon {
+    font-size: 1.3em;
+  }
+  .ps-quest {
+    display: none;
+  }
+}
+
+/* ---------- Touch (coarse pointer): >= 44 px targets, finger-scrollable strips, no keyboard hints ---------- */
+@media (pointer: coarse) {
+  .gs-close {
+    width: 44px;
+    height: 44px;
+  }
+  .gs-tab {
+    min-height: 44px;
+  }
+  .gs-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+  }
+  .gs-chips::-webkit-scrollbar {
+    display: none;
+  }
+  .gs-chip {
+    flex: none;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 14px;
+  }
+  #ui .gs-frame .btn,
+  #ui .gs-frame .btn.small,
+  #ui .ps-menu .btn,
+  #ui .confirm .btn,
+  #ui .companion-stable .btn.small,
+  #ui .shop-panel .btn.small {
+    min-height: 44px;
+  }
+  .mp-zbtn {
+    width: 46px;
+    height: 46px;
+  }
+  .mp-legend summary {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .gs-foot,
+  .ps-tile .kbd,
+  .iv-preview-hint {
+    display: none;
+  }
+  .gs-scroll,
+  .iv-right {
+    -webkit-overflow-scrolling: touch;
+  }
+  .gs-close:hover {
+    transform: none;
+  }
 }

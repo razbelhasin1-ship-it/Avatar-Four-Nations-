@@ -1,4 +1,5 @@
 import type { GameContext } from '../core/GameContext';
+import { keyHints } from '../core/Input';
 import { BOND_LEVELS, bondLevel, bondLevelName, HABITATS, SPECIES, speciesById, trustStage, type SpeciesDef } from '../data/creatures';
 import { itemById } from '../data/items';
 import { clear, h } from '../ui/dom';
@@ -144,7 +145,8 @@ export class StableScreen implements Screen {
     const unlocks = h('div', { style: { fontSize: '12px', margin: '6px 0' } });
     for (const u of def.bondUnlocks) {
       const got = r.bond >= u.at;
-      unlocks.append(h('div', { style: { opacity: got ? '1' : '0.55' }, title: u.description }, `${got ? '✓' : '🔒'} ${u.name}${got ? '' : ` (${u.at}%)`} — ${u.description}`));
+      const desc = keyHints(this.ctx.input, u.description);
+      unlocks.append(h('div', { style: { opacity: got ? '1' : '0.55' }, title: desc }, `${got ? '✓' : '🔒'} ${u.name}${got ? '' : ` (${u.at}%)`} — ${desc}`));
     }
     const nameInput = h('input', { type: 'text', value: r.name, maxLength: 24, style: { width: '120px', padding: '2px 6px' } }) as HTMLInputElement;
     const hab = r.habitat ? HABITATS.find((x) => x.id === r.habitat) : undefined;

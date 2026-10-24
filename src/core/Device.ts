@@ -75,11 +75,14 @@ export const fullscreen = {
       return false;
     }
     if (lockLandscape) {
+      // Fire and forget: some browsers never settle the lock promise.
       const o = (screen as Screen & { orientation?: { lock?: (o: string) => Promise<void> } }).orientation;
       try {
-        await o?.lock?.('landscape');
+        o?.lock?.('landscape')?.catch(() => {
+          /* not supported (desktop, iOS): fine */
+        });
       } catch {
-        /* not supported (desktop, iOS): fine */
+        /* not supported */
       }
     }
     return true;

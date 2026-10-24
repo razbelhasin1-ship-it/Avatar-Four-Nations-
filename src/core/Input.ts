@@ -111,6 +111,38 @@ export const DEFAULT_BINDINGS: Record<Action, string[]> = {
   pause: ['Escape', 'Pad9'],
 };
 
+/** [mobile] Names of the on-screen touch buttons, used by Input.label() while playing by touch. */
+export const TOUCH_LABELS: Partial<Record<Action, string>> = {
+  forward: 'Stick ↑',
+  back: 'Stick ↓',
+  left: 'Stick ←',
+  right: 'Stick →',
+  jump: 'Jump',
+  sprint: 'Sprint',
+  dodge: 'Dodge',
+  interact: 'Tap prompt',
+  companion: 'Mount',
+  attack: 'Attack',
+  aim: 'Heavy',
+  ability1: '1',
+  ability2: '2',
+  ability3: '3',
+  ability4: '4',
+  ability5: '5',
+  elementNext: 'Element',
+  elementPrev: 'Hold Element',
+  drawWater: 'Draw',
+  avatarState: 'Avatar',
+  lockOn: 'Lock',
+  map: 'Map',
+  journal: '☰ Menu',
+  inventory: '☰ Menu',
+  techniques: '☰ Menu',
+  companions: '☰ Menu',
+  character: '☰ Menu',
+  pause: '☰ Menu',
+};
+
 export function codeLabel(code: string): string {
   if (code.startsWith('Key')) return code.slice(3);
   if (code.startsWith('Digit')) return code.slice(5);
@@ -345,7 +377,8 @@ export class Input {
   // ---- virtual (touch) API ----
 
   setVirtual(action: Action, isDown: boolean): void {
-    this.lastDevice = 'touch';
+    // [ui] Only a press is evidence of touch play: releases also run when touch controls reset on desktop.
+    if (isDown) this.lastDevice = 'touch';
     if (isDown) {
       if (!this.virtualDown.has(action)) this.virtualPressedQ.add(action);
       this.virtualDown.add(action);
@@ -488,8 +521,18 @@ export class Input {
 
   /** Short label for the primary binding of an action, for prompts like "[E] Talk". */
   label(action: Action): string {
+    // [mobile] Touch players see the on-screen button names in prompts and hints.
+    if (this.lastDevice === 'touch') return TOUCH_LABELS[action] ?? ACTION_LABELS[action];
     const codes = this.bindings[action] ?? [];
     const prefer = this.lastDevice === 'gamepad' ? codes.find((c) => c.startsWith('Pad')) : codes.find((c) => !c.startsWith('Pad'));
     return codeLabel(prefer ?? codes[0] ?? '?');
   }
+}
+
+/**
+ * [additive: QA/mobile] Fill `{action}` placeholders in data texts (hints, ability descriptions) with the
+ * current device's control names — keys, pad buttons or the on-screen touch buttons.
+ */
+export function keyHints(input: Pick<Input, 'label'>, text: string): string {
+  return text.replace(/\{(\w+)\}/g, (all, a: string) => (a in ACTION_LABELS ? input.label(a as Action) : all));
 }

@@ -53,7 +53,6 @@ const ICONS = {
   talk: SVG('<path d="M4 5h16v10H10l-5 4v-4H4z"/>'),
   paw: SVG('<ellipse cx="12" cy="16" rx="4.5" ry="3.5"/><circle cx="6" cy="10" r="1.8"/><circle cx="10" cy="6.5" r="1.8"/><circle cx="14" cy="6.5" r="1.8"/><circle cx="18" cy="10" r="1.8"/>'),
   drop: SVG('<path d="M12 3c4 6 6 9 6 12a6 6 0 0 1-12 0c0-3 2-6 6-12z"/>'),
-  fullscreen: SVG('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'),
 };
 
 const PHONE_SVG = `<svg viewBox="0 0 120 80" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
@@ -438,46 +437,51 @@ export class TouchControls {
     const lefty = !!c.touchLeftHanded;
     const near = lefty ? ins.l : ins.r; // the action-cluster side
     const far = lefty ? ins.r : ins.l; // the stick side
-    const u = clamp(Math.min(W, H) / 390, 0.9, 1.3) * clamp(c.touchButtonSize || 1, 0.7, 1.5);
-    const S: Record<Size, number> = { big: Math.round(Math.max(64, 74 * u)), mid: Math.round(Math.max(48, 56 * u)), small: Math.round(Math.max(44, 48 * u)) };
-    const m = 12;
-    const gap = Math.round(8 * u);
-    const occupied: Rect[] = hud.map((r) => ({ ...r }));
     // Positions are computed for a right-handed layout, then mirrored for left-handed play.
     const mirror = (r: Rect): Rect => (lefty ? { ...r, x: W - r.x - r.w } : r);
+    const circle = (x: number, y: number, s: number): Rect => ({ x: x - s / 2, y: y - s / 2, w: s, h: s });
+    const m = 12;
+    const n = this.abilityCount;
+    /** Thumb arc around ATTACK in the bottom corner for a given scale. */
+    const arc = (u: number) => {
+      const S: Record<Size, number> = { big: Math.round(Math.max(64, 74 * u)), mid: Math.round(Math.max(48, 56 * u)), small: Math.round(Math.max(44, 48 * u)) };
+      const gap = Math.round(Math.max(6, 8 * u));
+      const big = S.big, mid = S.mid, sm = S.small;
+      const cx = W - near - m - big / 2;
+      const cy = H - ins.b - m - big / 2;
+      const at = (r: number, deg: number, sz: number) => circle(cx + r * Math.cos((deg * Math.PI) / 180), cy - r * Math.sin((deg * Math.PI) / 180), sz);
+      const r1 = big / 2 + mid / 2 + gap;
+      // HEAVY sits on the diagonal, far enough out that the square hit boxes never touch.
+      const rd = r1 * 1.3;
+      const r2 = rd + mid / 2 + sm / 2 + gap;
+      const pos = new Map<Action, Rect>([
+        ['attack', circle(cx, cy, big)],
+        ['jump', at(r1, 180, mid)],
+        ['dodge', at(r1, 90, mid)],
+        ['aim', at(rd, 135, mid)],
+      ]);
+      for (let i = 1; i <= n; i++) pos.set(`ability${i}` as Action, at(r2, n === 1 ? 135 : 180 - ((180 - 84) * (i - 1)) / (n - 1), sm));
+      return { S, gap, cx, cy, r2, pos, arcTop: cy - r2 - sm / 2, arcLeft: cx - r2 - sm / 2 };
+    };
+    // Shrink (down to the 44 px floor) until the arc clears the HUD on its side.
+    let u = clamp(Math.min(W, H) / 390, 0.9, 1.3) * clamp(c.touchButtonSize || 1, 0.7, 1.5);
+    let A = arc(u);
+    for (let i = 0; i < 10 && u > 0.6; i++) {
+      if (![...A.pos.values()].some((r) => hud.some((hr) => hit(mirror(r), hr, A.gap / 2)))) break;
+      u *= 0.93;
+      A = arc(u);
+    }
+    const { S, gap, cy, arcTop, arcLeft } = A;
+    const sm = S.small;
+    const occupied: Rect[] = hud.map((r) => ({ ...r }));
     const put = (b: Btn, r0: Rect) => {
       const r = mirror(r0);
       Object.assign(b.el.style, { left: `${Math.round(r.x)}px`, top: `${Math.round(r.y)}px`, width: `${Math.round(r.w)}px`, height: `${Math.round(r.h)}px` });
       b.el.classList.remove('gone-layout');
       occupied.push(r);
     };
-    const circle = (cx: number, cy: number, s: number): Rect => ({ x: cx - s / 2, y: cy - s / 2, w: s, h: s });
-
-    // Thumb arc around ATTACK in the bottom corner.
-    const big = S.big, mid = S.mid, sm = S.small;
-    const cx = W - near - m - big / 2;
-    const cy = H - ins.b - m - big / 2;
-    put(this.btns.get('attack')!, circle(cx, cy, big));
-    const r1 = big / 2 + mid / 2 + gap;
-    const at = (r: number, deg: number, s: number) => circle(cx + r * Math.cos((deg * Math.PI) / 180), cy - r * Math.sin((deg * Math.PI) / 180), s);
-    put(this.btns.get('jump')!, at(r1, 180, mid));
-    put(this.btns.get('dodge')!, at(r1, 90, mid));
-    // HEAVY sits on the diagonal, far enough out that the square hit boxes never touch.
-    const rd = r1 * 1.3;
-    put(this.btns.get('aim')!, at(rd, 135, mid));
-    const r2 = rd + mid / 2 + sm / 2 + gap;
-    const n = this.abilityCount;
-    for (let i = 1; i <= 5; i++) {
-      const b = this.btns.get(`ability${i}` as Action)!;
-      if (i > n) {
-        b.el.classList.add('gone-layout');
-        continue;
-      }
-      const deg = n === 1 ? 135 : 180 - ((180 - 84) * (i - 1)) / (n - 1);
-      put(b, at(r2, deg, sm));
-    }
-    const arcTop = cy - r2 - sm / 2;
-    const arcLeft = cx - r2 - sm / 2;
+    for (const [action, r] of A.pos) put(this.btns.get(action)!, r);
+    for (let i = n + 1; i <= 5; i++) this.btns.get(`ability${i}` as Action)!.el.classList.add('gone-layout');
 
     // Move stick resting place (bottom of the stick side) and its SPRINT latch.
     const stick = Math.round(clamp(120 * u, 104, 150));
@@ -571,6 +575,7 @@ export class TouchControls {
 
   private interactBox: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private interactLabel = '';
+  private interactSeen = 0;
 
   /** The interact pill hugs the side nearest the arc and grows with its label (up to the reserved box). */
   private placeInteract(): void {
@@ -578,7 +583,8 @@ export class TouchControls {
     const box = this.interactBox;
     const lefty = !!this.ctx.settings.data.controls.touchLeftHanded;
     const sm = box.h;
-    const w = this.interactLabel ? Math.min(box.w, Math.max(sm * 2.4, b.el.scrollWidth + 4)) : sm;
+    // Natural width: padding + icon + gap + the caption's full text width (its own scrollWidth ignores the ellipsis).
+    const w = this.interactLabel ? Math.min(box.w, Math.max(sm * 2.4, 12 + 22 + 8 + b.cap.scrollWidth + 18 + 4)) : sm;
     const x = lefty ? box.x : box.x + box.w - w;
     Object.assign(b.el.style, { left: `${Math.round(x)}px`, top: `${Math.round(box.y)}px`, width: `${Math.round(w)}px`, height: `${sm}px`, maxWidth: `${Math.round(box.w)}px` });
   }
@@ -665,7 +671,10 @@ export class TouchControls {
     this.btns.get('sprint')!.el.classList.toggle('on', this.sprintLatched);
     // Interact: the prompt label lives on the button.
     const inter = ctx.interactions.current;
-    const label = inter && !ctx.ui.dialogueOpen ? inter.label : '';
+    let label = inter && !ctx.ui.dialogueOpen ? inter.label : '';
+    // Hold the label briefly when a target drifts across the edge of its radius, so the pill does not flicker.
+    if (label) this.interactSeen = now;
+    else if (this.interactLabel && !ctx.ui.dialogueOpen && now - this.interactSeen < 350) label = this.interactLabel;
     if (label !== this.interactLabel) {
       this.interactLabel = label;
       this.interact.cap.textContent = label || 'Interact';

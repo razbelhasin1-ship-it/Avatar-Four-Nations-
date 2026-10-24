@@ -108,6 +108,7 @@ export interface SpeciesDef {
   hp: number;
 }
 
+/** `{action}` placeholders in descriptions become the player's control names (keyHints). */
 const L = (at: number, ability: string, name: string, description: string): BondUnlock => ({ at, ability, name, description });
 
 export const SPECIES: SpeciesDef[] = [
@@ -156,9 +157,9 @@ export const SPECIES: SpeciesDef[] = [
     bondUnlocks: [
       L(0, 'flight', 'Flight', 'Space takes off and climbs, Q descends. Lands by itself when you descend near flat ground.'),
       L(20, 'endurance', 'Endurance', 'Flies three times longer before it needs to rest.'),
-      L(45, 'boost', 'Yip Yip!', 'Hold Shift in flight for a burst of speed.'),
+      L(45, 'boost', 'Yip Yip!', 'Hold {sprint} in flight for a burst of speed.'),
       L(70, 'carry', 'Sky Carrier', 'Your pet rides along on the saddle, and cruising no longer tires it.'),
-      L(90, 'gust', 'Tail Gust', 'Press E while riding: a mighty tail stroke sweeps enemies away.'),
+      L(90, 'gust', 'Tail Gust', 'Press {interact} while riding: a mighty tail stroke sweeps enemies away.'),
     ],
     clues: ['tracks', 'fur'],
     sounds: { call: 'creature.skybison.groan', alarm: 'creature.skybison.groan', content: 'creature.skybison.huff' },
@@ -212,8 +213,8 @@ export const SPECIES: SpeciesDef[] = [
     },
     bondUnlocks: [
       L(0, 'flight', 'Flight', 'Space takes off and climbs, Q descends. It lands on its own when you descend near flat ground.'),
-      L(20, 'fire_breath', 'Dragonfire', 'Press E while riding to breathe fire where you aim. Summoned, it scorches enemies that come near you.'),
-      L(45, 'boost', 'Sun Dash', 'Hold Shift in flight for a burst of speed.'),
+      L(20, 'fire_breath', 'Dragonfire', 'Press {interact} while riding to breathe fire where you aim. Summoned, it scorches enemies that come near you.'),
+      L(45, 'boost', 'Sun Dash', 'Hold {sprint} in flight for a burst of speed.'),
       L(70, 'guard', 'Guardian', 'Attacks enemies that strike you.'),
       L(90, 'inferno', 'Inferno', 'Dragonfire burns hotter and wider.'),
     ],
@@ -267,9 +268,9 @@ export const SPECIES: SpeciesDef[] = [
       reach: 2.2,
     },
     bondUnlocks: [
-      L(0, 'ride', 'Rideable', 'Press F beside it to ride. Swims through icy water.'),
-      L(20, 'sprint', 'Gallop', 'Hold Shift while riding to gallop.'),
-      L(45, 'charge', 'Charge', 'Press E while riding to bowl enemies over.'),
+      L(0, 'ride', 'Rideable', 'Press {companion} beside it to ride. Swims through icy water.'),
+      L(20, 'sprint', 'Gallop', 'Hold {sprint} while riding to gallop.'),
+      L(45, 'charge', 'Charge', 'Press {interact} while riding to bowl enemies over.'),
       L(70, 'guard', 'Guardian', 'Leaps at enemies that strike you.'),
       L(90, 'tracker', 'Tracker', 'Sniffs out nearby creatures and clues.'),
     ],
@@ -323,9 +324,9 @@ export const SPECIES: SpeciesDef[] = [
       reach: 2.4,
     },
     bondUnlocks: [
-      L(0, 'ride', 'Rideable', 'Press F beside it to ride. Slow, steady and unstoppable.'),
-      L(20, 'dig', 'Dig', 'Press E while riding on soft ground to unearth mushrooms and jade.'),
-      L(45, 'burrow', 'Burrow', 'Hold Shift while riding to tunnel beneath walls, rock and buildings.'),
+      L(0, 'ride', 'Rideable', 'Press {companion} beside it to ride. Slow, steady and unstoppable.'),
+      L(20, 'dig', 'Dig', 'Press {interact} while riding on soft ground to unearth mushrooms and jade.'),
+      L(45, 'burrow', 'Burrow', 'Hold {sprint} while riding to tunnel beneath walls, rock and buildings.'),
       L(70, 'tremor', 'Tremor Sense', 'Every few seconds while riding, a seismic pulse reveals hidden foes nearby.'),
       L(90, 'fortify', 'Earth Hide', 'You take a third less damage while riding.'),
     ],
@@ -379,10 +380,10 @@ export const SPECIES: SpeciesDef[] = [
       reach: 1.8,
     },
     bondUnlocks: [
-      L(0, 'ride', 'Rideable', 'Press F beside it to ride. The fastest thing on two legs.'),
-      L(20, 'sprint', 'Full Stride', 'Hold Shift while riding to sprint.'),
+      L(0, 'ride', 'Rideable', 'Press {companion} beside it to ride. The fastest thing on two legs.'),
+      L(20, 'sprint', 'Full Stride', 'Hold {sprint} while riding to sprint.'),
       L(45, 'leap', 'Leap', 'Jumps far higher.'),
-      L(70, 'kick', 'Kick', 'Press E while riding: a powerful kick sends enemies flying.'),
+      L(70, 'kick', 'Kick', 'Press {interact} while riding: a powerful kick sends enemies flying.'),
       L(90, 'windrunner', 'Wind Runner', 'Sprints even faster.'),
     ],
     clues: ['tracks', 'feathers'],

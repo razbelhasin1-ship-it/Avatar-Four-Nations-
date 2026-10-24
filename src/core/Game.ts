@@ -503,7 +503,9 @@ export class Game {
     await this.world.preload(spawn, (f, label) => this.ui.setLoadingProgress(f, label));
     if (token !== this.sessionToken) return;
     const player = this.playerEntity;
-    const g = this.world.groundAt(spawn.x, spawn.z, spawn.y + 50);
+    // A saved position keeps its own floor (a bridge, rail deck or roof overhead must not lift it on load);
+    // fresh spawns (y = 0) search from high above.
+    const g = this.world.groundAt(spawn.x, spawn.z, isNew || spawn.y === 0 ? spawn.y + 50 : spawn.y + 2);
     spawn.y = g.y + 0.05;
     this.session.active = true;
     this.session.kind = kind;

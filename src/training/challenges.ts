@@ -463,7 +463,7 @@ class TargetsChallenge extends Challenge {
 
   override hint(): string {
     const d = this.def;
-    if (d.type === 'precision' && d.hidden) return 'Slam (hold RMB) or land hard to feel the targets through the ground';
+    if (d.type === 'precision' && d.hidden) return `Slam (hold ${this.ctx.input.label('aim')}) or land hard to feel the targets through the ground`;
     if (d.type === 'waterTargets') return 'Stand near the water · Draw Water, then strike';
     return super.hint();
   }

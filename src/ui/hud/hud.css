@@ -5,6 +5,11 @@
 
 .hud {
   --vw: 320px;
+  /* safe areas (notch, rounded corners, home indicator) */
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
   font-family: var(--font-body);
 }
 
@@ -15,8 +20,8 @@
 /* ---------- Vitals ---------- */
 
 .hud .hud-vitals {
-  top: 16px;
-  left: 16px;
+  top: calc(16px + var(--sat));
+  left: calc(16px + var(--sal));
   flex-direction: row;
   align-items: flex-start;
   gap: 12px;
@@ -217,7 +222,7 @@
 /* ---------- Compass ---------- */
 
 .hud .compass {
-  top: 14px;
+  top: calc(14px + var(--sat));
   width: clamp(160px, calc(100vw - 2 * (var(--vw) + 48px)), 460px);
   height: 30px;
   border-radius: 4px;
@@ -308,8 +313,8 @@
 /* ---------- Quest tracker ---------- */
 
 .hud .hud-quest {
-  top: 58px;
-  right: 16px;
+  top: calc(58px + var(--sat));
+  right: calc(16px + var(--sar));
   width: min(320px, 40vw);
   padding: 8px 12px 9px;
   border-radius: 8px;
@@ -351,7 +356,7 @@
 /* ---------- Ability bar ---------- */
 
 .hud .hud-bottom {
-  bottom: 30px;
+  bottom: calc(30px + var(--sab));
   gap: 16px;
 }
 
@@ -748,7 +753,7 @@
     font-size: 13px;
   }
   .hud .hud-bottom {
-    bottom: 24px;
+    bottom: calc(24px + var(--sab));
   }
 }
 
@@ -757,8 +762,8 @@
     --vw: 52vw;
   }
   .hud .hud-vitals {
-    top: 10px;
-    left: 10px;
+    top: calc(10px + var(--sat));
+    left: calc(10px + var(--sal));
     gap: 8px;
   }
   .hud-medal {
@@ -773,8 +778,8 @@
     font-size: 12px;
   }
   .hud .hud-quest {
-    top: 10px;
-    right: 10px;
+    top: calc(10px + var(--sat));
+    right: calc(10px + var(--sar));
     width: 40vw;
     max-height: 128px;
     overflow: hidden;
@@ -812,4 +817,122 @@
 
 .hud > .dmg {
   transition: none;
+}
+
+/* ---------- Touch: compact HUD ----------
+   The touch controls (TouchControls) lay their buttons out around the vitals
+   and quest rectangles and own the bottom corners, so on touch the HUD keeps
+   those two blocks small, docks the compass inside the quest block (the top
+   centre holds the menu/map buttons) and leaves the thumb zones alone. */
+#ui.touch-on .hud {
+  --vw: min(236px, 52vw);
+}
+
+#ui.touch-on .hud .hud-vitals {
+  top: calc(8px + var(--sat));
+  left: calc(10px + var(--sal));
+  gap: 8px;
+}
+
+#ui.touch-on .hud-medal {
+  width: 42px;
+  height: 42px;
+}
+
+#ui.touch-on .hud-medal-em {
+  width: 25px;
+  height: 25px;
+}
+
+#ui.touch-on .hud .hud-name {
+  font-size: 12px;
+}
+
+#ui.touch-on .hud-bars {
+  gap: 1px;
+  padding: 2px 8px 4px 6px;
+}
+
+#ui.touch-on .hud .bar-label {
+  font-size: 9.5px;
+}
+
+#ui.touch-on .hud .bar {
+  height: 7px;
+}
+
+#ui.touch-on .hud .bar.hp {
+  height: 10px;
+}
+
+#ui.touch-on .hud .bar.spirit {
+  height: 5px;
+}
+
+#ui.touch-on .hud .hud-quest {
+  top: calc(8px + var(--sat));
+  right: calc(10px + var(--sar));
+  width: clamp(150px, 36vw, 300px);
+  padding: 5px 9px 6px;
+}
+
+#ui.touch-on .hud .hud-quest .qt {
+  font-size: 13px;
+}
+
+#ui.touch-on .hud .hud-quest .obj {
+  font-size: 12px;
+}
+
+#ui.touch-on .hud .hud-quest-body .obj:nth-child(n + 5) {
+  display: none;
+}
+
+#ui.touch-on .hud .hud-quest.compass-only {
+  padding: 0;
+  border-left: 0;
+  background: none;
+}
+
+/* The front end hides the top-centre compass on touch (its buttons live there); docked
+   inside the quest block it stays out of their way, so it is shown again. */
+#ui.touch-on .hud .compass.docked {
+  position: relative;
+  top: auto;
+  left: auto;
+  display: block !important;
+  width: 100%;
+  height: 24px;
+  margin: 0 0 5px;
+  transform: none;
+}
+
+#ui.touch-on .hud .hud-quest.compass-only .compass.docked {
+  margin: 0;
+}
+
+#ui.touch-on .hud .compass.docked .tick {
+  top: 4px;
+  font-size: 11px;
+}
+
+#ui.touch-on .hud .compass.docked .tick.minor {
+  top: 6px;
+}
+
+#ui.touch-on .hud .compass.docked .marker {
+  top: 3px;
+}
+
+#ui.touch-on .hud-combo {
+  right: auto;
+  left: 30%;
+  top: 24%;
+}
+
+/* The touch INTERACT pill shows the prompt and the touch buttons relabel for riding
+   (CLIMB / BOOST / DISMOUNT), so the keyboard-key versions step aside. */
+#ui.touch-on .hud .prompt,
+#ui.touch-on .hud .hud-mount {
+  display: none;
 }

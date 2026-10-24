@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { GameContext, GameSystem } from '../core/GameContext';
+import { keyHints } from '../core/Input';
 import type { Persistable } from '../core/Save';
 import { abilitiesAt, bondLevelName, HOMELAND_FOOD, speciesById, type HabitatDef, type SpeciesDef } from '../data/creatures';
 import { itemById } from '../data/items';
@@ -381,7 +382,7 @@ export class CompanionSystem implements GameSystem, Persistable {
     for (const a of r.abilities) {
       if (before.includes(a)) continue;
       const u = def?.bondUnlocks.find((x) => x.ability === a);
-      if (u) this.ctx.events.emit('ui:notify', { text: `${r.name} — bond ${bondLevelName(r.bond)}: ${u.name}. ${u.description}`, kind: 'learn', duration: 6, icon: '💛' });
+      if (u) this.ctx.events.emit('ui:notify', { text: `${r.name} — bond ${bondLevelName(r.bond)}: ${u.name}. ${keyHints(this.ctx.input, u.description)}`, kind: 'learn', duration: 6, icon: '💛' });
     }
   }
 

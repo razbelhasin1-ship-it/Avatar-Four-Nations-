@@ -29,6 +29,8 @@ export interface QuestPropDef {
 }
 
 const ring = (n: number, r: number, a0 = 0): Array<{ dx: number; dz: number }> => Array.from({ length: n }, (_, i) => ({ dx: Math.cos(a0 + (i / n) * Math.PI * 2) * r, dz: Math.sin(a0 + (i / n) * Math.PI * 2) * r }));
+/** n points on an arc of radius r, from angle a0 in steps of `step` radians. */
+const arc = (n: number, r: number, a0: number, step: number): Array<{ dx: number; dz: number }> => Array.from({ length: n }, (_, i) => ({ dx: Math.cos(a0 + i * step) * r, dz: Math.sin(a0 + i * step) * r }));
 
 export const QUEST_PROPS: QuestPropDef[] = [
   // ---- hidden-master clues (always present until read) ----
@@ -70,8 +72,8 @@ export const QUEST_PROPS: QuestPropDef[] = [
     startQuest: 'sq_lin',
     text: '“EARTH RUMBLE SIX! Tonight at the Gaoling ring! Can ANYONE defeat the undefeated BLIND BANDIT?! Prize: one sack of gold pieces (sack not included).” Someone has scribbled underneath: “she can feel you coming through the floor, don\'t bother.”',
   },
-  // ---- sq_cabbage_cart: runaway cabbages around the Omashu gate ----
-  ...ring(5, 7, 0.3).map((o, i) => ({ id: `cabbage_${i}`, kind: 'pickup' as const, look: 'cabbage' as const, at: { spot: 'giver_omashu_gatekeeper', dx: 4 + o.dx, dz: 3 + o.dz }, label: 'Pick up the runaway cabbage', quest: 'sq_cabbage_cart', step: 'gather', item: 'stray_cabbage' })),
+  // ---- sq_cabbage_cart: runaway cabbages around the Omashu gate (an arc over the open square: a full ring put one inside a house) ----
+  ...arc(5, 7, 0.3, 0.9).map((o, i) => ({ id: `cabbage_${i}`, kind: 'pickup' as const, look: 'cabbage' as const, at: { spot: 'giver_omashu_gatekeeper', dx: 4 + o.dx, dz: 3 + o.dz }, label: 'Pick up the runaway cabbage', quest: 'sq_cabbage_cart', step: 'gather', item: 'stray_cabbage' })),
   // ---- sq_turtleduck ----
   { id: 'lost_turtleduck', kind: 'pickup', look: 'duck', at: { landmark: 'fn_turtleduck_pond', dx: -14, dz: -9 }, label: 'Pick up the lost turtle-duck', quest: 'sq_turtleduck', step: 'find', item: 'lost_turtleduck' },
   // ---- sq_braziers: four braziers around the Fire Sages' court ----

@@ -39,7 +39,9 @@ const check = async (name, fn) => {
 };
 
 const RIVER = { x: -336, z: -1505 }; // Glacier Melt Stream (NWT)
-const OCEAN = { x: -230, z: -1913, seaZ: -1945 }; // NWT north coast
+// NWT north coast, west of the jetties: the old spot (x -230) now sits at the mouth of the Grand Canal,
+// whose water (source 'canal') is nearer than the open sea.
+const OCEAN = { x: -300, z: -1890, seaZ: -1925 };
 const FROZEN = { x: 330, z: -1330 }; // Moonlit Frozen Lake
 const DESERT = { x: 250, z: 950 }; // Si Wong, far from any water
 const GREAT_RIVER = { x: 200, z: -250 };

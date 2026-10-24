@@ -443,7 +443,9 @@ export class HUD {
       this.compassT = 1 / 30;
       this.updateCompass();
     }
-    this.compass.style.display = compassOn ? '' : 'none';
+    // Inline !important: the docked (touch) compass is forced visible by the stylesheet.
+    if (compassOn) this.compass.style.removeProperty('display');
+    else this.compass.style.setProperty('display', 'none', 'important');
     // Dialogue: keep the scene clean (vitals stay, everything else fades).
     this.el.classList.toggle('in-dialogue', ctx.ui.dialogueOpen);
     this.el.classList.toggle('low-hp', hpF > 0 && hpF < 0.3);

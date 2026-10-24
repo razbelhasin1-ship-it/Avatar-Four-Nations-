@@ -3,6 +3,7 @@ import type { Appearance, OutfitSlots } from '../character/Appearance';
 import { npcLook, withPreset } from '../character/looks';
 import { allTechniques, getTechnique } from '../combat/CombatSystem';
 import type { GameContext, GameSystem } from '../core/GameContext';
+import { keyHints } from '../core/Input';
 import { ELEMENT_INFO, ELEMENTS, type Element } from '../core/types';
 import { cosmeticById } from '../data/cosmetics';
 import { AWAKENINGS, GRANDMASTER, MASTERS, lessonById, masterById, type ChallengeDef, type LessonDef, type MasterDef, type MasterLook } from '../data/masters';
@@ -702,10 +703,10 @@ export class TrainingSystem implements GameSystem {
         if (prev) ctx.events.emit('ui:notify', { text: `${def.name} equipped in slot ${slot + 1} (replaced ${getTechnique(prev)?.name ?? prev}). Change it in Techniques [${ctx.input.label('techniques')}].`, kind: 'info', duration: 6 });
       }
       banner = `Technique learned: ${def?.name ?? l.technique}`;
-      sub = l.hint;
+      sub = keyHints(ctx.input, l.hint);
       const slotIdx = pr.slotsFor(e).indexOf(l.technique);
       if (slotIdx >= 0) sub += `  [slot ${slotIdx + 1} · ${ctx.input.label(`ability${slotIdx + 1}` as never)}]`;
-      ctx.events.emit('ui:notify', { text: l.hint, kind: 'learn', duration: 8 });
+      ctx.events.emit('ui:notify', { text: keyHints(ctx.input, l.hint), kind: 'learn', duration: 8 });
       ctx.events.emit('training:completed', { masterId: m.id, lessonId: l.id, techniqueId: l.technique, success: true });
     } else if (run.kind === 'awaken') {
       pr.unlockElement(e);
@@ -713,8 +714,8 @@ export class TrainingSystem implements GameSystem {
       ctx.quests.setFlag(`awakened_${e}`);
       ctx.quests.setFlag(`can_bend_${e}`);
       banner = `${ELEMENT_INFO[e].name}bending Awakened`;
-      sub = AWAKENINGS[e].hint;
-      ctx.events.emit('ui:notify', { text: AWAKENINGS[e].hint, kind: 'learn', duration: 8 });
+      sub = keyHints(ctx.input, AWAKENINGS[e].hint);
+      ctx.events.emit('ui:notify', { text: sub, kind: 'learn', duration: 8 });
       ctx.events.emit('training:completed', { masterId: m.id, lessonId: AWAKENINGS[e].id, techniqueId: AWAKENINGS[e].technique, success: true });
     } else {
       pr.completeTrial(e);

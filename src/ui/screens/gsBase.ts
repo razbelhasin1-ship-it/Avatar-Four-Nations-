@@ -92,6 +92,13 @@ export function guardGhostClicks(root: HTMLElement): () => void {
   return () => (armed = false);
 }
 
+/** True when the player is (most likely) using touch: wording says "tap", hover-only affordances get tap equivalents. */
+export function touchUI(ctx: GameContext): boolean {
+  if (ctx.input.lastDevice === 'gamepad') return false;
+  if (ctx.input.lastDevice === 'touch' || ctx.ui.touch?.shown) return true;
+  return typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+}
+
 export function focusEl(el: HTMLElement): void {
   el.focus({ preventScroll: true });
   el.scrollIntoView({ block: 'nearest', inline: 'nearest' });

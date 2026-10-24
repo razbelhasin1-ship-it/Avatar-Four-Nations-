@@ -7,7 +7,7 @@ import { heightAt } from '../../../world/Heightfield';
 import { LANDMARKS, MOUNTAIN_RANGES, REGIONS, RIVERS, ROADS, WORLD_HALF, type LandmarkDef, type LandmarkKind } from '../../../world/WorldLayout';
 import { clear, h } from '../../dom';
 import type { UIManager } from '../../UIManager';
-import { GameScreen, type PadFrame } from '../gsBase';
+import { GameScreen, touchUI, type PadFrame } from '../gsBase';
 import { renderMapRaster } from './mapRender';
 
 // -----------------------------------------------------------------------------
@@ -391,6 +391,13 @@ export class MapScreen extends GameScreen {
     return { x: r.left + s.x, y: r.top + s.y, inside: s.x >= 0 && s.y >= 0 && s.x <= v.w && s.y <= v.h };
   }
 
+  /** Current view (tests, tutorials): centre, zoom and the selected place. */
+  viewState(): { cx: number; cz: number; zoom: number; selected: string | null } {
+    const sel = this.selected;
+    const id = !sel ? null : sel.type === 'landmark' ? sel.l.id : sel.type === 'habitat' ? sel.id : sel.m.questId;
+    return { cx: this.cx, cz: this.cz, zoom: this.zoom, selected: id };
+  }
+
   /** Centre the view on a world point. */
   focusOn(x: number, z: number, zoom?: number): void {
     if (zoom) this.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom));
@@ -539,10 +546,18 @@ export class MapScreen extends GameScreen {
       }
     });
     const up = (e: PointerEvent) => {
+      if (!this.pointers.has(e.pointerId)) return;
       const wasDrag = this.drag;
+      const wasPinch = !!this.pinch;
       this.pointers.delete(e.pointerId);
       if (this.pointers.size < 2) this.pinch = null;
       this.drag = null;
+      if (wasPinch && this.pointers.size === 1) {
+        // One finger of a pinch lifted: keep panning with the other (never a tap).
+        const [rest] = [...this.pointers.values()];
+        this.drag = { x: rest.x, y: rest.y, cx: this.cx, cz: this.cz, moved: true };
+        return;
+      }
       if (wasDrag && !wasDrag.moved && e.type === 'pointerup') {
         const r = c.getBoundingClientRect();
         const p = this.pickAt(e.clientX - r.left, e.clientY - r.top, e.pointerType === 'touch' ? 28 : 18);
@@ -703,7 +718,7 @@ export class MapScreen extends GameScreen {
     drawArrow(yg, 11, 12, 0, 1);
     return h(
       'details.mp-legend',
-      { open: window.innerWidth > 760 },
+      { open: window.innerWidth > 760 && window.innerHeight > 520 },
       h('summary', 'Legend'),
       h(
         'div.mp-leg-grid',
@@ -736,7 +751,9 @@ export class MapScreen extends GameScreen {
         h('h3.gs-h', reg?.name ?? 'The Wilds'),
         reg ? dangerRow(REGION_DANGER[reg.id] ?? DEFAULT_DANGER) : dangerRow(DEFAULT_DANGER),
         h('p.muted', reg?.blurb ?? 'Untamed country between the nations.'),
-        h('p.mp-tip', 'Select a place to see details. Discovered travel points (gold ring) can be travelled to — never while enemies are near.'),
+        h('p.mp-tip', touchUI(ctx)
+          ? 'Drag to pan, pinch to zoom. Tap a place for details; tap a discovered travel point (gold ring) again to travel — never while enemies are near.'
+          : 'Select a place to see details. Discovered travel points (gold ring) can be travelled to — never while enemies are near.'),
       );
       return;
     }

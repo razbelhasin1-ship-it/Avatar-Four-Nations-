@@ -1,3 +1,4 @@
+import { allTechniques } from '../../combat/CombatSystem';
 import { LANDMARKS } from '../../world/WorldLayout';
 import { cosmeticById } from '../../data/cosmetics';
 import { clear, h } from '../dom';
@@ -25,13 +26,16 @@ class CompanionsScreen extends GameScreen {
   }
 }
 
+let mapScreen: MapScreen | null = null;
+let characterScreen: InventoryScreen | null = null;
+
 export function registerGameScreens(ui: UIManager): void {
   ui.registerScreen('journal', (u) => new JournalScreen(u));
   ui.registerScreen('techniques', (u) => new TechniquesScreen(u));
-  ui.registerScreen('map', (u) => new MapScreen(u));
+  ui.registerScreen('map', (u) => (mapScreen = new MapScreen(u)));
   ui.registerScreen('inventory', (u) => new InventoryScreen(u, 'inventory', 'items'));
   ui.registerScreen('companions', (u) => new CompanionsScreen(u));
-  ui.registerScreen('character', (u) => new InventoryScreen(u, 'character', 'wardrobe'));
+  ui.registerScreen('character', (u) => (characterScreen = new InventoryScreen(u, 'character', 'wardrobe')));
   installUIDebug(ui);
 }
 
@@ -44,6 +48,22 @@ function installUIDebug(ui: UIManager): void {
     close: () => ui.close(),
     current: () => ui.currentScreen,
     mapReady: () => mapRasterSize(),
+    /** Map centre / zoom / selection while the map is open (no re-open). */
+    mapView: () => (ui.currentScreen === 'map' && mapScreen ? mapScreen.viewState() : null),
+    /** Learn up to n not-yet-known slottable techniques of an element (tests). Returns their ids. */
+    learnSome: (element: string, n = 3) => {
+      const pr = ui.ctx.progression;
+      const ids = allTechniques().filter((t) => t.element === element && (t.kind === 'ability' || t.kind === 'movement' || t.kind === 'defense') && !pr.knows(t.id)).slice(0, n).map((t) => t.id);
+      for (const id of ids) pr.learn(id, 'debug', true);
+      return ids;
+    },
+    /** Wardrobe preview turn while the character screen is open. */
+    previewYaw: () => (ui.currentScreen === 'character' && characterScreen ? characterScreen.previewYaw() : null),
+    /** Fast-travel points with distance from the player. */
+    travelPoints: () => {
+      const p = ui.ctx.player;
+      return LANDMARKS.filter((l) => l.fastTravel).map((l) => ({ id: l.id, name: l.name, discovered: ui.ctx.world.discovered.has(l.id), dist: p ? Math.round(Math.hypot(l.x - p.position.x, l.z - p.position.z)) : 0 }));
+    },
     ensureMap: () => ensureMapRaster(),
     /** Fast travel through the map screen's checks (refused near enemies / undiscovered). */
     travel: async (landmarkId: string) => {

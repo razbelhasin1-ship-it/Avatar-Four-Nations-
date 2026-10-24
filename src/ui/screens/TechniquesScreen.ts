@@ -8,7 +8,7 @@ import { SLOT_COUNT, SPHERE_TECHNIQUES } from '../../progression/Progression';
 import { clear, h } from '../dom';
 import { ELEMENT_COLORS, emblem, iconHTML } from '../icons';
 import type { UIManager } from '../UIManager';
-import { empty, focusEl, GameScreen, type PadFrame, type TabDef } from './gsBase';
+import { empty, focusEl, GameScreen, touchUI, type PadFrame, type TabDef } from './gsBase';
 
 type Tab = Element | 'avatar';
 
@@ -119,7 +119,14 @@ export class TechniquesScreen extends GameScreen {
     const pr = this.ctx.progression;
     const slots = pr.slotsFor(e);
     const bar = h('div.tq-loadout', { role: 'group', 'aria-label': `${ELEMENT_INFO[e].name} technique slots` });
-    const prompt = this.pick ? `Choose a slot for ${getTechnique(this.pick)?.name ?? ''}` : this.pickSlot !== null ? `Choose a technique for slot ${this.pickSlot + 1}` : 'Loadout — click a slot, then a technique (or drag a technique onto a slot)';
+    const touch = touchUI(this.ctx);
+    const prompt = this.pick
+      ? `${touch ? 'Tap' : 'Choose'} a slot for ${getTechnique(this.pick)?.name ?? ''}`
+      : this.pickSlot !== null
+        ? `${touch ? 'Tap' : 'Choose'} a technique for slot ${this.pickSlot + 1}`
+        : touch
+          ? 'Loadout — tap a slot, then a technique (or tap Equip, then a slot)'
+          : 'Loadout — click a slot, then a technique (or drag a technique onto a slot)';
     bar.append(h('div.tq-loadout-label', emblem(e, 'emblem'), h('span', prompt), this.pick || this.pickSlot !== null ? h('button.btn.small', { type: 'button', 'data-action': 'cancel-pick', onclick: () => this.cancelPick() }, 'Cancel') : null));
     const row = h('div.tq-slots');
     for (let i = 0; i < SLOT_COUNT; i++) {
@@ -185,7 +192,9 @@ export class TechniquesScreen extends GameScreen {
         onkeydown: (ev: KeyboardEvent) => this.cardKey(ev, d, slottable),
         onclick: (ev: MouseEvent) => {
           if ((ev.target as HTMLElement).closest('button')) return;
+          // Tap/click a technique, then a slot (or the reverse) — no drag needed on touch.
           if (slottable && this.pickSlot !== null) this.equip(this.pickSlot, d.id);
+          else if (slottable) this.onEquipButton(d.id);
         },
         style: { '--el': ELEMENT_COLORS[d.element === 'avatar' ? 'avatar' : d.element].glow } as unknown as Partial<CSSStyleDeclaration>,
       },

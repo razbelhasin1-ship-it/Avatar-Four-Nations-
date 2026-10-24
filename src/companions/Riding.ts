@@ -131,7 +131,7 @@ export class RidingController {
     }
     const alt = c.position.y - c.groundY(c.position.x, c.position.z, c.position.y + 1);
     if (c.flying && alt > 6 && !force) {
-      this.ctx.events.emit('ui:notify', { text: 'Too high to jump off — hold Dodge (Q) to descend and land first.', kind: 'warning', duration: 2.5 });
+      this.ctx.events.emit('ui:notify', { text: `Too high to jump off — hold ${this.ctx.input.label('dodge')} to descend and land first.`, kind: 'warning', duration: 2.5 });
       return false;
     }
     // Safe ground beside the mount: left (+X local), right, behind, then a search.

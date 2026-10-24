@@ -160,8 +160,8 @@ try {
       await shot('beauty_state_tattooed.png');
       await ev((g) => g.debug.avatar.press());
       await ev(() => window.__av.adv(20));
-      // Elements Sphere build-up frames.
-      await ev((g) => g.masterAll());
+      // Elements Sphere build-up frames (the spirit-vision story moment is covered by masters.e2e; skip it here).
+      await ev((g) => (g.ctx.quests.setFlag('sphere_vision'), g.masterAll()));
       await ev((g) => g.debug.avatar.press());
       const frames = [[16, 'a_air'], [12, 'b_water'], [14, 'c_earth'], [14, 'd_fire'], [30, 'e_formation']];
       for (const [n, name] of frames) {
@@ -279,7 +279,8 @@ try {
   });
 
   await gcheck('after masterAll the same input enters the Elements Sphere (sequence + formation)', async () => {
-    const pr = await ev((g) => g.masterAll());
+    // The spirit-vision dialogue that follows mastering everything would hold the controls (masters.e2e covers it).
+    const pr = await ev((g) => (g.ctx.quests.setFlag('sphere_vision'), g.masterAll()));
     assert.equal(pr.sphereUnlocked, true);
     for (const id of ['ult_hurricane', 'ult_tsunami', 'ult_earthquake', 'ult_fire_tornado', 'ult_cataclysm']) assert.ok(pr.learned.includes(id), id + ' learned');
     await ev((g) => g.debug.avatar.press());

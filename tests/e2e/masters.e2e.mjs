@@ -261,9 +261,10 @@ try {
     assert.ok(s.progression.sphereUnlocked);
     const txt = await tr((g) => {
       g.ctx.ui.open('journal');
-      const tabs = [...document.querySelectorAll('.modal .tab')];
-      tabs.find((t) => /Masters/.test(t.textContent)).click();
-      return document.querySelector('.modal').textContent;
+      // Journal tabs: role="tab" buttons (reworked screens) or the older `.modal .tab` markup.
+      const tab = document.querySelector('[role="tab"][data-tab="masters"]') ?? [...document.querySelectorAll('.modal .tab')].find((t) => /Masters/.test(t.textContent));
+      tab.click();
+      return (tab.closest('[role="dialog"], .modal') ?? document.body).textContent;
     });
     assert.ok(/The Elements Sphere/.test(txt) && /Master Jeong/.test(txt), 'journal masters page: ' + txt.slice(0, 300));
     await shot('journal_masters');

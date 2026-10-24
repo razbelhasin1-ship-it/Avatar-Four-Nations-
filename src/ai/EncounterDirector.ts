@@ -62,6 +62,7 @@ import {
 } from '../data/enemies';
 import type { HitInfo } from '../entities/Entity';
 import type { Player } from '../player/Player';
+import type { QuestMarker } from '../quests/QuestSystem';
 import { allSpots, getSpot, spotsWithPrefix } from '../world/Spots';
 import { LAKES, LANDMARKS, ROADS, STARTS, TUTORIAL_SPAWN } from '../world/WorldLayout';
 import { disposeAttackResources } from './attacks';
@@ -199,6 +200,41 @@ export class EncounterDirector implements GameSystem, AiHost {
     ctx.scene.add(this.loot.group);
     this.buildSafeZones();
     if (ctx.session.kind === 'campaign') this.buildCamps();
+    if (!this.questMarkers) {
+      this.questMarkers = true;
+      ctx.quests.addMarkerProvider(() => this.defeatMarkers());
+    }
+  }
+
+  private questMarkers = false;
+
+  /** Quests that ask for defeats (e.g. "Bandits on the Road") point at the nearest camp with such enemies. */
+  private defeatMarkers(): QuestMarker[] {
+    const ctx = this.ctx;
+    const p = ctx.player;
+    const q = ctx.quests;
+    const out: QuestMarker[] = [];
+    if (!p || !this.camps.length) return out;
+    for (const [id, prog] of q.active) {
+      const def = q.get(id);
+      const step = def?.steps[prog.step];
+      if (!def || !step) continue;
+      step.objectives.forEach((o, i) => {
+        if (o.type !== 'defeat' || prog.done[i]) return;
+        let best: Camp | null = null;
+        let bd = Infinity;
+        for (const c of this.camps) {
+          if (c.state === 'cleared' || !c.members.some((m) => ENEMY_ARCHETYPES[m]?.tags.includes(o.tag))) continue;
+          const d = Math.hypot(c.x - p.position.x, c.z - p.position.z);
+          if (d < bd) {
+            bd = d;
+            best = c;
+          }
+        }
+        if (best) out.push({ questId: id, title: def.title, text: `${o.text} — ${best.label}`, position: new THREE.Vector3(best.x, ctx.world.heightAt(best.x, best.z), best.z), tracked: id === q.tracked });
+      });
+    }
+    return out;
   }
 
   onSessionEnd(ctx: GameContext): void {
@@ -304,6 +340,14 @@ export class EncounterDirector implements GameSystem, AiHost {
     return rng.weighted(list, list.map((t) => t.weight));
   }
 
+  /** A 'camp' template whose members carry `tag` (the zone's table first, then any table). */
+  private pickCampWithTag(zone: EncounterZone, rng: Random, tag: string): EncounterTemplate | null {
+    const has = (t: EncounterTemplate) => t.kind === 'camp' && t.members.some((m) => ENEMY_ARCHETYPES[m]?.tags.includes(tag));
+    let list = ENCOUNTER_TABLES[zone].filter(has);
+    if (!list.length) list = Object.values(ENCOUNTER_TABLES).flat().filter(has);
+    return list.length ? rng.weighted(list, list.map((t) => t.weight)) : null;
+  }
+
   private buildCamps(): void {
     const camps: Camp[] = [];
     const make = (id: string, kind: CampKind, zone: EncounterZone, x: number, z: number, members: string[], label: string, boss: string | null = null): Camp => ({
@@ -324,7 +368,9 @@ export class EncounterDirector implements GameSystem, AiHost {
       if (bossSpots.has(id) || this.isSafe(sp.x, sp.z)) continue;
       const zone = this.zoneAt(sp.x, sp.z);
       const rng = new Random(hashString(id));
-      const t = this.pickTemplate(zone, rng, ['camp', 'beast']);
+      // The camp's name (and its built props) say who lives there: bandit camps hold bandits, not the zone's pirates.
+      const faction = /bandit/.test(id) ? 'bandit' : /pirate/.test(id) ? 'pirate' : /fire/.test(id) ? 'fire_nation' : null;
+      const t = (faction && this.pickCampWithTag(zone, rng, faction)) || this.pickTemplate(zone, rng, ['camp', 'beast']);
       camps.push(make(id, t.kind, zone, sp.x, sp.z, t.members.slice(), sp.label ?? 'Camp'));
     }
     // 3. Coastal pirate coves.

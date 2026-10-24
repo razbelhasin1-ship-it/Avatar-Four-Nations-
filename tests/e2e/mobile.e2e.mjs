@@ -107,17 +107,38 @@ try {
     await page.tap('[data-action="back"]');
     const fsSupported = await page.evaluate(() => !!(document.fullscreenEnabled || document.webkitFullscreenEnabled));
     assert.equal(await page.isVisible('.main-menu [data-action="fullscreen"]'), fsSupported, 'fullscreen toggle follows API support');
-    if (fsSupported) {
-      await page.tap('.main-menu [data-action="fullscreen"]');
-      await page.waitForFunction(() => !!document.fullscreenElement, null, { timeout: 5000 }).catch(() => {});
-      const on = await page.evaluate(() => !!document.fullscreenElement);
-      if (on) {
-        assert.match(await page.textContent('.main-menu [data-action="fullscreen"]'), /Exit Fullscreen/);
-        await page.tap('.main-menu [data-action="fullscreen"]');
-        await page.waitForFunction(() => !document.fullscreenElement, null, { timeout: 5000 });
-      }
-    }
     await shot('01_menu_portrait');
+  });
+
+  await check('browser gestures are tamed: no zoom, no pull-to-refresh, no long-press menu (text fields excepted)', async () => {
+    const r = await page.evaluate(() => {
+      const fire = (el, ev) => (el.dispatchEvent(ev), ev.defaultPrevented);
+      const body = getComputedStyle(document.body);
+      const input = document.createElement('input');
+      input.type = 'text';
+      document.getElementById('ui').append(input);
+      const out = {
+        viewport: document.querySelector('meta[name="viewport"]').content,
+        touchAction: body.touchAction,
+        overscroll: body.overscrollBehaviorY,
+        contextMenuGame: fire(document.querySelector('.main-menu'), new MouseEvent('contextmenu', { bubbles: true, cancelable: true })),
+        contextMenuInput: fire(input, new MouseEvent('contextmenu', { bubbles: true, cancelable: true })),
+        gesture: fire(document, new Event('gesturestart', { cancelable: true })),
+        selectInput: getComputedStyle(input).userSelect,
+        selectGame: body.userSelect,
+      };
+      input.remove();
+      return out;
+    });
+    assert.match(r.viewport, /user-scalable=no/);
+    assert.match(r.viewport, /viewport-fit=cover/);
+    assert.equal(r.touchAction, 'none');
+    assert.equal(r.overscroll, 'none');
+    assert.equal(r.contextMenuGame, true, 'long-press menu on the game UI');
+    assert.equal(r.contextMenuInput, false, 'text fields keep their menu');
+    assert.equal(r.gesture, true, 'iOS pinch gesture');
+    assert.equal(r.selectGame, 'none');
+    assert.equal(r.selectInput, 'text');
   });
 
   await check('portrait settings: touch section (size, opacity, sensitivity, left-handed) persists', async () => {
@@ -183,10 +204,13 @@ try {
     await page.setViewportSize(LANDSCAPE);
     await page.waitForFunction(() => !document.querySelector('.rotate-hint'), null, { timeout: 15000 });
     assert.notEqual((await h.state()).ui.screen, 'rotateHint');
-    if (await page.isVisible('[data-action="skip-arrival"]')) await page.tap('[data-action="skip-arrival"]');
+    // Skip the arrival sweep (on a slow software renderer it may already have ended by itself).
+    await page.tap('[data-action="skip-arrival"]', { timeout: 8000 }).catch(() => {});
     await page.waitForSelector('.quest-prompt', { timeout: 30000 });
     assert.doesNotMatch(await page.textContent('.quest-prompt'), /compass/, 'touch players get touch hints');
-    await page.tap('[data-action="quest-ok"]');
+    // The card also dismisses itself after a while (a slow software renderer can get there first).
+    await page.tap('[data-action="quest-ok"]', { timeout: 10000 }).catch(() => {});
+    await page.waitForSelector('.quest-prompt', { state: 'detached', timeout: 20000 });
     await h.step(4);
     assert.equal((await h.state()).player.name, 'Azula');
   });
@@ -233,6 +257,29 @@ try {
     assert.equal(await h.eval((g) => g.ctx.input.move.x === 0 && g.ctx.input.move.y === 0), true, 'stick release stops movement');
   });
 
+  await check('landscape: riding / gliding controls hold (JUMP climb·glide, DODGE descend, SPRINT latch boost)', async () => {
+    const down = (a) => h.eval((g, a) => g.ctx.input.isDown(a), a);
+    for (const a of ['jump', 'dodge']) {
+      const b = await center(`.touch .tbtn[data-touch="${a}"]`);
+      await touch('touchStart', [b]);
+      await h.step(8);
+      assert.equal(await down(a), true, `${a} should stay down while held`);
+      await touch('touchEnd', []);
+      await h.step(2);
+      assert.equal(await down(a), false, `${a} should release`);
+    }
+    // SPRINT latches while the stick is held, and lets go with the stick.
+    await tapTouch('sprint');
+    await touch('touchStart', [{ x: 120, y: 300 }]);
+    await touch('touchMove', [{ x: 120, y: 260 }]);
+    await h.step(3);
+    assert.equal(await down('sprint'), true, 'latched sprint while moving');
+    await touch('touchEnd', []);
+    await h.step(2);
+    assert.equal(await down('sprint'), false, 'sprint ends with the stick');
+    assert.equal(await page.$eval('.touch .tbtn[data-touch="sprint"]', (e) => e.classList.contains('on')), false);
+  });
+
   await check('landscape: attack, technique and jump by tap', async () => {
     await page.evaluate(() => { window.__casts = []; window.__game.ctx.events.on('technique:cast', (e) => e.isPlayer && window.__casts.push(e.id)); });
     await tapTouch('attack');
@@ -264,7 +311,8 @@ try {
     });
     assert.ok(npc, 'no NPC to talk to near the start');
     await h.step(6);
-    const pill = await page.$eval('.touch .tbtn[data-touch="interact"]', (e) => ({ text: e.textContent, ready: e.classList.contains('ready'), w: e.getBoundingClientRect().width }));
+    const pill = await page.$eval('.touch .tbtn[data-touch="interact"]', (e) => { const c = e.querySelector('.tc'); return { text: e.textContent, ready: e.classList.contains('ready'), w: e.getBoundingClientRect().width, clipped: c.scrollWidth > c.clientWidth + 1 }; });
+    assert.equal(pill.clipped, false, 'the prompt label should fit the pill: ' + JSON.stringify(pill));
     assert.ok(pill.ready && pill.text.includes(npc.replace(/^.*?(Talk)/, '$1').slice(0, 8)), 'pill should show the prompt: ' + JSON.stringify(pill) + ' vs ' + npc);
     await shot('07_interact_pill');
     await tapTouch('interact');
@@ -272,9 +320,20 @@ try {
     await page.waitForFunction(() => window.__game.ctx.ui.dialogueOpen, null, { timeout: 10000 });
     assert.equal(await page.isVisible('.touch .tbtn[data-touch="attack"]'), false, 'controls step aside during dialogue');
     for (let i = 0; i < 12 && (await h.eval((g) => g.ctx.ui.dialogueOpen)); i++) {
-      const choice = await page.$('.choices .choice');
-      if (!choice) break;
-      await choice.tap();
+      // Wait for the card to settle (it rises in), then tap the first choice where it is.
+      const box = await page
+        .waitForFunction(() => {
+          const c = document.querySelector('.choices .choice');
+          if (!c || document.querySelector('.dialogue')?.getAnimations().some((a) => a.playState === 'running')) return null;
+          c.scrollIntoView({ block: 'nearest' });
+          const r = c.getBoundingClientRect();
+          const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return top && c.contains(top) ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null;
+        }, null, { timeout: 20000 })
+        .then((hnd) => hnd.jsonValue())
+        .catch(() => null);
+      if (!box) break;
+      await page.touchscreen.tap(box.x, box.y);
       await h.step(2);
     }
     assert.equal(await h.eval((g) => g.ctx.ui.dialogueOpen), false, 'dialogue should finish by taps');
@@ -339,6 +398,16 @@ try {
     const s = await audit('.settings-panel button');
     assert.ok(s.overflowX <= 0 && !s.off.length, JSON.stringify(s));
     await page.tap('[data-action="close-settings"]');
+    // Save by touch from the pause menu.
+    await page.tap('.ps-menu [data-action="save"]');
+    await page.waitForSelector('.saveload [data-action="save-slot1"]');
+    const sl = await audit('.saveload button');
+    assert.ok(sl.overflowX <= 0 && !sl.off.length, JSON.stringify(sl));
+    await page.evaluate(() => { window.__saved = 0; window.__game.ctx.events.on('save:written', () => window.__saved++); });
+    await page.tap('.saveload [data-action="save-slot1"]');
+    if (await page.$('.confirm')) await page.tap('.confirm .btn.primary');
+    await page.waitForFunction(() => window.__saved > 0, null, { timeout: 15000 });
+    await page.tap('[data-action="close-saveload"]');
     const report = {};
     for (const vp of [LANDSCAPE, PORTRAIT]) {
       await page.setViewportSize(vp);
@@ -351,6 +420,7 @@ try {
         const a = await audit();
         report[`${vp.width}x${vp.height}:${id}`] = a;
         assert.ok(a.overflowX <= 0, `${id} overflows horizontally at ${vp.width}x${vp.height}`);
+        assert.deepEqual(a.off, [], `${id}: buttons out of reach at ${vp.width}x${vp.height}: ${JSON.stringify(a.off)}`);
         await h.eval((g, id) => g.ctx.ui.close(id), id);
         await h.step(1);
       }
@@ -379,6 +449,39 @@ try {
     }
     console.log('[perf mobile defaults]', JSON.stringify(out));
     for (const e of Object.keys(out)) assert.ok(out[e].drawCalls > 0, `${e}: nothing drawn`);
+  });
+
+  await check('landscape: Save & Exit by touch → main menu fits landscape, Continue offers the journey', async () => {
+    await tapTouch('pause');
+    await h.step(2);
+    await page.waitForSelector('.ps-menu');
+    await page.tap('.ps-menu [data-action="exit"]');
+    await page.waitForSelector('.confirm');
+    await page.tap('.confirm button:has-text("Save & Exit")');
+    await page.waitForFunction(() => window.__game.state().mode === 'menu', null, LONG);
+    await h.eval((g) => g.debug.menu.hold(true));
+    const a = await audit('.main-menu button');
+    assert.ok(a.overflowX <= 0 && !a.off.length && !a.small.length && !a.clipped.length, JSON.stringify(a));
+    await page.tap('[data-action="enter"]');
+    assert.match(await page.textContent('[data-action="continue"]'), /Azula/);
+    await shot('10_menu_landscape');
+    // Fullscreen last: headless fullscreen emulation can disturb viewport metrics for later steps.
+    const fsSupported = await page.evaluate(() => !!(document.fullscreenEnabled || document.webkitFullscreenEnabled));
+    assert.equal(await page.isVisible('.main-menu [data-action="fullscreen"]'), fsSupported, 'fullscreen toggle follows API support');
+    if (fsSupported) {
+      await page.tap('.main-menu [data-action="fullscreen"]');
+      await page.waitForFunction(() => !!document.fullscreenElement, null, { timeout: 5000 }).catch(() => {});
+      const on = await page.evaluate(() => !!document.fullscreenElement);
+      if (on) {
+        // The label follows the (asynchronous) fullscreenchange event.
+        await page.waitForFunction(() => /Exit Fullscreen/.test(document.querySelector('.main-menu [data-action="fullscreen"]').textContent), null, { timeout: 10000 });
+        await page.tap('.main-menu [data-action="fullscreen"]');
+        await page.waitForFunction(() => !document.fullscreenElement, null, { timeout: 10000 });
+        await page.waitForFunction(() => /^\s*Fullscreen/.test(document.querySelector('.main-menu [data-action="fullscreen"]').textContent), null, { timeout: 10000 });
+      }
+    }
+
+    assert.equal(h.errors.length, 0, 'console errors: ' + h.errors.slice(0, 5).join('\n'));
   });
 } finally {
   if (h.errors.length) console.log('CONSOLE ERRORS:\n' + h.errors.slice(0, 15).join('\n'));

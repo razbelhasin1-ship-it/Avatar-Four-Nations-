@@ -8,7 +8,7 @@ import { LANDMARKS, REGIONS } from '../../world/WorldLayout';
 import { clear, h } from '../dom';
 import { ELEMENT_COLORS, emblem } from '../icons';
 import type { UIManager } from '../UIManager';
-import { chip, empty, GameScreen, meter, type PadFrame, type TabDef } from './gsBase';
+import { chip, empty, GameScreen, meter, touchUI, type PadFrame, type TabDef } from './gsBase';
 import { WardrobeStudio } from './WardrobeStudio';
 
 type HubTab = 'items' | 'wardrobe' | 'profile';
@@ -108,6 +108,11 @@ export class InventoryScreen extends GameScreen {
     this.dropStudio();
   }
 
+  /** Preview turn (tests): null when no 3D preview is staged. */
+  previewYaw(): number | null {
+    return this.studio ? this.studio.yaw : null;
+  }
+
   private dropStudio(): void {
     if (!this.studio) return;
     this.ctx.game.setStage(null);
@@ -137,6 +142,7 @@ export class InventoryScreen extends GameScreen {
     clear(this.body);
     this.body.className = 'gs-body';
     this.preview = null;
+    this.tapTry = null;
     if (this.tab === 'items') {
       if (this.studio) this.dropStudio();
       this.renderItems();
@@ -323,11 +329,16 @@ export class InventoryScreen extends GameScreen {
       const equipped = p.appearance.outfit[key] === c.id || (EMPTY_SLOT_IDS.has(c.id) && EMPTY_SLOT_IDS.has(p.appearance.outfit[key]));
       const swatches = c.colors ? h('div.wd-sw', Object.values(c.colors).map((col) => h('span', { style: { background: col as string } }))) : null;
       const card = h(
-        `div.wd-card${unlocked ? '' : '.locked'}${equipped ? '.equipped' : ''}`,
+        `div.wd-card${unlocked ? '' : '.locked'}${equipped ? '.equipped' : ''}${this.tapTry === c.id ? '.trying' : ''}`,
         {
           'data-cosmetic': c.id,
-          onpointerenter: () => this.tryOn(c),
-          onpointerleave: () => this.tryOn(null),
+          // Mouse: hover previews. Touch has no hover: a tap on the card previews it (sticky) instead.
+          onpointerenter: (e: PointerEvent) => e.pointerType === 'mouse' && this.tryOn(c),
+          onpointerleave: (e: PointerEvent) => e.pointerType === 'mouse' && this.tryOn(null),
+          onclick: (e: MouseEvent) => {
+            if ((e.target as HTMLElement).closest('button')) return;
+            this.tapTryOn(c);
+          },
         },
         h('div.wd-card-head', h('h4', c.name), equipped ? h('span.gs-badge.gold', 'Worn') : null),
         h('div.wd-meta', c.nation === 'any' ? 'Any nation' : `${c.nation[0].toUpperCase()}${c.nation.slice(1)} style`, swatches),
@@ -338,7 +349,8 @@ export class InventoryScreen extends GameScreen {
       );
       grid.append(card);
     }
-    right.append(h('div.gs-sec', 'Wardrobe', h('span.gs-sec-sub', 'hover or focus to try on · changes apply instantly')), chips, grid);
+    const tip = touchUI(ctx) ? 'tap a card to try it on · Wear applies it' : 'hover or focus to try on · changes apply instantly';
+    right.append(h('div.gs-sec', 'Wardrobe', h('span.gs-sec-sub', tip)), chips, grid);
   }
 
   private withCosmetic(base: Appearance, c: CosmeticDef): Appearance {
@@ -349,9 +361,20 @@ export class InventoryScreen extends GameScreen {
     return a;
   }
 
+  /** Cosmetic previewed by a tap (touch has no hover): sticky until tapped again, worn, or the list changes. */
+  private tapTry: string | null = null;
+
+  private tapTryOn(c: CosmeticDef): void {
+    this.tapTry = this.tapTry === c.id ? null : c.id;
+    this.tryOn(this.tapTry ? c : null);
+    for (const el of Array.from(this.body.querySelectorAll('.wd-card'))) el.classList.toggle('trying', (el as HTMLElement).dataset.cosmetic === this.tapTry);
+  }
+
   private tryOn(c: CosmeticDef | null): void {
     const p = this.ctx.player;
     if (!p || !this.studio) return;
+    // Hover/focus leaving falls back to the tapped preview, if any.
+    if (!c && this.tapTry) c = COSMETICS.find((x) => x.id === this.tapTry) ?? null;
     if (!c && !this.tryingOn) return;
     this.tryingOn = !!c;
     this.studio.setAppearance(c ? this.withCosmetic(p.appearance, c) : p.appearance);

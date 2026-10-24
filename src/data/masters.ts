@@ -53,7 +53,7 @@ export interface LessonDef {
   intro: string;
   demo: DemoDef;
   challenge: ChallengeDef;
-  /** Contextual hint shown after learning. */
+  /** Contextual hint shown after learning. `{action}` placeholders (e.g. {attack}) become the player's current control names. */
   hint: string;
 }
 
@@ -121,7 +121,7 @@ export const AWAKENINGS: Record<Element, LessonDef> = {
     intro: 'Air is the element of freedom. Do not push the wind — let it pass through your palms. Strike the targets with open hands.',
     demo: { cast: 'air_palm', line: 'Watch: the palm opens, and the wind follows.' },
     challenge: { type: 'targets', count: 3, time: 50, layout: 'arc', dist: 5 },
-    hint: 'Airbending awakened. Switch elements with the element keys/wheel; LMB Air Palm, hold RMB for Air Blast.',
+    hint: 'Airbending awakened. Switch elements with {elementNext}; {attack} Air Palm, hold {aim} for Air Blast.',
   },
   water: {
     id: 'awaken_water',
@@ -130,7 +130,7 @@ export const AWAKENINGS: Record<Element, LessonDef> = {
     intro: 'Water is never created — only guided. Call it from the pool, then let it lash out. Break the targets.',
     demo: { cast: 'water_whip', line: 'Push and pull. The water remembers the moon.' },
     challenge: { type: 'waterTargets', count: 3, time: 70 },
-    hint: 'Waterbending awakened. Stay near real water (rivers, sea, ponds) or carry it in your reserve. LMB Water Whip.',
+    hint: 'Waterbending awakened. Stay near real water (rivers, sea, ponds) or carry it in your reserve ({drawWater} draws). {attack} Water Whip.',
   },
   earth: {
     id: 'awaken_earth',
@@ -139,7 +139,7 @@ export const AWAKENINGS: Record<Element, LessonDef> = {
     intro: 'Earth is patient, then decisive. Feel the stone under your feet, pull it up, and strike.',
     demo: { cast: 'earth_strike', line: 'Root yourself. Now — strike!' },
     challenge: { type: 'targets', count: 3, time: 50, layout: 'arc', dist: 6 },
-    hint: 'Earthbending awakened. LMB Rock Strike, hold RMB for Seismic Slam, Earth Pillar on an ability slot.',
+    hint: 'Earthbending awakened. {attack} Rock Strike, hold {aim} for Seismic Slam, Earth Pillar on an ability slot.',
   },
   fire: {
     id: 'awaken_fire',
@@ -148,7 +148,7 @@ export const AWAKENINGS: Record<Element, LessonDef> = {
     intro: 'Fire is life, not only destruction. Breathe in; let the breath become flame. Quick, precise strikes.',
     demo: { cast: 'fire_jab', line: 'Breath, then fire. Never the other way around.' },
     challenge: { type: 'targets', count: 3, time: 50, layout: 'arc', dist: 6 },
-    hint: 'Firebending awakened. LMB Flame Punch combo, hold RMB for a Charged Fireball.',
+    hint: 'Firebending awakened. {attack} Flame Punch combo, hold {aim} for a Charged Fireball.',
   },
 };
 
