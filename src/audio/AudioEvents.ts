@@ -149,6 +149,8 @@ export class AudioEvents implements GameSystem {
       if (p) a.play('body.fall', { position: p, delay: 0.3 });
     });
     on('technique:failed', (e) => {
+      // A water attack with empty hands beside a source becomes a gather (it plays the draw sounds itself).
+      if (e.reason === 'gather') return;
       const t = ctx.time.real;
       if (t - this.lastFail < 0.3) return;
       this.lastFail = t;

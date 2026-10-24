@@ -15,6 +15,11 @@
  *   7. Visuals and hit detection stay synchronized (dummy on the whip path is hit on the frame the
  *      drawn whip reaches it; a dummy beyond the visible reach is never hit).
  *   8. After travelling to another region and a save/load round-trip, waterbending still works.
+ *   9. Held-water rule (the player): beside a river with empty hands a water attack does not bend the
+ *      river from a distance — it gathers water into the hands (reason 'gather', water:drawn); the next
+ *      press bends the held water, which also works after walking away from the river until it runs out.
+ * Scenarios 1–8 exercise the source mechanics through the direct-draw path that NPC and enemy benders use
+ * (heldWaterOnly off); scenario 9 switches the player's held-water rule back on.
  * Extras: shield blocks a projectile, ice wall is a solid walkable collider registered as an ice
  * source, water skin works anywhere and refills, moisture is generous in the swamp and poor in the desert.
  */
@@ -95,6 +100,8 @@ try {
     g.learnAll();
     window.__hits = [];
     g.ctx.events.on('hit', (e) => window.__hits.push({ frame: g.ctx.time.frame, targetId: e.targetId, techniqueId: e.techniqueId ?? null, damage: e.damage }));
+    // Scenarios 1-8: direct-draw path (NPC/enemy benders); scenario 9 restores the player's held-water rule.
+    g.ctx.water.heldWaterOnly = false;
     window.__wev = [];
     for (const k of ['water:drawn', 'water:unavailable', 'water:reserve', 'technique:failed', 'technique:cast', 'ui:notify'])
       g.ctx.events.on(k, (p) => window.__wev.push([k, JSON.parse(JSON.stringify(p))]));
@@ -368,6 +375,7 @@ try {
     assert.ok(loaded, 'load failed');
     await h.eval((g) => {
       g.game.stop();
+      g.ctx.water.heldWaterOnly = false; // the fresh page starts with the player's held-water rule (scenario 9 covers it)
       window.__hits = [];
     });
     await h.page.waitForFunction(() => !!(window.__game && window.__game.debug && window.__game.debug.water), null, { timeout: 30000 });
@@ -529,6 +537,42 @@ try {
     await prep(SWAMP, null, 0);
     const wet = await h.eval((g) => g.debug.water.humidity());
     assert.ok(wet.yield.units > dry.yield.units * 4 && dry.yield.units < 3, `moisture swamp ${wet.yield.units} vs desert ${dry.yield.units}`);
+  });
+  await check('9. held water: empty hands beside a river gather first, then the held water is bent (also away from it)', async () => {
+    await h.eval((g) => (g.ctx.water.heldWaterOnly = true));
+    try {
+      await prep(RIVER, null, 0);
+      const d = await h.eval((g) => g.spawnDummy(6, 0, 400));
+      await h.eval((g, d) => g.faceTowards(d.x, d.z), d);
+      await events();
+      const first = await h.eval((g, d) => g.cast('water_whip', { x: d.x, y: d.y + 1.2, z: d.z }), d);
+      assert.equal(first.reason, 'gather', 'empty hands must gather, not bend the river: ' + JSON.stringify(first));
+      assert.equal(await reserve(), 0, 'nothing is consumed by the refused press');
+      await h.step(45);
+      const held = await reserve();
+      assert.ok(held >= 15, 'the gather motion should fill the hands: ' + held);
+      const ev = await events();
+      assert.ok(ev.some(([k, p]) => k === 'water:drawn' && p.sourceId.startsWith('river:')), 'gathered from the river: ' + JSON.stringify(ev.filter(([k]) => k === 'water:drawn').slice(0, 2)));
+      assert.ok(!ev.some(([k]) => k === 'water:unavailable'), 'no "no water" warning while gathering');
+      const second = await h.eval((g, d) => g.cast('water_whip', { x: d.x, y: d.y + 1.2, z: d.z }), d);
+      assert.ok(second.ok && second.water.source === 'reserve', 'second press bends the held water: ' + JSON.stringify(second));
+      await idle();
+      assert.ok((await reserve()) < held, 'bending spends the held water');
+      // Carry it away from the water and bend there until it runs out.
+      await prep(DESERT, null, 12);
+      const away = await h.eval((g) => g.cast('water_whip', null));
+      assert.ok(away.ok && away.water.source === 'reserve', 'held water works away from the river: ' + JSON.stringify(away));
+      await idle();
+      let last = away;
+      for (let i = 0; i < 6 && last.ok; i++) {
+        await h.step(30);
+        last = await h.eval((g) => g.cast('water_whip', null));
+        await idle();
+      }
+      assert.equal(last.reason, 'water', 'with the hands empty and no water around the technique is refused: ' + JSON.stringify(last));
+    } finally {
+      await h.eval((g) => (g.ctx.water.heldWaterOnly = false));
+    }
   });
 } finally {
   for (const r of results) console.log(r.join(' | '));

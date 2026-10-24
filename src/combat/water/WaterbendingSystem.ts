@@ -41,6 +41,10 @@ import { createPuddleMaterial, sharedIceMaterial } from './WaterMaterials';
  */
 
 export const FLASK_CAPACITY = 30;
+/** A water attack pressed with empty hands beside a source gathers at least this much (then strike again). */
+const AUTO_GATHER_MIN = 20;
+/** Longest the automatic gather motion runs (slow sources fill less). */
+const AUTO_GATHER_TIME = 1.4;
 
 const DRAW_RATE: Partial<Record<WaterSourceType, number>> = {
   ocean: 34,
@@ -89,6 +93,10 @@ export class WaterbendingSystem implements GameSystem, Persistable {
   readonly moisture = new MoistureMap();
   // Draw Water state
   private drawing = false;
+  /** Remaining time of an automatic gather (water attack with empty hands next to a source). */
+  private autoGatherT = 0;
+  private autoGatherTarget = 0;
+  private gatherTaught = false;
   private drawStream: StreamBody | null = null;
   private drawFrom = new THREE.Vector3();
   private drawFromValid = false;
@@ -122,6 +130,9 @@ export class WaterbendingSystem implements GameSystem, Persistable {
     ctx.water.onSource((e) => this.onSourceEvent(e));
     // Fire heat from the fire/air/earth module (additive event; subscribed loosely so this compiles either way).
     (ctx.events as unknown as { on(t: string, fn: (e: HeatEvent) => void): void }).on('bending:heat', (e) => this.onHeat(e));
+    ctx.events.on('technique:failed', (e) => {
+      if (e.reason === 'gather') this.beginAutoGather(e.id);
+    });
     this.installDebug();
   }
 
@@ -218,6 +229,7 @@ export class WaterbendingSystem implements GameSystem, Persistable {
   }
 
   onSessionEnd(): void {
+    this.autoGatherT = 0;
     this.stopDraw();
     this.endCharge();
     this.fx.clear();
@@ -253,10 +265,33 @@ export class WaterbendingSystem implements GameSystem, Persistable {
     return !ctx.ui.blocksGameplay && p.controlLock <= 0 && !p.defeated && p.alive && !ctx.combat.isBusy(p) && !ctx.companions.mounted;
   }
 
+  /**
+   * Water attack with empty hands next to a source: instead of bending the river
+   * from a distance, the press lifts water out of it into the hands (the same
+   * stream and reserve as Draw Water). The next press bends what is held.
+   */
+  private beginAutoGather(techniqueId: string): void {
+    const p = this.player;
+    if (!p || !this.canDraw(p) || !this.ctx.progression.canBend('water')) return;
+    const need = getTechnique(techniqueId)?.water?.amount ?? 10;
+    this.autoGatherTarget = Math.min(p.maxWaterReserve, Math.max(need, AUTO_GATHER_MIN));
+    this.autoGatherT = AUTO_GATHER_TIME;
+    if (!this.gatherTaught) {
+      this.gatherTaught = true;
+      const key = this.ctx.input.label('drawWater');
+      this.ctx.events.emit('ui:notify', { text: `You draw the water up into your hands — strike again to bend it. Hold ${key} to gather more.`, kind: 'info', duration: 4.5 });
+    }
+  }
+
   private updateDraw(dt: number, p: Player): void {
     const ctx = this.ctx;
     const input = ctx.input;
-    const wants = input.isDown('drawWater') && this.canDraw(p);
+    const auto = this.autoGatherT > 0;
+    if (auto) {
+      this.autoGatherT -= dt;
+      if (p.waterReserve >= this.autoGatherTarget - 0.01) this.autoGatherT = 0;
+    }
+    const wants = (input.isDown('drawWater') || auto) && this.canDraw(p);
     if (input.wasPressed('drawWater') && !ctx.progression.canBend('water')) {
       ctx.events.emit('ui:notify', { text: 'You cannot bend water yet — find a waterbending master.', kind: 'warning', duration: 2.5 });
       return;

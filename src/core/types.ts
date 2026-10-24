@@ -87,4 +87,4 @@ export type WaterSourceType =
 
 export type NotifyKind = 'info' | 'success' | 'warning' | 'learn' | 'discovery' | 'quest' | 'error' | 'avatar';
 
-export type TechniqueFailReason = 'cooldown' | 'chi' | 'water' | 'locked' | 'state' | 'airborne' | 'busy' | 'target';
+export type TechniqueFailReason = 'cooldown' | 'chi' | 'water' | 'locked' | 'state' | 'airborne' | 'busy' | 'target' | 'gather';

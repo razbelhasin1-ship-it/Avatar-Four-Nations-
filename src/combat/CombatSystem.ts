@@ -283,6 +283,9 @@ export class CombatSystem implements GameSystem {
     if (def.water) {
       const grant = ctx.water.acquire(caster, def.water, aimDir, aimPoint);
       if (!grant) {
+        // Empty hands beside a source: the waterbending module turns this press into a gather.
+        const wf = ctx.water.lastFailure;
+        if (wf?.reason === 'gather') return fail('gather', wf.message);
         if (caster.isPlayer) {
           ctx.events.emit('water:unavailable', { techniqueId: id, needed: def.water.amount, available: caster.waterReserve });
         }

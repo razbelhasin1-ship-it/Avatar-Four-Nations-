@@ -128,8 +128,10 @@ export interface CarriedSupply {
 }
 
 export interface WaterFailure {
-  reason: 'none' | 'frozen' | 'snow' | 'dry' | 'busy' | 'small' | 'full' | 'cannot';
+  reason: 'none' | 'frozen' | 'snow' | 'dry' | 'busy' | 'small' | 'full' | 'cannot' | 'gather';
   message: string;
+  /** For 'gather': the source the bender should draw from before bending. */
+  source?: SourceHit;
   /** Technique id when the failure came from a cast. */
   techniqueId?: string;
 }
@@ -540,6 +542,20 @@ export class WaterSourceSystem implements GameSystem {
     return all.map((h) => ({ h, s: this.score(h, pos, o) })).sort((a, b) => a.s - b.s).map((x) => x.h);
   }
 
+  /**
+   * Held-water rule: the player bends only water they hold — gathered with Draw
+   * Water, or by the gather motion a water attack makes with empty hands (see
+   * WaterbendingSystem) — plus their water skin. Solid ice can still be torn
+   * straight from frozen surfaces, and big-body moves (largeSource, e.g. Water
+   * Spout) and conjuring ultimates work from the water body itself. NPC and
+   * enemy benders gather as part of their attacks.
+   */
+  heldWaterOnly = true;
+
+  private mustHold(caster: Combatant, req: WaterRequirement): boolean {
+    return this.heldWaterOnly && !!caster.isPlayer && !req.largeSource && !req.canConjure;
+  }
+
   /** Units available to a caster right now (reserve + best source), for HUD/AI. */
   availableFor(caster: Combatant, req: WaterRequirement): number {
     const range = Math.min(this.effectiveRange(caster), req.maxRange ?? Infinity);
@@ -677,6 +693,8 @@ export class WaterSourceSystem implements GameSystem {
     let sawRateLimited = false;
     let sawDry: string | null = null;
     const range = Math.min(this.effectiveRange(caster), req.maxRange ?? Infinity);
+    const hold = this.mustHold(caster, req);
+    let gatherable: SourceHit | null = null;
     if (remaining > 0.001) {
       const o = { ...this.reqOptions(caster, req), facing: aimDir };
       // Depleted finite sources are included so we can explain "it ran dry".
@@ -684,6 +702,11 @@ export class WaterSourceSystem implements GameSystem {
       let partial: { h: SourceHit; cap: number } | null = null;
       for (const h of cands) {
         const cap = this.capFor(h);
+        // Liquid water, snow and rain must be gathered into the hands first; only solid ice is bent in place.
+        if (hold && !(h.frozen && h.type !== 'snow')) {
+          if (!gatherable && cap > 0.01) gatherable = h;
+          continue;
+        }
         if (cap <= 0.01) {
           const finite = this.sources.get(h.id);
           if (finite && Number.isFinite(finite.capacity)) sawDry ??= h.label;
@@ -711,6 +734,9 @@ export class WaterSourceSystem implements GameSystem {
     if (remaining > 0.001 && flask && flask.amount > 0.001) {
       fromFlask = Math.min(flask.amount, remaining);
       remaining -= fromFlask;
+    }
+    if (remaining > 0.001 && hold && gatherable) {
+      return this.fail({ reason: 'gather', message: `Gather water first — draw it up from ${gatherable.label}.`, source: gatherable });
     }
     let conjured = 0;
     if (remaining > 0.001 && req.canConjure) {

@@ -35,14 +35,20 @@ try {
     const r = await h.eval((g) => g.cast('water_whip', null));
     if (near.filter((n) => !n.frozen && n.type !== 'snow').length === 0) assert.equal(r.reason, 'water', JSON.stringify(r));
   });
-  await check('water: river source → technique succeeds and reports source', async () => {
+  await check('water: river source → first press gathers water into the hands, second press bends it', async () => {
     await h.eval((g) => g.teleport(-336, -1505));
     await h.step(5);
     const near = await h.eval((g) => g.waterNearby(16));
     assert.ok(near.length > 0, 'expected a nearby river: ' + JSON.stringify(near));
+    // Empty hands: the press becomes a gather instead of bending the river from a distance.
+    const first = await h.eval((g) => g.cast('water_whip', null));
+    assert.equal(first.reason, 'gather', JSON.stringify(first));
+    await h.step(60);
+    const held = await h.eval((g) => g.ctx.player.waterReserve);
+    assert.ok(held >= 8, 'water should now be held: ' + held);
     const r = await h.eval((g) => g.cast('water_whip', null));
     assert.ok(r.ok, JSON.stringify(r));
-    assert.ok(r.water && r.water.source !== 'conjured', JSON.stringify(r));
+    assert.equal(r.water && r.water.source, 'reserve', JSON.stringify(r));
   });
   await check('save and load round-trip', async () => {
     await h.eval((g) => g.teleport(-260, -1580));
@@ -50,7 +56,8 @@ try {
     const ok = await h.eval((g) => g.save('slot3'));
     assert.ok(ok, 'save failed');
     const before = await h.state();
-    await h.page.reload();
+    // Software-rendered reloads can take well over 30 s on a loaded machine.
+    await h.page.reload({ timeout: 120000 });
     await h.page.waitForFunction(() => window.__ready === true, null, { timeout: 120000 });
     const loaded = await h.eval((g) => g.loadGame('slot3'));
     assert.ok(loaded, 'load failed');
