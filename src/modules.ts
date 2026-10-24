@@ -10,6 +10,7 @@ import { TrainingSystem } from './training/TrainingSystem';
 import { ShopSystem } from './shop/ShopSystem';
 import { QuestWorld } from './training/QuestWorld';
 import { AmbienceDirector } from './audio/AmbienceDirector';
+import { WaterContainers } from './world/WaterContainers';
 import { MusicSystem } from './audio/MusicSystem';
 import { AudioEvents } from './audio/AudioEvents';
 
@@ -54,6 +55,8 @@ export const MODULES: GameModule[] = [
   { name: 'quest_world', order: 77, create: () => new QuestWorld() },
   // Audio (src/audio, SOUNDS.md): layered ambience by place/time/weather, region music + combat layer + stingers,
   // event→sound bindings and UI sounds. They tick on the audio engine (menu included) (__game.debug.audio).
+  // Water jars and rain barrels beside town stalls and quest givers: small, finite waterbending sources.
+  { name: 'water_containers', order: 47, create: () => new WaterContainers() },
   { name: 'audio_ambience', order: 970, create: () => new AmbienceDirector() },
   { name: 'audio_music', order: 971, create: () => new MusicSystem() },
   { name: 'audio_events', order: 972, create: () => new AudioEvents() },
