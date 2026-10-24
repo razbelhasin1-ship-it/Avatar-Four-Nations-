@@ -56,6 +56,9 @@ export class HUD {
   private slotsEl: HTMLElement;
   private slotViews: SlotView[] = [];
   private questEl: HTMLElement;
+  private questBody: HTMLElement;
+  /** Touch layout: the compass rides inside the quest block (the touch controls lay out around it). */
+  private compassDocked = false;
   private compass: HTMLElement;
   private compassStrip: HTMLElement;
   private prompt: HTMLElement;
@@ -123,7 +126,8 @@ export class HUD {
     this.slotsEl = h('div.slots');
     this.mountHint = h('div.hud-mount.hidden');
     const bottom = h('div.hud-bottom', this.wheel, this.slotsEl);
-    this.questEl = h('div.hud-quest');
+    this.questBody = h('div.hud-quest-body');
+    this.questEl = h('div.hud-quest', this.questBody);
     this.compassStrip = h('div.compass-strip');
     this.compass = h('div.compass', this.compassStrip, h('div.compass-needle'));
     this.prompt = h('div.prompt.hidden');
@@ -306,14 +310,17 @@ export class HUD {
       const m = ctx.quests.markers().find((x) => x.tracked);
       if (m) dist = `${Math.round(Math.hypot(m.position.x - p.position.x, m.position.z - p.position.z))} m`;
     }
-    const sig = o ? o.title + o.lines.map((l) => l.text + l.done + (l.progress ?? '')).join('|') + dist : '';
+    const docked = this.compassDocked && ctx.settings.data.gameplay.compass;
+    const sig = (o ? o.title + o.lines.map((l) => l.text + l.done + (l.progress ?? '')).join('|') + dist : '') + `|${docked}`;
     if (sig === this.questSig) return;
     this.questSig = sig;
-    clear(this.questEl);
-    this.questEl.classList.toggle('hidden', !o);
+    clear(this.questBody);
+    // Docked compass keeps the block alive even with nothing tracked.
+    this.questEl.classList.toggle('hidden', !o && !docked);
+    this.questEl.classList.toggle('compass-only', !o && docked);
     if (!o) return;
     const lines = o.lines.filter((l) => !l.done).concat(o.lines.filter((l) => l.done)).slice(0, 4);
-    this.questEl.append(
+    this.questBody.append(
       h('div.qk', h('span', 'Quest'), dist ? h('span.qd', dist) : null),
       h('div.qt', o.title),
       ...lines.map((l) => h(`div.obj${l.done ? '.done' : ''}`, h('span.om', l.done ? '✓' : '◇'), h('span', l.text + (l.progress ? ` (${l.progress})` : '')))),
@@ -427,6 +434,7 @@ export class HUD {
     if (this.nameEl.textContent !== name) this.nameEl.textContent = name;
     this.updateWater(dt);
     this.updateSlots();
+    this.dockCompass(!!this.ui.touch?.shown);
     this.updateQuest();
     this.updateMount();
     const compassOn = ctx.settings.data.gameplay.compass;
@@ -505,6 +513,20 @@ export class HUD {
     if (state && this.stateBadge.textContent !== state) this.stateBadge.textContent = state;
     this.spiritRow.classList.toggle('ready', !av.active && av.spirit >= SPIRIT_TO_ENTER);
     this.el.classList.toggle('avatar-on', av.active);
+  }
+
+  /**
+   * With touch controls on, the top centre belongs to the menu/map buttons: the
+   * compass moves into the quest block (whose rectangle the touch layout already
+   * avoids); without them it returns to the top centre.
+   */
+  private dockCompass(touch: boolean): void {
+    if (touch === this.compassDocked) return;
+    this.compassDocked = touch;
+    if (touch) this.questEl.prepend(this.compass);
+    else this.el.insertBefore(this.compass, this.questEl);
+    this.compass.classList.toggle('docked', touch);
+    this.questSig = '';
   }
 
   /** Element switch helper for touch UI. */

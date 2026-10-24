@@ -194,6 +194,13 @@ body.ngf-studio .main-menu { visibility: hidden; }
   .ngf-presets { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
   .ngf-left.ngf-preview-sheet { height: 50%; }
 }
+/* Landscape phones: the sheet becomes a left-hand panel so the Avatar keeps the right side. */
+@media (max-height: 500px) and (min-aspect-ratio: 4/3) {
+  .ngf-left, .ngf-left.ngf-preview-sheet { left: 0; right: auto; top: 0; bottom: 0; height: auto; width: min(420px, 52vw); border-radius: 0 14px 14px 0; padding: max(8px, env(safe-area-inset-top)) 10px max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
+  .ngf-viewbar { top: 8px; bottom: auto; }
+  .ngf-head h2 { font-size: 15px; }
+  .ngf-scroll { margin-top: 6px; }
+}
 `;
 
 type Step = 'element' | 'creator' | 'preview';
@@ -1105,7 +1112,8 @@ function sameItem(a: string, b: string): boolean {
 export function arrivalOverlay(ctx: GameContext, isActive: () => boolean, onSkip?: () => void): { close(showPrompt: boolean): void } {
   const root = ctx.ui.root;
   let closed = false;
-  const skip = h('button.cine-skip', { 'data-action': 'skip-arrival', onclick: () => onSkip?.() }, h('span.kbd', ctx.input.label('jump')), ' Skip');
+  const touch = isTouchPlay(ctx);
+  const skip = h('button.cine-skip', { 'data-action': 'skip-arrival', onclick: () => onSkip?.() }, touch ? null : h('span.kbd', ctx.input.label('jump')), touch ? 'Skip ›' : ' Skip');
   const el = h('div.cine', h('div.cine-bar.top'), h('div.cine-bar.bottom', skip));
   ctx.ui.layers.overlay.appendChild(el);
   root.classList.add('cinematic');
@@ -1124,6 +1132,11 @@ export function arrivalOverlay(ctx: GameContext, isActive: () => boolean, onSkip
   };
   requestAnimationFrame(tick);
   return { close };
+}
+
+/** Playing by touch (phone / tablet, or the on-screen controls are up): hints speak of taps, not keys. */
+function isTouchPlay(ctx: GameContext): boolean {
+  return ctx.settings.device.mobile || ctx.input.lastDevice === 'touch' || !!ctx.ui.touch?.shown;
 }
 
 /** "New quest" card for the opening quest: title, summary, first objectives and where to look. */
@@ -1148,7 +1161,11 @@ export function showFirstQuestPrompt(ctx: GameContext): void {
     h('div.qp-title', def.title),
     def.summary ? h('p.qp-summary', def.summary) : null,
     lines.length ? h('div.qp-obj', lines.map((l) => h('div', h('span.qp-dot', '◇'), l.text))) : null,
-    h('div.qp-foot', h('span.muted', h('span.kbd', ctx.input.label('journal')), ' Journal · follow the ◆ on your compass'), h('button.btn.small.primary', { 'data-action': 'quest-ok', onclick: dismiss }, 'Got it')),
+    h(
+      'div.qp-foot',
+      isTouchPlay(ctx) ? h('span.muted', 'Journal and map: ☰ Menu · follow the quest marker') : h('span.muted', h('span.kbd', ctx.input.label('journal')), ' Journal · follow the ◆ on your compass'),
+      h('button.btn.small.primary', { 'data-action': 'quest-ok', onclick: dismiss }, 'Got it'),
+    ),
   );
   ctx.ui.layers.overlay.appendChild(card);
   setTimeout(dismiss, 14000);

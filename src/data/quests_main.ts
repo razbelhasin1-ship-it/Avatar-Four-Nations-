@@ -40,9 +40,14 @@ const GRAND: Record<Element, { id: string; name: string }> = {
 
 const bender = (e: Element) => `${ELEMENT_INFO[e].name.toLowerCase()}bending`;
 
+/** The Avatar cycle. The "seek" quests start in this order after the start element; the first one is tracked. */
+const CYCLE: Element[] = ['water', 'earth', 'fire', 'air'];
+
 function avatarCycle(start: Element): QuestDef {
   const sm = START_MASTER[start];
   const others = ELEMENTS.filter((e) => e !== start);
+  const ci = CYCLE.indexOf(start);
+  const seekOrder = [1, 2, 3].map((k) => CYCLE[(ci + k) % CYCLE.length]);
   return {
     id: `mq_avatar_cycle_${start}`,
     title: 'The Avatar Cycle',
@@ -55,7 +60,7 @@ function avatarCycle(start: Element): QuestDef {
       {
         id: 'nations',
         text: 'Seek the other nations. A master of each element can awaken it in you.',
-        onStart: others.map((e) => ({ type: 'startQuest' as const, quest: `mq_seek_${e}` })),
+        onStart: seekOrder.map((e) => ({ type: 'startQuest' as const, quest: `mq_seek_${e}` })),
         objectives: others.map((e) => ({ type: 'element' as const, element: e, text: `Learn ${bender(e)}` })),
       },
       {
@@ -76,9 +81,10 @@ function seek(e: Element): QuestDef {
     title: `Seek the ${ELEMENT_INFO[e].nation}`,
     category: 'main',
     summary: `${ELEMENT_INFO[e].name} waits for the Avatar in ${n.place}. ${n.firstName} can awaken it in you.`,
+    // `any` + the element objective: a player who already awakened it elsewhere is not sent back.
     steps: [
-      { id: 'travel', text: `Travel to ${n.place}.`, objectives: [{ type: 'reach', landmark: n.landmark, radius: 120, text: `Reach ${n.place}` }] },
-      { id: 'meet', text: `Find ${n.firstName} ${n.where}.`, objectives: [{ type: 'talk', npc: n.first, text: `Talk to ${n.firstName}` }] },
+      { id: 'travel', text: `Travel to ${n.place}.`, any: true, objectives: [{ type: 'reach', landmark: n.landmark, radius: 120, text: `Reach ${n.place}` }, { type: 'element', element: e, text: `Awaken ${bender(e)}` }] },
+      { id: 'meet', text: `Find ${n.firstName} ${n.where}.`, any: true, objectives: [{ type: 'talk', npc: n.first, text: `Talk to ${n.firstName}` }, { type: 'element', element: e, text: `Awaken ${bender(e)}` }] },
       { id: 'awaken', text: `Pass ${n.firstName}'s awakening lesson.`, objectives: [{ type: 'element', element: e, text: `Awaken ${bender(e)}` }] },
     ],
     rewards: { xp: 200, currency: 60 },

@@ -1,3 +1,4 @@
+import { detectDevice, type DeviceInfo } from './Device';
 import type { EventBus } from './EventBus';
 import type { Action } from './Input';
 import { DEFAULT_BINDINGS } from './Input';
@@ -51,6 +52,12 @@ export interface ControlSettings {
   bindings: Record<Action, string[]>;
   autoTarget: boolean;
   touchControls: 'auto' | 'on' | 'off';
+  /** On-screen button size multiplier (buttons never shrink below 44 px). */
+  touchButtonSize: number;
+  /** 0.3..1 opacity of the on-screen controls. */
+  touchOpacity: number;
+  /** Mirror the touch layout: move stick on the right, action buttons on the left. */
+  touchLeftHanded: boolean;
 }
 
 export interface GameplaySettings {
@@ -154,9 +161,36 @@ export function defaultSettings(): SettingsData {
       bindings: structuredClone(DEFAULT_BINDINGS),
       autoTarget: true,
       touchControls: 'auto',
+      touchButtonSize: 1,
+      touchOpacity: 0.85,
+      touchLeftHanded: false,
     },
     gameplay: { difficulty: 'balanced', tutorialHints: true, damageNumbers: true, hudScale: 1, compass: true },
   };
+}
+
+/**
+ * First launch on a phone / tablet (no saved settings): the Low preset made
+ * lighter still for mobile GPUs and batteries — lower render scale, capped
+ * pixel ratio, shorter draw distance, no post-processing, thin grass and
+ * foliage (the 'low' preset also thins city crowds). Everything stays
+ * adjustable in Settings.
+ */
+export function applyMobileDefaults(s: SettingsData, device: DeviceInfo): void {
+  Object.assign(s.graphics, GRAPHICS_PRESETS.low, {
+    preset: 'low',
+    renderScale: 0.7,
+    maxPixelRatio: 1.5,
+    drawDistance: 400,
+    grassDensity: 0,
+    foliageDensity: 0.4,
+    particleDensity: 0.35,
+    postProcessing: false,
+    bloom: false,
+    antialias: false,
+  });
+  s.controls.touchControls = 'auto';
+  if (device.phone) s.gameplay.hudScale = 0.85;
 }
 
 /** Deep-merge `src` into `dst` keeping only keys present in `dst` (schema-safe). */
@@ -190,18 +224,30 @@ function mergeBindings(dst: Record<string, string[]>, src: any): Record<string, 
  */
 export class SettingsManager {
   data: SettingsData;
+  /** Device class detected at boot (phone / tablet / desktop). */
+  readonly device: DeviceInfo = detectDevice();
+  /** True when this launch found no saved settings on a mobile device and applied the mobile defaults. */
+  mobileDefaultsApplied = false;
 
   constructor(private readonly events: EventBus) {
     this.data = this.load();
+    if (this.mobileDefaultsApplied) this.persist();
   }
 
   private load(): SettingsData {
     const base = defaultSettings();
+    let raw: string | null = null;
+    let readable = false;
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      raw = localStorage.getItem(STORAGE_KEY);
+      readable = true;
       if (raw) mergeKnown(base, JSON.parse(raw));
     } catch {
       /* storage unavailable or corrupt: defaults */
+    }
+    if (!raw && (readable || typeof localStorage === 'undefined') && this.device.mobile) {
+      applyMobileDefaults(base, this.device);
+      this.mobileDefaultsApplied = true;
     }
     base.version = SETTINGS_VERSION;
     return base;

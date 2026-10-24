@@ -5,6 +5,7 @@ import { clear, h } from '../dom';
 import { emblem } from '../icons';
 import type { Screen, UIManager } from '../UIManager';
 import { focusables, guardGhostClicks, moveFocus, pollPad, type Dir } from './gsBase';
+import { fullscreenButton } from './MainMenu';
 
 const SHORTCUTS: Array<[string, Action, string, string]> = [
   ['map', 'map', 'World Map', '🗺'],
@@ -56,6 +57,7 @@ export class PauseScreen implements Screen {
       tutorial ? null : b('Load Journey', () => this.ui.open('saveload', { mode: 'load' }), '', 'load'),
       b('Settings', () => this.ui.open('settings'), '', 'settings'),
       b('Controls', () => this.renderControls(), '', 'controls'),
+      fullscreenButton('btn.ps-btn', () => this.ctx), // [front end] hidden where the Fullscreen API is missing
       h('div.divider'),
       b(tutorial ? 'Leave Tutorial' : 'Exit to Main Menu', () => this.exit(), '.danger', 'exit'),
     );

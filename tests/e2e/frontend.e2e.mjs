@@ -194,7 +194,7 @@ async function desktop() {
 
     let before;
     await check('desktop: creator options visibly change the model', async () => {
-      await h.page.click('[data-element="fire"]');
+      await h.page.click('.element-card[data-element="fire"]');
       await h.page.waitForSelector('[data-tab="hair"]');
       const c = (fn, ...a) => h.eval((g, src, a) => new Function('return (' + src + ')')()(g.debug.creator, ...a), fn.toString(), a);
       await c((x) => x.flush());
@@ -324,7 +324,7 @@ async function desktop() {
       assert.match(cont, /Ember · Fire Avatar/);
       // New journey into the occupied slot must ask first.
       await h.page.click('[data-action="new"]');
-      await h.page.click('[data-element="air"]');
+      await h.page.click('.element-card[data-element="air"]');
       await h.page.waitForSelector('.ngf-right [data-action="creator-continue"]');
       await h.page.click('.ngf-right [data-action="creator-continue"]');
       await h.page.waitForSelector('.ngf-slot');
@@ -404,7 +404,7 @@ async function phone() {
     });
 
     await check('phone: creator bottom sheet with touch sliders and chips', async () => {
-      await h.page.tap('[data-element="water"]');
+      await h.page.tap('.element-card[data-element="water"]');
       await h.page.waitForSelector('.ngf-mobile [data-action="creator-continue"]');
       assert.ok(await inView('.ngf-left'), 'creator sheet off-screen');
       assert.equal(await h.page.isVisible('.touch .tbtn[data-touch="jump"]'), false, 'touch controls must not cover menus / the creator');
@@ -442,7 +442,12 @@ async function phone() {
       await h.page.waitForSelector('.quest-prompt', { timeout: 20000 });
       assert.ok(await inView('.quest-prompt'), 'quest prompt off-screen');
       await h.page.tap('[data-action="quest-ok"]');
+      // Portrait play: a rotate card pauses the game until the phone turns (or the player opts to stay in portrait).
+      await h.page.waitForSelector('.rotate-hint', { timeout: 10000 });
+      assert.equal((await h.state()).ui.screen, 'rotateHint');
+      await h.page.tap('[data-action="rotate-dismiss"]');
       await h.step(3);
+      assert.equal(await h.page.isVisible('.rotate-hint'), false, 'rotate card should close');
       assert.ok(await h.page.isVisible('.touch .tbtn[data-touch="jump"]'), 'touch controls hidden on a touch phone');
       const overlaps = await h.page.evaluate(() => {
         const vis = (e) => e && e.offsetParent !== null && getComputedStyle(e).visibility !== 'hidden';

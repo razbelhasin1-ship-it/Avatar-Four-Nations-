@@ -3,7 +3,8 @@ import { ACTION_LABELS, codeLabel, type Action } from '../../core/Input';
 import type { QualityPreset } from '../../core/Settings';
 import { clear, h } from '../dom';
 import type { Screen, UIManager } from '../UIManager';
-import { gamepadNav } from './MainMenu';
+import { fullscreen } from '../../core/Device';
+import { fullscreenButton, gamepadNav } from './MainMenu';
 
 type Tab = 'graphics' | 'audio' | 'controls' | 'gameplay';
 type Device = 'kbm' | 'pad';
@@ -181,6 +182,7 @@ export class SettingsScreen implements Screen {
     if ((g0.preset as QualityPreset) === 'custom') presets.append(h('span.chip.active', 'Custom'));
     this.body.append(presets);
     const r = this.ctx.render;
+    if (s.device.mobile) this.body.append(h('div.muted.settings-note', s.mobileDefaultsApplied ? 'Phone / tablet detected: mobile-friendly defaults were applied on first launch (Low, 70 % render scale, shorter draw distance).' : 'Phone / tablet detected: Low or Medium keeps the game smooth and the battery cool.'));
     this.body.append(h('div.muted.settings-note', `Rendering at ${Math.round(r.viewportWidth * r.pixelRatio)}×${Math.round(r.viewportHeight * r.pixelRatio)} · shadows ${g0.shadows === 'off' ? 'off' : g0.shadows} · ${g0.postProcessing ? 'post-processing on' : 'no post-processing'}`));
     let g = this.grid('Resolution & lighting');
     this.rowSlider(g, 'Render scale', 'graphics.renderScale', 0.5, 1, 0.05, (v) => `${Math.round(v * 100)}%`, 'Internal resolution');
@@ -221,9 +223,12 @@ export class SettingsScreen implements Screen {
     this.rowSlider(g, 'Camera shake', 'controls.cameraShake', 0, 1, 0.05, (v) => (v === 0 ? 'Off' : `${Math.round(v * 100)}%`));
     this.rowSlider(g, 'Camera distance', 'controls.cameraDistance', 0.6, 1.6, 0.05, (v) => `${Math.round(v * 100)}%`);
     this.rowToggle(g, 'Aim assist', 'controls.autoTarget', 'Snap techniques toward enemies near the crosshair');
-    g = this.grid('Touch');
-    this.rowSelect(g, 'Touch controls', 'controls.touchControls', [['auto', 'Automatic'], ['on', 'Always'], ['off', 'Never']]);
-    this.rowSlider(g, 'Touch sensitivity', 'controls.touchSensitivity', 0.2, 3, 0.05, (v) => v.toFixed(2));
+    g = this.grid('Touch controls');
+    this.rowSelect(g, 'On-screen controls', 'controls.touchControls', [['auto', 'Automatic'], ['on', 'Always'], ['off', 'Never']], 'Automatic shows them on phones, tablets and after a touch');
+    this.rowSlider(g, 'Look sensitivity', 'controls.touchSensitivity', 0.2, 3, 0.05, (v) => v.toFixed(2), 'Drag-to-look speed');
+    this.rowSlider(g, 'Button size', 'controls.touchButtonSize', 0.8, 1.4, 0.05, (v) => `${Math.round(v * 100)}%`, 'Never smaller than a fingertip (44 px)');
+    this.rowSlider(g, 'Button opacity', 'controls.touchOpacity', 0.3, 1, 0.05, (v) => `${Math.round(v * 100)}%`);
+    this.rowToggle(g, 'Left-handed layout', 'controls.touchLeftHanded', 'Move stick on the right, actions on the left');
     this.body.append(
       h(
         'div.bind-head',
@@ -259,6 +264,7 @@ export class SettingsScreen implements Screen {
     this.rowSlider(g, 'UI scale', 'gameplay.hudScale', 0.75, 1.3, 0.05, (v) => `${Math.round(v * 100)}%`, 'Size of the HUD: vitals, techniques, quest tracker, compass');
     this.rowToggle(g, 'Damage numbers', 'gameplay.damageNumbers');
     this.rowToggle(g, 'Compass', 'gameplay.compass');
+    if (fullscreen.supported) g.append(this.label('Fullscreen', this.ctx.settings.device.mobile ? 'Also locks landscape on phones and tablets' : ''), fullscreenButton('btn.small', () => this.ctx), h('span'));
     this.body.append(
       h('div.divider'),
       h('button.btn.small.danger', { 'data-action': 'reset-all', onclick: () => this.ui.confirm('Reset every setting to its default?', [{ text: 'Reset', danger: true, onClick: () => { this.ctx.settings.resetAll(); this.render(); } }, { text: 'Cancel', primary: true }]) }, 'Reset all settings'),

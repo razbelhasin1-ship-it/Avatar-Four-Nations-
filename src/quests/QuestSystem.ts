@@ -276,7 +276,9 @@ export class QuestSystem implements GameSystem, Persistable {
       for (const t of r.techniques ?? []) this.ctx.progression.learn(t, 'quest');
     }
     if (this.tracked === def.id) {
-      const next = [...this.active.keys()].find((id) => this.defs.get(id)?.category === 'main') ?? [...this.active.keys()][0] ?? null;
+      // Prefer a main quest the compass can point at (a step with a located objective).
+      const main = [...this.active.keys()].filter((id) => this.defs.get(id)?.category === 'main');
+      const next = main.find((id) => this.hasLocatedObjective(id)) ?? main[0] ?? [...this.active.keys()][0] ?? null;
       this.track(next);
     }
     this.ctx.events.emit('quest:completed', { questId: def.id });
@@ -284,12 +286,22 @@ export class QuestSystem implements GameSystem, Persistable {
     this.checkAutoStart();
   }
 
+  /** True when the quest's current step has an unfinished objective with a world position. */
+  private hasLocatedObjective(id: string): boolean {
+    const def = this.defs.get(id);
+    const prog = this.active.get(id);
+    const step = def && prog ? def.steps[prog.step] : undefined;
+    return !!step && step.objectives.some((o, i) => !prog!.done[i] && !!this.objectivePosition(o));
+  }
+
   runActions(actions: QuestAction[]): void {
+    // Several main quests started together: track the first (data lists them in the intended order).
+    let firstMain: string | null = null;
     for (const a of actions) {
       try {
         switch (a.type) {
           case 'startQuest':
-            this.start(a.quest);
+            if (this.start(a.quest) && !firstMain && this.defs.get(a.quest)?.category === 'main') firstMain = a.quest;
             break;
           case 'setFlag':
             this.setFlag(a.flag);
@@ -323,6 +335,7 @@ export class QuestSystem implements GameSystem, Persistable {
         console.error('[Quests] action failed', a, err);
       }
     }
+    if (firstMain && this.tracked !== firstMain && this.active.has(firstMain)) this.track(firstMain);
   }
 
   /** Start quests whose autoStart conditions hold. */

@@ -67,6 +67,7 @@ export function installDebug(game: Game): void {
         inventory: { currency: ctx.inventory.currency, items: Object.fromEntries(ctx.inventory.items) },
         render: { ...ctx.render.stats },
         time: { elapsed: ctx.time.elapsed, hour: ctx.world.sky.timeOfDay },
+        device: { ...ctx.settings.device, mobileDefaults: ctx.settings.mobileDefaultsApplied, touchUI: !!ctx.ui.touch?.shown },
       };
     },
     /** Start a new campaign without going through the UI. */

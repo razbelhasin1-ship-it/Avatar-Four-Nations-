@@ -1,3 +1,4 @@
+import { fullscreen } from '../../core/Device';
 import type { GameContext } from '../../core/GameContext';
 import { ELEMENT_INFO, ELEMENTS, type Element } from '../../core/types';
 import { h, clear } from '../dom';
@@ -104,6 +105,41 @@ export function arrowNav(e: KeyboardEvent, root: HTMLElement): boolean {
   return true;
 }
 
+/**
+ * Fullscreen toggle (Fullscreen API with webkit fallbacks; on phones and tablets
+ * it also locks landscape). Hidden where the API is missing, e.g. iPhone Safari.
+ */
+export function fullscreenButton(cls: string, ctx: () => GameContext | undefined): HTMLElement {
+  const icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+  const label = h('span');
+  const b = h(`button.${cls}.fs-toggle`, { type: 'button', 'data-action': 'fullscreen', html: icon }, label);
+  const sync = () => {
+    const on = fullscreen.active;
+    label.textContent = on ? 'Exit Fullscreen' : 'Fullscreen';
+    b.setAttribute('aria-pressed', String(on));
+    b.classList.toggle('hidden', !fullscreen.supported);
+  };
+  b.addEventListener('click', () => {
+    const c = ctx();
+    c?.audio.play('ui_click', { bus: 'ui' });
+    void fullscreen.toggle(!!c?.settings.device.mobile).then(sync);
+  });
+  // One document listener keeps every live toggle in sync (menus re-render their buttons).
+  for (const [el] of fsSyncs) if (!el.isConnected) fsSyncs.delete(el);
+  fsSyncs.set(b, sync);
+  if (!fsListening) {
+    fsListening = true;
+    const all = () => fsSyncs.forEach((f) => f());
+    document.addEventListener('fullscreenchange', all);
+    document.addEventListener('webkitfullscreenchange', all);
+  }
+  sync();
+  return b;
+}
+
+const fsSyncs = new Map<HTMLElement, () => void>();
+let fsListening = false;
+
 // -----------------------------------------------------------------------------
 
 type View = 'root' | 'enter' | 'farewell';
@@ -123,6 +159,7 @@ export class MainMenu implements Screen {
   private ctx!: GameContext;
   private view: View = 'root';
   private subscribed = false;
+  private fsBtn: HTMLElement;
 
   constructor(private readonly ui: UIManager) {
     this.list = h('div.menu-list', { role: 'menu' });
@@ -145,6 +182,7 @@ export class MainMenu implements Screen {
     );
     this.content = h('div.menu-content', brand, this.list);
     this.farewellEl = h('div.menu-farewell.hidden');
+    this.fsBtn = fullscreenButton('btn.small.menu-fs', () => this.ctx);
     this.el = h(
       'div.main-menu',
       this.xfade,
@@ -152,6 +190,7 @@ export class MainMenu implements Screen {
       this.content,
       this.farewellEl,
       this.locEl,
+      this.fsBtn,
       h('div.menu-footer', h('span', 'Mouse & keyboard · gamepad · touch'), h('span.dot', '·'), h('span', 'A fan-made tribute adventure')),
     );
   }

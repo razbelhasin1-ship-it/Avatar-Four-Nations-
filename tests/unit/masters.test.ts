@@ -79,6 +79,16 @@ describe('quests, NPCs, dialogues, props, shops', () => {
     }
   });
 
+  it('main line: the seek quests start in Avatar-cycle order after the start element (the first is tracked)', () => {
+    const cycle = ['water', 'earth', 'fire', 'air'];
+    for (const e of ELEMENTS) {
+      const q = QUESTS.find((x) => x.id === `mq_avatar_cycle_${e}`)!;
+      const starts = q.steps.find((s) => s.id === 'nations')!.onStart!.map((a) => (a.type === 'startQuest' ? a.quest : ''));
+      const i = cycle.indexOf(e);
+      expect(starts, e).toEqual([1, 2, 3].map((k) => `mq_seek_${cycle[(i + k) % 4]}`));
+    }
+  });
+
   it('NPC dialogues exist and dialogue quest actions reference real quests/items', () => {
     const dl = new Map(DIALOGUES.map((d) => [d.id, d]));
     const qids = new Set(QUESTS.map((q) => q.id));
