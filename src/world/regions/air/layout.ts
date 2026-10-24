@@ -57,9 +57,10 @@ export const AIR_SPOTS: Record<string, Spot> = {
   merchant_air_temple_2: { x: 1203.5, z: 974, yaw: face(1203.5, 974, 1210, 980), r: 2, label: 'Trailhead pedlar', region: R },
   // --- Creature habitats -------------------------------------------------------
   habitat_bison_stable: { ...polarFrame(-64.3, 44.3, 0, 2), y: F.stable, r: 9, label: 'Sky bison stables', region: R },
-  habitat_sky_bison_1: { x: 1340, z: 1080, r: 45, label: 'Sky Bison Meadow', region: R },
+  // On the level grazing shelf beside Cloudmirror Tarn (PLATEAUS 'bison_meadow').
+  habitat_sky_bison_1: { x: 1366, z: 1050, r: 32, label: 'Sky Bison Meadow', region: R },
   habitat_sky_bison_2: { ...polarFrame(-64.3, 44.3, 0, 2), y: F.stable, r: 9, label: 'Sky bison stables', region: R },
-  habitat_bison_meadow: { x: 1340, z: 1080, r: 45, label: 'Sky Bison Meadow', region: R },
+  habitat_bison_meadow: { x: 1366, z: 1050, r: 32, label: 'Sky Bison Meadow', region: R },
   // --- Shrines -------------------------------------------------------------------
   shrine_wind: { x: 1577.05, z: 1344.7, y: WIND_SHRINE.y + 0.5, r: 3, label: 'Shrine of the Four Winds', region: R },
   shrine_air_pavilion: at(-24, -24, { y: Y0 + 0.9, r: 4, label: 'Teal pavilion' }),

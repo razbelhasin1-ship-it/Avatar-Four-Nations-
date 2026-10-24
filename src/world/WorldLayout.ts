@@ -289,8 +289,10 @@ export const RIVERS: RiverDef[] = [
   {
     id: 'caldera_stream',
     name: 'Ember Stream',
+    // Rises on the OUTER slope of the volcano (rim crest is ~235 m from the caldera centre); a source inside the
+    // rim made the river surface hang over the caldera wall as a sheet.
     points: [
-      { x: -1180, z: 1000 },
+      { x: -1110, z: 975 },
       { x: -1060, z: 960 },
       { x: -960, z: 960 },
     ],
@@ -429,6 +431,8 @@ export const PLATEAUS: PlateauDef[] = [
   { id: 'river_village', x: 120, z: -560, r: 55, blend: 50 },
   { id: 'meditation_isle', x: -1800, z: -1800, r: 70, blend: 40, height: 4 },
   { id: 'ember_resort', x: -1690, z: 1760, r: 60, blend: 40, height: 4 },
+  // Grazing shelf around Cloudmirror Tarn so the sky bison herd has open, level ground on the steep massif.
+  { id: 'bison_meadow', x: 1368, z: 1052, r: 36, blend: 26, height: 132 },
 ];
 
 // ---------------------------------------------------------------------------

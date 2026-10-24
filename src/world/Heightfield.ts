@@ -296,7 +296,8 @@ const EMPTY_CELL: Cell = { ranges: [], plateaus: [], trails: [], roads: [], lake
 function cellAt(x: number, z: number): Cell {
   const cx = Math.floor((x + WORLD_HALF) / GRID_CELL);
   const cz = Math.floor((z + WORLD_HALF) / GRID_CELL);
-  if (cx < 0 || cz < 0 || cx >= GRID_N || cz >= GRID_N) return EMPTY_CELL;
+  // Written so NaN coordinates (e.g. from a degenerate camera ray) also fall back to the empty cell.
+  if (!(cx >= 0 && cz >= 0 && cx < GRID_N && cz < GRID_N)) return EMPTY_CELL;
   return cells[cz * GRID_N + cx];
 }
 
