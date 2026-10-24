@@ -6,3 +6,8 @@
  */
 import './footsteps';
 import './elements';
+import './combat';
+import './ui';
+import './voices';
+import './avatar';
+import './ambience';

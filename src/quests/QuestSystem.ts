@@ -12,6 +12,11 @@ export interface QuestMarker {
   text: string;
   position: THREE.Vector3;
   tracked: boolean;
+  // [additive: training] Non-quest markers (masters ✦, quest props): glyph, colour, compass visibility.
+  icon?: string;
+  color?: string;
+  /** false = map only (not on the HUD compass). */
+  compass?: boolean;
 }
 
 /**
@@ -28,6 +33,12 @@ export class QuestSystem implements GameSystem, Persistable {
   tracked: string | null = null;
   private pollTimer = 0;
   private subscribed = false;
+  /** [additive: training] Extra map/compass markers (known masters, quest props). */
+  private markerProviders: Array<() => QuestMarker[]> = [];
+
+  addMarkerProvider(f: () => QuestMarker[]): void {
+    this.markerProviders.push(f);
+  }
 
   init(ctx: GameContext): void {
     this.ctx = ctx;
@@ -299,6 +310,9 @@ export class QuestSystem implements GameSystem, Persistable {
           case 'revealLocation':
             this.ctx.world.discovered.add(a.location);
             break;
+          case 'takeItem':
+            this.ctx.inventory.remove(a.item, a.count ?? 1);
+            break;
         }
       } catch (err) {
         console.error('[Quests] action failed', a, err);
@@ -387,6 +401,13 @@ export class QuestSystem implements GameSystem, Persistable {
         const p = this.objectivePosition(o);
         if (p) out.push({ questId: id, title: def.title, text: o.text, position: p, tracked: id === this.tracked });
       });
+    }
+    for (const f of this.markerProviders) {
+      try {
+        out.push(...f());
+      } catch (err) {
+        console.error('[Quests] marker provider failed', err);
+      }
     }
     return out;
   }

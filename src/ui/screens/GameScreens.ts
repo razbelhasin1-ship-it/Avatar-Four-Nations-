@@ -282,9 +282,9 @@ class MapScreen extends ModalScreen {
     }
     for (const m of ctx.quests.markers()) {
       const x = v.ox + m.position.x * v.scale, y = v.oz + m.position.z * v.scale;
-      g.fillStyle = m.tracked ? '#ffcc33' : '#e0e0e0';
+      g.fillStyle = m.color ?? (m.tracked ? '#ffcc33' : '#e0e0e0');
       g.font = '16px serif';
-      g.fillText('◆', x, y + 5);
+      g.fillText(m.icon ?? '◆', x, y + 5);
       g.font = '12px Cinzel, serif';
     }
     const p = ctx.player;

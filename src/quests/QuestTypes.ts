@@ -46,7 +46,9 @@ export type QuestAction =
   | { type: 'learn'; technique: string }
   | { type: 'unlockElement'; element: Element }
   | { type: 'currency'; amount: number }
-  | { type: 'revealLocation'; location: string };
+  | { type: 'revealLocation'; location: string }
+  // [additive: quests] hand over a quest item (letters, deliveries).
+  | { type: 'takeItem'; item: string; count?: number };
 
 export interface QuestStepDef {
   id: string;

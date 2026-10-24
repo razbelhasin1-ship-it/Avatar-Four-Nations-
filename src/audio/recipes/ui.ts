@@ -1,6 +1,6 @@
 import { INSTRUMENTS, type NoteCtx } from '../music/instruments';
 import { aliasSound, registerSound, type RecipeOpts, type SoundMeta } from '../registry';
-import { droplet, filt, glide, midiHz, noise, noiseHit, osc, perc, ping, pluck, swell, thump, type AC } from '../synth';
+import { bell, droplet, filt, glide, midiHz, noise, noiseHit, osc, perc, ping, pluck, swell, thump, type AC } from '../synth';
 import { whoosh } from './elements';
 
 /**
@@ -18,17 +18,46 @@ function kpluck(ac: AC, out: AudioNode, o: RecipeOpts, t: number, midi: number, 
 }
 
 function softBell(ac: AC, out: AudioNode, o: RecipeOpts, t: number, midi: number, vol: number, decay = 1.2): void {
-  INSTRUMENTS.bell(nc(ac, out, o), t, hz(midi, o), decay - 1.6, vol * o.volume);
+  // FM temple bell at a UI-appropriate level (the music instrument's velocity curve made these ~20 dB too quiet).
+  bell(ac, out, t, hz(midi, o), Math.max(0.6, Math.min(3.2, decay)), 0.5 * vol * o.volume, 3.5, 2.0);
 }
 
+/**
+ * Real ring-out (s) of recipes whose bells/gongs outlast their musical length,
+ * measured offline (debug.audio.verifyAll, -60 dB re peak) plus margin. The
+ * engine keeps voices alive for this long, so tails are never cut (no clicks).
+ */
+const TAIL: Record<string, number> = {
+  'ui.confirm': 1.45,
+  'ui.open': 1.3,
+  'ui.notify': 2.75,
+  'ui.notify.info': 2.75,
+  'ui.notify.success': 2.4,
+  'ui.notify.warning': 2.1,
+  'ui.notify.learn': 2.7,
+  'ui.notify.quest': 2.3,
+  'ui.notify.avatar': 4.5,
+  'ui.quest.start': 2.9,
+  'ui.quest.complete': 3.4,
+  'ui.technique.learned': 3.75,
+  'ui.mastery': 5.15,
+  'ui.discovery': 3.05,
+  'ui.levelup': 3.2,
+  'ui.sphere.unlocked': 4.7,
+  'ui.save': 2.3,
+  'ui.pickup': 1.6,
+  'ui.element.water': 2.2,
+};
+
 function reg(id: string, dur: number, fn: (ac: AC, out: AudioNode, t: number, o: RecipeOpts) => void, desc: string, extra: SoundMeta = {}): void {
+  const total = Math.max(dur + 0.35, TAIL[id] ?? 0);
   registerSound(
     id,
     (ac, out, t, o) => {
       fn(ac, out, t, o);
-      return dur;
+      return total;
     },
-    { ...UI, duration: dur + 0.35, desc, ...extra },
+    { ...UI, duration: total, desc, ...extra },
   );
 }
 

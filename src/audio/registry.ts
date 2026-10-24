@@ -114,6 +114,21 @@ export function loopMeta(id: string): LoopMeta {
   return loopMetas.get(id) ?? {};
 }
 
+const trims = new Map<string, number>();
+
+/**
+ * Engine-side gain staging: a static trim applied to every play of `id` (one-shot
+ * or loop). Used for recipes whose raw output peaks above 0 dBFS at volume 1
+ * (measured by debug.audio.verifyAll); see src/audio/trims.ts.
+ */
+export function setSoundTrim(id: string, gain: number): void {
+  if (Number.isFinite(gain) && gain > 0) trims.set(id, gain);
+}
+
+export function soundTrim(id: string): number {
+  return trims.get(id) ?? 1;
+}
+
 export function hasSound(id: string): boolean {
   return recipes.has(id);
 }

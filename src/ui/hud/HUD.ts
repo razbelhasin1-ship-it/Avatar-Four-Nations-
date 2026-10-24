@@ -219,8 +219,9 @@ export class HUD {
     const dirs: Array<[string, number]> = [['N', 0], ['E', Math.PI / 2], ['S', Math.PI], ['W', -Math.PI / 2], ['NE', Math.PI / 4], ['SE', (3 * Math.PI) / 4], ['SW', (-3 * Math.PI) / 4], ['NW', -Math.PI / 4]];
     for (const [label, a] of dirs) place(a, h('div.tick', { style: { opacity: label.length > 1 ? '0.55' : '1' } }, label));
     for (const m of ctx.quests.markers()) {
+      if (m.compass === false) continue;
       const a = Math.atan2(m.position.x - p.position.x, -(m.position.z - p.position.z));
-      place(a, h('div.marker', { title: m.text, style: { color: m.tracked ? '#ffcc33' : '#bbb' } }, '◆'));
+      place(a, h('div.marker', { title: m.text, style: { color: m.color ?? (m.tracked ? '#ffcc33' : '#bbb') } }, m.icon ?? '◆'));
     }
     for (const l of LANDMARKS) {
       if (!ctx.world.discovered.has(l.id)) continue;

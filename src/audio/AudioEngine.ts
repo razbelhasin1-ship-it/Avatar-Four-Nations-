@@ -4,8 +4,9 @@ import type { SettingsManager } from '../core/Settings';
 import type { Vec3Like } from '../core/types';
 import { createReverb, makeResources, type AudioResources, type Reverb, type ReverbParams } from './dsp';
 import { MusicDirector } from './music/MusicDirector';
-import { getLoopRecipe, getSoundRecipe, soundMeta, type Bus } from './registry';
+import { getLoopRecipe, getSoundRecipe, soundMeta, soundTrim, type Bus } from './registry';
 import './recipes';
+import './trims';
 
 // Public recipe API (unchanged import path for every module).
 export * from './registry';
@@ -423,7 +424,7 @@ export class AudioEngine {
     // Build the voice chain.
     const busNode = this.buses[bus]!;
     const vg = ac.createGain();
-    vg.gain.value = 1;
+    vg.gain.value = soundTrim(id);
     const nodes: AudioNode[] = [vg];
     let head: AudioNode = vg;
     if (pos) {
@@ -465,7 +466,9 @@ export class AudioEngine {
       for (const n of nodes) n.disconnect();
       return null;
     }
-    const voice: Voice = { id, start: t, end: t + Math.max(0.05, dur) + 0.3, prio, gain: vg, send: sendNode, nodes, stolen: false };
+    // Keep the voice alive for the longer of the returned and declared durations (no cut-off tails).
+    const life = Math.max(0.05, dur, fin(meta.duration, 0));
+    const voice: Voice = { id, start: t, end: t + life + 0.3, prio, gain: vg, send: sendNode, nodes, stolen: false };
     this.voices.push(voice);
     this.stats.played++;
     this.log.push({ id, t: now, bus, vol: volume, x: pos?.x, z: pos?.z });
@@ -518,9 +521,10 @@ export class AudioEngine {
     }
     const pos = finite3(opts.position) ? opts.position : undefined;
     const bus: Bus = opts.bus ?? (pos ? 'sfx' : 'ambient');
+    const trim = soundTrim(id);
     const gainNode = ac.createGain();
     gainNode.gain.value = 0;
-    gainNode.gain.setTargetAtTime(Math.max(0, Math.min(4, fin(opts.volume, 1))), ac.currentTime, 0.2);
+    gainNode.gain.setTargetAtTime(Math.max(0, Math.min(4, fin(opts.volume, 1))) * trim, ac.currentTime, 0.2);
     let panner: PannerNode | null = null;
     if (pos) {
       panner = this.makePanner(ac, pos, Math.max(2, fin(opts.range, 120)), 5, 1.1);
@@ -551,7 +555,7 @@ export class AudioEngine {
     const live = () => !rec.stopped && this.ac === ac;
     return {
       setVolume: (v) => {
-        if (live()) gainNode.gain.setTargetAtTime(Math.max(0, Math.min(4, fin(v, 0))), ac.currentTime, 0.1);
+        if (live()) gainNode.gain.setTargetAtTime(Math.max(0, Math.min(4, fin(v, 0))) * trim, ac.currentTime, 0.1);
       },
       setPosition: (p) => {
         if (!live() || !panner?.positionX || !finite3(p)) return;

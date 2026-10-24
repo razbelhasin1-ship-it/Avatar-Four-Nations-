@@ -6,6 +6,9 @@ import { TutorialSystem } from './tutorial/TutorialSystem';
 import { CharacterSystem } from './character/CharacterSystem';
 import { EnvironmentSystem } from './world/env/EnvironmentSystem';
 import { EncounterDirector } from './ai/EncounterDirector';
+import { AmbienceDirector } from './audio/AmbienceDirector';
+import { MusicSystem } from './audio/MusicSystem';
+import { AudioEvents } from './audio/AudioEvents';
 
 /**
  * Feature modules plug into the game here without editing Game.ts.
@@ -39,4 +42,9 @@ export const MODULES: GameModule[] = [
   { name: 'environment', order: 940, create: () => new EnvironmentSystem() },
   // Enemies, combat AI and encounters: camps/patrols/ambushes/bosses, attack tokens, loot, enemy HUD, sparring API (__game.debug.enemies).
   { name: 'encounters', order: 70, create: () => new EncounterDirector() },
+  // Audio (src/audio, SOUNDS.md): layered ambience by place/time/weather, region music + combat layer + stingers,
+  // event→sound bindings and UI sounds. They tick on the audio engine (menu included) (__game.debug.audio).
+  { name: 'audio_ambience', order: 970, create: () => new AmbienceDirector() },
+  { name: 'audio_music', order: 971, create: () => new MusicSystem() },
+  { name: 'audio_events', order: 972, create: () => new AudioEvents() },
 ];

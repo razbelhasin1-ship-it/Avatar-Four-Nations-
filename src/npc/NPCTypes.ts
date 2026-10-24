@@ -50,6 +50,10 @@ export interface NPCDef {
   /** Only spawn when this condition holds (story progression). */
   requiresFlag?: string;
   hidden?: boolean;
+  // [additive: training/NPC life] Spawn only while this condition holds (story/relocation),
+  // and a cheap day/night routine ('day' NPCs go indoors at night, 'night' ones only appear then).
+  condition?: DialogueCondition;
+  schedule?: 'day' | 'night' | 'always';
 }
 
 export type DialogueCondition = {

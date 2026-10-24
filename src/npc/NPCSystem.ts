@@ -56,6 +56,17 @@ export class NPC extends Entity {
   lookAt: THREE.Vector3 | null = null;
   private unregisterInteract: (() => void) | null = null;
   private markerSprite: THREE.Sprite | null = null;
+  // [additive: training] Combatant surface so masters can demonstrate real techniques
+  // through CombatSystem (ctx.combat.tryCast(npc, id, { force: true, free: true })).
+  readonly isPlayer = false;
+  element: Element = 'air';
+  chi = 100;
+  maxChi = 100;
+  waterReserve = 0;
+  maxWaterReserve = 40;
+  // [additive: NPC life] Civilians flee from nearby fighting for a few seconds.
+  fleeTimer = 0;
+  readonly fleeFrom = new THREE.Vector3();
 
   constructor(readonly def: NPCDef, private readonly sys: NPCSystem) {
     super();
@@ -71,6 +82,7 @@ export class NPC extends Entity {
     this.body = new KinematicBody(0.32, this.height);
     this.health = new Health(9999, 999);
     this.yaw = def.yaw ?? 0;
+    this.element = def.element ?? 'air';
     const style = def.element ?? (def.role === 'elder' ? 'elder' : def.role === 'guard' || def.role === 'soldier' ? 'guard' : def.role === 'child' ? 'child' : 'npc');
     this.humanoid.animator.loco.style = style;
     if (def.behavior.type === 'idle') this.humanoid.animator.loco.idleVariant = def.behavior.variant ?? 'stand';
@@ -117,6 +129,23 @@ export class NPC extends Entity {
     void ctx;
   }
 
+  castOrigin(which: 'handL' | 'handR' | 'hands' | 'chest' | 'feet', out: THREE.Vector3): THREE.Vector3 {
+    if (which === 'feet') return out.copy(this.root.position);
+    const h = this.humanoid;
+    h.root.updateWorldMatrix(true, true);
+    if (which === 'handL') return h.anchors.handL.getWorldPosition(out);
+    if (which === 'handR') return h.anchors.handR.getWorldPosition(out);
+    if (which === 'hands') {
+      h.anchors.handL.getWorldPosition(out);
+      return out.add(h.anchors.handR.getWorldPosition(new THREE.Vector3())).multiplyScalar(0.5);
+    }
+    return h.anchors.chest.getWorldPosition(out);
+  }
+
+  powerMultiplier(): number {
+    return 1;
+  }
+
   override receiveHit(hit: HitInfo, _ctx: GameContext): HitResult {
     // Civilians are not damageable; they flinch and move away.
     this.humanoid.animator.hitReact(0.6);
@@ -129,7 +158,17 @@ export class NPC extends Entity {
     const b = this.def.behavior;
     let desiredSpeed = 0;
     const pos = this.root.position;
-    if (!this.talking) {
+    if (this.fleeTimer > 0 && !this.talking) {
+      // [additive: NPC life] run away from danger, then walk back home.
+      this.fleeTimer -= dt;
+      const ax = pos.x - this.fleeFrom.x, az = pos.z - this.fleeFrom.z;
+      const l = Math.hypot(ax, az) || 1;
+      this.target.set(pos.x + (ax / l) * 4, pos.y, pos.z + (az / l) * 4);
+      desiredSpeed = 3.6;
+    } else if (!this.talking && (b.type === 'idle' || b.type === 'train' || b.type === 'converse') && Math.hypot(pos.x - this.home.x, pos.z - this.home.z) > 1.2) {
+      this.target.copy(this.home);
+      desiredSpeed = 1.4;
+    } else if (!this.talking) {
       if (b.type === 'wander') {
         if (pos.distanceTo(this.target) < 0.8) {
           this.waitTimer -= dt;
@@ -206,6 +245,8 @@ export class NPCSystem implements GameSystem {
   private live = new Map<string, NPC>();
   private dialogues = new Map<string, DialogueDef>();
   private actionHandlers = new Map<string, DialogueActionHandler>();
+  /** [additive: training] NPCs whose conversation is driven by code (masters, merchants). */
+  private talkHandlers = new Map<string, (npc: NPC) => void>();
   private markerTextures = new Map<string, THREE.Texture>();
   private streamTimer = 0;
   /** Active conversation. */
@@ -220,6 +261,30 @@ export class NPCSystem implements GameSystem {
     ctx.events.on('quest:started', () => this.refreshMarkers());
     ctx.events.on('quest:completed', () => this.refreshMarkers());
     ctx.events.on('quest:updated', () => this.refreshMarkers());
+    // [additive: NPC life] civilians flee from fights (not from training targets or sparring).
+    ctx.events.on('hit', (e) => {
+      if (e.targetKind === 'target' || e.targetKind === 'npc') return;
+      const a = ctx.entities.get(e.attackerId), t = ctx.entities.get(e.targetId);
+      if (a?.tags.has('sparring') || t?.tags.has('sparring')) return;
+      this.alarm(e.position.x, e.position.z);
+    });
+  }
+
+  /** [additive: NPC life] Danger at (x,z): nearby civilians flee, guards turn to look. */
+  alarm(x: number, z: number, radius = 16): void {
+    for (const n of this.live.values()) {
+      const d = Math.hypot(n.position.x - x, n.position.z - z);
+      if (d > radius || n.talking) continue;
+      const r = n.def.role;
+      if (r === 'master' || r === 'guard' || r === 'soldier') {
+        n.lookAt = new THREE.Vector3(x, n.position.y, z);
+        setTimeout(() => (n.lookAt = null), 3000);
+        continue;
+      }
+      if (n.fleeTimer <= 0) n.humanoid.animator.hitReact(0.3);
+      n.fleeTimer = 3.5 + Math.random() * 2;
+      n.fleeFrom.set(x, 0, z);
+    }
   }
 
   addDef(d: NPCDef): void {
@@ -232,6 +297,19 @@ export class NPCSystem implements GameSystem {
 
   onAction(type: string, h: DialogueActionHandler): void {
     this.actionHandlers.set(type, h);
+  }
+
+  /**
+   * [additive: training] Drive an NPC's conversation from code: `handler` shows its own
+   * dialogue (ctx.ui.showDialogue) and must finish with endConversation().
+   */
+  onTalk(npcId: string, handler: (npc: NPC) => void): void {
+    this.talkHandlers.set(npcId, handler);
+  }
+
+  /** [additive: training] Live NPCs (read-only iteration). */
+  liveNPCs(): IterableIterator<NPC> {
+    return this.live.values();
   }
 
   getDef(id: string): NPCDef | undefined {
@@ -297,6 +375,12 @@ export class NPCSystem implements GameSystem {
   private shouldExist(d: NPCDef): boolean {
     if (d.hidden) return false;
     if (d.requiresFlag && !this.ctx.quests.hasFlag(d.requiresFlag)) return false;
+    if (d.condition && !this.checkCondition(d.condition)) return false;
+    if (d.schedule && d.schedule !== 'always') {
+      const hour = this.ctx.world.sky?.timeOfDay ?? 12;
+      const night = hour >= 21 || hour < 5.5;
+      if ((d.schedule === 'day' && night) || (d.schedule === 'night' && !night)) return false;
+    }
     return true;
   }
 
@@ -375,7 +459,7 @@ export class NPCSystem implements GameSystem {
 
   runActions(actions: DialogueAction[] | undefined, npc: NPC | null): void {
     if (!actions) return;
-    const questTypes = new Set(['startQuest', 'setFlag', 'notify', 'giveItem', 'giveCosmetic', 'learn', 'unlockElement', 'currency', 'revealLocation']);
+    const questTypes = new Set(['startQuest', 'setFlag', 'notify', 'giveItem', 'giveCosmetic', 'learn', 'unlockElement', 'currency', 'revealLocation', 'takeItem']);
     for (const a of actions) {
       if (questTypes.has(a.type)) {
         this.ctx.quests.runActions([a as any]);
@@ -398,6 +482,14 @@ export class NPCSystem implements GameSystem {
   /** Begin a conversation with an NPC. */
   talk(npc: NPC): void {
     this.ctx.events.emit('npc:interact', { npcId: npc.def.id });
+    const custom = this.talkHandlers.get(npc.def.id);
+    if (custom) {
+      this.talkingTo = npc;
+      npc.talking = true;
+      this.ctx.events.emit('dialogue:started', { npcId: npc.def.id, dialogueId: `code:${npc.def.id}` });
+      custom(npc);
+      return;
+    }
     const dlg = npc.def.dialogue ? this.dialogues.get(npc.def.dialogue) : undefined;
     if (!dlg) {
       this.ctx.events.emit('ui:notify', { text: `${npc.def.name}: "${this.smallTalk(npc)}"`, kind: 'info', duration: 3.5 });
