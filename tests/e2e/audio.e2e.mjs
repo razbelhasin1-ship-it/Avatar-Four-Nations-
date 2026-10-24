@@ -180,15 +180,18 @@ try {
     ids = await logIds();
     if (!r.ok && r.reason === 'water') assert.ok(ids.includes('fail.nowater'), 'no dry fizz: ' + ids.join(','));
     else assert.ok(near.length > 0, 'expected failure without water: ' + JSON.stringify(r));
-    // Next to the river: the cast draws real water.
+    // Next to the river with empty hands: the press gathers real water (draw sound, no dry fizz), the next one bends it.
     await audio((g) => g.teleport(-336, -1505));
     await h.step(6);
     await clearLog();
-    const ok = await audio((g) => g.cast('water_whip', null));
-    await h.step(3);
+    const gather = await audio((g) => g.cast('water_whip', null));
+    assert.equal(gather.reason, 'gather', JSON.stringify(gather));
+    await h.step(30);
     ids = await logIds();
-    assert.ok(ok.ok, JSON.stringify(ok));
     assert.ok(ids.some((id) => id.startsWith('water.draw') || id === 'water.flask'), 'no draw sound: ' + ids.join(','));
+    assert.ok(!ids.includes('fail.nowater'), 'gathering must not play the dry fizz: ' + ids.join(','));
+    const ok = await audio((g) => g.cast('water_whip', null));
+    assert.ok(ok.ok, JSON.stringify(ok));
   });
 
   await check('bindings: notifications by kind, dialogue voices, DOM UI sounds, pause muffles', async () => {
