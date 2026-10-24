@@ -16,6 +16,7 @@ import { Player } from '../player/Player';
 import { Progression } from '../progression/Progression';
 import { QuestSystem } from '../quests/QuestSystem';
 import { RenderPipeline } from '../render/Renderer';
+import { arrivalOverlay } from '../ui/screens/NewGameFlow';
 import { UIManager } from '../ui/UIManager';
 import { VFXSystem } from '../vfx/VFX';
 import { InteractionSystem } from '../world/Interactables';
@@ -42,8 +43,34 @@ interface OrderedSystem {
   sys: GameSystem;
 }
 
-/** Menu backdrop: a slow orbit above the Southern Air Temple's sea of clouds. */
-const MENU_FOCUS = new THREE.Vector3(1450, 330, 1250);
+/**
+ * Main-menu backdrop: a slow golden-hour camera tour over real world locations
+ * (the Air Temple and the capitals), cross-faded by the main menu on 'menu:tour'.
+ * `az` is the direction from the focus to the camera (sin, cos), swept by `sweep`.
+ */
+interface MenuShot {
+  id: Element;
+  name: string;
+  subtitle: string;
+  x: number;
+  z: number;
+  /** Look-at height above the terrain at the focus. */
+  lookY: number;
+  az: number;
+  sweep: number;
+  radius: number;
+  height: number;
+  duration: number;
+}
+const MENU_SHOTS: MenuShot[] = [
+  { id: 'air', name: 'Southern Air Temple', subtitle: 'Above the sea of clouds', x: 1450, z: 1250, lookY: -8, az: Math.PI / 2, sweep: 0.5, radius: 330, height: 75, duration: 16 },
+  { id: 'water', name: 'Northern Water Tribe', subtitle: 'The city of ice and canals', x: -220, z: -1550, lookY: 6, az: -2.3, sweep: 0.4, radius: 260, height: 80, duration: 15 },
+  { id: 'earth', name: 'Ba Sing Se', subtitle: 'The impenetrable city', x: 850, z: -50, lookY: 12, az: -1.25, sweep: -0.3, radius: 240, height: 95, duration: 15 },
+  { id: 'fire', name: 'Fire Nation Capital', subtitle: 'The caldera city', x: -1330, z: 1110, lookY: 12, az: 0.75, sweep: 0.4, radius: 150, height: 100, duration: 15 },
+];
+const MENU_FOCUS = new THREE.Vector3(MENU_SHOTS[0].x, 0, MENU_SHOTS[0].z);
+/** Golden hour for the menu tour (sun low in the west). */
+const MENU_HOUR = 17.3;
 
 /**
  * Top-level orchestrator: owns every system, runs the frame loop, and manages
@@ -80,7 +107,17 @@ export class Game {
   private readonly timer = new THREE.Timer();
   private running = false;
   private autosaveTimer = 0;
-  private menuAngle = 0;
+  // Main-menu tour state (see MENU_SHOTS).
+  private menuShot = 0;
+  private menuT = 0;
+  private menuPhase: 'play' | 'cut' = 'play';
+  private menuToken = 0;
+  private menuPrimed = false;
+  private menuPreload: Promise<void> | null = null;
+  private readonly menuFocus = MENU_FOCUS.clone();
+  private menuGround = 0;
+  /** False holds the tour on the current shot (tests, screenshots). */
+  menuTourAuto = true;
   /** Alternate scene/camera rendered instead of the world (character creator studio). */
   private stage: { scene: THREE.Scene; camera: THREE.Camera } | null = null;
   /** Bumped every session start to cancel stale async work. */
@@ -247,6 +284,7 @@ export class Game {
   async boot(onProgress?: (f: number, label: string) => void): Promise<void> {
     this.setMode('loading');
     await this.world.preload(MENU_FOCUS.clone().setY(0), (f, l) => onProgress?.(f, l));
+    this.menuPrimed = true;
     this.enterMenu();
     this.start();
   }
@@ -288,7 +326,7 @@ export class Game {
       this.audio.setListener(this.render.camera);
       this.audio.update(dt);
       if (this.stage) this.render.renderer.render(this.stage.scene, this.stage.camera);
-      else this.render.render(dt);
+      else if (!(this.mode === 'menu' && this.menuPhase === 'cut')) this.render.render(dt); // menu cut: a snapshot covers the canvas
     } catch (err) {
       console.error('[Game] frame error', err);
     }
@@ -327,22 +365,103 @@ export class Game {
   }
 
   private updateMenu(dt: number): void {
-    this.menuAngle += dt * 0.035;
-    const cam = this.render.camera;
-    const r = 340;
-    cam.position.set(MENU_FOCUS.x + Math.cos(this.menuAngle) * r, MENU_FOCUS.y + 70 + Math.sin(this.menuAngle * 0.7) * 15, MENU_FOCUS.z + Math.sin(this.menuAngle) * r);
-    cam.lookAt(MENU_FOCUS.x, MENU_FOCUS.y - 10, MENU_FOCUS.z);
-    this.world.updateAmbient(dt, MENU_FOCUS);
+    // The creator studio replaces the world; a cut streams the next place in (the menu shows a snapshot meanwhile).
+    if (this.stage || this.menuPhase === 'cut') return;
+    const shot = MENU_SHOTS[this.menuShot];
+    this.menuT += dt;
+    this.placeMenuCamera(shot, Math.min(1, this.menuT / shot.duration));
+    // Full world tick around the shown place: far cities the tour built earlier drop to their cheap/hidden detail.
+    this.world.update(dt, this.menuFocus);
     this.vfx.update(dt);
-    this.render.setShadowFocus(MENU_FOCUS);
+    this.render.setShadowFocus(this.menuFocus);
+    if (this.menuTourAuto && this.menuT >= shot.duration) this.menuCut((this.menuShot + 1) % MENU_SHOTS.length);
+  }
+
+  /** Camera on the shot's slow arc at progress k (0..1). */
+  private placeMenuCamera(shot: MenuShot, k: number): void {
+    const s = k * k * (3 - 2 * k) * 0.35 + k * 0.65; // gentle ease at both ends
+    const az = shot.az + shot.sweep * s;
+    const r = shot.radius * (1 - 0.1 * s);
+    const f = this.menuFocus;
+    const cam = this.render.camera;
+    const cx = f.x + Math.sin(az) * r;
+    const cz = f.z + Math.cos(az) * r;
+    const cy = Math.max(this.menuGround + shot.height * (1 - 0.08 * s), this.world.heightAt(cx, cz) + 18);
+    cam.position.set(cx, cy, cz);
+    cam.lookAt(f.x, this.menuGround + shot.lookY, f.z);
+    cam.updateMatrixWorld();
+  }
+
+  /**
+   * Cross-fade the menu backdrop to another location: the outgoing frame is
+   * re-rendered so listeners of 'menu:tour' (phase 'cut') can snapshot the
+   * canvas synchronously, then the next place streams in behind that snapshot.
+   */
+  menuCut(next: number, blank = false): void {
+    if (this.mode !== 'menu' || this.menuPhase === 'cut') return;
+    const from = MENU_SHOTS[this.menuShot];
+    const token = ++this.menuToken;
+    this.menuPhase = 'cut';
+    if (!blank && !this.stage) this.render.render(0);
+    this.events.emit('menu:tour', { phase: 'cut', index: this.menuShot, id: from.id, name: from.name, subtitle: from.subtitle, blank });
+    const i = ((next % MENU_SHOTS.length) + MENU_SHOTS.length) % MENU_SHOTS.length;
+    const to = MENU_SHOTS[i];
+    const p = (this.menuPreload = this.world.preload(new THREE.Vector3(to.x, 0, to.z)).catch((err) => console.error('[Game] menu preload failed', err)));
+    void p.then(async () => {
+      if (this.menuPreload === p) this.menuPreload = null;
+      if (token !== this.menuToken || this.mode !== 'menu') return;
+      // Compile the new place's shaders from the first camera pose so the cross-fade does not stutter.
+      this.aimMenuShot(i);
+      try {
+        await this.render.renderer.compileAsync(this.render.scene, this.render.camera);
+      } catch {
+        /* compile on first draw instead */
+      }
+      if (token !== this.menuToken || this.mode !== 'menu') return;
+      this.startMenuShot(i);
+    });
+  }
+
+  private aimMenuShot(i: number): void {
+    const s = MENU_SHOTS[i];
+    this.menuFocus.set(s.x, 0, s.z);
+    this.menuGround = this.world.heightAt(s.x, s.z);
+    this.menuFocus.y = this.menuGround;
+    this.placeMenuCamera(s, 0);
+  }
+
+  private startMenuShot(i: number): void {
+    const s = MENU_SHOTS[i];
+    this.aimMenuShot(i);
+    this.menuShot = i;
+    this.menuT = 0;
+    this.menuPhase = 'play';
+    this.events.emit('menu:tour', { phase: 'shot', index: i, id: s.id, name: s.name, subtitle: s.subtitle });
+  }
+
+  /** Tour state for the main menu and tests. */
+  get menuTour(): { index: number; id: string; name: string; subtitle: string; phase: 'play' | 'cut'; t: number; shots: number } {
+    const s = MENU_SHOTS[this.menuShot];
+    return { index: this.menuShot, id: s.id, name: s.name, subtitle: s.subtitle, phase: this.menuPhase, t: this.menuT, shots: MENU_SHOTS.length };
   }
 
   enterMenu(): void {
     this.setMode('menu');
     this.paused = false;
-    this.world.sky.secondsPerHour = 40;
+    // Golden hour, drifting very slowly while the tour runs.
+    this.world.sky.timeOfDay = MENU_HOUR;
+    this.world.sky.secondsPerHour = 1500;
     this.audio.setMusicTheme('menu');
     this.ui.showMainMenu();
+    this.menuToken++;
+    this.menuPhase = 'play';
+    if (this.menuPrimed) {
+      this.menuPrimed = false;
+      this.startMenuShot(0);
+    } else {
+      // Back from a session: stream the first location in behind a dark veil.
+      this.menuCut(0, true);
+    }
   }
 
   setPaused(p: boolean): void {
@@ -377,6 +496,10 @@ export class Game {
     this.setMode('loading');
     this.stage = null;
     this.ui.showLoading(kind === 'tutorial' ? 'Meditation Isle' : this.world.regionAt(spawn.x, spawn.z)?.name ?? 'The Four Nations');
+    // Never stream two places at once: let an in-flight menu-tour preload finish first.
+    this.menuToken++;
+    if (this.menuPreload) await this.menuPreload;
+    if (token !== this.sessionToken) return;
     await this.world.preload(spawn, (f, label) => this.ui.setLoadingProgress(f, label));
     if (token !== this.sessionToken) return;
     const player = this.playerEntity;
@@ -428,28 +551,72 @@ export class Game {
     }
   }
 
-  /** Short cinematic: sweep down from the sky onto the Avatar, then hand over control. */
+  /**
+   * Arrival cinematic: a sweeping descent over the start city that swings
+   * around the Avatar and settles exactly where the follow camera sits behind
+   * them, then the first quest prompt. Jump / interact / attack skip it.
+   */
   private playArrival(title: string, blurb: string): void {
     const p = this.playerEntity;
-    const target = p.position.clone();
-    const start = target.clone().add(new THREE.Vector3(Math.sin(p.yaw) * 90, 70, Math.cos(p.yaw) * 90));
-    const end = target.clone().add(new THREE.Vector3(-Math.sin(p.yaw) * 5.5, 2.4, -Math.cos(p.yaw) * 5.5));
+    const rig = this.cameraRig;
+    const token = this.sessionToken;
+    rig.pitch = 0.28;
+    // Final pose = the follow camera's pose right after snapBehind().
+    const yawC = p.yaw + Math.PI;
+    const pivot = p.position.clone();
+    pivot.y += 1.55 * (p.height / 1.75);
+    pivot.addScaledVector(new THREE.Vector3(Math.cos(yawC), 0, -Math.sin(yawC)), 0.55);
+    const dir = new THREE.Vector3(Math.sin(yawC) * Math.cos(rig.pitch), Math.sin(rig.pitch), Math.cos(yawC) * Math.cos(rig.pitch));
+    const dist = rig.distance * this.settings.data.controls.cameraDistance;
+    const endR = dist * Math.cos(rig.pitch);
+    const endH = dist * Math.sin(rig.pitch);
+    const endLook = pivot.clone().addScaledVector(dir, -2);
+    const fwd = new THREE.Vector3(Math.sin(p.yaw), 0, Math.cos(p.yaw));
+    const cityLook = p.position.clone().addScaledVector(fwd, 28).setY(p.position.y + 6);
+    const startAz = yawC + 2.4;
+    const R0 = 170;
+    const H0 = 105;
+    const dur = 7;
     let t = 0;
-    const dur = 4.2;
-    p.controlLock = dur;
+    let finished = false;
+    const pos = new THREE.Vector3();
+    const look = new THREE.Vector3();
+    const toCam = new THREE.Vector3();
+    p.controlLock = dur + 1;
+    const overlay = arrivalOverlay(this.ctx, () => !finished && rig.isScripted && token === this.sessionToken && this.session.active, () => finish());
     this.ui.showBanner(title, blurb);
-    this.cameraRig.setScripted((dt, cam) => {
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      rig.setScripted(null);
+      rig.snapBehind();
+      p.controlLock = 0;
+      overlay.close(true);
+    };
+    rig.setScripted((dt, cam) => {
       t += dt;
       const k = Math.min(1, t / dur);
       const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
-      cam.position.lerpVectors(start, end, e);
-      const look = target.clone().setY(target.y + 1.5 + (1 - e) * 4);
-      cam.lookAt(look);
-      if (k >= 1 || (t > 0.8 && this.input.wasPressed('pause'))) {
-        this.cameraRig.setScripted(null);
-        this.cameraRig.snapBehind();
-        p.controlLock = 0;
+      const az = startAz + (yawC - startAz) * e;
+      const r = R0 * Math.pow(endR / R0, e);
+      const hk = Math.pow(Math.max(0, (r - endR) / (R0 - endR)), 0.85);
+      pos.set(pivot.x + Math.sin(az) * r, pivot.y + endH + (H0 - endH) * hk, pivot.z + Math.cos(az) * r);
+      if (r < 30) {
+        // Close to the Avatar: keep architecture from blocking the view, like the follow camera.
+        toCam.copy(pos).sub(pivot);
+        const len = toCam.length();
+        toCam.divideScalar(len);
+        const hit = this.world.raycast(pivot, toCam, len + 0.4);
+        if (hit) pos.copy(pivot).addScaledVector(toCam, Math.max(0.8, hit.distance - 0.4));
       }
+      const gh = this.world.heightAt(pos.x, pos.z) + 1.2;
+      if (pos.y < gh) pos.y = gh;
+      cam.position.copy(pos);
+      const lk = Math.min(1, Math.max(0, (k - 0.35) / 0.6));
+      look.copy(cityLook).lerp(endLook, lk * lk * (3 - 2 * lk));
+      cam.lookAt(look);
+      const skip = t > 0.6 && (this.input.wasPressed('jump') || this.input.wasPressed('interact') || this.input.wasPressed('attack'));
+      if (k >= 1 || skip) finish();
     });
   }
 

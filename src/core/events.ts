@@ -127,6 +127,10 @@ export interface GameEvents {
   'bending:heat': { position: Vec3Like; radius: number; intensity: number; casterId: number };
   /** Seismic Sense pulse: entity ids revealed (enemies, creatures, things tagged 'hidden'). */
   'seismic:pulse': { position: Vec3Like; radius: number; casterId: number; revealed: number[] };
+
+  // ---- front end (main menu backdrop tour) ----
+  /** 'cut': the outgoing shot is in the drawing buffer right now (snapshot it synchronously); 'shot': the next location is ready. */
+  'menu:tour': { phase: 'cut' | 'shot'; index: number; id: string; name: string; subtitle: string; blank?: boolean };
 }
 
 export type GameEventName = keyof GameEvents;

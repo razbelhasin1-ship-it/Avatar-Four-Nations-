@@ -18,14 +18,37 @@ import {
 import { FACE_PRESET_NAMES } from '../../character/CharShape';
 import { Humanoid } from '../../character/Humanoid';
 import { creatorPresets, NATION_NAMES, NATION_PALETTES, NAME_MAX, normalizeName, randomLook, suggestName, validateName, withPreset } from '../../character/looks';
+import { createModel } from '../../companions/models';
+import { defaultAnim, type AnimInput, type CreatureModel } from '../../companions/models/CreatureModel';
 import type { GameContext } from '../../core/GameContext';
 import { Random } from '../../core/Random';
+import { SAVE_SLOTS } from '../../core/Save';
 import { ELEMENT_INFO, ELEMENTS, type Element } from '../../core/types';
 import { COSMETICS, type CosmeticDef, type CosmeticSlot } from '../../data/cosmetics';
+import { SPECIES } from '../../data/creatures';
+import { MASTERS } from '../../data/masters';
+import { QUESTS } from '../../data/quests';
 import { STARTS, regionById } from '../../world/WorldLayout';
 import { clear, h } from '../dom';
 import { ELEMENT_COLORS, emblem } from '../icons';
 import type { Screen, UIManager } from '../UIManager';
+import { gamepadNav, getVista } from './MainMenu';
+
+/** Homeland companion shown beside the Avatar on the journey preview (studio scale keeps big creatures in frame). */
+const COMPANION: Record<Element, { species: string; scale: number; x: number; z: number; yaw: number }> = {
+  air: { species: 'sky_bison', scale: 0.5, x: 2.1, z: -2.2, yaw: -0.7 },
+  water: { species: 'polar_bear_dog', scale: 0.75, x: 1.7, z: -1.4, yaw: -0.8 },
+  earth: { species: 'badgermole', scale: 0.8, x: 1.7, z: -1.3, yaw: -0.8 },
+  fire: { species: 'dragon', scale: 0.16, x: 2.0, z: -1.9, yaw: -0.9 },
+};
+
+/** The master who teaches in the start city, and the opening quest (data-driven). */
+function startInfo(e: Element): { region: string; master: string | null; quest: { title: string; summary: string } | null } {
+  const s = STARTS[e];
+  const m = MASTERS.find((x) => x.element === e && x.region === s.regionId && !x.hidden);
+  const q = QUESTS.find((x) => x.autoStart?.startingElement === e);
+  return { region: regionById(s.regionId)?.name ?? '', master: m ? `${m.name}, ${m.title}` : null, quest: q ? { title: q.title, summary: q.summary ?? '' } : null };
+}
 
 const CARD_BG: Record<Element, string> = {
   air: 'linear-gradient(160deg, #f7e2b0 0%, #e8b04a 35%, #6a8fb8 100%)',
@@ -144,6 +167,22 @@ body.ngf-studio .main-menu { visibility: hidden; }
 .ngf-actions .grow { flex: 1; }
 .ngf-mobile { display: none; }
 .ngf-sum { font-size: 14px; line-height: 1.4; }
+.ngf-sec { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(214, 178, 94, 0.18); }
+.ngf-sec-title { font-family: var(--font-title); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gold); margin-bottom: 6px; }
+.ngf-sec p { margin: 4px 0 0; }
+.ngf-who-name { font-family: var(--font-title); font-size: 22px; color: var(--gold-2); }
+.ngf-items { display: flex; flex-direction: column; gap: 6px; }
+.ngf-item { display: flex; gap: 8px; font-size: 14px; line-height: 1.3; }
+.ngf-item i { color: var(--gold); font-style: normal; font-size: 9px; margin-top: 5px; }
+.ngf-item .muted { font-size: 13px; }
+.ngf-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.ngf-slot { text-align: left; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.3); color: var(--text); cursor: pointer; font: inherit; min-width: 0; }
+.ngf-slot b { display: block; font-family: var(--font-title); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; }
+.ngf-slot span { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ngf-slot.active { border-color: var(--gold-2); background: rgba(214, 178, 94, 0.2); }
+.ngf-slot.used.active { border-color: #e0806a; background: rgba(224, 80, 58, 0.16); }
+.ngf-slot-note { font-size: 13px; margin-top: 6px; }
+.ngf-slot-note.warn { color: #ffb59f; }
 @media (max-width: 860px), (max-aspect-ratio: 4/5) {
   .ngf-left { left: 0; right: 0; bottom: 0; top: auto; width: auto; height: 57%; border-radius: 14px 14px 0 0; padding: 10px 12px 12px; }
   .ngf-right { display: none; }
@@ -196,6 +235,10 @@ export class NewGameFlow implements Screen {
   private dirty = false;
   private nameError: HTMLElement | null = null;
   private continueBtns: HTMLButtonElement[] = [];
+  private subscribed = false;
+  /** Save slot the new journey will be written to. */
+  private slot: string = SAVE_SLOTS[0];
+  private companion: { model: CreatureModel; anim: AnimInput; element: Element } | null = null;
 
   constructor(private readonly ui: UIManager) {
     this.el = h('div.layer.interactive');
@@ -205,6 +248,13 @@ export class NewGameFlow implements Screen {
     this.ctx = ctx;
     this.step = 'element';
     if (!document.getElementById('ngf-style')) document.head.append(h('style#ngf-style', CSS));
+    if (!this.subscribed) {
+      this.subscribed = true;
+      // New vistas arrive as the menu tour visits each city.
+      ctx.events.on('menu:tour', (e) => {
+        if (e.phase === 'cut') this.onTour();
+      });
+    }
     this.render();
     this.installDebug();
   }
@@ -242,35 +292,65 @@ export class NewGameFlow implements Screen {
     };
     const cards = order.map((e, i) => {
       const c = ELEMENT_COLORS[e];
+      const info = startInfo(e);
+      const art = h('div.card-art', { 'data-art': e }, emblem(e));
+      this.paintArt(art, e);
       const card = h(
         'div.element-card',
         {
           tabindex: 0,
+          role: 'button',
+          'aria-label': `${ELEMENT_INFO[e].name}: ${where[e]}`,
           'data-element': e,
-          style: { background: CARD_BG[e], animationDelay: `${i * 0.06}s` },
+          style: { animationDelay: `${i * 0.06}s` },
           onclick: () => this.chooseElement(e),
           onkeydown: (ev: KeyboardEvent) => {
-            if (ev.key === 'Enter') this.chooseElement(e);
+            if (ev.key === 'Enter' || ev.key === ' ') {
+              ev.preventDefault();
+              this.chooseElement(e);
+            }
           },
         },
-        emblem(e),
-        h('h3', ELEMENT_INFO[e].name.toUpperCase()),
-        h('div.where', where[e]),
-        h('div.desc', desc[e]),
+        art,
+        h(
+          'div.card-body',
+          h('h3', ELEMENT_INFO[e].name.toUpperCase()),
+          h('div.where', where[e]),
+          h('div.desc', desc[e]),
+          h(
+            'div.card-facts',
+            info.master ? h('div', h('span.fact-k', 'Master'), h('span.fact-v', info.master)) : null,
+            info.quest ? h('div', h('span.fact-k', 'First quest'), h('span.fact-v', h('b', info.quest.title), ' — ', info.quest.summary)) : null,
+          ),
+          h('div.card-cta', 'Begin here ›'),
+        ),
       );
       card.style.setProperty('--el-glow', c.glow);
       card.style.setProperty('--el-shadow', c.shadow);
+      card.style.setProperty('--el-color', c.color);
       return card;
     });
     this.el.append(
       h(
         'div.element-select',
-        h('h1.title', 'BEGIN YOUR JOURNEY AS THE AVATAR'),
-        h('p.lead', 'Choose the element with which your journey begins. Your destiny is to master all four.'),
+        h('div.es-head', h('h1.title', 'BEGIN YOUR JOURNEY AS THE AVATAR'), h('p.lead', 'Choose the element with which your journey begins. Your destiny is to master all four.')),
         h('div.element-cards', cards),
-        h('div.row', { style: { marginTop: '22px' } }, h('button.btn', { onclick: () => this.ui.close() }, 'Back')),
+        h('div.row.es-actions', h('button.btn', { 'data-action': 'element-back', onclick: () => this.ui.close() }, 'Back')),
       ),
     );
+    (this.el.querySelector('.element-card') as HTMLElement | null)?.focus({ preventScroll: true });
+  }
+
+  /** Card art: the tour's snapshot of the start city when one exists, otherwise the painted element backdrop. */
+  private paintArt(art: HTMLElement, e: Element): void {
+    const v = getVista(e);
+    art.style.background = v ? `linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(8,6,4,0.55)), center / cover no-repeat url("${v}")` : CARD_BG[e];
+    art.classList.toggle('vista', !!v);
+  }
+
+  private onTour(): void {
+    if (this.step !== 'element') return;
+    for (const art of Array.from(this.el.querySelectorAll<HTMLElement>('.card-art[data-art]'))) this.paintArt(art, art.dataset.art as Element);
   }
 
   private chooseElement(e: Element): void {
@@ -367,8 +447,34 @@ export class NewGameFlow implements Screen {
     this.studio.ringMat.color.set(t.ring);
   }
 
+  /** Homeland companion beside the Avatar (journey preview only). */
+  private setCompanion(on: boolean): void {
+    const s = this.studio;
+    if (this.companion && (!on || !s || this.companion.element !== this.element)) {
+      this.companion.model.root.removeFromParent();
+      this.companion.model.dispose();
+      this.companion = null;
+    }
+    if (!on || !s || this.companion) return;
+    const c = COMPANION[this.element];
+    try {
+      const model = createModel(c.species, 0, 1, c.scale);
+      if (!model) return;
+      model.setShadows(false);
+      model.root.position.set(c.x, 0, c.z);
+      model.root.rotation.y = c.yaw;
+      s.scene.add(model.root);
+      const anim = defaultAnim();
+      model.update(anim);
+      this.companion = { model, anim, element: this.element };
+    } catch (err) {
+      console.error('[NewGameFlow] companion preview failed', err);
+    }
+  }
+
   private disposeStudio(): void {
     if (!this.studio) return;
+    this.setCompanion(false);
     this.studio.humanoid.dispose();
     for (const d of this.studio.disposables) d.dispose();
     this.studio = null;
@@ -447,8 +553,15 @@ export class NewGameFlow implements Screen {
   }
 
   update(dt: number): void {
+    if (this.ui.currentScreen === this.id) gamepadNav(this.el, () => (this.step === 'element' ? this.ui.close() : this.back()));
     if (!this.studio) return;
     const s = this.studio;
+    if (this.companion) {
+      const a = this.companion.anim;
+      a.dt = dt;
+      a.time += dt;
+      this.companion.model.update(a);
+    }
     if (this.dirty) {
       this.rebuildTimer -= dt;
       if (this.rebuildTimer <= 0) {
@@ -472,8 +585,18 @@ export class NewGameFlow implements Screen {
     const hgt = this.studio.humanoid.height;
     const z = this.zoom;
     const focusY = THREE.MathUtils.lerp(hgt * 0.5, hgt * 0.925, z);
-    const span = THREE.MathUtils.lerp(hgt * 1.16 + 0.12, 0.44, z);
-    const spanW = THREE.MathUtils.lerp(0.95, 0.4, z);
+    let span = THREE.MathUtils.lerp(hgt * 1.16 + 0.12, 0.44, z);
+    let spanW = THREE.MathUtils.lerp(0.95, 0.4, z);
+    let lookX = 0;
+    if (this.companion && this.step === 'preview') {
+      // Frame the Avatar together with their homeland companion.
+      const b = new THREE.Box3().setFromObject(this.companion.model.root);
+      const left = -0.75;
+      const right = Math.max(1, b.max.x + 0.15);
+      spanW = Math.max(spanW, (right - left) * 1.02);
+      span = Math.max(span, b.max.y * 1.12 + 0.15);
+      lookX = (left + right) / 2;
+    }
     // Shift the projection centre to the middle of the free area.
     const cx = fr.x + fr.w / 2, cy = fr.y + fr.h / 2;
     const dx = cx - W / 2, dy = cy - H / 2;
@@ -483,8 +606,8 @@ export class NewGameFlow implements Screen {
     const tanH = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2);
     const pxPerUnitAt1 = fullH / (2 * tanH);
     const dist = Math.max((span * pxPerUnitAt1) / (fr.h * 0.9), (spanW * pxPerUnitAt1) / (fr.w * 0.9));
-    cam.position.set(0, focusY + dist * THREE.MathUtils.lerp(0.06, 0.015, z), dist);
-    cam.lookAt(0, focusY, 0);
+    cam.position.set(lookX, focusY + dist * THREE.MathUtils.lerp(0.06, 0.015, z), dist);
+    cam.lookAt(lookX, focusY, 0);
     cam.updateProjectionMatrix();
     if (this.viewBar) this.viewBar.style.left = `${cx}px`;
     if (this.hint) this.hint.style.left = `${cx}px`;
@@ -501,6 +624,7 @@ export class NewGameFlow implements Screen {
 
   private renderCreator(): void {
     this.ensureStudio();
+    this.setCompanion(false);
     const left = h('div.panel.ngf-left');
     this.leftPanel = left;
     const tabBar = h('div.ngf-tabs');
@@ -824,44 +948,74 @@ export class NewGameFlow implements Screen {
 
   private renderPreview(): void {
     this.ensureStudio();
+    this.setCompanion(true);
     const e = this.element;
     const start = STARTS[e];
+    const info = startInfo(e);
+    const species = SPECIES.find((s) => s.id === COMPANION[e].species);
+    // Default slot: keep a previous choice if still empty, else the first empty one, else the oldest journey.
+    const metas = SAVE_SLOTS.map((s) => this.ctx.save.getMeta(s));
+    const idx = SAVE_SLOTS.indexOf(this.slot as (typeof SAVE_SLOTS)[number]);
+    if (idx < 0 || metas[idx]) {
+      const empty = metas.findIndex((m) => !m);
+      const oldest = metas.reduce((best, m, i) => (m && (best < 0 || m.savedAt < metas[best]!.savedAt) ? i : best), -1);
+      this.slot = SAVE_SLOTS[empty >= 0 ? empty : Math.max(0, oldest)];
+    }
+    const section = (title: string, ...kids: Array<HTMLElement | string | null>) => h('div.ngf-sec', h('div.ngf-sec-title', title), ...kids);
+    const slotRow = h('div.ngf-slots');
+    const slotNote = h('div.ngf-slot-note.muted');
+    const paintSlots = () => {
+      clear(slotRow);
+      SAVE_SLOTS.forEach((s, i) => {
+        const m = metas[i];
+        slotRow.append(
+          h(
+            `button.ngf-slot${s === this.slot ? '.active' : ''}${m ? '.used' : ''}`,
+            { 'data-slot': s, onclick: () => { this.slot = s; paintSlots(); } },
+            h('b', `Slot ${i + 1}`),
+            h('span', m ? `${m.characterName} · Lv ${m.level}` : 'Empty'),
+          ),
+        );
+      });
+      const m = metas[SAVE_SLOTS.indexOf(this.slot as (typeof SAVE_SLOTS)[number])];
+      slotNote.textContent = m ? `${m.characterName}'s journey in this slot will be replaced (you will be asked to confirm).` : 'Your journey will be saved here. Autosaves keep it up to date.';
+      slotNote.classList.toggle('warn', !!m);
+    };
+    paintSlots();
     const panel = h(
       'div.panel.ngf-left.ngf-preview-sheet',
       h('div.ngf-head', emblem(e, 'emblem'), h('h2.title', 'Your Journey Begins')),
-      h('div.ngf-scroll', { style: { marginTop: '0' } },
-        h('div', { style: { fontSize: '20px' } }, this.name || 'Avatar'),
-        h('div.muted', { style: { marginBottom: '4px' } }, `${ELEMENT_INFO[e].name}bender · ${start.title}`),
-        h('div.divider'),
-        h('div.title', { style: { fontSize: '14px', marginBottom: '6px' } }, 'Starting Equipment'),
-        ...STARTER_ITEMS[e].map((it) => h('div', { style: { marginBottom: '6px' } }, h('div', it.name), h('div.muted', { style: { fontSize: '13px' } }, it.detail))),
-        h('div.divider'),
-        h('div.title', { style: { fontSize: '14px', marginBottom: '6px' } }, 'Companions of your Homeland'),
-        h('p.muted', { style: { fontSize: '14px', lineHeight: '1.4', margin: '0' } }, HOMELAND_CREATURES[e]),
-        h('div.divider'),
-        h('p.muted', { style: { fontSize: '14px', lineHeight: '1.4' } }, `You begin with ${ELEMENT_INFO[e].name}bending. As the Avatar you can learn ${ELEMENTS.filter((x) => x !== e).map((x) => ELEMENT_INFO[x].name).join(', ')} from masters across the world — and enter the Avatar State at will.`),
+      h(
+        'div.ngf-scroll',
+        { style: { marginTop: '0' } },
+        h('div.ngf-who', h('div.ngf-who-name', this.name || 'Avatar'), h('div.muted', `${ELEMENT_INFO[e].name}bender · ${start.title}`)),
+        section(
+          'Homeland Companion',
+          h('div.ngf-comp', h('b', species?.name ?? 'Companion'), h('span.muted', ' — befriend one on your travels')),
+          h('p.muted.ngf-sum', HOMELAND_CREATURES[e]),
+        ),
+        section('Starting Equipment', h('div.ngf-items', STARTER_ITEMS[e].map((it) => h('div.ngf-item', h('i', '◆'), h('div', h('div', it.name), h('div.muted', it.detail)))))),
+        info.quest ? section('First Quest', h('div', h('b', info.quest.title)), h('p.muted.ngf-sum', info.quest.summary), info.master ? h('div.muted.ngf-sum', `Your first teacher in ${info.region}: ${info.master}.`) : null) : null,
+        section('Save Slot', slotRow, slotNote),
+        h('p.muted.ngf-sum', `You begin with ${ELEMENT_INFO[e].name}bending. As the Avatar you can learn ${ELEMENTS.filter((x) => x !== e).map((x) => ELEMENT_INFO[x].name).join(', ')} from masters across the world — and enter the Avatar State at will.`),
       ),
-      h('div.ngf-actions', { style: { paddingTop: '8px' } }, h('button.btn', { onclick: () => this.back() }, 'Back'), h('div.grow'), h('button.btn.primary', { 'data-action': 'confirm-journey', onclick: () => this.confirm() }, 'Begin Journey')),
+      h('div.ngf-actions', { style: { paddingTop: '8px' } }, h('button.btn', { 'data-action': 'preview-back', onclick: () => this.back() }, 'Back'), h('div.grow'), h('button.btn.primary', { 'data-action': 'confirm-journey', onclick: () => this.confirm() }, 'Begin Journey')),
     );
     this.leftPanel = panel;
     this.el.append(h('div.ngf-root', this.stageEl(), panel, this.viewBarEl()));
   }
 
+  /** Never overwrite a journey silently: an occupied slot needs explicit confirmation. */
   private confirm(): void {
-    const save = this.ctx.save;
-    const empty = save.firstEmptySlot();
-    if (empty) {
-      this.launch(empty);
+    const slot = this.slot;
+    const meta = this.ctx.save.getMeta(slot);
+    if (!meta) {
+      this.launch(slot);
       return;
     }
-    // All slots used: never overwrite silently.
-    const metas = save.listSlots();
-    this.ui.confirm('All three journey slots are in use. Choose a journey to replace — it will be permanently overwritten.', [
-      ...metas.map((m, i) => ({
-        text: m ? `Replace ${m.characterName} (Lv ${m.level})` : `Slot ${i + 1}`,
-        danger: true,
-        onClick: () => this.launch(`slot${i + 1}`),
-      })),
+    const n = SAVE_SLOTS.indexOf(slot as (typeof SAVE_SLOTS)[number]) + 1;
+    this.ui.confirm(`Slot ${n} holds ${meta.characterName}'s journey (Lv ${meta.level}, ${meta.regionName}). Replace it with this new journey? It will be permanently overwritten.`, [
+      { text: 'Replace Journey', danger: true, onClick: () => this.launch(slot) },
       { text: 'Cancel', primary: true },
     ]);
   }
@@ -937,4 +1091,66 @@ export class NewGameFlow implements Screen {
 
 function sameItem(a: string, b: string): boolean {
   return a === b || (EMPTY_IDS.has(a) && EMPTY_IDS.has(b));
+}
+
+// -----------------------------------------------------------------------------
+// Arrival: letterbox for the opening camera sweep, then the first quest prompt.
+// -----------------------------------------------------------------------------
+
+/**
+ * Letterbox bars + skip control for the arrival cinematic (the HUD fades out
+ * meanwhile). `isActive` is polled every frame; when it turns false (session
+ * ended, camera taken over) the overlay removes itself without the prompt.
+ */
+export function arrivalOverlay(ctx: GameContext, isActive: () => boolean, onSkip?: () => void): { close(showPrompt: boolean): void } {
+  const root = ctx.ui.root;
+  let closed = false;
+  const skip = h('button.cine-skip', { 'data-action': 'skip-arrival', onclick: () => onSkip?.() }, h('span.kbd', ctx.input.label('jump')), ' Skip');
+  const el = h('div.cine', h('div.cine-bar.top'), h('div.cine-bar.bottom', skip));
+  ctx.ui.layers.overlay.appendChild(el);
+  root.classList.add('cinematic');
+  const close = (showPrompt: boolean) => {
+    if (closed) return;
+    closed = true;
+    root.classList.remove('cinematic');
+    el.classList.add('out');
+    setTimeout(() => el.remove(), 700);
+    if (showPrompt) showFirstQuestPrompt(ctx);
+  };
+  const tick = () => {
+    if (closed) return;
+    if (!isActive()) close(false);
+    else requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  return { close };
+}
+
+/** "New quest" card for the opening quest: title, summary, first objectives and where to look. */
+export function showFirstQuestPrompt(ctx: GameContext): void {
+  const q = ctx.quests;
+  const id = q.tracked ?? [...q.active.keys()][0];
+  const def = id ? q.get(id) : undefined;
+  if (!def || !ctx.session.active) return;
+  document.querySelector('.quest-prompt')?.remove();
+  const lines = (q.objectiveText()?.lines ?? []).filter((l) => !l.done).slice(0, 2);
+  let gone = false;
+  const dismiss = () => {
+    if (gone) return;
+    gone = true;
+    card.classList.add('out');
+    setTimeout(() => card.remove(), 450);
+  };
+  const card = h(
+    'div.quest-prompt.panel',
+    { role: 'status', 'data-quest': def.id },
+    h('div.qp-kicker', '◆ New Quest'),
+    h('div.qp-title', def.title),
+    def.summary ? h('p.qp-summary', def.summary) : null,
+    lines.length ? h('div.qp-obj', lines.map((l) => h('div', h('span.qp-dot', '◇'), l.text))) : null,
+    h('div.qp-foot', h('span.muted', h('span.kbd', ctx.input.label('journal')), ' Journal · follow the ◆ on your compass'), h('button.btn.small.primary', { 'data-action': 'quest-ok', onclick: dismiss }, 'Got it')),
+  );
+  ctx.ui.layers.overlay.appendChild(card);
+  setTimeout(dismiss, 14000);
+  ctx.events.once('session:ending', () => card.remove());
 }

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { GameContext, GameSystem } from '../core/GameContext';
 import type { Element } from '../core/types';
 import { itemById } from '../data/items';
-import { LIFE_NPCS, type At } from '../data/npcs_life';
+import { CITY_LIFE, LIFE_NPCS, type At } from '../data/npcs_life';
 import { QUEST_PROPS, type QuestPropDef } from '../data/quests_props';
 import { Entity, Health, type HitInfo, type HitResult } from '../entities/Entity';
 import type { NPCDef } from '../npc/NPCTypes';
@@ -94,6 +94,8 @@ export class QuestWorld implements GameSystem {
   init(ctx: GameContext): void {
     this.ctx = ctx;
     this.placeNPCs();
+    this.applyCrowdDensity();
+    ctx.events.on('settings:changed', () => this.applyCrowdDensity());
     ctx.quests.addMarkerProvider(() => this.markers());
     this.installDebug();
   }
@@ -110,6 +112,19 @@ export class QuestWorld implements GameSystem {
       const { at: _at, ...rest } = spec;
       const def: NPCDef = { ...rest, x: p.x, z: p.z, y: p.y };
       this.ctx.npcs.addDef(def);
+    }
+  }
+
+  /** City crowds scale with the graphics preset (quest givers, merchants and masters always stay). */
+  private applyCrowdDensity(): void {
+    const g = this.ctx.settings.data.graphics;
+    const density = g.preset === 'low' ? 0.55 : g.preset === 'medium' ? 0.8 : 1;
+    for (const spec of CITY_LIFE) {
+      const d = this.ctx.npcs.getDef(spec.id);
+      if (!d) continue;
+      let h = 2166136261;
+      for (let i = 0; i < spec.id.length; i++) h = Math.imul(h ^ spec.id.charCodeAt(i), 16777619);
+      d.hidden = ((h >>> 0) % 1000) / 1000 >= density;
     }
   }
 

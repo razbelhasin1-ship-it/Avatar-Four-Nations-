@@ -8,7 +8,8 @@ import { MainMenu } from './screens/MainMenu';
 import { NewGameFlow } from './screens/NewGameFlow';
 import { PauseScreen } from './screens/PauseScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
-import { SaveLoadScreen } from './screens/SaveLoadScreen';
+import { installSaveThumbnails, SaveLoadScreen } from './screens/SaveLoadScreen';
+import { installInterfaceSettings } from './screens/SettingsScreen';
 import { registerGameScreens } from './screens/GameScreens';
 import { TouchControls } from './TouchControls';
 
@@ -45,6 +46,13 @@ const TIPS = [
   'Master all four elements to awaken the Elements Sphere.',
   'Animals remember kindness. Bring the right food and approach slowly.',
   'Press M for the world map, J for your journal, K for techniques.',
+  // Lore
+  'The first airbenders learned by watching the sky bison glide on the wind.',
+  'Badgermoles taught the first earthbenders to feel the world through the ground.',
+  'Waterbenders learned the push and pull of the tides from the Moon.',
+  'The oldest firebending forms came from the dragons — fire as life and energy, not only rage.',
+  'Ba Sing Se’s great walls have never been breached — or so its people say.',
+  'Long ago the four nations lived together in harmony. Keeping that balance is the Avatar’s duty.',
 ];
 
 export class UIManager {
@@ -87,6 +95,8 @@ export class UIManager {
     this.registerScreen('settings', (ui) => new SettingsScreen(ui));
     this.registerScreen('saveload', (ui) => new SaveLoadScreen(ui));
     registerGameScreens(this);
+    installSaveThumbnails(ctx);
+    installInterfaceSettings(ctx);
     ctx.events.on('ui:notify', (e) => this.notify(e.text, e.kind ?? 'info', e.duration, e.icon));
     ctx.events.on('player:defeated', () => this.showDefeat());
     ctx.events.on('player:respawned', () => this.hideDefeat());
@@ -293,31 +303,47 @@ export class UIManager {
   // Loading
   // ---------------------------------------------------------------------------
 
+  private loadingTipTimer = 0;
+
   showLoading(title: string): void {
     this.closeAll();
     this.hideLoading();
     const bar = h('div');
     const label = h('div.muted', { style: { marginTop: '10px', fontSize: '14px' } }, 'Preparing…');
+    const pct = h('span.loading-pct', '0%');
+    let tipIndex = Math.floor(Math.random() * TIPS.length);
+    const tip = h('div.tip', h('span.tip-kicker', 'Did you know?'), h('span.tip-text', TIPS[tipIndex]));
     this.loadingEl = h(
       'div.loading',
       h('div.emblems', emblem('water'), emblem('earth'), emblem('fire'), emblem('air')),
+      h('div.loading-kicker', 'Travelling to'),
       h('h2.title', { style: { margin: '0', fontSize: 'clamp(22px,3vw,34px)' } }, title),
       h('div.progress', bar),
-      label,
-      h('div.tip', TIPS[Math.floor(Math.random() * TIPS.length)]),
+      h('div.loading-status', label, pct),
+      tip,
     );
     (this.loadingEl as any)._bar = bar;
     (this.loadingEl as any)._label = label;
+    (this.loadingEl as any)._pct = pct;
     this.layers.top.appendChild(this.loadingEl);
+    // Rotate lore tips while the world streams in.
+    window.clearInterval(this.loadingTipTimer);
+    this.loadingTipTimer = window.setInterval(() => {
+      tipIndex = (tipIndex + 1) % TIPS.length;
+      const t = tip.querySelector('.tip-text');
+      if (t) t.textContent = TIPS[tipIndex];
+    }, 6000);
   }
 
   setLoadingProgress(f: number, label: string): void {
     if (!this.loadingEl) return;
     (this.loadingEl as any)._bar.style.width = `${Math.round(f * 100)}%`;
     (this.loadingEl as any)._label.textContent = label;
+    (this.loadingEl as any)._pct.textContent = `${Math.round(f * 100)}%`;
   }
 
   hideLoading(): void {
+    window.clearInterval(this.loadingTipTimer);
     this.loadingEl?.remove();
     this.loadingEl = null;
   }

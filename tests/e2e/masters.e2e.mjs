@@ -265,7 +265,7 @@ try {
       tabs.find((t) => /Masters/.test(t.textContent)).click();
       return document.querySelector('.modal').textContent;
     });
-    assert.ok(/The Elements Sphere/.test(txt) && /Hunter Akka/.test(txt), 'journal masters page');
+    assert.ok(/The Elements Sphere/.test(txt) && /Master Jeong/.test(txt), 'journal masters page: ' + txt.slice(0, 300));
     await shot('journal_masters');
     await tr((g) => g.ctx.ui.closeAll());
   });

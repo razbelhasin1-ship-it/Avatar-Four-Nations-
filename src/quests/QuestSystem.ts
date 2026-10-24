@@ -73,7 +73,12 @@ export class QuestSystem implements GameSystem, Persistable {
       'player:dodged',
       'mount:changed',
       'quest:completed',
+      // [additive: quests] quest props (bells, braziers, tablets) report through world:interact.
+      'world:interact',
     ];
+    // [additive: quests] also listen to any other event an `event` objective names.
+    for (const q of this.defs.values())
+      for (const st of q.steps) for (const o of st.objectives) if (o.type === 'event' && !names.includes(o.event)) names.push(o.event);
     for (const n of names) ev.on(n, (p: any) => this.onEvent(n, p));
   }
 

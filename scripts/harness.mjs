@@ -57,7 +57,7 @@ async function startVite() {
 }
 
 export async function launch(opts = {}) {
-  const { width = 1280, height = 720, url: givenUrl, preset = 'low', query = '', timeout = 120000, deviceScaleFactor = 1 } = opts;
+  const { width = 1280, height = 720, url: givenUrl, preset = 'low', query = '', timeout = 120000, deviceScaleFactor = 1, hasTouch = false, isMobile = false } = opts;
   let server = null;
   let url = givenUrl;
   if (!url) {
@@ -67,7 +67,7 @@ export async function launch(opts = {}) {
   const browser = await chromium.launch({
     args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl', '--autoplay-policy=no-user-gesture-required'],
   });
-  const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor });
+  const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor, hasTouch, isMobile });
   // Seed settings before the app boots (low preset keeps SwiftShader usable).
   await context.addInitScript((p) => {
     try {
