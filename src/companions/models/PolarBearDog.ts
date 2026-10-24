@@ -116,8 +116,13 @@ export class PolarBearDogModel extends CreatureModel {
   private sniffT = 0;
   private wag = 0;
 
-  constructor(variant = 0, detail = 1, scale = 1) {
-    super(cachedTemplate(`beardog:${variant}:${detail.toFixed(2)}`, () => buildBearDog(variant, detail)), cachedTemplate('beardog:saddle', () => buildBearDogSaddle()), scale);
+  /** `templates` lets another quadruped with the same skeleton (komodo rhino) reuse this gait. */
+  constructor(variant = 0, detail = 1, scale = 1, templates?: { body: ModelTemplate; saddle: ModelTemplate }) {
+    super(
+      templates?.body ?? cachedTemplate(`beardog:${variant}:${detail.toFixed(2)}`, () => buildBearDog(variant, detail)),
+      templates?.saddle ?? cachedTemplate('beardog:saddle', () => buildBearDogSaddle()),
+      scale,
+    );
   }
 
   update(a: AnimInput): void {

@@ -71,9 +71,15 @@ supports it.
 - **Enemies**: Fire Nation soldiers and elites, bandits, Dai Li agents, rogue waterbenders,
   pirates, archers and wild beasts, with readable attack tells, camps, patrols and three bosses.
 - **Animal companions**: sky bison, dragon (rare and gated), polar bear dog, badgermole, ostrich
-  horse, winged lemur and turtle-duck, plus ambient wildlife. Find them by their tracks and
-  habitats, earn their trust with the right food, patience and rescues (never by fighting
-  them), bond and name them, then ride on the ground or fly. Bonds unlock perks.
+  horse, komodo rhino, winged lemur and turtle-duck, plus ambient wildlife. Find them by their
+  tracks and habitats, earn their trust with the right food, patience and rescues (never by
+  fighting them), bond and name them, then ride on the ground or fly. Bonds unlock perks.
+  If you would rather pay than tame, each nation has a **beast keeper** who sells stable-raised
+  companions from that nation only, at a steep price: polar bear dogs in the Northern Water
+  Tribe, ostrich horses and badgermoles in Ba Sing Se's Lower Ring, komodo rhinos (the Fire
+  Nation cavalry mount, sold nowhere else) and turtle-ducks at the Fire Nation harbour, and sky
+  bison and winged lemurs at the Southern Air Temple. A bought companion is yours at once and
+  comes to you; dragons are never for sale.
 - **Shops, inventory and wardrobe**, procedural music and ambience per region, an interactive
   tutorial, and versioned save slots with autosave.
 

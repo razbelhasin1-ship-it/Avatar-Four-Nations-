@@ -24,6 +24,7 @@ const CAMERA: Record<string, { dist: number; height: number }> = {
   polar_bear_dog: { dist: 1.2, height: 0.5 },
   badgermole: { dist: 1.2, height: 0.4 },
   ostrich_horse: { dist: 0.6, height: 0.3 },
+  komodo_rhino: { dist: 1.2, height: 0.45 },
 };
 
 const tmpA = new THREE.Vector3();

@@ -2,6 +2,8 @@ import type { GameContext } from '../core/GameContext';
 import { keyHints } from '../core/Input';
 import { BOND_LEVELS, bondLevel, bondLevelName, HABITATS, SPECIES, speciesById, trustStage, type SpeciesDef } from '../data/creatures';
 import { itemById } from '../data/items';
+import { COMPANION_PRICES, SHOPS } from '../shop/stock';
+import { regionById } from '../world/WorldLayout';
 import { clear, h } from '../ui/dom';
 import type { Screen, UIManager } from '../ui/UIManager';
 import type { CompanionSystem, CompanionRecord } from './CompanionSystem';
@@ -20,6 +22,7 @@ export const SPECIES_ICON: Record<string, string> = {
   polar_bear_dog: '🐻‍❄️',
   badgermole: '🦡',
   ostrich_horse: '🐦',
+  komodo_rhino: '🦏',
   winged_lemur: '🐒',
   turtle_duck: '🦆',
   otter_penguin: '🐧',
@@ -197,6 +200,7 @@ export class StableScreen implements Screen {
     }
     const taming = [...sys.taming.trust.entries()].filter(([uid]) => habs.some((hb) => uid.startsWith(`${hb.id}#`)) && !sys.isUidBonded(uid));
     const diet = [...s.diet.preferred.map((i) => `${itemById(i)?.name ?? i} (favourite)`), ...s.diet.liked.map((i) => itemById(i)?.name ?? i)].join(', ') || '—';
+    const sellers = SHOPS.filter((x) => x.companions?.includes(s.id));
     return h(
       'div.card',
       { 'data-species': s.id },
@@ -207,7 +211,8 @@ export class StableScreen implements Screen {
       s.tameable ? h('div', { style: { fontSize: '12px' } }, h('b', 'Diet: '), diet) : null,
       s.tameable ? h('div', { style: { fontSize: '12px', marginTop: '4px' } }, h('b', 'Taming: '), s.tamingTips) : h('div.muted', { style: { fontSize: '12px', marginTop: '4px' } }, 'Cannot be tamed.'),
       taming.length ? h('div', { style: { fontSize: '12px', marginTop: '4px' } }, h('b', 'Earning trust: '), taming.map(([, v]) => `${Math.round(v)}% (${trustStage(v)})`).join(' · ')) : null,
-      sys.bondedCount(s.id) ? h('div', { style: { fontSize: '12px', color: 'var(--gold)' } }, `Bonded: ${sys.bonded.filter((r) => r.speciesId === s.id).map((r) => r.name).join(', ')}`) : null,
+      sellers.length ? h('div', { style: { fontSize: '12px', marginTop: '4px' } }, h('b', 'For sale: '), `${sellers.map((x) => `${x.merchant}, ${x.title} in ${regionById(x.region)?.name ?? 'the city'}`).join('; ')} (${COMPANION_PRICES[s.id]} copper)`) : null,
+      sys.bonded.some((r) => r.speciesId === s.id) ? h('div', { style: { fontSize: '12px', color: 'var(--gold)' } }, `Bonded: ${sys.bonded.filter((r) => r.speciesId === s.id).map((r) => r.name).join(', ')}`) : null,
     );
   }
 }

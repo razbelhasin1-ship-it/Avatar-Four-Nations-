@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { abilitiesAt, bondLevel, foodValue, HABITATS, HOMELAND_FOOD, SPECIES, speciesById, SUN_STONE_SHARDS, SUN_STONES_NEEDED } from '../../src/data/creatures';
+import { abilitiesAt, bondLevel, foodValue, HABITATS, HOMELAND_FOOD, SPECIES, SPECIES_HOMELAND, speciesById, SUN_STONE_SHARDS, SUN_STONES_NEEDED } from '../../src/data/creatures';
+import { COMPANION_PRICES, SHOPS } from '../../src/shop/stock';
 import { itemById } from '../../src/data/items';
 import { createModel, hasModel } from '../../src/companions/models';
 import { defaultAnim } from '../../src/companions/models/CreatureModel';
@@ -38,6 +39,22 @@ describe('creature catalogue', () => {
       if (h.requires) expect(h.species).toBe('dragon');
     }
     expect(HABITATS.filter((h) => h.species === 'dragon').reduce((n, h) => n + h.count, 0)).toBe(1);
+  });
+
+  it('beast keepers sell only their own nation\'s companions, at a price; dragons are never for sale', () => {
+    const keepers = SHOPS.filter((s) => s.companions?.length);
+    expect(keepers.map((s) => s.nation).sort()).toEqual(['air', 'earth', 'fire', 'water']);
+    for (const s of keepers) {
+      for (const sp of s.companions!) {
+        expect(speciesById(sp)?.role, sp).not.toBe('ambient');
+        expect(SPECIES_HOMELAND[sp], `${s.id} sells ${sp}`).toBe(s.nation);
+        expect(COMPANION_PRICES[sp], sp).toBeGreaterThan(300);
+      }
+    }
+    expect(keepers.some((s) => s.companions!.includes('dragon'))).toBe(false);
+    // Every companion species except the dragon can be bought somewhere.
+    const sold = new Set(keepers.flatMap((s) => s.companions!));
+    for (const s of SPECIES) if (s.role !== 'ambient' && s.id !== 'dragon') expect(sold.has(s.id), s.id).toBe(true);
   });
 
   it('taming differs per species (no single generic bar)', () => {

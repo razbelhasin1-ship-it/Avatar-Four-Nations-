@@ -23,7 +23,22 @@ export interface ShopDef {
   cosmetics?: string[];
   /** Fraction of the price paid when the player sells (default 0.4). */
   sellRate?: number;
+  /** Companion species for sale (beast keepers; only species from the shop's own nation, see SPECIES_HOMELAND). */
+  companions?: string[];
+  /** Placed at `fallback` by design: no merchant spot is expected. */
+  fixed?: boolean;
 }
+
+/** Copper price of a stable-raised companion. Expensive on purpose: taming one in the wild is free. */
+export const COMPANION_PRICES: Readonly<Record<string, number>> = {
+  turtle_duck: 350,
+  winged_lemur: 500,
+  ostrich_horse: 900,
+  polar_bear_dog: 1400,
+  badgermole: 1500,
+  komodo_rhino: 1500,
+  sky_bison: 2800,
+};
 
 export const SHOPS: ShopDef[] = [
   // ---------------- Northern Water Tribe ----------------
@@ -57,6 +72,11 @@ export const SHOPS: ShopDef[] = [
   { id: 'kyoshi_fish', spot: 'kyoshi_1', fallback: { x: 1834, z: -432, yaw: -Math.PI / 2 }, merchant: 'Koko\'s Father', title: 'Fish Market', nation: 'earth', region: 'kyoshi_island', greeting: 'Welcome to Kyoshi Island! Mind the unagi, buy some fish.', rumor: 'The Kyoshi Warriors lost a few of their fans in the last storm. Their captain would be grateful for help.', items: ['raw_fish', 'sea_prunes', 'cabbage', 'healing_herbs'] },
   { id: 'omashu_cabbage', spot: 'omashu_1', fallback: { x: -438, z: -640, yaw: -Math.PI / 2 }, merchant: 'The Cabbage Merchant', title: 'Cabbage Stall', nation: 'earth', region: 'omashu', greeting: 'Cabbages! Fresh cabbages! Please do not bend anything near the cart.', rumor: 'My cabbages! ...Sorry. Old habit. King Bumo is quite fond of them, you know.', items: ['cabbage', 'lychee_nuts', 'bread_crumbs'] },
   { id: 'omashu_stone', spot: 'omashu_2', fallback: { x: -462, z: -640, yaw: Math.PI / 2 }, merchant: 'Gan Jin', title: 'Stonecutter', nation: 'earth', region: 'omashu', greeting: 'Omashu stone, cut to order. Jade on Tuesdays.', rumor: 'The king set up a boulder arena on the high terrace. He says it is for "bowling".', items: ['glowing_mushroom', 'jade_shard'], cosmetics: ['earth_shoulder_guard'] },
+  // ---------------- Beast keepers: companions for sale, each only from its own nation ----------------
+  { id: 'nwt_beasts', spot: 'nwt_beasts', fixed: true, fallback: { x: -186, z: -1562, yaw: -Math.PI / 2 }, merchant: 'Kallik', title: 'Beast Keeper', nation: 'water', region: 'northern_water_tribe', greeting: 'Every bear dog in my pens was born on the ice and raised to the saddle. They are not cheap, but they will carry you through a blizzard.', rumor: 'Wild bear dogs den in the Frozen Tundra. Earn a mother\'s trust and you will never need my pens, but that takes patience.', items: ['sea_prunes', 'raw_fish'], companions: ['polar_bear_dog'] },
+  { id: 'bss_beasts', spot: 'bss_beasts', fixed: true, fallback: { x: 650, z: -124.6, yaw: 1.036 }, merchant: 'Gong', title: 'Beast Keeper', nation: 'earth', region: 'ba_sing_se', greeting: 'Ostrich horses for the road, badgermoles for the stubborn. Earth Kingdom stock only; the Dai Li inspect my papers every week.', rumor: 'Badgermoles taught the first earthbenders. Some of mine still remember, and they sulk if you call them moles.', items: ['cabbage', 'glowing_mushroom'], companions: ['ostrich_horse', 'badgermole'] },
+  { id: 'fn_beasts', spot: 'fn_beasts', fixed: true, fallback: { x: -898.2, z: 984.2, yaw: Math.PI / 2 }, merchant: 'Stablemaster Hira', title: 'Beast Keeper', nation: 'fire', region: 'fire_nation_capital', greeting: 'Komodo rhinos from the Royal Cavalry stables, and turtle-ducks for the gentle-hearted. Dragons? Nobody sells a dragon. You would have to earn one.', rumor: 'The Sun Warrior ruins are not as empty as the sages claim. Bring the Sun Stone and see what answers.', items: ['fire_flakes', 'bread_crumbs'], companions: ['komodo_rhino', 'turtle_duck'] },
+  { id: 'air_beasts', spot: 'air_beasts', fixed: true, fallback: { x: 1426.6, z: 1294, yaw: Math.PI / 2 }, merchant: 'Brother Norbu', title: 'Bison Herder', nation: 'air', region: 'southern_air_temple', greeting: 'The herd chooses its friends, and the temple asks an offering for its keep. A bison from our meadow will fly for you from the first day.', rumor: 'Lemurs nest in the temple eaves. They will steal your peaches whether or not you adopt one.', items: ['moon_peaches'], companions: ['sky_bison', 'winged_lemur'] },
   { id: 'tundra_lodge', spot: 'tundra_1', fallback: { x: 296, z: -1046, yaw: 0 }, merchant: 'Iluq', title: 'Lodge Trader', nation: 'water', region: 'frozen_tundra', greeting: 'Out here you buy what keeps you alive. Furs. Fish. Tea.', rumor: 'Something glitters deep in the glacier caves to the west of the Northern Tribe. The scout by the fire knows more.', items: ['raw_fish', 'sea_prunes', 'jasmine_tea', 'healing_herbs'], cosmetics: ['water_fur_coat'] },
 ];
 

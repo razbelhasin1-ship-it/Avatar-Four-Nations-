@@ -35,6 +35,7 @@ const CSS = `
 .shop-row .shop-icon{font-size:22px;width:32px;text-align:center}
 .shop-row .shop-name{flex:1;min-width:0}
 .shop-row .shop-name small{display:block;color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shop-row.shop-beast .shop-name small{white-space:normal}
 .shop-row .shop-price{font-family:var(--font-title);min-width:70px;text-align:right}
 .shop-row .shop-price.poor{color:var(--danger)}
 .shop-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}

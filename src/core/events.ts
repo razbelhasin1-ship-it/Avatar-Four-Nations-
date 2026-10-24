@@ -131,6 +131,10 @@ export interface GameEvents {
   // ---- front end (main menu backdrop tour) ----
   /** 'cut': the outgoing shot is in the drawing buffer right now (snapshot it synchronously); 'shot': the next location is ready. */
   'menu:tour': { phase: 'cut' | 'shot'; index: number; id: string; name: string; subtitle: string; blank?: boolean };
+
+  // ---- beast keepers ----
+  /** A companion was bought from a beast keeper (it is bonded and on its way to you). */
+  'companion:purchased': { companionId: string; speciesId: string; name: string; price: number; shopId: string };
 }
 
 export type GameEventName = keyof GameEvents;

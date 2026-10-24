@@ -1,4 +1,6 @@
+import { SPECIES_ICON } from '../companions/StableScreen';
 import { cosmeticById } from '../data/cosmetics';
+import { speciesById } from '../data/creatures';
 import { itemById } from '../data/items';
 import type { GameContext } from '../core/GameContext';
 import { injectTrainingCSS } from '../training/hud';
@@ -96,7 +98,50 @@ export class ShopScreen implements Screen {
       );
     }
     if (!any) sell.append(h('p.muted', 'Nothing to sell.'));
-    this.body.append(h('p.muted', { style: { margin: '0 0 10px', fontStyle: 'italic' } }, `“${s.greeting}”`), h('div.shop-cols', buy, sell));
+    this.body.append(h('p.muted', { style: { margin: '0 0 10px', fontStyle: 'italic' } }, `“${s.greeting}”`));
+    if (s.companions?.length) this.body.append(this.pens(s));
+    this.body.append(h('div.shop-cols', buy, sell));
+  }
+
+  /** Beast keeper: companions for sale (bonded on purchase). */
+  private pens(s: ShopDef): HTMLElement {
+    const ctx = this.ctx;
+    const wrap = h('div', { style: { marginBottom: '12px' } }, h('h3', { style: { margin: '4px 0 8px' } }, 'Companions'));
+    for (const sp of s.companions ?? []) {
+      const d = speciesById(sp);
+      const price = this.sys.companionPrice(sp);
+      if (!d || price <= 0) continue;
+      const poor = ctx.inventory.currency < price;
+      const owned = ctx.companions.bonded.filter((r) => r.speciesId === sp).length;
+      const kind = d.role === 'pet' ? 'Pet' : d.flying ? 'Flying mount' : 'Mount';
+      const perks = d.bondUnlocks.filter((u) => u.at <= 10).map((u) => u.name).join(', ');
+      wrap.append(
+        h(
+          'div.shop-row.shop-beast',
+          { 'data-companion': sp },
+          h('div.shop-icon', SPECIES_ICON[sp] ?? '🐾'),
+          h('div.shop-name', `${d.name} · ${kind}${owned ? `  (you have ${owned})` : ''}`, h('small', `${d.description} Stable-raised: ${d.rideable ? 'ready to ride' : 'follows you'} from day one${perks ? ` (${perks})` : ''}, and your bond grows as you travel together.`)),
+          h(`div.shop-price${poor ? '.poor' : ''}`, `${price} cp`),
+          h('button.btn.small', { 'data-buy-companion': sp, onclick: () => this.buyCompanion(sp) }, 'Buy'),
+        ),
+      );
+    }
+    return wrap;
+  }
+
+  private buyCompanion(sp: string): void {
+    const r = this.sys.buyCompanion(this.shop!.id, sp);
+    if (r.ok && r.companionId) {
+      // Name the new companion straight away, as after taming one.
+      this.ui.close('shop');
+      if (!this.ctx.companions.autoName) this.ui.open('companions', { name: r.companionId });
+      return;
+    }
+    this.render();
+    if (r.reason === 'poor') {
+      const row = this.body.querySelector(`[data-companion="${sp}"] .shop-price`) as HTMLElement | null;
+      row?.animate?.([{ transform: 'translateX(0)' }, { transform: 'translateX(-6px)' }, { transform: 'translateX(6px)' }, { transform: 'translateX(0)' }], { duration: 260 });
+    }
   }
 
   private buy(id: string): void {

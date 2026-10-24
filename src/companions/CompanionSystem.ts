@@ -18,7 +18,8 @@ import { StableScreen } from './StableScreen';
  * taming/bonding, the companion stable, summoning and riding.
  *
  * Public API used by other systems (keep stable):
- *  - bondedCount(speciesId?)            number of bonded companions (quests)
+ *  - bondedCount(speciesId?)            companions befriended in the wild (quests; bought ones excluded)
+ *  - adopt(speciesId)                   bond a companion bought from a beast keeper (ShopSystem)
  *  - mounted                            true while riding
  *  - mountedFlying                      true while riding a flying mount
  *  - dismount()                         force dismount (cutscenes, Avatar State)
@@ -52,6 +53,8 @@ export interface CompanionRecord {
   together?: number;
   travelled?: number;
   fedAt?: number;
+  /** Bought from a beast keeper (stable-raised) rather than befriended in the wild. */
+  bought?: boolean;
 }
 
 export class CompanionSystem implements GameSystem, Persistable {
@@ -351,6 +354,44 @@ export class CompanionSystem implements GameSystem, Persistable {
     this.ctx.events.emit('ui:notify', { text: `${def.name} bonded! It will follow you — open the Companion Stable (P) to name it.`, kind: 'success', duration: 5, icon: '💛' });
     this.ctx.audio.play('ui.levelup', { volume: 0.7 });
     if (!this.autoName && !this.ctx.ui.blocksGameplay) this.ctx.ui.open('companions', { name: id });
+    return rec;
+  }
+
+  /**
+   * A stable-raised companion bought from a beast keeper: bonded at once and brought to you
+   * (a flyer circles in from the sky). It is a full companion (summon, ride, perks, bond growth),
+   * but quest objectives that ask you to earn a wild animal's trust still need taming.
+   */
+  adopt(speciesId: string, name?: string): CompanionRecord | null {
+    const def = speciesById(speciesId);
+    const p = this.ctx.player;
+    if (!def || def.role === 'ambient' || !p) return null;
+    const id = `bought:${speciesId}:${Date.now().toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`;
+    const used = new Set(this.bonded.map((r) => r.name));
+    const rec: CompanionRecord = {
+      id,
+      speciesId,
+      name: (name ?? def.names.find((n) => !used.has(n)) ?? def.name).slice(0, 24),
+      bond: 10,
+      variant: Math.floor(Math.random() * 3),
+      abilities: abilitiesAt(speciesId, 10),
+      active: false,
+      home: { x: p.position.x, z: p.position.z },
+      scale: 0.94 + Math.random() * 0.12,
+      summoned: false,
+      together: 0,
+      travelled: 0,
+      bought: true,
+    };
+    this.bonded.push(rec);
+    this.setActive(id);
+    this.discoveredSpecies.add(speciesId);
+    for (const o of this.companionCreatures()) if (o.def.role === def.role && o.state !== 'leave') this.dismiss(o.companionId!);
+    const c = this.spawnCompanion(rec, 'near');
+    if (c) {
+      rec.summoned = true;
+      this.ctx.audio.play(def.sounds.call, { position: c.position, volume: 1, range: 400 });
+    }
     return rec;
   }
 
@@ -792,8 +833,9 @@ export class CompanionSystem implements GameSystem, Persistable {
 
   // ---------------------------------------------------------------- persistence
 
+  /** Companions befriended in the wild (quest objectives); bought ones are not counted. */
   bondedCount(speciesId?: string): number {
-    return this.bonded.filter((c) => !speciesId || c.speciesId === speciesId).length;
+    return this.bonded.filter((c) => !c.bought && (!speciesId || c.speciesId === speciesId)).length;
   }
 
   serialize(): unknown {
@@ -831,6 +873,7 @@ export class CompanionSystem implements GameSystem, Persistable {
           summoned: !!r.summoned,
           together: typeof r.together === 'number' ? r.together : 0,
           travelled: typeof r.travelled === 'number' ? r.travelled : 0,
+          bought: r.bought === true ? true : undefined,
         });
       }
     }

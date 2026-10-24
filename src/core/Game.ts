@@ -248,6 +248,7 @@ export class Game {
     this.events.on('technique:learned', () => this.requestAutosave(true));
     this.events.on('mastery:achieved', () => this.requestAutosave(true));
     this.events.on('companion:bonded', () => this.requestAutosave(true));
+    this.events.on('companion:purchased', () => this.requestAutosave(true));
     this.events.on('region:entered', () => this.requestAutosave(false));
 
     installDebug(this);

@@ -1,4 +1,5 @@
 import type { BiomeId } from '../core/types';
+import type { Nation } from '../world/WorldLayout';
 
 /**
  * Creature catalogue: tameable companions (mounts and pets), ambient wildlife,
@@ -393,6 +394,46 @@ export const SPECIES: SpeciesDef[] = [
     tamingTips: 'Very skittish: approach at a walk and stop if it backs away. Cabbage works wonders. Win its respect by outrunning a rival in a race.',
     names: ['Dash', 'Feathers', 'Bolt', 'Sandy', 'Rooster', 'Kicker'],
     hp: 260,
+  },
+  {
+    id: 'komodo_rhino',
+    name: 'Komodo Rhino',
+    plural: 'Komodo Rhinos',
+    role: 'mount',
+    locomotion: 'ground',
+    rideable: true,
+    flying: false,
+    // Stable-bred cavalry beasts: never wild, only sold by Fire Nation beast keepers.
+    tameable: false,
+    size: { length: 3.8, height: 1.8, width: 1.5 },
+    radius: 0.95,
+    walk: 2.4,
+    run: 8.5,
+    sprint: 13,
+    turn: 2.3,
+    accel: 3.4,
+    jump: 6,
+    stepUp: 0.8,
+    maxSlopeNy: 0.66,
+    wadeDepth: 1.2,
+    canSwim: false,
+    swimSpeed: 0,
+    temperament: 'proud',
+    diet: { preferred: ['fire_flakes'], liked: ['raw_fish', 'cabbage'] },
+    bondUnlocks: [
+      L(0, 'ride', 'Rideable', 'Press {companion} beside it to ride. Armoured, stubborn and hard to knock down.'),
+      L(20, 'sprint', 'Stampede', 'Hold {sprint} while riding to stampede.'),
+      L(45, 'charge', 'Horn Charge', 'Press {interact} while riding to ram through enemies.'),
+      L(70, 'fortify', 'Armoured Hide', 'You take a third less damage while riding.'),
+      L(90, 'guard', 'War Beast', 'Charges enemies that strike you.'),
+    ],
+    clues: ['tracks', 'scorch'],
+    sounds: { call: 'creature.badgermole.snort', alarm: 'creature.armadillolizard.hiss' },
+    description: 'Armoured, horned war beasts of the Fire Nation cavalry: part rhinoceros, part komodo dragon, and very hard to stop once they get going.',
+    habitatText: 'Never found in the wild. They are bred in Fire Nation stables; the Beast Keeper in the Fire Nation Capital sells them.',
+    tamingTips: 'Cannot be tamed in the wild. Buy one from a Fire Nation beast keeper.',
+    names: ['Ember', 'Ironhide', 'Cinder', 'Brute', 'Magma', 'Tank'],
+    hp: 420,
   },
   {
     id: 'winged_lemur',
@@ -915,6 +956,21 @@ export const SUN_STONE_SHARDS: ReadonlyArray<{ id: string; dx: number; dz: numbe
 
 /** Fragments the altar needs to rekindle the Sun Stone. */
 export const SUN_STONES_NEEDED = 3;
+
+/**
+ * Nation each companion species comes from. Beast keepers only sell their own nation's animals
+ * (a polar bear dog is bought in the Water Tribes, a komodo rhino only in the Fire Nation).
+ */
+export const SPECIES_HOMELAND: Readonly<Record<string, Nation>> = {
+  sky_bison: 'air',
+  winged_lemur: 'air',
+  polar_bear_dog: 'water',
+  badgermole: 'earth',
+  ostrich_horse: 'earth',
+  komodo_rhino: 'fire',
+  turtle_duck: 'fire',
+  dragon: 'fire',
+};
 
 /** Homeland supplies granted on a new campaign (the creator's starting kit food). */
 export const HOMELAND_FOOD: Readonly<Record<string, { item: string; count: number }>> = {

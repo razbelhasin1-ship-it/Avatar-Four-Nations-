@@ -4,6 +4,7 @@ import { DragonModel } from './Dragon';
 import { PolarBearDogModel } from './PolarBearDog';
 import { BadgermoleModel } from './Badgermole';
 import { OstrichHorseModel } from './OstrichHorse';
+import { KomodoRhinoModel } from './KomodoRhino';
 import { TurtleDuckModel, WingedLemurModel } from './SmallCreatures';
 import { ArmadilloLizardModel, CatOwlModel, ElephantKoiModel, HogMonkeyModel, OtterPenguinModel } from './Wildlife';
 
@@ -19,6 +20,7 @@ const FACTORIES: Record<string, ModelFactory> = {
   polar_bear_dog: (v, d, s) => new PolarBearDogModel(v, d, s),
   badgermole: (v, d, s) => new BadgermoleModel(v, d, s),
   ostrich_horse: (v, d, s) => new OstrichHorseModel(v, d, s),
+  komodo_rhino: (v, d, s) => new KomodoRhinoModel(v, d, s),
   winged_lemur: (v, d, s) => new WingedLemurModel(v, d, s),
   turtle_duck: (v, d, s) => new TurtleDuckModel(v, d, s),
   otter_penguin: (v, d, s) => new OtterPenguinModel(v, d, s),

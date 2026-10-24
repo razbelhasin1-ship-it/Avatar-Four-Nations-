@@ -1,25 +1,30 @@
 import * as THREE from 'three';
 import type { GameContext, GameSystem } from '../core/GameContext';
 import { cosmeticById } from '../data/cosmetics';
+import { SPECIES_HOMELAND, speciesById } from '../data/creatures';
 import { itemById } from '../data/items';
 import type { NPC } from '../npc/NPCSystem';
 import type { NPCDef } from '../npc/NPCTypes';
 import { getSpot, spotsWithPrefix } from '../world/Spots';
 import { ShopScreen } from './ShopScreen';
-import { SHOPS, shopById, type ShopDef } from './stock';
+import { COMPANION_PRICES, SHOPS, shopById, type ShopDef } from './stock';
 
 /**
  * Merchants & shops (module `shop`, ctx.extra.get('shop')).
  * A merchant NPC stands at every merchant_<id> spot; talking opens a short
  * conversation (wares / news) and the shop screen (buy & sell for copper).
  * Data dialogues can open a shop with the action { type: 'shop', shop: '<id>' }.
+ * Beast keepers (ShopDef.companions) also sell companions of their own nation:
+ * a purchase bonds the animal at once and it comes to you (CompanionSystem.adopt).
  *
- * Debug: window.__game.debug.shop = { shops, open, buy, sell, price }.
+ * Debug: window.__game.debug.shop = { shops, open, buy, buyCompanion, sell, price }.
  */
 export interface BuyResult {
   ok: boolean;
-  reason?: 'unknown' | 'poor' | 'owned' | 'notStocked';
+  reason?: 'unknown' | 'poor' | 'owned' | 'notStocked' | 'busy';
   price: number;
+  /** Set when a companion was bought. */
+  companionId?: string;
 }
 
 export class ShopSystem implements GameSystem {
@@ -47,8 +52,8 @@ export class ShopSystem implements GameSystem {
   }
 
   private npcDef(s: ShopDef): NPCDef {
-    const sp = getSpot(`merchant_${s.spot}`);
-    if (!sp) this.missingSpots.push(`merchant_${s.spot}`);
+    const sp = s.fixed ? undefined : getSpot(`merchant_${s.spot}`);
+    if (!sp && !s.fixed) this.missingSpots.push(`merchant_${s.spot}`);
     const x = sp?.x ?? s.fallback?.x ?? 0;
     const z = sp?.z ?? s.fallback?.z ?? 0;
     return {
@@ -100,6 +105,39 @@ export class ShopSystem implements GameSystem {
     return { ok: true, price };
   }
 
+  companionPrice(speciesId: string): number {
+    return COMPANION_PRICES[speciesId] ?? 0;
+  }
+
+  /** Buy a companion from a beast keeper. Only species from the keeper's own nation are ever sold. */
+  buyCompanion(shopId: string, speciesId: string): BuyResult {
+    const ctx = this.ctx;
+    const s = shopById(shopId);
+    const def = speciesById(speciesId);
+    const price = this.companionPrice(speciesId);
+    if (!s || !def || price <= 0) return { ok: false, reason: 'unknown', price };
+    if (!(s.companions ?? []).includes(speciesId) || SPECIES_HOMELAND[speciesId] !== s.nation) return { ok: false, reason: 'notStocked', price };
+    if (ctx.companions.mounted || ctx.session.kind !== 'campaign') {
+      ctx.events.emit('ui:notify', { text: ctx.companions.mounted ? 'Dismount before you buy a new companion.' : 'Companions can only be bought on your journey.', kind: 'warning', duration: 3 });
+      return { ok: false, reason: 'busy', price };
+    }
+    if (!ctx.inventory.spend(price)) {
+      ctx.events.emit('ui:notify', { text: `Not enough copper — ${price} needed, you have ${ctx.inventory.currency}.`, kind: 'warning', duration: 3 });
+      ctx.audio.play('ui_click', { bus: 'ui', volume: 0.5, pitch: 0.55 });
+      return { ok: false, reason: 'poor', price };
+    }
+    const rec = ctx.companions.adopt(speciesId);
+    if (!rec) {
+      ctx.inventory.addCurrency(price);
+      return { ok: false, reason: 'unknown', price };
+    }
+    ctx.audio.play('ui.levelup', { volume: 0.7 });
+    ctx.events.emit('companion:purchased', { companionId: rec.id, speciesId, name: rec.name, price, shopId });
+    const how = def.flying ? 'It is flying in to meet you.' : 'It is on its way to you.';
+    ctx.events.emit('ui:notify', { text: `${def.name} bought from ${s.merchant}! ${how} Name it in the Companion Stable.`, kind: 'success', duration: 5, icon: '💛' });
+    return { ok: true, price, companionId: rec.id };
+  }
+
   sell(shopId: string, id: string): BuyResult {
     const ctx = this.ctx;
     const s = shopById(shopId);
@@ -134,7 +172,7 @@ export class ShopSystem implements GameSystem {
         speaker,
         text,
         choices: [
-          { text: 'Show me your wares.', onSelect: () => this.open(s.id) },
+          { text: s.companions?.length ? 'Show me your animals.' : 'Show me your wares.', onSelect: () => this.open(s.id) },
           { text: 'Heard any news?', onSelect: (): void => menu(s.rumor) },
           { text: 'Farewell.', onSelect: end },
         ],
@@ -149,10 +187,12 @@ export class ShopSystem implements GameSystem {
       if (!w.__game) return false;
       w.__game.debug.shop = {
         sys: this,
-        shops: () => SHOPS.map((s) => ({ id: s.id, npc: `merchant_${s.id}`, items: s.items, cosmetics: s.cosmetics ?? [], spot: !this.missingSpots.includes(`merchant_${s.spot}`) })),
+        shops: () => SHOPS.map((s) => ({ id: s.id, npc: `merchant_${s.id}`, nation: s.nation, items: s.items, cosmetics: s.cosmetics ?? [], companions: s.companions ?? [], spot: !this.missingSpots.includes(`merchant_${s.spot}`) })),
         missingSpots: () => [...this.missingSpots],
         open: (id: string) => this.open(id),
         buy: (shop: string, id: string) => this.buy(shop, id),
+        buyCompanion: (shop: string, species: string) => this.buyCompanion(shop, species),
+        companionPrice: (species: string) => this.companionPrice(species),
         sell: (shop: string, id: string) => this.sell(shop, id),
         price: (id: string) => this.buyPrice(id),
         goto: (id: string) => {
