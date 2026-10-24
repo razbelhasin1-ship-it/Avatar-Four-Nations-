@@ -11,26 +11,38 @@ import assert from 'node:assert/strict';
 import { launch } from '../../scripts/harness.mjs';
 
 const SHOTS = process.env.SHOTS || '';
-let h = await launch({ width: 960, height: 540 });
+// One dev server; every check gets its own browser (memory isolation on busy shared machines).
+const base = await launch({ width: 960, height: 540 });
+let h = base;
+let crashed = false;
 const watch = () => {
-  h.page.on('crash', () => console.log('!! page crashed'));
-  h.page.on('close', () => console.log('!! page closed'));
+  crashed = false;
+  h.page.on('crash', () => {
+    crashed = true;
+    console.log('!! page crashed');
+  });
 };
 watch();
-/** Fresh campaign; relaunches the browser if a previous step lost it (shared CI machines). */
+/** Fresh browser + campaign for a check. */
 async function fresh(element) {
-  if (h.page.isClosed()) {
-    await h.close().catch(() => {});
-    h = await launch({ width: 960, height: 540 });
-    watch();
-  }
-  await h.page.waitForFunction(() => window.__ready === true, null, { timeout: 240000 });
+  if (h === base) await base.page.context().browser()?.close().catch(() => {});
+  else await h.close().catch(() => {});
+  h = await launch({ url: base.url, width: 960, height: 540 });
+  watch();
   await h.newGame(element);
   await fast(true);
 }
+/** Evaluate with a deadline (a crashed renderer never answers). */
+function withTimeout(p, ms = 240000) {
+  return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(crashed ? 'renderer crashed' : 'evaluate timeout')), ms))]);
+}
 const results = [];
 const t0 = Date.now();
+const ONLY = process.env.ONLY ? process.env.ONLY.split(',').map(Number) : null;
+let checkNo = 0;
 const check = async (name, fn) => {
+  checkNo++;
+  if (ONLY && !ONLY.includes(checkNo)) return;
   console.log(`[${((Date.now() - t0) / 1000).toFixed(0)}s] ${name}`);
   try {
     await fn();
@@ -50,7 +62,7 @@ const shot = async (name) => {
     console.log('screenshot failed', name, e.message.split('\n')[0]);
   }
 };
-const tr = (fn, ...a) => h.eval(fn, ...a);
+const tr = (fn, ...a) => withTimeout(h.eval(fn, ...a));
 
 /** Run the current challenge's targets down with real casts of `tech` (walking into range like a player would). */
 async function breakTargets(tech, maxRounds = 60) {
@@ -196,6 +208,7 @@ try {
     await tr((g) => {
       g.debug.training.completeLesson('siku_ice_wall');
       g.debug.training.completeLesson('yugoda_water_heal');
+      g.debug.training.completeLesson('akka_ice_shards');
       g.ctx.progression.mastery.water.proficiency = 330;
     });
     assert.ok(await tr((g) => g.ctx.progression.trialAvailable('water')));
@@ -232,7 +245,7 @@ try {
   });
 
   await check('Elements Sphere story moment: spirit vision + journal note', async () => {
-    if (h.page.isClosed()) await fresh('water');
+    await fresh('fire');
     await tr((g) => g.debug.training.cancel());
     await tr((g) => g.masterAll());
     await wait(3);
@@ -258,7 +271,7 @@ try {
   });
 
   await check('every lesson, awakening and trial-stage challenge builds and runs', async () => {
-    if (h.page.isClosed()) await fresh('water');
+    if (h.page.isClosed() || crashed) await fresh('water');
     await tr((g) => g.debug.training.cancel());
     const res = await tr((g) => g.debug.training.probeAll());
     const bad = res.filter((r) => !r.ok);
@@ -272,7 +285,8 @@ try {
   for (const r of results) console.log(r.join(' | '));
   const errs = h.errors.filter((e) => !/favicon|404/.test(e));
   if (errs.length) console.log('page errors:', errs.slice(0, 8).join('\n'));
-  await h.close();
+  await h.close().catch(() => {});
+  if (h !== base) await base.close().catch(() => {});
   const failed = results.filter((r) => r[0] === 'FAIL').length;
   console.log(`${results.length - failed}/${results.length} passed`);
   process.exit(failed ? 1 : 0);
