@@ -194,23 +194,33 @@ try {
   });
 
   await check('Begin → portrait play pauses with a rotate card → turning the phone resumes in landscape', async () => {
+    // The quest card dismisses itself on a wall-clock timer: record it the moment it appears.
+    await page.evaluate(() => { window.__qp = null; new MutationObserver(() => { const q = document.querySelector('.quest-prompt'); if (q && !window.__qp) window.__qp = q.textContent; }).observe(document.getElementById('ui'), { childList: true, subtree: true }); });
     await page.tap('[data-action="confirm-journey"]');
     await page.waitForFunction(() => window.__game.state().mode === 'play', null, LONG);
-    await page.waitForSelector('.rotate-hint', { timeout: 15000 });
+    await page.waitForSelector('.rotate-hint', { timeout: 30000 });
     const st = await h.state();
     assert.equal(st.ui.screen, 'rotateHint');
     assert.equal(st.paused || (await h.eval((g) => g.ctx.ui.freezesSim)), true, 'the rotate card should freeze play');
+    const cam0 = await h.eval((g) => g.ctx.camera.position.toArray());
+    await h.step(20);
+    assert.deepEqual(await h.eval((g) => g.ctx.camera.position.toArray()), cam0, 'the arrival waits while the card is up');
     await shot('04_rotate_hint');
     await page.setViewportSize(LANDSCAPE);
-    await page.waitForFunction(() => !document.querySelector('.rotate-hint'), null, { timeout: 15000 });
+    await page.waitForFunction(() => !document.querySelector('.rotate-hint'), null, { timeout: 30000 });
     assert.notEqual((await h.state()).ui.screen, 'rotateHint');
-    // Skip the arrival sweep (on a slow software renderer it may already have ended by itself).
-    await page.tap('[data-action="skip-arrival"]', { timeout: 8000 }).catch(() => {});
-    await page.waitForSelector('.quest-prompt', { timeout: 30000 });
-    assert.doesNotMatch(await page.textContent('.quest-prompt'), /compass/, 'touch players get touch hints');
-    // The card also dismisses itself after a while (a slow software renderer can get there first).
-    await page.tap('[data-action="quest-ok"]', { timeout: 10000 }).catch(() => {});
-    await page.waitForSelector('.quest-prompt', { state: 'detached', timeout: 20000 });
+    // Skip the arrival sweep by touch (tap where the button is), then let simulated time settle it deterministically.
+    const skip = await page.$('[data-action="skip-arrival"]');
+    const sb = skip && (await skip.boundingBox());
+    if (sb) await page.touchscreen.tap(sb.x + sb.width / 2, sb.y + sb.height / 2);
+    await h.step(90, 0.1);
+    assert.equal(await page.evaluate(() => document.getElementById('ui').classList.contains('cinematic')), false, 'arrival should be over');
+    await page.waitForFunction(() => !!window.__qp, null, { timeout: 30000 });
+    assert.doesNotMatch(await page.evaluate(() => window.__qp), /compass/, 'touch players get touch hints');
+    const ok = await page.$('[data-action="quest-ok"]');
+    const ob = ok && (await ok.boundingBox());
+    if (ob) await page.touchscreen.tap(ob.x + ob.width / 2, ob.y + ob.height / 2);
+    await page.waitForSelector('.quest-prompt', { state: 'detached', timeout: 30000 });
     await h.step(4);
     assert.equal((await h.state()).player.name, 'Azula');
   });

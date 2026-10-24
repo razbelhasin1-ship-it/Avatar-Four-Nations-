@@ -627,6 +627,13 @@ body {
   }
 }
 
+@media (max-height: 500px) {
+  /* Landscape phones: the credit line would sit under the last menu button. */
+  .menu-footer {
+    display: none;
+  }
+}
+
 @media (max-height: 560px) {
   .menu-brand {
     margin-bottom: 10px;
