@@ -38,8 +38,11 @@ supports it.
   earth surfing). Fire is aggressive and combo-driven (4-hit chains, flamethrower stream, jet
   dash, explosive finisher, chaining lightning). Water is fluid and **depends on real water**:
   rivers, lakes, the sea, ponds, fountains, ice, snow (once learned), rain and plant moisture.
-  Away from water the game tells you there is none nearby instead of conjuring it. 43
-  techniques in all, listed in `docs/TECHNIQUES.md`.
+  You gather it before you bend it: hold Draw Water, or press a water technique with empty
+  hands beside a source, and a stream rises out of the river into your hands. Then you bend
+  what you hold, and you can carry it away from the source until it is spent. Ice can be torn
+  straight from frozen ground. Away from water the game tells you there is none nearby instead
+  of conjuring it. 43 techniques in all, listed in `docs/TECHNIQUES.md`.
 - **16 masters** across the world, some hidden behind clues. Each lesson is a demonstration
   followed by a real training challenge (target practice, precision, timed defence, ring
   courses, sparring, ledge and flame trials and more). Passing teaches a technique you can use
