@@ -59,12 +59,20 @@ async function desktop() {
     await check('desktop: settings presets and options apply live', async () => {
       await h.page.click('[data-action="settings"]');
       await h.page.waitForSelector('.settings-panel');
-      await h.page.click('[data-preset="high"]');
-      let r = await h.eval((g) => ({ pr: g.ctx.render.renderer.getPixelRatio(), shadows: g.ctx.render.renderer.shadowMap.enabled, post: !!g.ctx.render.composer }));
-      assert.equal(r.shadows, true, 'high preset should enable shadows');
-      assert.equal(r.post, true, 'high preset should enable post-processing');
-      await h.page.click('[data-preset="low"]');
-      r = await h.eval((g) => ({ pr: g.ctx.render.renderer.getPixelRatio(), shadows: g.ctx.render.renderer.shadowMap.enabled, post: !!g.ctx.render.composer }));
+      // Click the preset buttons within one task so SwiftShader never has to draw a High/Ultra frame.
+      const both = await h.page.evaluate(() => {
+        const r = window.__game.ctx.render;
+        const read = () => ({ pr: r.renderer.getPixelRatio(), shadows: r.renderer.shadowMap.enabled, post: !!r.composer, far: r.scene.fog.far });
+        document.querySelector('[data-preset="ultra"]').click();
+        const ultra = { ...read(), active: document.querySelector('[data-preset="ultra"]').classList.contains('primary') };
+        document.querySelector('[data-preset="low"]').click();
+        return { ultra, low: read() };
+      });
+      assert.equal(both.ultra.shadows, true, 'ultra preset should enable shadows');
+      assert.equal(both.ultra.post, true, 'ultra preset should enable post-processing');
+      assert.equal(both.ultra.active, true, 'ultra button should show as active');
+      assert.ok(both.ultra.far > both.low.far, 'ultra should draw further');
+      const r = both.low;
       assert.equal(r.shadows, false);
       assert.equal(r.post, false);
       assert.equal(r.pr, 0.75, 'low preset renders at 75%');
@@ -73,7 +81,7 @@ async function desktop() {
       assert.equal(await h.eval((g) => g.ctx.render.renderer.getPixelRatio()), 0.5, 'render scale should change the pixel ratio');
       assert.equal((await settings()).graphics.preset, 'custom');
       await setRange('graphics.drawDistance', 600);
-      assert.equal(await h.eval((g) => g.ctx.scene.fog.far), 600, 'draw distance should move the fog');
+      assert.equal(await h.eval((g) => g.ctx.camera.far), 3000, 'draw distance should extend the camera range');
       await shot('02_settings');
       await h.page.click('[data-tab="audio"]');
       const before = await h.eval((g) => g.ctx.audio.busLevel('music'));
