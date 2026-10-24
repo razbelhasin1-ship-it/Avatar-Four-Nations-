@@ -60,6 +60,44 @@ describe('WaterSourceSystem', () => {
     fake = m.fake;
     ws = new WaterSourceSystem();
     ws.init(m.ctx);
+    // These tests exercise the source mechanics through the direct-draw path NPC and enemy benders
+    // use; the player's held-water rule has its own tests below.
+    ws.heldWaterOnly = false;
+  });
+
+  describe("player's held-water rule", () => {
+    beforeEach(() => {
+      ws.heldWaterOnly = true;
+    });
+
+    it('with empty hands beside a source, asks to gather instead of bending it from a distance', () => {
+      ws.register({ id: 'test:fountain', type: 'fountain', label: 'Fountain', x: DESERT.x + 3, y: 0, z: DESERT.z, r: 1, capacity: 50, regen: 0 });
+      const c = makeCaster(0);
+      expect(ws.acquire(c, { amount: 4 }, aim, aimPt)).toBeNull();
+      expect(ws.lastFailure?.reason).toBe('gather');
+      expect(ws.lastFailure?.source?.id).toBe('test:fountain');
+      expect(ws.get('test:fountain')!.amount).toBe(50); // nothing consumed
+    });
+
+    it('bends held water, and gathering then bending works', () => {
+      ws.register({ id: 'test:fountain', type: 'fountain', label: 'Fountain', x: DESERT.x + 3, y: 0, z: DESERT.z, r: 1, capacity: 50, regen: 0 });
+      const c = makeCaster(0);
+      expect(ws.drawToReserve(c, 20, aim)).not.toBeNull();
+      expect(c.waterReserve).toBeCloseTo(20);
+      const g = ws.acquire(c, { amount: 4 }, aim, aimPt)!;
+      expect(g.sourceType).toBe('reserve');
+      expect(c.waterReserve).toBeCloseTo(16);
+      expect(ws.get('test:fountain')!.amount).toBeCloseTo(30); // only the gather took from the fountain
+    });
+
+    it('still tears ice from frozen sources and lets other benders draw directly', () => {
+      ws.register({ id: 'test:ice', type: 'ice', label: 'Ice sheet', x: DESERT.x + 3, y: 0, z: DESERT.z, r: 2, capacity: 50, regen: 0, frozen: true });
+      const c = makeCaster(0);
+      expect(ws.acquire(c, { amount: 6, allowIce: true }, aim, aimPt)?.sourceId).toBe('test:ice');
+      ws.register({ id: 'test:fountain', type: 'fountain', label: 'Fountain', x: DESERT.x - 3, y: 0, z: DESERT.z, r: 1, capacity: 50, regen: 0 });
+      const npc = { ...makeCaster(0), isPlayer: false } as unknown as Combatant;
+      expect(ws.acquire(npc, { amount: 4 }, aim, aimPt)?.sourceId).toBe('test:fountain');
+    });
   });
 
   it('refuses and consumes nothing when no water is in range', () => {
