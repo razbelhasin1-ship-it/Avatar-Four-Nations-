@@ -59,7 +59,7 @@ function pickWeighted<T>(rnd: { next(): number }, list: Array<[T, number]>): T {
 export const lastStats = { lots: 0, outside: 0, rejected: 0, blocked: 0 };
 
 /** Concentric rows of houses (fronts alternate outward / inward so pairs face a lane). Returns the count. */
-export function houseRows(env: BuildEnv, o: RowOpts): number {
+export function* houseRowsGen(env: BuildEnv, o: RowOpts): Generator<unknown, number, unknown> {
   lastStats.lots = lastStats.outside = lastStats.rejected = lastStats.blocked = 0;
   const rnd = env.rnd;
   const tints = (o.tints ?? ['#ffffff', '#f4efe6', '#efe9dc', '#fbf6ea', '#e9e4da', '#f7efe2']).map((c) => new THREE.Color(c));
@@ -79,7 +79,8 @@ export function houseRows(env: BuildEnv, o: RowOpts): number {
     return out;
   };
   const fronts: Array<{ k: number; th: number; x: number; z: number; h: number }> = [];
-  rowRadii.forEach(({ rho: r, out }, ki) => {
+  for (let ki = 0; ki < rowRadii.length; ki++) {
+    const { rho: r, out } = rowRadii[ki];
     let th = rnd.range(0, 0.05);
     const end = th + Math.PI * 2 - 0.02;
     while (th < end) {
@@ -128,7 +129,8 @@ export function houseRows(env: BuildEnv, o: RowOpts): number {
       const fx = x + Math.sin(yaw) * (a.d * sc) / 2, fz = z + Math.cos(yaw) * (a.d * sc) / 2;
       fronts.push({ k: ki, th: tm, x: fx, z: fz, h: a.h * sc });
     }
-  });
+    yield;
+  }
   // Laundry lines between facing rows (row 2j+1 faces row 2j+2).
   if (o.laundry && o.laundry > 0) {
     const byRow = new Map<number, typeof fronts>();
@@ -161,6 +163,14 @@ export function houseRows(env: BuildEnv, o: RowOpts): number {
     }
   }
   return count;
+}
+
+/** Synchronous houseRowsGen(). */
+export function houseRows(env: BuildEnv, o: RowOpts): number {
+  const it = houseRowsGen(env, o);
+  let r = it.next();
+  while (!r.done) r = it.next();
+  return r.value;
 }
 
 /** Paved strip (avenue, street) following a polyline, merged into a chunk builder. */

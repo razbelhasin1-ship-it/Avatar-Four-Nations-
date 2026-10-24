@@ -168,7 +168,7 @@ export function laundry(b: ContentBuilder, m: EarthMaterials, a: THREE.Vector3, 
   const sag = 0.35;
   lanternString(b, m, a, c, sag, 0);
   const n = Math.max(2, Math.floor(a.distanceTo(c) / 1.1));
-  const cloths: KitMaterialName[] = ['cloth_white', 'cloth_green', 'cloth_yellow', 'cloth_white', 'cloth_blue', 'cloth_red', 'cloth_orange'];
+  const cloths: KitMaterialName[] = ['cloth_white', 'cloth_green', 'cloth_yellow', 'cloth_white', 'cloth_red'];
   const yaw = Math.atan2(-(c.z - a.z), c.x - a.x);
   for (let i = 1; i < n; i++) {
     if (rnd.chance(0.25)) continue;
@@ -197,7 +197,7 @@ export function marketStall(b: ContentBuilder, x: number, y: number, z: number, 
   const aw = P(0, 0);
   b.box(awning, { x: aw.x, y: y + 2.55, z: aw.z, sx: w + 0.5, sy: 0.05, sz: d + 0.6, yaw, pitch: 0.24 }, { castShadow: true });
   // Goods on the counter
-  const goods: KitMaterialName[] = ['cloth_yellow', 'jade', 'cloth_red', 'bronze', 'cloth_orange', 'cloth_green', 'gold'];
+  const goods: KitMaterialName[] = ['cloth_yellow', 'jade', 'cloth_red', 'cloth_green'];
   for (let i = 0; i < 5; i++) {
     const g = P(-w / 2 + 0.35 + i * ((w - 0.7) / 4), d * 0.25 + rnd.range(-0.15, 0.15));
     const sz = rnd.range(0.18, 0.32);

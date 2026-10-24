@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { ContentBuilder } from '../../kit/Builder';
 import type { KitMaterialName } from '../../kit/Materials';
 import { MID, MID_INNER, MIDDLE_AVENUES, PALACE, qkey, UP, UP_FACE, UP_GATES, UP_INNER } from './bssLayout';
-import { houseRows, lanternsAlong, lastStats, pavedStrip } from './cityKit';
+import { houseRowsGen, lanternsAlong, lastStats, pavedStrip } from './cityKit';
 import type { EarthRegion } from './EarthRegion';
 import type { BuildEnv } from './env';
 import { bannerPole, crates, fountain, guardianStatue, hangingBanner, mat4, pavilion, planter, plaque, stoneLantern, tree } from './parts';
@@ -296,7 +296,7 @@ export function* buildMiddleRing(env: BuildEnv, site: EarthRegion): Generator<un
   yield;
 
   // --- Houses (larger, with gardens).
-  const n = houseRows(env, {
+  const n = yield* houseRowsGen(env, {
     c: { x: MID.x, z: MID.z },
     rOuter: MID_INNER - 1,
     edge: 6,
@@ -363,7 +363,7 @@ export function* buildUpperRing(env: BuildEnv, site: EarthRegion): Generator<unk
     mansions++;
   }
   // Mansions with gardens around the palace platform.
-  const n = houseRows(env, {
+  const n = yield* houseRowsGen(env, {
     c: { x: UP.x, z: UP.z },
     rOuter: UP_INNER - 1,
     edge: 5,

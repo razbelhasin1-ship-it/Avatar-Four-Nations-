@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { KitMaterialName } from '../../kit/Materials';
 import { C, GROUND, INNER, INNER_FACE_IN, INNER_GATES, LOWER_AVENUES, MID, MID_FACE, MID_GATES, rayToCircle } from './bssLayout';
-import { houseRows, lanternsAlong, lastStats, pavedStrip, segDir } from './cityKit';
+import { houseRowsGen, lanternsAlong, lastStats, pavedStrip, segDir } from './cityKit';
 import type { EarthRegion } from './EarthRegion';
 import type { BuildEnv } from './env';
 import { annulusGeometry } from './geom';
@@ -15,7 +15,7 @@ import { BSS, marketStalls } from './spots';
  * concentric rows with radial alleys and laundry lines; lantern-lit avenues.
  */
 
-const AWNINGS: KitMaterialName[] = ['cloth_green', 'cloth_yellow', 'cloth_red', 'cloth_orange', 'cloth_white'];
+const AWNINGS: KitMaterialName[] = ['cloth_green', 'cloth_yellow', 'cloth_red', 'cloth_white'];
 
 export function* buildLowerRing(env: BuildEnv, site: EarthRegion): Generator<unknown, void, unknown> {
   const { chunks, mats, excl, rnd } = env;
@@ -114,7 +114,7 @@ export function* buildLowerRing(env: BuildEnv, site: EarthRegion): Generator<unk
   yield;
 
   // --- Houses: concentric rows around C (fronts alternate to face shared lanes).
-  const n = houseRows(env, {
+  const n = yield* houseRowsGen(env, {
     c: C,
     rOuter: INNER_FACE_IN - 1.5,
     edge: 4,

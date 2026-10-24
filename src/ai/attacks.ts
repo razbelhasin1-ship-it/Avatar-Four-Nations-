@@ -81,15 +81,22 @@ function play(r: AiAttackRuntime, clip: string, speed = 1): void {
   r.caster.humanoid?.animator.play(clip, { speed, fadeIn: 0.05 });
 }
 
-/** Melee arc in front of the attacker (deduplicated per detached cast). */
+/**
+ * Melee hit in front of the attacker (deduplicated per detached cast). With a
+ * `halfAngle` it is a sector measured from the attacker's chest out to
+ * `reach + radius` (so a target pressed up close is still hit); without one it
+ * is a sphere of `radius` centred `reach` ahead (body slams).
+ */
 function meleeArc(r: AiAttackRuntime, reach: number, radius: number, o: { damage: number; knockback: number; stagger: number; launch?: number; knockdown?: boolean; halfAngle?: number }): Entity[] {
   const c = r.caster;
-  const center = c.castOrigin('chest', tmp).addScaledVector(r.dir, reach);
+  const sector = !!o.halfAngle;
+  const center = c.castOrigin('chest', tmp);
+  if (!sector) center.addScaledVector(r.dir, reach);
   return r.cast.areaHit({
     center,
-    radius,
+    radius: sector ? reach + radius : radius,
     height: 1.4,
-    cone: o.halfAngle ? { dir: r.dir, halfAngle: o.halfAngle } : undefined,
+    cone: sector ? { dir: r.dir, halfAngle: o.halfAngle! } : undefined,
     damage: o.damage,
     knockback: o.knockback,
     knockDir: r.dir.clone(),

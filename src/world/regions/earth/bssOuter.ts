@@ -222,7 +222,7 @@ export function* buildAgrarian(env: BuildEnv, site: EarthRegion): Generator<unkn
   }
   yield;
   // Fields on a polar grid (merged per quadrant; one draw call per crop texture per quadrant).
-  const crops = [...mats.crops, mats.paddy];
+  const crops = [...mats.crops.slice(0, 3), mats.paddy];
   let fields = 0;
   let farms = 0;
   const r0 = INNER.r + INNER.thick / 2 + 14;

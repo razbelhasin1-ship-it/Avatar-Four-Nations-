@@ -206,7 +206,7 @@ export abstract class EarthRegion implements RegionContent {
     const g = this.ctx.settings.data.graphics;
     const low = g.preset === 'low' || g.drawDistance < 500;
     this.lod = {
-      houses: Math.max(320, Math.min(g.shadows === 'high' ? 900 : 520, g.drawDistance * 0.9)),
+      houses: Math.max(320, Math.min(g.shadows === 'high' ? 900 : 460, g.drawDistance * 0.9)),
       props: low ? 120 : 150,
       detail: low ? 60 : 90,
     };

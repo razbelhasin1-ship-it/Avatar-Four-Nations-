@@ -36,7 +36,7 @@ const h = await launch({ width: 960, height: 540 });
 const ONLY = process.env.ENEMY_ONLY || '';
 
 async function check(name, fn) {
-  if (ONLY && !name.includes(ONLY)) return;
+  if (ONLY && !new RegExp(ONLY).test(name)) return;
   const t = Date.now();
   try {
     await fn();
@@ -358,6 +358,14 @@ try {
     await resetArena();
     const s = await h.eval((g) => g.debug.enemies.spawn('platypus_bear', 9, 0, { aware: true }));
     const hit = await until(`window.__et.dmg.some((d) => d.sourceId === ${s.id})`, 450, 15);
+    if (hit < 0) {
+      const dbg = await h.eval((g, id) => {
+        const e = g.debug.enemies.entity(id);
+        const p = g.game.player;
+        return { info: g.debug.enemies.get(id), mm: e.moveMode, sp: e.moveSpeed, see: e.brain.canSee, player: { x: p.position.x, y: p.position.y, z: p.position.z, hp: p.health.hp, inv: p.invuln, def: p.defeated }, hits: window.__et.hits.filter((x) => x.a === id).length };
+      }, s.id);
+      console.log('    bear debug: ' + JSON.stringify(dbg));
+    }
     assert.ok(hit >= 0, 'bear attacks land');
     await shot('05_beasts', (g) => g.debug.enemies.spawn('moose_lion', 14, 6, { aware: true }));
     for (let i = 0; i < 20 && !(await info(s.id))?.defeated; i++) {
