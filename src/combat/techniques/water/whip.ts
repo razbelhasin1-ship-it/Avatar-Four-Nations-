@@ -44,6 +44,8 @@ export interface WhipOptions {
   onFinish?(tip: THREE.Vector3, cast: Cast): void;
 }
 
+/** Points on the whip curve (enough to carry the travelling ripple). */
+const WHIP_PTS = 9;
 const tA = new THREE.Vector3();
 const tB = new THREE.Vector3();
 const tC = new THREE.Vector3();
@@ -74,7 +76,9 @@ export class WhipEffect implements WaterEffect {
   private targetDist: number;
   private readonly contacts: PathContact[] = [];
   private readonly scratchPath = new PathSampler();
-  private readonly scratchPts = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  private readonly scratchPts = Array.from({ length: WHIP_PTS }, () => new THREE.Vector3());
+  private readonly ctrl = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  private readonly ctrlPath = new PathSampler();
   private lastSamples: number[][] = [];
   private hitThisFrame: number[] = [];
   readonly hits: Array<{ id: number; frame: number; point: number[] }> = [];
@@ -91,7 +95,7 @@ export class WhipEffect implements WaterEffect {
     this.feed = new StreamBody(this.fx, look, feedLen > 9 ? 1.4 : 1, 3);
     this.feed.radius = o.radius * 0.9;
     this.feed.wobble = 0.05;
-    this.whip = new StreamBody(this.fx, look, 1.2, 4);
+    this.whip = new StreamBody(this.fx, look, 1.2, WHIP_PTS);
     this.whip.radius = o.radius;
     this.whip.wobble = 0.03;
     this.elev = Math.max(-0.55, Math.min(0.55, Math.asin(Math.max(-1, Math.min(1, cast.aimDir.y)))));
@@ -162,10 +166,28 @@ export class WhipEffect implements WaterEffect {
     c2.copy(piv).addScaledVector(dirH(th + 0.34 * lag, tC), rho * 0.72 * ce).addScaledVector(UP, rho * 0.72 * se + bump * 0.9);
   }
 
+  /**
+   * The whip curve for swing progress p: the swept arc (hand → two lagging control points →
+   * tip), resampled and rippled by a wave that runs from the hand to the tip, so it lashes
+   * like a whip instead of sweeping like a rod. Hit tests use this exact curve.
+   */
   private buildWhipPath(p: number, path: PathSampler, pts: THREE.Vector3[]): void {
-    pts[0].copy(this.hand);
-    this.pose(p, pts[3], pts[1], pts[2]);
-    path.set(pts, 4);
+    const c = this.ctrl;
+    c[0].copy(this.hand);
+    this.pose(p, c[3], c[1], c[2]);
+    this.ctrlPath.set(c, 4);
+    const L = this.ctrlPath.length;
+    const amp = (this.o.style === 'overhead' ? 0.22 : 0.34) * Math.sin(Math.PI * Math.min(1, p)) * Math.min(1, L / 4);
+    for (let i = 0; i < WHIP_PTS; i++) {
+      const u = i / (WHIP_PTS - 1);
+      this.ctrlPath.at(u * L, pts[i]);
+      if (i === 0 || i === WHIP_PTS - 1) continue;
+      // Ripple across the swing plane: mostly vertical for side lashes, sideways for the slam.
+      const w = amp * Math.sin(Math.PI * u) * Math.sin(u * 7.5 - p * 14);
+      if (this.o.style === 'overhead') pts[i].addScaledVector(this.r, w);
+      else pts[i].addScaledVector(UP, w);
+    }
+    path.set(pts, WHIP_PTS);
   }
 
   update(dt: number): boolean {
@@ -231,7 +253,7 @@ export class WhipEffect implements WaterEffect {
       this.prevP = p;
     }
     this.buildWhipPath(p, this.whip.path, this.whip.pts);
-    this.tip.copy(this.whip.pts[3]);
+    this.tip.copy(this.whip.pts[WHIP_PTS - 1]);
     // Drops fly off the whipping tip.
     if (this.tipInit && dt > 0 && o.ice < 0.5) {
       tD.subVectors(this.tip, this.prevTip).multiplyScalar(1 / dt);
@@ -269,7 +291,7 @@ export class WhipEffect implements WaterEffect {
     this.whip.head = head;
     const R = o.radius * radiusMul;
     this.whip.profile = (u) => (0.7 + 0.3 * u + (pinch - 1) * Math.max(0, (u - 0.75) / 0.25)) * capTaper(u, 0.02, 0.07) * (R / o.radius);
-    this.whip.build(4);
+    this.whip.build(WHIP_PTS);
     return true;
   }
 
@@ -336,9 +358,9 @@ export class WhipEffect implements WaterEffect {
 // ---------------------------------------------------------------------------
 
 const STEPS: Array<Pick<WhipOptions, 'style' | 'hand' | 'range' | 'swing' | 'radius' | 'damage' | 'knockback' | 'stagger' | 'launch' | 'delay'> & { clip: string }> = [
-  { style: 'right', hand: 'handR', range: 9.5, swing: 0.2, radius: 0.28, damage: 8, knockback: 4, stagger: 12, clip: 'water_whip_r' },
-  { style: 'left', hand: 'handL', range: 9.5, swing: 0.2, radius: 0.29, damage: 9, knockback: 5, stagger: 14, clip: 'water_whip_l' },
-  { style: 'overhead', hand: 'hands', range: 10.5, swing: 0.24, radius: 0.37, damage: 15, knockback: 8, stagger: 30, launch: 3, delay: 0.06, clip: 'water_whip_slam' },
+  { style: 'right', hand: 'handR', range: 9.5, swing: 0.26, radius: 0.28, damage: 8, knockback: 4, stagger: 12, clip: 'water_whip_r' },
+  { style: 'left', hand: 'handL', range: 9.5, swing: 0.26, radius: 0.29, damage: 9, knockback: 5, stagger: 14, clip: 'water_whip_l' },
+  { style: 'overhead', hand: 'hands', range: 10.5, swing: 0.3, radius: 0.37, damage: 15, knockback: 8, stagger: 30, launch: 3, delay: 0.06, clip: 'water_whip_slam' },
 ];
 
 registerTechnique({

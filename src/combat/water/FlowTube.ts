@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { PathSampler } from './Curve';
-import { createWaterMaterial, setLook, type WaterLook } from './WaterMaterials';
+import { createWaterMaterial, DEEP, SHALLOW, setLook, type WaterLook } from './WaterMaterials';
 
 /**
  * A tube of water swept along a PathSampler: fixed-size, pre-allocated
@@ -202,7 +202,7 @@ export class TubePool {
       this.all.add(t);
     }
     t.inUse = true;
-    t.setLook({ opacity: 0.9, ice: 0, glow: 0, flow: 3, foam: 1, deep: '#1764a8', shallow: '#9fe0ff', ...look });
+    t.setLook({ opacity: 0.92, ice: 0, glow: 0, flow: 3, foam: 0.8, deep: DEEP, shallow: SHALLOW, ...look });
     t.mesh.renderOrder = 12;
     return t;
   }

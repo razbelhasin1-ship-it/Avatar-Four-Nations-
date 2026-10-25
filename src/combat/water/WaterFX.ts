@@ -619,8 +619,8 @@ export class ReserveVisual {
       const b = this.body('loop');
       rF.set(Math.sin(o.yaw), 0, Math.cos(o.yaw));
       rR.set(-rF.z, 0, rF.x);
-      const Rx = 0.64 + 0.2 * frac + 0.06 * this.pulseT;
-      const Rz = 0.52 + 0.12 * frac;
+      const Rx = 0.7 + 0.22 * frac + 0.06 * this.pulseT;
+      const Rz = 0.58 + 0.14 * frac;
       // Angles of the hands around the chest (right = +rR, forward = +rF).
       const angOf = (h: THREE.Vector3) => Math.atan2(rF.dot(rB.copy(h).sub(this.center)), rR.dot(rB));
       const aL = angOf(this.handL);
@@ -632,17 +632,18 @@ export class ReserveVisual {
           .copy(this.center)
           .addScaledVector(rR, c * Rx)
           .addScaledVector(rF, sn * Rz);
-        // Rises behind the back, dips in front; a travelling wave along the stream.
-        p.y += -0.24 * sn + 0.08 * Math.sin(2 * th + t * 2.6);
-        // Pulled through the palms (the arms carry the water).
-        const wl = Math.pow(Math.max(0, Math.cos(th - aL)), 6) * 0.85;
-        const wr = Math.pow(Math.max(0, Math.cos(th - aR)), 6) * 0.85;
+        // Rises over the shoulders behind, dips toward the hands in front; a travelling wave along it.
+        p.y += -0.42 * sn + 0.09 * Math.sin(2 * th + t * 2.6);
+        // Pulled toward the palms (the arms carry the water).
+        const wl = Math.pow(Math.max(0, Math.cos(th - aL)), 6) * 0.75;
+        const wr = Math.pow(Math.max(0, Math.cos(th - aR)), 6) * 0.75;
         if (wl > 0.01) p.lerp(this.handL, wl);
         if (wr > 0.01) p.lerp(this.handR, wr);
       }
       b.tail = 0;
-      b.head = 0.35 + 0.6 * Math.pow(frac, 0.8);
-      b.radius = (0.055 + 0.11 * Math.pow(frac, 0.7) + 0.03 * this.pulseT) * this.form;
+      // An open serpent of water (head and tail), never a closed hoop.
+      b.head = 0.3 + 0.5 * Math.pow(frac, 0.8);
+      b.radius = (0.05 + 0.085 * Math.pow(frac, 0.7) + 0.03 * this.pulseT) * this.form;
       b.profile = (u) => capTaper(u, 0.14, 0.2) * (0.86 + 0.14 * Math.sin(u * 16 - t * 5.5));
       b.setLook(look);
       b.build(LOOP_PTS, true);
