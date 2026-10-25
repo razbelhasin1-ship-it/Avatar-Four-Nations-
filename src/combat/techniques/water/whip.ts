@@ -265,7 +265,10 @@ export class WhipEffect implements WaterEffect {
       this.finished = true;
       this.collapseT = 0;
       // The crack at full stretch: water snaps off the tip.
-      if (o.ice < 0.5) this.fx.crown(this.tip, o.style === 'overhead' ? 0.8 : 0.5, tD.copy(this.f));
+      if (o.ice < 0.5) {
+        this.fx.crown(this.tip, o.style === 'overhead' ? 0.8 : 0.5, tD.copy(this.f));
+        cast.ctx.audio.play('water_impact', { position: this.tip, volume: 0.32, pitch: 1.75 });
+      }
       o.onFinish?.(this.tip.clone(), cast);
     }
     // ---- Collapse / snap back -------------------------------------------------
