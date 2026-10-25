@@ -9,6 +9,7 @@ import {
   HAIR_COLORS,
   SKIN_TONES,
   type Appearance,
+  type BodyType,
   type Frame,
   type OutfitSlots,
 } from './Appearance';
@@ -216,15 +217,21 @@ export function normalizeName(raw: string): string {
   return n.charAt(0).toUpperCase() + n.slice(1);
 }
 
-const NAME_POOLS: Record<LookNation, string[]> = {
-  air: ['Tashi', 'Pema', 'Dawa', 'Norbu', 'Sonam', 'Yeshe', 'Lhamo', 'Jamyang', 'Kunga', 'Dolma'],
-  water: ['Atka', 'Nuka', 'Siku', 'Tulok', 'Aput', 'Kallik', 'Malu', 'Yuka', 'Ikaya', 'Nanok'],
-  earth: ['Bao', 'Lin', 'Shen', 'Jun', 'Mei', 'Tao', 'Hua', 'Kang', 'Wen', 'Lian'],
-  fire: ['Riku', 'Hiro', 'Kenji', 'Aiko', 'Ren', 'Sora', 'Akemi', 'Daichi', 'Haru', 'Natsu'],
+const NAME_POOLS: Record<LookNation, Record<BodyType, string[]>> = {
+  air: { male: ['Tashi', 'Dawa', 'Norbu', 'Sonam', 'Jamyang', 'Kunga', 'Tenzin', 'Lobsang'], female: ['Pema', 'Lhamo', 'Dolma', 'Yeshe', 'Dechen', 'Tsering', 'Kalsang', 'Nyima'] },
+  water: { male: ['Atka', 'Siku', 'Tulok', 'Aput', 'Kallik', 'Nanok', 'Anuk', 'Tornak'], female: ['Nuka', 'Malu', 'Yuka', 'Ikaya', 'Sila', 'Aluki', 'Tika', 'Kiana'] },
+  earth: { male: ['Bao', 'Shen', 'Jun', 'Tao', 'Kang', 'Wen', 'Hao', 'Long'], female: ['Lin', 'Mei', 'Hua', 'Lian', 'Ying', 'Xiu', 'Lan', 'Jia'] },
+  fire: { male: ['Riku', 'Hiro', 'Kenji', 'Ren', 'Daichi', 'Haru', 'Takeo', 'Kaito'], female: ['Aiko', 'Akemi', 'Natsu', 'Sora', 'Yumi', 'Hana', 'Kiyomi', 'Emi'] },
 };
 
-export function suggestName(nation: LookNation, rng: Random = new Random((Math.random() * 1e9) | 0)): string {
-  return rng.pick(NAME_POOLS[nation]);
+export function suggestName(nation: LookNation, rng: Random = new Random((Math.random() * 1e9) | 0), body: BodyType = 'male'): string {
+  return rng.pick(NAME_POOLS[nation][body]);
+}
+
+/** True for a stock suggestion (not a name the player typed), so a nation or body change may replace it. */
+export function isSuggestedName(name: string): boolean {
+  const n = name.trim();
+  return Object.values(NAME_POOLS).some((p) => p.male.includes(n) || p.female.includes(n));
 }
 
 // -----------------------------------------------------------------------------

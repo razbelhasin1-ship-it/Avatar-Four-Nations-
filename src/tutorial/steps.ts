@@ -32,6 +32,8 @@ export interface TutorialStep {
   element?: Element;
   /** Setup (spawn dummies, set reserve...). */
   enter?(rt: StepRuntime): void;
+  /** Undo temporary setup when the step is left (next, previous, skip or the tutorial ends). */
+  exit?(rt: StepRuntime): void;
   /** Events counted while this step is active. Return a counter name to increment. */
   onEvent?: Partial<{ [K in keyof GameEvents]: (rt: StepRuntime, p: GameEvents[K]) => string | null }>;
   /** Called every frame; return true when complete. */
@@ -221,6 +223,14 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     title: 'The Avatar State',
     text: 'Press {avatarState} to enter the Avatar State: your eyes and markings glow and every element grows stronger. Your spirit drains while it lasts. Press {avatarState} again to leave it.',
     touch: 'Tap AVATAR at the top of the screen to enter the Avatar State: your eyes and markings glow and every element grows stronger. Your spirit drains while it lasts. Tap AVATAR again to leave it.',
+    // The sandbox has the Elements Sphere unlocked everywhere else; this lesson is about the plain Avatar State.
+    enter: (rt) => {
+      rt.data.sphereWas = rt.ctx.progression.elementsSphereUnlocked;
+      rt.ctx.progression.elementsSphereUnlocked = false;
+    },
+    exit: (rt) => {
+      if (rt.data.sphereWas) rt.ctx.progression.elementsSphereUnlocked = true;
+    },
     onEvent: { 'avatarState:changed': (_rt, p) => (p.active ? 'on' : 'off') },
     check: (rt) => c(rt, 'on') >= 1 && c(rt, 'off') >= 1,
     progress: (rt) => (c(rt, 'on') ? (c(rt, 'off') ? 'Done' : 'Now leave the Avatar State') : 'Enter the Avatar State'),
@@ -232,6 +242,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     touch: 'When you have MASTERED all four elements in your journey, the Avatar State awakens into the Elements Sphere. Here, as a vision, you may feel it: tap AVATAR, then unleash ultimates with the technique buttons.',
     enter: (rt) => {
       rt.data.prevSphere = rt.ctx.progression.elementsSphereUnlocked;
+      // Still in the plain Avatar State from the last lesson: end it quietly so the next press awakens the Sphere.
+      if (rt.ctx.avatar.active && !rt.ctx.avatar.sphereActive) rt.ctx.avatar.deactivate(true);
       rt.ctx.avatar.spirit = rt.ctx.avatar.maxSpirit;
       // Sandbox-only preview: grants the sphere for this tutorial session (never saved).
       rt.ctx.progression.elementsSphereUnlocked = true;

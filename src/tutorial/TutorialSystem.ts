@@ -62,7 +62,19 @@ export class TutorialSystem implements GameSystem {
     this.goto(0);
   }
 
+  /** Run the current step's exit hook (temporary setup is undone before moving on). */
+  private leaveStep(): void {
+    const cur = this.index >= 0 ? TUTORIAL_STEPS[this.index] : undefined;
+    if (!cur?.exit || !this.rt) return;
+    try {
+      cur.exit(this.rt);
+    } catch (err) {
+      console.error('[Tutorial] step exit failed', err);
+    }
+  }
+
   onSessionEnd(): void {
+    this.leaveStep();
     this.active = false;
     this.rt = null;
     this.index = -1;
@@ -111,6 +123,7 @@ export class TutorialSystem implements GameSystem {
 
   private goto(i: number): void {
     if (i < 0 || i >= TUTORIAL_STEPS.length) return;
+    this.leaveStep();
     this.index = i;
     const step = TUTORIAL_STEPS[i];
     this.rt = { ctx: this.ctx, counters: {}, t: 0, data: {} };
@@ -127,7 +140,6 @@ export class TutorialSystem implements GameSystem {
     this.renderText();
     this.progEl.textContent = '';
     this.panel?.classList.remove('tut-complete');
-    // Keep the CSS centring (translateX(-50%)) while the animation overrides transform.
     // Keep the CSS placement (centred on desktop, top-right card on touch) while the animation overrides transform.
     const x = this.panel?.closest('#ui')?.classList.contains('touch-on') ? '0' : '-50%';
     this.panel?.animate([{ transform: `translate(${x}, -6px)`, opacity: 0.4 }, { transform: `translate(${x}, 0)`, opacity: 1 }], { duration: 260 });

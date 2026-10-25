@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {
+  BODY_OPTIONS,
   cloneAppearance,
   DEFAULT_APPEARANCE,
   EYE_COLORS,
@@ -12,12 +13,14 @@ import {
   TATTOO_COLORS,
   TATTOO_STYLES,
   type Appearance,
+  type BodyType,
   type EyeShape,
   type OutfitSlots,
+  withBodyType,
 } from '../../character/Appearance';
 import { FACE_PRESET_NAMES } from '../../character/CharShape';
 import { Humanoid } from '../../character/Humanoid';
-import { creatorPresets, NATION_NAMES, NATION_PALETTES, NAME_MAX, normalizeName, randomLook, suggestName, validateName, withPreset } from '../../character/looks';
+import { creatorPresets, isSuggestedName, NATION_NAMES, NATION_PALETTES, NAME_MAX, normalizeName, randomLook, suggestName, validateName, withPreset } from '../../character/looks';
 import { createModel } from '../../companions/models';
 import { defaultAnim, type AnimInput, type CreatureModel } from '../../companions/models/CreatureModel';
 import type { GameContext } from '../../core/GameContext';
@@ -241,6 +244,7 @@ export class NewGameFlow implements Screen {
   private rebuildTimer = 0;
   private dirty = false;
   private nameError: HTMLElement | null = null;
+  private nameInput: HTMLInputElement | null = null;
   private continueBtns: HTMLButtonElement[] = [];
   private subscribed = false;
   /** Save slot the new journey will be written to. */
@@ -365,8 +369,11 @@ export class NewGameFlow implements Screen {
     if (e !== this.element || this.step === 'element') {
       const changedElement = e !== this.element;
       this.element = e;
+      // A new nation brings its starting look; the chosen body type stays.
+      const body = this.app.body;
       this.app = cloneAppearance(DEFAULT_APPEARANCE[e]);
-      if (changedElement || !this.name) this.name = suggestName(e);
+      if (body === 'female') this.app = withBodyType(this.app, 'female', e);
+      if (changedElement || !this.name) this.name = suggestName(e, undefined, this.app.body ?? 'male');
       this.dirty = true;
       this.rebuildTimer = 0;
     }
@@ -713,14 +720,27 @@ export class NewGameFlow implements Screen {
         }
       },
     }) as HTMLInputElement;
+    this.nameInput = input;
     this.nameError = h('div.ngf-error', { 'data-field': 'name-error' });
     return h(
       'div.field',
       { style: { marginBottom: '8px' } },
       h('label', 'NAME'),
-      h('div.ngf-name', input, h('button.btn', { title: 'Suggest a name', onclick: () => { this.name = suggestName(this.element); input.value = this.name; this.validate(); } }, '🎲')),
+      h('div.ngf-name', input, h('button.btn', { title: 'Suggest a name', onclick: () => this.setName(suggestName(this.element, undefined, this.app.body ?? 'male')) }, '🎲')),
       this.nameError,
     );
+  }
+
+  private setName(name: string): void {
+    this.name = name;
+    if (this.nameInput) this.nameInput.value = name;
+    this.validate();
+  }
+
+  /** Switch male / female: refit the look and, unless the player typed their own, suggest a fitting name. */
+  private setBodyType(body: BodyType): void {
+    this.app = withBodyType(this.app, body, this.element);
+    if (!this.name.trim() || isSuggestedName(this.name)) this.setName(suggestName(this.element, undefined, body));
   }
 
   private continueButton(): HTMLButtonElement {
@@ -808,6 +828,8 @@ export class NewGameFlow implements Screen {
     switch (tab) {
       case 'body':
         return [
+          // Male / female: refits hairstyle, face, brows, height and build to the nation's start for that body.
+          h('div.field', h('label', 'BODY'), this.chipRow(BODY_OPTIONS, a.body ?? 'male', (v) => this.setBodyType(v), rerender, 'bodyType')),
           h('div.field', h('label', 'FRAME'), this.chipRow(FRAME_OPTIONS, a.frame, (v) => (a.frame = v), rerender, 'frame')),
           this.slider('HEIGHT', a.height, 0.9, 1.1, 0.01, (v) => (a.height = v), 'height'),
           this.slider('BUILD', a.build, 0, 1, 0.01, (v) => (a.build = v), 'build'),
@@ -834,8 +856,8 @@ export class NewGameFlow implements Screen {
         return [
           h('div.field', h('label', 'HAIRSTYLE'), ...groups.map(([g, list]) => [h('div.ngf-group', g), this.chipRow(list, a.hair.style, (v) => (a.hair.style = v), rerender, 'hair')])),
           h('div.field', h('label', 'HAIR COLOUR'), this.swatchRow(HAIR_COLORS, a.hair.color, (c) => { a.hair.color = c; a.brows.color = c; }, rerender)),
-          h('div.field', h('label', 'FACIAL HAIR'), this.chipRow(FACIAL_HAIR, a.facialHair, (v) => (a.facialHair = v), rerender, 'facialHair')),
-        ];
+          a.body === 'female' ? null : h('div.field', h('label', 'FACIAL HAIR'), this.chipRow(FACIAL_HAIR, a.facialHair, (v) => (a.facialHair = v), rerender, 'facialHair')),
+        ].filter((x): x is HTMLElement => !!x);
       }
       case 'marks':
         return [
@@ -943,7 +965,12 @@ export class NewGameFlow implements Screen {
 
   private randomize(): void {
     const keepName = this.name;
+    const body = this.app.body;
     this.app = randomLook(this.element, new Random((Math.random() * 1e9) | 0));
+    if (body === 'female') {
+      this.app.body = 'female';
+      this.app.facialHair = 'none';
+    }
     this.name = keepName;
     this.changed();
     this.render();

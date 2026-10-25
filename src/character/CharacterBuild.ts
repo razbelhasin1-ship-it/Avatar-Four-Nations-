@@ -36,6 +36,7 @@ const q = (v: number, step = 0.02) => Math.round(v / step) * step;
 export function shapeKey(a: Appearance, lod: 0 | 1): string {
   return JSON.stringify([
     lod,
+    a.body ?? 'male',
     a.frame,
     q(a.build, 0.05),
     a.face.preset,

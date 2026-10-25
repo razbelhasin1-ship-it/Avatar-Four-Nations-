@@ -8,6 +8,8 @@ import { cosmeticById, EMPTY_SLOT_IDS } from '../data/cosmetics';
  */
 
 export type Frame = 'slim' | 'average' | 'athletic' | 'broad';
+/** Body type: proportions of the skeleton, torso, limbs and face (default male; older saves have none). */
+export type BodyType = 'male' | 'female';
 export type EyeShape = 'round' | 'almond' | 'narrow' | 'wide';
 export type TattooStyle = 'none' | 'arrows' | 'arrows_head' | 'arrows_limbs' | 'arrow_partial' | 'wind_bands' | 'spirit_marks';
 
@@ -25,6 +27,8 @@ export interface OutfitSlots {
 
 export interface Appearance {
   version: 1;
+  /** Male or female proportions (undefined = male). */
+  body?: BodyType;
   frame: Frame;
   /** Overall height multiplier 0.9 .. 1.1 */
   height: number;
@@ -101,6 +105,59 @@ export const TATTOO_STYLES: Array<{ id: TattooStyle; name: string; desc: string 
   { id: 'spirit_marks', name: 'Spirit Marks', desc: 'Subtle dotted markings across the brow.' },
 ];
 
+export const BODY_OPTIONS: Array<{ id: BodyType; name: string }> = [
+  { id: 'male', name: 'Male' },
+  { id: 'female', name: 'Female' },
+];
+
+export function isFemale(a: Pick<Appearance, 'body'>): boolean {
+  return a.body === 'female';
+}
+
+/**
+ * Starting look of a female Avatar per nation: the same outfit and colours as the male start,
+ * with a fitting hairstyle, face, brows and height. Used by the creator's body switch.
+ */
+export const FEMALE_DEFAULTS: Record<Element, { frame: Frame; height: number; build: number; face: Appearance['face']; eyes: Appearance['eyes']['shape']; brows: { style: number; thickness: number }; hair: string }> = {
+  air: { frame: 'slim', height: 0.95, build: 0.3, face: { preset: 5, jaw: -0.45, cheeks: 0.2, nose: -0.2, eyeSpacing: 0 }, eyes: 'round', brows: { style: 0, thickness: 0.3 }, hair: 'bun' },
+  water: { frame: 'slim', height: 0.95, build: 0.35, face: { preset: 1, jaw: -0.4, cheeks: 0.25, nose: -0.2, eyeSpacing: 0 }, eyes: 'wide', brows: { style: 1, thickness: 0.35 }, hair: 'hair_loops' },
+  earth: { frame: 'average', height: 0.96, build: 0.45, face: { preset: 1, jaw: -0.2, cheeks: 0.15, nose: -0.1, eyeSpacing: 0 }, eyes: 'almond', brows: { style: 2, thickness: 0.4 }, hair: 'double_buns' },
+  fire: { frame: 'slim', height: 0.97, build: 0.4, face: { preset: 3, jaw: -0.35, cheeks: 0.35, nose: -0.15, eyeSpacing: 0 }, eyes: 'almond', brows: { style: 3, thickness: 0.35 }, hair: 'high_ponytail' },
+};
+
+/**
+ * Switch the body type and refit the look to it: hairstyle, face, brows, height and build come
+ * from the nation's start for that body; skin, eye and hair colours, outfit, colours, tattoos and
+ * scars are kept. A female start has no facial hair.
+ */
+export function withBodyType(a: Appearance, body: BodyType, nation: Element): Appearance {
+  const out = cloneAppearance(a);
+  out.body = body;
+  if (body === 'female') {
+    const f = FEMALE_DEFAULTS[nation];
+    out.frame = f.frame;
+    out.height = f.height;
+    out.build = f.build;
+    out.face = { ...f.face };
+    out.eyes.shape = f.eyes;
+    out.brows.style = f.brows.style;
+    out.brows.thickness = f.brows.thickness;
+    out.hair.style = f.hair;
+    out.facialHair = 'none';
+  } else {
+    const m = DEFAULT_APPEARANCE[nation];
+    out.frame = m.frame;
+    out.height = m.height;
+    out.build = m.build;
+    out.face = { ...m.face };
+    out.eyes.shape = m.eyes.shape;
+    out.brows.style = m.brows.style;
+    out.brows.thickness = m.brows.thickness;
+    out.hair.style = m.hair.style;
+  }
+  return out;
+}
+
 export const FRAME_OPTIONS: Array<{ id: Frame; name: string }> = [
   { id: 'slim', name: 'Slim' },
   { id: 'average', name: 'Average' },
@@ -112,6 +169,7 @@ export const FRAME_OPTIONS: Array<{ id: Frame; name: string }> = [
 export const DEFAULT_APPEARANCE: Record<Element, Appearance> = {
   air: {
     version: 1,
+    body: 'male',
     frame: 'slim',
     height: 0.97,
     build: 0.35,
@@ -139,6 +197,7 @@ export const DEFAULT_APPEARANCE: Record<Element, Appearance> = {
   },
   water: {
     version: 1,
+    body: 'male',
     frame: 'average',
     height: 1.0,
     build: 0.45,
@@ -166,6 +225,7 @@ export const DEFAULT_APPEARANCE: Record<Element, Appearance> = {
   },
   earth: {
     version: 1,
+    body: 'male',
     frame: 'athletic',
     height: 1.0,
     build: 0.6,
@@ -193,6 +253,7 @@ export const DEFAULT_APPEARANCE: Record<Element, Appearance> = {
   },
   fire: {
     version: 1,
+    body: 'male',
     frame: 'athletic',
     height: 1.02,
     build: 0.55,
@@ -233,6 +294,7 @@ export function sanitizeAppearance(raw: unknown, fallback: Appearance): Appearan
   const color = (v: any, d: string) => (typeof v === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v) ? v.toLowerCase() : d);
   const oneOf = <T extends string>(v: any, ids: readonly T[], d: T): T => (typeof v === 'string' && (ids as readonly string[]).includes(v) ? (v as T) : d);
   const obj = (v: any) => (v && typeof v === 'object' ? v : null);
+  a.body = oneOf(r.body, ['male', 'female'] as const, a.body ?? 'male');
   a.frame = oneOf(r.frame, FRAME_OPTIONS.map((f) => f.id), a.frame);
   a.height = num(r.height, a.height, 0.88, 1.12);
   a.build = num(r.build, a.build, 0, 1);

@@ -1,5 +1,5 @@
 import type { BoneName } from './Animator';
-import type { Appearance, EyeShape, Frame } from './Appearance';
+import type { Appearance, BodyType, EyeShape, Frame } from './Appearance';
 
 /**
  * Pure shape maths for procedural characters: skeleton layout per frame, body
@@ -59,8 +59,27 @@ export interface RigLayout {
   dims: FrameDims;
 }
 
-export function rigLayout(frame: Frame): RigLayout {
-  const d = FRAME_DIMS[frame] ?? FRAME_DIMS.average;
+/**
+ * Female proportions, applied on top of the frame: narrower shoulders and ribcage, a defined
+ * waist, wider hips, slimmer limbs and neck. (The bust is shaped in buildBody's torsoAt.)
+ */
+export const FEMALE_DIMS: FrameDims = { shoulder: 0.9, hip: 1.08, chestW: 0.9, waistW: 0.84, hipW: 1.12, depth: 0.95, limb: 0.87, neck: 0.85 };
+
+export function rigLayout(frame: Frame, body: BodyType = 'male'): RigLayout {
+  const base = FRAME_DIMS[frame] ?? FRAME_DIMS.average;
+  const d: FrameDims =
+    body === 'female'
+      ? {
+          shoulder: base.shoulder * FEMALE_DIMS.shoulder,
+          hip: base.hip * FEMALE_DIMS.hip,
+          chestW: base.chestW * FEMALE_DIMS.chestW,
+          waistW: base.waistW * FEMALE_DIMS.waistW,
+          hipW: base.hipW * FEMALE_DIMS.hipW,
+          depth: base.depth * FEMALE_DIMS.depth,
+          limb: base.limb * FEMALE_DIMS.limb,
+          neck: base.neck * FEMALE_DIMS.neck,
+        }
+      : base;
   const offset: Record<BoneName, V3> = {
     hips: [0, 0.95, 0],
     spine: [0, 0.1, 0],
@@ -156,9 +175,25 @@ const PRESETS: FaceParams[] = [
 const clampN = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
 
 /** Resolve the face preset + sliders + eye shape into concrete parameters. */
-export function faceParams(face: Appearance['face'], eyeShape: EyeShape): FaceParams {
+export function faceParams(face: Appearance['face'], eyeShape: EyeShape, body: BodyType = 'male'): FaceParams {
   const base = PRESETS[clampN(Math.round(face.preset), 0, PRESETS.length - 1)];
   const f: FaceParams = { ...base };
+  if (body === 'female') {
+    // Softer, finer features: narrower jaw and chin, lighter brow ridge, finer nose, fuller lips, larger eyes.
+    f.jawW *= 0.9;
+    f.jawSq *= 0.55;
+    f.chin *= 0.85;
+    f.chinW *= 0.86;
+    f.brow *= 0.6;
+    f.faceLen *= 0.96;
+    f.noseLen *= 0.92;
+    f.noseW *= 0.88;
+    f.noseProj *= 0.88;
+    f.lipFull = Math.min(1.3, f.lipFull + 0.18);
+    f.cheek += 0.08;
+    f.eyeR *= 1.05;
+    f.eyeOpen *= 1.06;
+  }
   // Stylised proportions: slightly larger heads than life.
   const HS = 1.06;
   f.rx *= HS;

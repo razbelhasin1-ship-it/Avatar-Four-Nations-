@@ -118,8 +118,8 @@ export class BuildCtx {
   private nextChainBone = FIRST_CHAIN_BONE;
 
   constructor(readonly a: Appearance, readonly lod: 0 | 1) {
-    this.rig = rigLayout(a.frame);
-    this.face = faceParams(a.face, a.eyes.shape);
+    this.rig = rigLayout(a.frame, a.body);
+    this.face = faceParams(a.face, a.eyes.shape, a.body);
     const o = a.outfit;
     this.items = {
       top: resolveItem(o.top),

@@ -153,7 +153,7 @@ export class Humanoid {
   /** Initial bone rest positions (the hips rest position never changes after the Animator captures it). */
   private applyRig(a: Appearance): void {
     this.root.scale.setScalar(Math.min(1.25, Math.max(0.55, a.height)));
-    const rig = rigLayout(a.frame);
+    const rig = rigLayout(a.frame, a.body);
     for (const name of BONE_NAMES) {
       const o = rig.offset[name];
       this.bones[name].position.set(o[0], o[1], o[2]);

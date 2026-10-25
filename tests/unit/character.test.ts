@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { getClip, solveLegIK } from '../../src/character/Animator';
-import { cloneAppearance, DEFAULT_APPEARANCE, HAIRSTYLES, sanitizeAppearance, type Appearance } from '../../src/character/Appearance';
+import { cloneAppearance, DEFAULT_APPEARANCE, HAIRSTYLES, sanitizeAppearance, withBodyType, type Appearance } from '../../src/character/Appearance';
+import { shapeKey } from '../../src/character/CharacterBuild';
+import { rigLayout } from '../../src/character/CharShape';
 import { legAt, mirrorPose, stance } from '../../src/character/combatClips';
 import '../../src/character/clips';
-import { creatorPresets, npcLook, OUTFIT_PRESETS, normalizeName, randomLook, validateName, withPreset } from '../../src/character/looks';
+import { creatorPresets, isSuggestedName, npcLook, OUTFIT_PRESETS, normalizeName, randomLook, suggestName, validateName, withPreset } from '../../src/character/looks';
 import { Random } from '../../src/core/Random';
 import { cosmeticById, EMPTY_SLOT_IDS } from '../../src/data/cosmetics';
 
@@ -18,6 +20,40 @@ function outfitValid(a: Appearance): void {
     expect(def!.slot).toBe(slot);
   }
 }
+
+describe('body type', () => {
+  it('female refits the look, keeps colours and outfit, and survives a save round trip', () => {
+    const f = withBodyType(DEFAULT_APPEARANCE.water, 'female', 'water');
+    expect(f.body).toBe('female');
+    expect(f.facialHair).toBe('none');
+    expect(f.hair.style).not.toBe(DEFAULT_APPEARANCE.water.hair.style);
+    expect(f.outfit).toEqual(DEFAULT_APPEARANCE.water.outfit);
+    expect(f.skinTone).toBe(DEFAULT_APPEARANCE.water.skinTone);
+    expect(sanitizeAppearance(JSON.parse(JSON.stringify(f)), water)).toEqual(f);
+    expect(withBodyType(f, 'male', 'water').hair.style).toBe(DEFAULT_APPEARANCE.water.hair.style);
+    expect(sanitizeAppearance({ body: 'robot' }, water).body).toBe('male');
+  });
+
+  it('female rig has narrower shoulders and wider hips; geometry differs', () => {
+    const m = rigLayout('average', 'male');
+    const f = rigLayout('average', 'female');
+    expect(f.dims.shoulder).toBeLessThan(m.dims.shoulder);
+    expect(f.dims.hipW).toBeGreaterThan(m.dims.hipW);
+    expect(f.pos.upperArmL[0]).toBeLessThan(m.pos.upperArmL[0]);
+    const fa = withBodyType(water, 'female', 'water');
+    expect(shapeKey(fa, 0)).not.toBe(shapeKey({ ...fa, body: 'male' }, 0));
+  });
+
+  it('name suggestions follow the body type', () => {
+    const rng = new Random(5);
+    for (let i = 0; i < 20; i++) {
+      const n = suggestName('fire', rng, 'female');
+      expect(isSuggestedName(n)).toBe(true);
+      expect(['Riku', 'Hiro', 'Kenji', 'Ren', 'Daichi', 'Haru', 'Takeo', 'Kaito']).not.toContain(n);
+    }
+    expect(isSuggestedName('Zuko-ish')).toBe(false);
+  });
+});
 
 describe('sanitizeAppearance', () => {
   it('returns a clone of the fallback for missing or garbage data', () => {

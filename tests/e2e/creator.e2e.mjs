@@ -104,6 +104,20 @@ async function run(width, height, tag) {
       assert.equal(h.errors.length, 0, 'console errors: ' + h.errors.join('\n'));
     });
 
+    await check(`${tag}: female body refits the look and drops facial hair`, async () => {
+      await h.page.click('[data-tab="body"]');
+      const g0 = await creator((c) => c.geomHash());
+      await h.page.click('[data-opt="bodyType:female"]');
+      await settle();
+      const a = (await creator((c) => c.state())).appearance;
+      assert.equal(a.body, 'female');
+      assert.equal(a.facialHair, 'none');
+      assert.notEqual(await creator((c) => c.geomHash()), g0, 'body type did not change the mesh');
+      await h.page.click('[data-tab="hair"]');
+      assert.equal(await h.page.$$eval('[data-opt^="facialHair:"]', (els) => els.length), 0, 'facial hair offered for a female body');
+      await shot('female');
+    });
+
     await check(`${tag}: name validation gates Continue`, async () => {
       const input = 'input[data-field="name"]';
       await h.page.fill(input, 'A');
@@ -131,6 +145,7 @@ async function run(width, height, tag) {
       const got = await h.eval((g) => g.game.player.humanoid.appearance);
       assert.equal(got.hair.style, want.hair.style);
       assert.deepEqual(got.outfit, want.outfit);
+      assert.equal(got.body, 'female');
     });
   } finally {
     if (h.errors.length) console.log(`[${tag}] CONSOLE ERRORS:\n` + h.errors.slice(0, 15).join('\n'));

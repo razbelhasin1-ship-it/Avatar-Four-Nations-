@@ -88,13 +88,37 @@ try {
     await castAtDummy(id);
     assert.ok(await stepUntil(atStep('abilities'), 120), JSON.stringify(await tut()));
   });
+  const avatar = () => h.eval((g) => ({ active: g.ctx.avatar.active, sphere: g.ctx.avatar.sphereActive }));
+  await check('the Elements Sphere awakens anywhere in the tutorial sandbox', async () => {
+    assert.equal(await h.eval((g) => g.ctx.progression.elementsSphereUnlocked), true);
+    assert.ok(await h.eval((g) => g.avatarState(true)), 'could not enter the Avatar State');
+    await h.step(20);
+    assert.deepEqual(await avatar(), { active: true, sphere: true });
+    await h.eval((g) => g.avatarState(false));
+    await h.step(20);
+  });
   await check('skip through remaining lessons; Avatar State lesson completes via real toggle', async () => {
     await h.eval((g) => g.debug.tutorial.goto('avatar_state'));
     await h.step(5);
     await h.eval((g) => g.avatarState(true));
     await h.step(40);
+    assert.deepEqual(await avatar(), { active: true, sphere: false }, 'the lesson should teach the plain Avatar State');
     await h.eval((g) => g.avatarState(false));
     assert.ok(await stepUntil(atStep('sphere'), 120), JSON.stringify(await tut()));
+  });
+  await check('Elements Sphere lesson: a plain Avatar State is ended, the next press awakens the Sphere', async () => {
+    await h.eval((g) => g.debug.tutorial.goto('avatar_state'));
+    await h.step(5);
+    await h.eval((g) => g.avatarState(true));
+    await h.step(10);
+    await h.eval((g) => g.debug.tutorial.goto('sphere'));
+    await h.step(5);
+    assert.deepEqual(await avatar(), { active: false, sphere: false });
+    assert.ok(await h.eval((g) => g.avatarState(true)), 'could not enter the Sphere');
+    await h.step(20);
+    assert.deepEqual(await avatar(), { active: true, sphere: true });
+    await h.eval((g) => g.avatarState(false));
+    await h.step(10);
   });
   await check('menus lesson completes when the map opens', async () => {
     await h.eval((g) => g.debug.tutorial.goto('menus'));

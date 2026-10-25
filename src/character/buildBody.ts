@@ -528,6 +528,13 @@ export function torsoAt(ctx: BuildCtx, y: number): { hw: number; hd: number; z: 
   const wK = 1 + (d.chestW - 1) * chestK + (d.waistW - 1) * waistK + (d.hipW - 1) * hipK;
   hw *= wK * (1 + (m - 1) * 0.5 * chestK);
   hd *= d.depth * (1 + (m - 1) * 0.6 * chestK) * (1 + (d.waistW - 1) * 0.6 * waistK);
+  if (ctx.a.body === 'female') {
+    // A modest bust: deeper and a little forward across the chest (clothing follows this shape).
+    const bust = smooth01(1.16, 1.25, y) * (1 - smooth01(1.3, 1.38, y));
+    hd *= 1 + 0.17 * bust;
+    hw *= 1 + 0.03 * bust;
+    return { hw, hd, z: z + 0.015 * bust };
+  }
   return { hw, hd, z };
 }
 
