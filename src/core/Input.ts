@@ -228,6 +228,14 @@ export class Input {
   private onPointerLockLost: (() => void) | null = null;
 
   private readonly handlers: Array<[EventTarget, string, EventListener, AddEventListenerOptions?]> = [];
+  /** Last touch contact (ms). Mouse events right after it are the browser's emulation of the tap. */
+  private lastTouchMs = -1e9;
+
+  /** A mouse event generated from a touch (Android/iOS tap emulation), not a real mouse. */
+  private fromTouch(e: MouseEvent): boolean {
+    const caps = (e as MouseEvent & { sourceCapabilities?: { firesTouchEvents?: boolean } }).sourceCapabilities;
+    return caps?.firesTouchEvents === true || performance.now() - this.lastTouchMs < 1000;
+  }
 
   attach(canvas: HTMLElement): void {
     this.canvas = canvas;
@@ -238,6 +246,13 @@ export class Input {
     on(window, 'keydown', (e: KeyboardEvent) => this.onKeyDown(e));
     on(window, 'keyup', (e: KeyboardEvent) => this.onKeyUp(e));
     on(window, 'blur', () => this.releaseAll());
+    // Touch contact: the on-screen controls handle it; remember it so emulated mouse events are ignored.
+    const touched = () => {
+      this.lastTouchMs = performance.now();
+      this.lastDevice = 'touch';
+    };
+    on(window, 'touchstart', touched, { capture: true, passive: true });
+    on(window, 'touchend', touched, { capture: true, passive: true });
     on(canvas, 'mousedown', (e: MouseEvent) => this.onMouseDown(e));
     on(window, 'mouseup', (e: MouseEvent) => this.onMouseUp(e));
     on(window, 'mousemove', (e: MouseEvent) => this.onMouseMove(e));
@@ -326,6 +341,8 @@ export class Input {
   }
 
   private onMouseDown(e: MouseEvent): void {
+    // A tap on a phone also fires a fake mousedown: it must neither attack nor switch prompts to keys.
+    if (this.fromTouch(e)) return;
     this.lastDevice = 'kbm';
     const code = 'Mouse' + e.button;
     if (this.captureNext) {
@@ -340,6 +357,7 @@ export class Input {
   }
 
   private onMouseUp(e: MouseEvent): void {
+    if (this.fromTouch(e)) return;
     const code = 'Mouse' + e.button;
     if (!this.codeDown.has(code)) return;
     this.codeDown.delete(code);

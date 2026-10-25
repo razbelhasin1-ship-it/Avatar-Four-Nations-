@@ -1,6 +1,6 @@
 import type { GameContext, GameSystem } from '../core/GameContext';
 import type { GameEvents } from '../core/events';
-import type { Action } from '../core/Input';
+import { TOUCH_LABELS, type Action } from '../core/Input';
 import { h } from '../ui/dom';
 import { TUTORIAL_STEPS, type StepRuntime, type TutorialStep } from './steps';
 import './tutorial.css';
@@ -94,8 +94,9 @@ export class TutorialSystem implements GameSystem {
     ]);
   }
 
-  private formatText(text: string): string {
-    return text.replace(/\{(\w+)\}/g, (_m, a: string) => `<span class="kbd">${this.ctx.input.label(a as Action)}</span>`);
+  private formatText(text: string, touch = false): string {
+    // Touch screens always name the on-screen buttons, whatever device spoke last.
+    return text.replace(/\{(\w+)\}/g, (_m, a: string) => `<span class="kbd">${(touch && TOUCH_LABELS[a as Action]) || this.ctx.input.label(a as Action)}</span>`);
   }
 
   private renderText(): void {
@@ -103,7 +104,7 @@ export class TutorialSystem implements GameSystem {
     const step = TUTORIAL_STEPS[this.index];
     this.titleEl.textContent = step.title;
     const touch = this.ctx.ui.layers.hud.closest('#ui')?.classList.contains('touch-on') ?? false;
-    this.textEl.innerHTML = this.formatText(touch && step.touch ? step.touch : step.text);
+    this.textEl.innerHTML = this.formatText(touch && step.touch ? step.touch : step.text, touch);
     this.panel.classList.remove('tut-open');
     this.countEl.textContent = `${this.index + 1} / ${TUTORIAL_STEPS.length}`;
   }
@@ -127,7 +128,9 @@ export class TutorialSystem implements GameSystem {
     this.progEl.textContent = '';
     this.panel?.classList.remove('tut-complete');
     // Keep the CSS centring (translateX(-50%)) while the animation overrides transform.
-    this.panel?.animate([{ transform: 'translate(-50%, -6px)', opacity: 0.4 }, { transform: 'translate(-50%, 0)', opacity: 1 }], { duration: 260 });
+    // Keep the CSS placement (centred on desktop, top-right card on touch) while the animation overrides transform.
+    const x = this.panel?.closest('#ui')?.classList.contains('touch-on') ? '0' : '-50%';
+    this.panel?.animate([{ transform: `translate(${x}, -6px)`, opacity: 0.4 }, { transform: `translate(${x}, 0)`, opacity: 1 }], { duration: 260 });
   }
 
   next(): void {

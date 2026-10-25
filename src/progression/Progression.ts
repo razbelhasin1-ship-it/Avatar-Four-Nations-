@@ -65,10 +65,19 @@ export class Progression implements Persistable, GameSystem {
   }
 
   /** Tutorial sandbox: all elements and starter techniques, no persistence. */
+  /**
+   * Tutorial sandbox: all four elements and every bending technique are known (never saved,
+   * never touches the journey). Starters fill the slots first; the rest go into free slots and
+   * the Technique Library. Ultimates stay with the Elements Sphere lesson, so the Avatar State
+   * lesson still enters the Avatar State.
+   */
   setupSandbox(): void {
     this.reset();
     this.sandbox = true;
     for (const e of ELEMENTS) this.unlockElement(e, true);
+    for (const def of allTechniques()) {
+      if (def.element !== 'avatar' && def.kind !== 'ultimate' && def.kind !== 'combined') this.learn(def.id, 'debug', true);
+    }
   }
 
   // ---------------------------------------------------------------------------

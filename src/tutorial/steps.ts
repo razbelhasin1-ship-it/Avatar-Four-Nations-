@@ -83,6 +83,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'move',
     title: 'Movement',
     text: 'Walk with {forward}{left}{back}{right}. Hold {sprint} to sprint.',
+    touch: 'Walk with the stick on the left side of the screen. Push it all the way, or tap SPRINT, to run.',
     enter: (rt) => {
       const p = rt.ctx.player!;
       rt.data.start = p.position.clone();
@@ -97,6 +98,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'jump',
     title: 'Jumping & Gliding',
     text: 'Press {jump} to jump. As an Airbender, press it again in the air for a wind-assisted jump, and hold it while falling to glide.',
+    touch: 'Tap JUMP to jump. As an Airbender, tap it again in the air for a wind-assisted jump, and hold it while falling to glide.',
     element: 'air',
     onEvent: {
       'player:jumped': () => 'jump',
@@ -109,6 +111,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'dodge',
     title: 'Evasion',
     text: 'Press {dodge} to dodge. Each element dodges differently — Airbenders dash on the wind. You are briefly untouchable while dodging.',
+    touch: 'Tap DODGE to dodge. Each element dodges differently — Airbenders dash on the wind. You are briefly untouchable while dodging.',
     onEvent: { 'player:dodged': () => 'dodge' },
     check: (rt) => c(rt, 'dodge') >= 2,
     progress: (rt) => `${Math.min(2, c(rt, 'dodge'))} / 2`,
@@ -117,6 +120,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'air_basic',
     title: 'Airbending: Strikes',
     text: 'A training dummy appears ahead. Aim with the crosshair and press {attack} repeatedly — your strikes chain into a combo.',
+    touch: 'A training dummy appears ahead. Aim with the crosshair and tap ATTACK repeatedly — your strikes chain into a combo.',
     element: 'air',
     enter: (rt) => {
       rt.data.dummy = spawnDummy(rt, 8, 0);
@@ -129,6 +133,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'air_heavy',
     title: 'Charged Techniques',
     text: 'Hold {aim} to gather power, then release to unleash a heavy technique. A full charge hits much harder.',
+    touch: 'Hold HEAVY to gather power, then release to unleash a heavy technique. A full charge hits much harder.',
     element: 'air',
     onEvent: { 'technique:cast': castCounter('air', ['heavy'], 'heavy') },
     check: (rt) => c(rt, 'heavy') >= 1,
@@ -137,6 +142,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'abilities',
     title: 'Techniques',
     text: 'Your learned techniques sit in slots {ability1}–{ability4}. Try one now. Open the Technique Library with {techniques} to change your loadout.',
+    touch: 'Your techniques sit on the round technique buttons. Try one now. Every technique is unlocked here: change your loadout in MENU → Techniques.',
     element: 'air',
     onEvent: { 'technique:cast': castCounter(null, ['ability', 'movement', 'defense'], 'ability') },
     check: (rt) => c(rt, 'ability') >= 1,
@@ -145,6 +151,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'switch_fire',
     title: 'The Avatar Bends All Four',
     text: 'Press {elementNext} (or scroll) to switch elements. Switch to Fire and land a quick chain of fire punches on the dummy.',
+    touch: 'Tap the element button on the left (it shows your element) to switch elements. Switch to Fire and land a quick chain of fire punches on the dummy.',
     onEvent: { hit: hitCounter('fire', 'fire') },
     check: (rt) => c(rt, 'fire') >= 3,
     progress: (rt) => `${Math.min(3, c(rt, 'fire'))} / 3 fire hits`,
@@ -161,6 +168,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'lock',
     title: 'Targeting',
     text: 'Press {lockOn} to lock onto the dummy. Your attacks and camera will follow it. Press again to release.',
+    touch: 'Tap LOCK to lock onto the dummy. Your attacks and camera will follow it. Tap it again to release.',
     check: (rt) => !!rt.ctx.player?.lockTarget,
   },
   {
@@ -181,7 +189,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 'water_draw',
     title: 'Drawing Water',
-    text: 'Walk to the pond or stream and hold {drawWater} to draw water to you. The water you hold orbits you and powers your techniques anywhere — until it runs out.',
+    text: 'Walk to the pond or stream and hold {drawWater} to draw water to you. The water you carry swirls around you and powers your techniques anywhere — until it runs out.',
+    touch: 'Walk to the pond or stream and hold DRAW to pull water to you. The water you carry swirls around you and powers your techniques anywhere — until it runs out.',
     element: 'water',
     onEvent: { 'water:drawn': () => 'drawn' },
     check: (rt) => c(rt, 'drawn') >= 1 && (rt.ctx.player?.waterReserve ?? 0) > 5,
@@ -200,6 +209,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'defense',
     title: 'Defence',
     text: 'Defensive techniques block or deflect attacks. Use a defensive technique from your slots (for example a Water Shield), or dodge with {dodge}.',
+    touch: 'Defensive techniques block or deflect attacks. Use a defensive technique from your buttons (for example a Water Shield), or tap DODGE.',
     onEvent: {
       'technique:cast': castCounter(null, ['defense'], 'def'),
       'player:dodged': () => 'dodge',
@@ -210,6 +220,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'avatar_state',
     title: 'The Avatar State',
     text: 'Press {avatarState} to enter the Avatar State: your eyes and markings glow and every element grows stronger. Your spirit drains while it lasts. Press {avatarState} again to leave it.',
+    touch: 'Tap AVATAR at the top of the screen to enter the Avatar State: your eyes and markings glow and every element grows stronger. Your spirit drains while it lasts. Tap AVATAR again to leave it.',
     onEvent: { 'avatarState:changed': (_rt, p) => (p.active ? 'on' : 'off') },
     check: (rt) => c(rt, 'on') >= 1 && c(rt, 'off') >= 1,
     progress: (rt) => (c(rt, 'on') ? (c(rt, 'off') ? 'Done' : 'Now leave the Avatar State') : 'Enter the Avatar State'),
@@ -218,6 +229,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'sphere',
     title: 'A Vision: The Elements Sphere',
     text: 'When you have MASTERED all four elements in your journey, the Avatar State awakens into the Elements Sphere. Here, as a vision, you may feel it: press {avatarState}, then unleash ultimates with {ability1}–{ability4} and {ability5}.',
+    touch: 'When you have MASTERED all four elements in your journey, the Avatar State awakens into the Elements Sphere. Here, as a vision, you may feel it: tap AVATAR, then unleash ultimates with the technique buttons.',
     enter: (rt) => {
       rt.data.prevSphere = rt.ctx.progression.elementsSphereUnlocked;
       rt.ctx.avatar.spirit = rt.ctx.avatar.maxSpirit;
@@ -244,6 +256,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'done',
     title: 'You Are Ready',
     text: 'Keep practising here as long as you like, or leave the tutorial from the pause menu. The Four Nations await.',
+    touch: 'Keep practising here as long as you like, or leave the tutorial from MENU. The Four Nations await.',
     check: () => false,
   },
 ];
