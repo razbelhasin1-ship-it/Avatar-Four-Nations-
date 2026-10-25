@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AMBIENCE_LAYERS, LAYER_GAIN, ambienceTargets, nightFactor, reverbFor, spotRates, type AmbienceContext } from '../../src/audio/AmbienceDirector';
 import { voiceTypeFor } from '../../src/audio/AudioEvents';
+import { FDN_DAMP_Q_DB, fdnWorstLoopGain, lowpassMagnitude } from '../../src/audio/dsp';
 import { THEMES, themeFor } from '../../src/audio/music/themes';
 import { STEP_SURFACES, stepId } from '../../src/audio/recipes/footsteps';
 import { listLoops, listSounds, loopMeta, soundMeta, soundTrim } from '../../src/audio/registry';
@@ -212,5 +213,22 @@ describe('music & voices', () => {
     expect(voiceTypeFor({ id: 'spirit_guide', role: 'villager' })).toBe('spirit');
     expect(voiceTypeFor({ id: 'abc', role: 'villager', nation: 'earth' })).toBe(voiceTypeFor({ id: 'abc', role: 'villager', nation: 'earth' }));
     expect(voiceTypeFor(undefined)).toBe('male');
+  });
+});
+
+describe('reverb stability', () => {
+  it('the FDN loop never gains above unity, for every decay, damping, size and sample rate the game can set', () => {
+    // A loop gain above 1 at any frequency grows into a full-scale tone that never stops
+    // (the music hall used to reach 1.03 near 3.2 kHz).
+    for (const sr of [44100, 48000])
+      for (const size of [1, 1.35])
+        for (const decay of [0.2, 0.7, 1.3, 1.9, 2.2, 2.6, 2.8, 4, 8])
+          for (const damping of [500, 3600, 4200, 5200, 6500, 7000, 16000]) expect(fdnWorstLoopGain({ decay, damping }, size, sr), `decay ${decay} damping ${damping} size ${size} @${sr}`).toBeLessThan(0.98);
+  });
+
+  it('the damping low-pass never boosts any frequency', () => {
+    for (const f of [50, 500, 2000, 3200, 4200, 8000, 15000]) expect(lowpassMagnitude(f, 4200, FDN_DAMP_Q_DB, 48000)).toBeLessThanOrEqual(1.0000001);
+    // The old setting (Q 0.5 dB) resonated above unity just below the cutoff.
+    expect(lowpassMagnitude(3200, 4200, 0.5, 44100)).toBeGreaterThan(1.1);
   });
 });

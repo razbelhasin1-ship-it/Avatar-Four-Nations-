@@ -84,6 +84,19 @@ try {
     assert.ok(s.ambience.playing.includes('amb.temple'), JSON.stringify(s.ambience.playing));
   });
 
+  await check('reverb tails always die away: no runaway feedback in any space or the music hall', async () => {
+    // Regression: the music hall reverb gained energy in Chrome until it was a full-scale screech.
+    const cases = [[{ decay: 2.6, damping: 4200, mix: 0.55 }, 1.35], [{ decay: 1.3, damping: 5200, mix: 0.4 }, 1], [{ decay: 2.8, damping: 3600, mix: 0.5 }, 1], [{ decay: 8, damping: 16000, mix: 1 }, 1.35]];
+    for (const [p, size] of cases) {
+      for (const sr of [44100, 48000]) {
+        const w = await audio((g, p, size, sr) => g.debug.audio.reverbTail(p, size, 16, sr), p, size, sr);
+        assert.ok(w.every((v) => Number.isFinite(v)), `${JSON.stringify(p)} x${size} @${sr}: ${w}`);
+        assert.ok(w[w.length - 1] < w[0] * 1e-3, `tail must decay: ${JSON.stringify(p)} x${size} @${sr}: ${w}`);
+      }
+    }
+    assert.equal(await audio((g) => g.ctx.audio.rebuilds), 0, 'the runaway watchdog must not have fired');
+  });
+
   await check('settings: mute and bus volumes apply live', async () => {
     await audio((g) => {
       g.setting('audio.muted', false);

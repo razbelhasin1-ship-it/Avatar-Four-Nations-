@@ -340,6 +340,9 @@ export class MusicDirector {
   }
 
   attach(ac: BaseAudioContext, bus: AudioNode): void {
+    // A rebuilt context (engine watchdog): the old performance's nodes died with the old one.
+    this.current = null;
+    this.fading = [];
     this.ac = ac;
     this.res = makeResources(ac);
     this.master = ac.createGain();

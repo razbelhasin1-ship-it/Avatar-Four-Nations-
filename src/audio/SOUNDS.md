@@ -1,7 +1,7 @@
 # Sound library (`src/audio`)
 
 Everything is synthesised at runtime with WebAudio (noise + oscillators + filters + envelopes,
-Karplus-Strong plucks, FM bells, waveshaping, formant voices, FDN reverb). No audio files.
+Karplus-Strong plucks, FM bells, waveshaping, formant voices, comb-filter reverb). No audio files.
 This file lists every id the shared library registers and what it is for. It is generated from
 the live registry (keep it in sync when adding ids: `listSounds()` / `listLoops()` in `registry.ts`).
 
@@ -22,7 +22,7 @@ registerSound('my_module_thing', (ac, out, t, o) => { /* build graph into out at
 - Meta (`SoundMeta`): `duration` (declared ring-out, verified offline), `bus`, `maxVoices` per id,
   `cooldown` (anti-spam per id and spot), `priority` (voice stealing), `reverb` send, `range`, `desc`.
 - Engine: 28/40 voice cap (low/other presets) with priority stealing and 40 ms click-free fades, per-id
-  caps and cooldowns, distance culling + air absorption, FDN environment reverb (set by the ambience
+  caps and cooldowns, distance culling + air absorption, damped-comb environment reverb (independent loops, stable in every browser; set by the ambience
   director), glue compressor + limiter, NaN-safe params, unlock on first gesture (safe no-ops while
   locked), suspend while the tab is hidden, `suppress()` so event bindings can replace legacy plays,
   `setMuffled()` for the pause menu, `duck()`, live master/music/sfx/ambient/mute settings.

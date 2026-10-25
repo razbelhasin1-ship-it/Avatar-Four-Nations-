@@ -22,13 +22,16 @@ export { MusicDirector } from './music/MusicDirector';
  * Graph:
  *   voice → [air-absorption LP] → [panner] → bus(sfx|ambient) → duck → muffle ┐
  *   voice → bus(ui) → duck ────────────────────────────────────────────────────┼→ glue comp → master → limiter → out
- *   voice → send → sendFader(bus) → FDN reverb ─────────────────→ muffle ──────┘
+ *   voice → send → sendFader(bus) → comb reverb ────────────────→ muffle ──────┘
  *   MusicDirector → bus(music) → duck ──────────────────────────────────────────→ master
  *
  * Voice management: global voice cap with priority stealing (click-free 40 ms
  * fade), per-id concurrency caps, per-id/per-spot cooldowns, distance culling,
  * NaN-safe options, and `suppress()` so event bindings can replace legacy direct
  * plays without doubling them.
+ *
+ * Watchdog: an analyser on the master mutes and rebuilds the graph if the signal ever
+ * runs away (NaN or far past full scale), so a fault can never become a stuck screech.
  *
  * Browser autoplay rules: the AudioContext is created/resumed on the first user
  * gesture (unlock()), which Game wires to pointerdown/keydown (the engine also
@@ -142,6 +145,12 @@ export class AudioEngine {
   private frameNo = 0;
   private muffled = false;
   private hiddenSuspend = false;
+  /** Runaway-signal watchdog on the master (see checkRunaway). */
+  private guard: AnalyserNode | null = null;
+  private guardBuf: Float32Array<ArrayBuffer> | null = null;
+  private guardT = 0;
+  /** Graph rebuilds forced by the watchdog (capped; after that it stays muted). */
+  rebuilds = 0;
 
   constructor(private readonly settings: SettingsManager, events: EventBus) {
     events.on('settings:changed', () => this.applyVolumes());
@@ -188,6 +197,11 @@ export class AudioEngine {
     const master = ac.createGain();
     master.gain.value = 0;
     master.connect(limiter);
+    const guard = ac.createAnalyser();
+    guard.fftSize = 512;
+    master.connect(guard);
+    this.guard = guard;
+    this.guardBuf = new Float32Array(guard.fftSize);
     const comp = ac.createDynamicsCompressor();
     comp.threshold.value = -16;
     comp.knee.value = 10;
@@ -654,6 +668,11 @@ export class AudioEngine {
     this.frameNo++;
     const step = Math.max(0, Math.min(0.25, fin(dt, 0)));
     if (this.ac) this.pruneVoices(this.ac.currentTime);
+    this.guardT -= step;
+    if (this.guardT <= 0) {
+      this.guardT = 0.5;
+      this.checkRunaway();
+    }
     try {
       this.music.update(step);
     } catch (err) {
@@ -674,6 +693,50 @@ export class AudioEngine {
     }
   }
 
+  /**
+   * Safety net: a runaway signal (NaN, or far beyond full scale, as an unstable feedback
+   * loop produces) would come out of the speakers as a deafening tone that never stops.
+   * Mute at once and rebuild the graph on a fresh context; the music re-attaches and the
+   * ambience re-creates its loops when `generation` changes. Capped at 3 rebuilds per
+   * session, after which audio simply stays muted.
+   */
+  private checkRunaway(): void {
+    const ac = this.ac, guard = this.guard, buf = this.guardBuf;
+    if (!ac || !guard || !buf || ac.state !== 'running') return;
+    guard.getFloatTimeDomainData(buf);
+    let bad = false;
+    for (let i = 0; i < buf.length; i++) {
+      if (!(Math.abs(buf[i]) < 16)) {
+        bad = true;
+        break;
+      }
+    }
+    if (!bad) return;
+    this.stats.errors++;
+    console.warn('[Audio] runaway signal detected: muting and rebuilding the audio graph');
+    try {
+      this.master?.gain.cancelScheduledValues(0);
+      this.master?.gain.setValueAtTime(0, ac.currentTime);
+    } catch {
+      /* context already broken */
+    }
+    if (this.rebuilds >= 3) return;
+    this.rebuilds++;
+    const AC = ac.constructor as typeof AudioContext;
+    ac.onstatechange = null;
+    void ac.close().catch(() => {});
+    this.voices = [];
+    this.loops.clear();
+    try {
+      this.build(new AC({ latencyHint: 'interactive' }));
+      void this.ac!.resume().catch(() => {});
+    } catch (err) {
+      console.warn('[Audio] rebuild failed', err);
+      this.ac = null;
+      this.unlocked = false;
+    }
+  }
+
   /** Snapshot for debug/tests. */
   debugState(): Record<string, unknown> {
     const ac = this.ac;
@@ -686,6 +749,7 @@ export class AudioEngine {
       state: ac?.state ?? 'locked',
       unlocked: this.unlocked,
       generation: this.generation,
+      rebuilds: this.rebuilds,
       sampleRate: ac?.sampleRate ?? 0,
       time: ac?.currentTime ?? 0,
       voices: this.voices.filter((v) => !v.stolen).length,

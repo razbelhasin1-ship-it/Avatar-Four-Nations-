@@ -325,19 +325,63 @@ export interface Reverb {
   disconnect(): void;
 }
 
-const FDN_TIMES = [0.0421, 0.0503, 0.0611, 0.0727];
-// Hadamard / 2 — orthogonal, so |g| < 1 keeps the loop stable.
-const HAD = [
-  [1, 1, 1, 1],
-  [1, -1, 1, -1],
-  [1, 1, -1, -1],
-  [1, -1, -1, 1],
-];
+/** Comb lengths (s): roughly co-prime in samples so their resonances do not line up. */
+const FDN_TIMES = [0.0297, 0.0353, 0.0411, 0.0467, 0.0527, 0.0601];
+/** Output weight per comb (alternating sign decorrelates them). */
+const COMB_OUT = 0.42;
+/**
+ * Resonance of the damping low-passes inside the loop. WebAudio lowpass Q is in dB:
+ * -6 dB = a linear Q of 0.5, which never boosts any frequency (|H| <= 1). A positive
+ * value (the old 0.5 dB = linear Q 1.06) peaks ~1.2x just below the cutoff, which pushed
+ * long reverbs (music hall, caves, temples) past unity loop gain: a tone that grew until
+ * it was a full-scale screech.
+ */
+export const FDN_DAMP_Q_DB = -6;
+/** Ceiling on any line's feedback gain, whatever the decay (stability margin). */
+export const FDN_MAX_LOOP_GAIN = 0.97;
+
+/** Feedback gain of a delay line `time` seconds long for an RT60 of `decay` seconds. */
+export function fdnLoopGain(time: number, decay: number): number {
+  return Math.min(FDN_MAX_LOOP_GAIN, Math.pow(10, (-3 * time) / Math.max(0.1, decay)));
+}
+
+/** |H| at `f` Hz of a WebAudio lowpass BiquadFilterNode (spec formulas, Q in dB). */
+export function lowpassMagnitude(f: number, cutoff: number, qDb: number, sampleRate: number): number {
+  const w0 = (2 * Math.PI * Math.min(cutoff, sampleRate / 2 - 1)) / sampleRate;
+  const alpha = Math.sin(w0) / (2 * Math.pow(10, qDb / 20));
+  const c = Math.cos(w0);
+  const b0 = (1 - c) / 2, b1 = 1 - c, b2 = (1 - c) / 2;
+  const a0 = 1 + alpha, a1 = -2 * c, a2 = 1 - alpha;
+  const w = (2 * Math.PI * f) / sampleRate;
+  const re = (k0: number, k1: number, k2: number) => k0 + k1 * Math.cos(w) + k2 * Math.cos(2 * w);
+  const im = (k1: number, k2: number) => -(k1 * Math.sin(w) + k2 * Math.sin(2 * w));
+  return Math.hypot(re(b0, b1, b2), im(b1, b2)) / Math.hypot(re(a0, a1, a2), im(a1, a2));
+}
 
 /**
- * 4-line feedback delay network reverb (no convolution): pre-delay →
- * allpass diffusion → 4 damped delay lines mixed by a Hadamard matrix.
- * Fixed node count (~34), created once per bus group.
+ * Worst-case gain once around any comb loop (any line, any frequency). Each loop is
+ * independent, so the reverb is stable when this stays below 1.
+ */
+export function fdnWorstLoopGain(p: Pick<ReverbParams, 'decay' | 'damping'>, size = 1, sampleRate = 48000): number {
+  let worst = 0;
+  for (const t0 of FDN_TIMES) {
+    const g = fdnLoopGain(t0 * size, p.decay);
+    for (let f = 20; f < sampleRate / 2; f *= 1.02) worst = Math.max(worst, g * lowpassMagnitude(f, p.damping, FDN_DAMP_Q_DB, sampleRate));
+  }
+  return worst;
+}
+
+/**
+ * Reverb without convolution: pre-delay → allpass diffusion → 6 parallel damped
+ * comb filters (Schroeder/Moorer), plus early reflections. Fixed node count (~35),
+ * created once per bus group.
+ *
+ * The combs are deliberately independent loops. An earlier version cross-coupled four
+ * lines through a Hadamard matrix, which is stable on paper, but Chrome renders delay
+ * cycles that share nodes with extra render-quantum delay on some paths and not others;
+ * that breaks the matrix's orthogonality and the network gained energy until it was a
+ * full-scale screech (music hall after ~15 s, caves, temples). A single self-loop with
+ * gain below 1 stays stable however the browser schedules it.
  */
 export function createReverb(ac: BaseAudioContext, init: Partial<ReverbParams> = {}, size = 1): Reverb {
   const params: ReverbParams = { decay: init.decay ?? 1.6, damping: init.damping ?? 5200, mix: init.mix ?? 0.25 };
@@ -358,12 +402,12 @@ export function createReverb(ac: BaseAudioContext, init: Partial<ReverbParams> =
   hp.type = 'highpass';
   hp.frequency.value = 110;
   input.connect(hp).connect(pre).connect(ap1).connect(ap2);
-  const sums: GainNode[] = [];
-  const delays: DelayNode[] = [];
   const damps: BiquadFilterNode[] = [];
-  const mats: GainNode[][] = [];
+  const feedbacks: GainNode[] = [];
   const times = FDN_TIMES.map((t) => t * size);
-  for (let i = 0; i < 4; i++) {
+  const loopGain = (i: number) => fdnLoopGain(times[i], params.decay);
+  for (let i = 0; i < times.length; i++) {
+    // s = input + g · lowpass(delayed s): one independent comb per line.
     const s = ac.createGain();
     s.gain.value = 1;
     const d = ac.createDelay(1);
@@ -371,12 +415,16 @@ export function createReverb(ac: BaseAudioContext, init: Partial<ReverbParams> =
     const lp = ac.createBiquadFilter();
     lp.type = 'lowpass';
     lp.frequency.value = params.damping;
-    lp.Q.value = 0.5;
+    lp.Q.value = FDN_DAMP_Q_DB;
+    const fb = ac.createGain();
+    fb.gain.value = loopGain(i);
     ap2.connect(s);
-    s.connect(d).connect(lp);
-    sums.push(s);
-    delays.push(d);
+    s.connect(d).connect(lp).connect(fb).connect(s);
+    const og = ac.createGain();
+    og.gain.value = i % 2 ? -COMB_OUT : COMB_OUT;
+    lp.connect(og).connect(output);
     damps.push(lp);
+    feedbacks.push(fb);
   }
   // Early reflections.
   for (const [dt, g] of [[0.0071, 0.32], [0.0133, 0.24], [0.0197, 0.18]] as const) {
@@ -386,27 +434,13 @@ export function createReverb(ac: BaseAudioContext, init: Partial<ReverbParams> =
     tg.gain.value = g;
     pre.connect(tap).connect(tg).connect(output);
   }
-  const loopGain = (i: number) => Math.pow(10, (-3 * times[i]) / Math.max(0.1, params.decay));
-  for (let i = 0; i < 4; i++) {
-    const row: GainNode[] = [];
-    for (let j = 0; j < 4; j++) {
-      const m = ac.createGain();
-      m.gain.value = 0.5 * HAD[j][i] * loopGain(i);
-      damps[i].connect(m).connect(sums[j]);
-      row.push(m);
-    }
-    mats.push(row);
-    const og = ac.createGain();
-    og.gain.value = i % 2 ? -0.5 : 0.5;
-    damps[i].connect(og).connect(output);
-  }
   const set = (p: Partial<ReverbParams>, time = ac.currentTime): void => {
     if (p.decay !== undefined && Number.isFinite(p.decay)) params.decay = Math.max(0.2, Math.min(8, p.decay));
     if (p.damping !== undefined && Number.isFinite(p.damping)) params.damping = Math.max(500, Math.min(16000, p.damping));
     if (p.mix !== undefined && Number.isFinite(p.mix)) params.mix = Math.max(0, Math.min(1.5, p.mix));
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < times.length; i++) {
       damps[i].frequency.setTargetAtTime(params.damping, time, 0.3);
-      for (let j = 0; j < 4; j++) mats[i][j].gain.setTargetAtTime(0.5 * HAD[j][i] * loopGain(i), time, 0.3);
+      feedbacks[i].gain.setTargetAtTime(loopGain(i), time, 0.3);
     }
     output.gain.setTargetAtTime(params.mix, time, 0.3);
   };

@@ -4,6 +4,7 @@ import { ambienceTargets, sampleContext, sampleWater, spotRates } from './Ambien
 import type { AudioEvents } from './AudioEvents';
 import type { LoopHandle, PlayOpts } from './AudioEngine';
 import { renderLoop, renderSound, verifyAll } from './AudioVerify';
+import { createReverb, type ReverbParams } from './dsp';
 import type { MusicSystem } from './MusicSystem';
 import type { StingerKind } from './music/MusicDirector';
 import { hasSound, listLoops, listSounds, loopMeta, soundMeta } from './registry';
@@ -29,6 +30,29 @@ export function installAudioDebug(ctx: GameContext): void {
         return ctx.audio.debugState();
       },
       ready: () => ctx.audio.ready,
+      /** Peak per 2 s window of an impulse through the reverb (runaway-feedback regression check). */
+      reverbTail: async (p: Partial<ReverbParams>, size = 1, seconds = 16, sampleRate = 44100): Promise<number[]> => {
+        const oac = new OfflineAudioContext(1, Math.ceil(sampleRate * seconds), sampleRate);
+        const rev = createReverb(oac, p, size);
+        const src = oac.createBufferSource();
+        const b = oac.createBuffer(1, 64, sampleRate);
+        b.getChannelData(0)[0] = 1;
+        src.buffer = b;
+        src.connect(rev.input);
+        rev.output.connect(oac.destination);
+        src.start(0.01);
+        const d = (await oac.startRendering()).getChannelData(0);
+        const out: number[] = [];
+        for (let s = 0; s + 2 <= seconds; s += 2) {
+          let m = 0;
+          for (let i = s * sampleRate; i < (s + 2) * sampleRate; i++) {
+            const v = Math.abs(d[i]);
+            if (!(v <= m)) m = v; // NaN propagates
+          }
+          out.push(m);
+        }
+        return out;
+      },
       list: () => ({ sounds: listSounds(), loops: listLoops() }),
       has: (id: string) => hasSound(id),
       hasLoop: (id: string) => listLoops().includes(id),
