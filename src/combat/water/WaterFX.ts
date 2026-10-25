@@ -407,7 +407,7 @@ export class Droplets {
       this.size[w] = this.size[i];
       this.floor[w] = this.floor[i];
       const speed = Math.hypot(vx, vy, vz);
-      const r = this.size[i] * Math.min(1, life * 4);
+      const r = Math.max(0.004, this.size[i] * Math.min(1, life * 4));
       if (speed > 0.01) dQ.setFromUnitVectors(DROP_UP, dV.set(vx / speed, vy / speed, vz / speed));
       else dQ.identity();
       dS.set(r, r * (1 + Math.min(2.2, speed * 0.16)), r);

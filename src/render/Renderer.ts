@@ -6,6 +6,33 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import type { EventBus } from '../core/EventBus';
 import type { SettingsManager, ShadowQuality } from '../core/Settings';
 
+/**
+ * Runs between the scene render and bloom. A single NaN or Inf pixel (some phone GPUs produce them
+ * where desktop GPUs do not: a zero vector normalised, a half-float overflow) is spread over the
+ * whole screen by the bloom blur, which shows as black flashes while bending or walking. Bad pixels
+ * become black and extreme HDR values are capped. clamp() also catches NaN where isnan() is
+ * optimised away (GPU min/max return the non-NaN operand).
+ */
+const SanitizeShader = {
+  name: 'SanitizeShader',
+  uniforms: { tDiffuse: { value: null as THREE.Texture | null } },
+  vertexShader: /* glsl */ `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`,
+  fragmentShader: /* glsl */ `
+uniform sampler2D tDiffuse;
+varying vec2 vUv;
+void main() {
+  vec4 c = texture2D(tDiffuse, vUv);
+  bool bad = any(isnan(c)) || any(isinf(c));
+  c = clamp(c, vec4(0.0), vec4(256.0, 256.0, 256.0, 1.0));
+  gl_FragColor = bad ? vec4(0.0, 0.0, 0.0, 1.0) : c;
+}`,
+};
+
 const SHADOW_CONFIG: Record<ShadowQuality, { size: number; radius: number }> = {
   off: { size: 0, radius: 0 },
   low: { size: 1024, radius: 45 },
@@ -183,6 +210,7 @@ export class RenderPipeline {
 
   private composer: EffectComposer | null = null;
   private renderPass: RenderPass | null = null;
+  private sanitizePass: ShaderPass | null = null;
   private bloomPass: UnrealBloomPass | null = null;
   private outputPass: GradeOutputPass | null = null;
   private shadowRadius = 0;
@@ -320,6 +348,8 @@ export class RenderPipeline {
     this.composer = new EffectComposer(this.renderer, target);
     this.renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(this.renderPass);
+    this.sanitizePass = new ShaderPass(SanitizeShader);
+    this.composer.addPass(this.sanitizePass);
     this.bloomPass = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.5, 0.86);
     this.composer.addPass(this.bloomPass);
     this.outputPass = new GradeOutputPass();
@@ -328,10 +358,12 @@ export class RenderPipeline {
 
   private disposeComposer(): void {
     this.bloomPass?.dispose();
+    this.sanitizePass?.dispose();
     this.outputPass?.dispose();
     this.composer?.dispose();
     this.composer = null;
     this.renderPass = null;
+    this.sanitizePass = null;
     this.bloomPass = null;
     this.outputPass = null;
   }

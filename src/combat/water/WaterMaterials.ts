@@ -30,9 +30,17 @@ varying vec2 vUv;
 #include <fog_pars_vertex>
 void main() {
   vUv = uv;
-  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vec4 lp = vec4(position, 1.0);
+  vec3 ln = normal;
+  #ifdef USE_INSTANCING
+  // Droplets are one InstancedMesh: each bead has its own matrix.
+  lp = instanceMatrix * lp;
+  ln = mat3(instanceMatrix) * ln;
+  #endif
+  vec4 wp = modelMatrix * lp;
   vWP = wp.xyz;
-  vN = normalize(mat3(modelMatrix) * normal);
+  // Normalised in the fragment shader (safely: a zero normal must never become NaN).
+  vN = mat3(modelMatrix) * ln;
   vec4 mvPosition = viewMatrix * wp;
   gl_Position = projectionMatrix * mvPosition;
   #include <fog_vertex>
@@ -55,11 +63,21 @@ varying vec2 vUv;
 #include <fog_pars_fragment>
 ${NOISE}
 void main() {
-  vec3 V = normalize(cameraPosition - vWP);
-  vec3 N = normalize(vN);
-  vec3 Nf = normalize(cross(dFdx(vWP), dFdy(vWP)));
-  if (dot(Nf, V) < 0.0) Nf = -Nf;
-  N = normalize(mix(N, Nf, uIce * 0.8));
+  // NaN guards: one NaN pixel is smeared over the whole frame by the bloom blur (black flashes on
+  // phones), so never normalise a vector that can be zero.
+  vec3 V = normalize(cameraPosition - vWP + vec3(0.0, 1e-4, 0.0));
+  vec3 N = vN / max(length(vN), 1e-6);
+  if (uIce > 0.001) {
+    // Faceted ice: the flat triangle normal from screen-space derivatives (uniform branch).
+    vec3 cr = cross(dFdx(vWP), dFdy(vWP));
+    float cl = length(cr);
+    if (cl > 1e-12) {
+      vec3 Nf = cr / cl;
+      if (dot(Nf, V) < 0.0) Nf = -Nf;
+      vec3 Nm = mix(N, Nf, uIce * 0.8);
+      N = Nm / max(length(Nm), 1e-6);
+    }
+  }
   float ndv = clamp(abs(dot(N, V)), 0.0, 1.0);
   float fres = pow(1.0 - ndv, 2.5);
   float along = vUv.y;
@@ -81,7 +99,8 @@ void main() {
   col *= 0.74 + 0.42 * lam;
   // Never muddy in shade: water carries a little of the sky's light.
   col += uShallow * 0.07;
-  vec3 H = normalize(L + V);
+  vec3 LV = L + V;
+  vec3 H = LV / max(length(LV), 1e-6);
   float spec = pow(max(dot(N, H), 0.0), mix(70.0, 120.0, uIce));
   float sheen = pow(max(dot(N, H), 0.0), 12.0);
   // Sun glints flicking along the surface.
