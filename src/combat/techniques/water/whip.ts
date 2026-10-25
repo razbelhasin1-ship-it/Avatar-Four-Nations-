@@ -61,6 +61,8 @@ export class WhipEffect implements WaterEffect {
   private readonly pivot = new THREE.Vector3();
   private readonly hand = new THREE.Vector3();
   readonly tip = new THREE.Vector3();
+  private readonly prevTip = new THREE.Vector3();
+  private tipInit = false;
   private t = 0;
   private relT = -1;
   private aborted = false;
@@ -230,9 +232,18 @@ export class WhipEffect implements WaterEffect {
     }
     this.buildWhipPath(p, this.whip.path, this.whip.pts);
     this.tip.copy(this.whip.pts[3]);
+    // Drops fly off the whipping tip.
+    if (this.tipInit && dt > 0 && o.ice < 0.5) {
+      tD.subVectors(this.tip, this.prevTip).multiplyScalar(1 / dt);
+      if (!this.finished && Math.random() < dt * 45) this.fx.shed(this.tip, tD, 2, 1.4);
+    }
+    this.prevTip.copy(this.tip);
+    this.tipInit = true;
     if (p >= 1 && !this.finished) {
       this.finished = true;
       this.collapseT = 0;
+      // The crack at full stretch: water snaps off the tip.
+      if (o.ice < 0.5) this.fx.crown(this.tip, o.style === 'overhead' ? 0.8 : 0.5, tD.copy(this.f));
       o.onFinish?.(this.tip.clone(), cast);
     }
     // ---- Collapse / snap back -------------------------------------------------
@@ -240,7 +251,8 @@ export class WhipEffect implements WaterEffect {
     let radiusMul = 1;
     if (this.finished) {
       this.collapseT += dt;
-      const c = clamp01(this.collapseT / 0.22);
+      // Snaps back visibly (the water is pulled home), the slam spreads out.
+      const c = clamp01(this.collapseT / (o.style === 'overhead' ? 0.26 : 0.34));
       if (o.style === 'overhead') {
         radiusMul = 1 - c;
       } else {
@@ -324,9 +336,9 @@ export class WhipEffect implements WaterEffect {
 // ---------------------------------------------------------------------------
 
 const STEPS: Array<Pick<WhipOptions, 'style' | 'hand' | 'range' | 'swing' | 'radius' | 'damage' | 'knockback' | 'stagger' | 'launch' | 'delay'> & { clip: string }> = [
-  { style: 'right', hand: 'handR', range: 9.5, swing: 0.2, radius: 0.23, damage: 8, knockback: 4, stagger: 12, clip: 'water_whip_r' },
-  { style: 'left', hand: 'handL', range: 9.5, swing: 0.2, radius: 0.24, damage: 9, knockback: 5, stagger: 14, clip: 'water_whip_l' },
-  { style: 'overhead', hand: 'hands', range: 10.5, swing: 0.24, radius: 0.3, damage: 15, knockback: 8, stagger: 30, launch: 3, delay: 0.06, clip: 'water_whip_slam' },
+  { style: 'right', hand: 'handR', range: 9.5, swing: 0.2, radius: 0.28, damage: 8, knockback: 4, stagger: 12, clip: 'water_whip_r' },
+  { style: 'left', hand: 'handL', range: 9.5, swing: 0.2, radius: 0.29, damage: 9, knockback: 5, stagger: 14, clip: 'water_whip_l' },
+  { style: 'overhead', hand: 'hands', range: 10.5, swing: 0.24, radius: 0.37, damage: 15, knockback: 8, stagger: 30, launch: 3, delay: 0.06, clip: 'water_whip_slam' },
 ];
 
 registerTechnique({

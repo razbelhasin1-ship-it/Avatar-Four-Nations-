@@ -72,10 +72,10 @@ function blastVisual(cast: Cast, radius: number, start: THREE.Vector3): Projecti
   const mesh = new THREE.Mesh(blobGeo, mat);
   mesh.renderOrder = 12;
   mesh.frustumCulled = false;
-  const tail = new StreamBody(fx, { flow: 12, opacity: 0.85 }, 0.8, 6);
-  tail.wobble = 0.06;
+  const tail = new StreamBody(fx, { flow: 12, opacity: 0.9 }, 0.8, 8);
+  tail.wobble = 0.07;
   const hist: THREE.Vector3[] = [];
-  for (let i = 0; i < 6; i++) hist.push(start.clone());
+  for (let i = 0; i < 8; i++) hist.push(start.clone());
   let acc = 0;
   let time = 0;
   return {
@@ -90,15 +90,16 @@ function blastVisual(cast: Cast, radius: number, start: THREE.Vector3): Projecti
         hist[hist.length - 1].copy(p.position);
       }
       // Tail: oldest → newest → current position.
-      for (let i = 0; i < 5; i++) tail.pts[i].copy(hist[i + 1]);
-      tail.pts[5].copy(p.position);
-      tail.radius = radius * 0.7;
-      tail.profile = (u) => capTaper(u, 0.5, 0.02) * (0.4 + 0.6 * u);
-      tail.build(6);
+      for (let i = 0; i < 7; i++) tail.pts[i].copy(hist[i + 1]);
+      tail.pts[7].copy(p.position);
+      tail.radius = radius * 0.8;
+      tail.profile = (u) => capTaper(u, 0.5, 0.02) * (0.35 + 0.65 * u) * (0.85 + 0.15 * Math.sin(u * 20 - time * 30));
+      tail.build(8);
       const s = radius;
       mesh.scale.set(s * (1 + 0.1 * Math.sin(time * 23)), s * (1 + 0.1 * Math.sin(time * 19 + 1)), s * (1.15 + 0.1 * Math.sin(time * 21 + 2)));
       mesh.lookAt(tA.copy(p.position).add(p.velocity));
-      if (Math.random() < dt * 25) cast.ctx.vfx.burst('spray', p.position, { count: 1, size: 0.6 });
+      // Drops stream off the flying mass.
+      if (Math.random() < dt * 40) fx.shed(p.position, p.velocity, 2, 1.8);
     },
     dispose: () => {
       tail.dispose();
@@ -109,9 +110,12 @@ function blastVisual(cast: Cast, radius: number, start: THREE.Vector3): Projecti
 
 function impact(cast: Cast, p: Projectile, at: THREE.Vector3, c: number): void {
   const fx = fxOf(cast);
-  fx.splash(at, 1.4 + c, { volume: 1 });
-  cast.ctx.vfx.burst('spray', at, { count: 18, size: 1.2 + c });
-  cast.ctx.vfx.flash(at, '#9fe0ff', 4 + 4 * c, 0.2, 10);
+  const dir = tA.copy(p.velocity).normalize();
+  // A heavy burst of real water: a big crown thrown along the blast, a second one up, a wet flash.
+  fx.splash(at, 1.4 + c, { volume: 1, dir });
+  fx.crown(at, 0.9 + c);
+  cast.ctx.vfx.burst('spray', at, { count: 6, size: 0.9 + 0.5 * c });
+  cast.ctx.vfx.flash(at, '#6fcfff', 1.2 + 1.2 * c, 0.16, 8);
   // Splash damage around the impact (single hit per entity per cast).
   cast.areaHit({ center: at.clone(), radius: 1.6 + 1.2 * c, height: 1.6, damage: 5 + 5 * c, knockback: 7 + 4 * c, knockDir: 'radial', stagger: 15, status: [{ type: 'soaked', duration: 8 }] });
   spill(cast, at, cast.water.amount * 0.75);
@@ -174,7 +178,7 @@ registerTechnique({
     const near: Projectile[] = [];
     cast.projectile({
       position: start,
-      velocity: dir.clone().multiplyScalar(24 + 10 * cast.charge),
+      velocity: dir.clone().multiplyScalar(21 + 10 * cast.charge),
       radius: radius * 0.95,
       gravity: 2.5,
       life: 1.15,
@@ -213,7 +217,8 @@ registerTechnique({
       },
     });
     ctx.audio.play('water_launch', { position: start, volume: 0.8 + 0.2 * c, pitch: 1.15 - 0.3 * c });
-    ctx.vfx.burst('spray', start, { count: 10, dir, spread: 0.4, speed: 1.4 });
+    ctx.vfx.burst('spray', start, { count: 4, dir, spread: 0.4, speed: 1.4 });
+    fxOf(cast).shed(start, tA.copy(dir).multiplyScalar(14), 8, 2.2);
     shake(cast, 0.06 + 0.08 * c, 0.15);
   },
   end(cast, interrupted) {

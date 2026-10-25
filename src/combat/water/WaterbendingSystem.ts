@@ -98,6 +98,8 @@ export class WaterbendingSystem implements GameSystem, Persistable {
   private autoGatherTarget = 0;
   private gatherTaught = false;
   private drawStream: StreamBody | null = null;
+  /** Whirl of water lifting out of the source surface while drawing. */
+  private drawColumn: StreamBody | null = null;
   private drawFrom = new THREE.Vector3();
   private drawFromValid = false;
   private drawTick = 0;
@@ -332,11 +334,19 @@ export class WaterbendingSystem implements GameSystem, Persistable {
     this.drawLoop?.stop(0.25);
     this.drawLoop = null;
     if (this.drawStream) {
-      // Let the stream collapse: droplets along it, then release.
-      if (this.drawFlow > 0.2) this.fx.droplets(this.drawStream.path, 0, this.drawStream.path.length * 0.6, 4);
+      // Let the stream collapse: the unbent water falls back as drops, then release.
+      if (this.drawFlow > 0.2) {
+        const path = this.drawStream.path;
+        for (let i = 0; i < 14; i++) {
+          path.at(path.length * Math.random() * 0.8, tA);
+          this.fx.drops.emit(tA, tB.set((Math.random() - 0.5) * 1.2, Math.random() * 0.8, (Math.random() - 0.5) * 1.2), 0.025 + 0.03 * Math.random(), 1.4);
+        }
+      }
       this.drawStream.dispose();
       this.drawStream = null;
     }
+    this.drawColumn?.dispose();
+    this.drawColumn = null;
     this.drawMode = 'none';
     this.drawHit = null;
   }
@@ -430,6 +440,8 @@ export class WaterbendingSystem implements GameSystem, Persistable {
         this.drawStream.dispose();
         this.drawStream = null;
       }
+      this.drawColumn?.dispose();
+      this.drawColumn = null;
       this.drawLoop?.stop(0.2);
       this.drawLoop = null;
       return;
@@ -464,21 +476,48 @@ export class WaterbendingSystem implements GameSystem, Persistable {
     else if (ring) ring.pointNear(hands, s.pts[3]);
     else s.pts[3].copy(p.position).setY(p.position.y + 1);
     s.pts[4].copy(s.pts[3]).lerp(hands, -0.15);
-    s.radius = (0.07 + 0.08 * this.drawFlow) * (this.drawMode === 'flask' ? 0.7 : 1);
+    s.radius = (0.1 + 0.11 * this.drawFlow) * (this.drawMode === 'flask' ? 0.6 : 1);
     s.tail = 0;
     s.head = easeOut(this.drawFlow);
-    s.profile = (u) => capTaper(u, 0.05, 0.12) * (0.75 + 0.25 * Math.sin(u * 24 - this.fx.time * 14) ** 2);
+    // Thick at the source, thinning toward the hands; surges travel up the stream.
+    s.profile = (u) => capTaper(u, 0.05, 0.12) * (1.15 - 0.4 * u) * (0.72 + 0.28 * Math.sin(u * 22 - this.fx.time * 13) ** 2);
     s.build(5);
     this.drawLoop?.setPosition(hands);
-    // Source ripples and spray.
+    const fromSurface = this.drawMode !== 'flask' && this.drawMode !== 'refill';
+    // The surface whirls and lifts where the water is pulled out.
+    if (fromSurface) {
+      if (!this.drawColumn) {
+        this.drawColumn = new StreamBody(this.fx, { flow: 6, foam: 1.3 }, 1, 6);
+        this.drawColumn.wobble = 0.05;
+      }
+      const col = this.drawColumn;
+      const spin = this.fx.time * 7;
+      for (let i = 0; i < 6; i++) {
+        const k = i / 5;
+        const r = 0.6 * (1 - k) + 0.06;
+        col.pts[i].set(from.x + Math.cos(spin + k * 4.4) * r, from.y + 0.02 + k * 0.75 * this.drawFlow, from.z + Math.sin(spin + k * 4.4) * r);
+      }
+      col.radius = 0.05 + 0.08 * this.drawFlow;
+      col.tail = 0;
+      col.head = 1;
+      col.profile = (u) => (1.15 - 0.5 * u) * capTaper(u, 0.03, 0.2);
+      col.setLook({ ice: snow ? 0.55 : 0, flow: 6 });
+      col.build(6);
+    }
+    // Drops peel off the rushing stream.
+    if (s.path.length > 0.5 && Math.random() < dt * (this.fx.quality === 'low' ? 5 : 14)) {
+      s.path.at(s.path.length * s.head * Math.random(), tC);
+      this.fx.shed(tC, tA.subVectors(hands, from).normalize().multiplyScalar(4.5), 1, 1.1);
+    }
+    // Source ripples, spray and splashes where it is torn from the surface.
     this.drawRipple -= dt;
     if (this.drawRipple <= 0 && this.drawMode !== 'flask') {
-      this.drawRipple = 0.35;
+      this.drawRipple = 0.24;
       const g = tC.copy(from);
-      this.ctx.vfx.ring(g.setY(from.y + 0.04), snow ? '#ffffff' : '#cfefff', 1.4, 0.6, { opacity: 0.4 });
-      this.ctx.vfx.burst(snow ? 'snowpuff' : 'spray', from, { count: 3, size: 0.6 });
+      this.ctx.vfx.ring(g.setY(from.y + 0.04), snow ? '#ffffff' : '#cfefff', 1.9, 0.7, { opacity: 0.45 });
+      this.ctx.vfx.burst(snow ? 'snowpuff' : 'spray', from, { count: 2, size: 0.5 });
+      if (!snow && fromSurface && Math.random() < 0.45) this.fx.crown(from, 0.4);
     }
-    if (Math.random() < dt * 6) this.ctx.vfx.burst('splash', hands, { count: 1, speed: 0.4, size: 0.5 });
   }
 
   /** Debug/test: whether the player is currently drawing and from what. */

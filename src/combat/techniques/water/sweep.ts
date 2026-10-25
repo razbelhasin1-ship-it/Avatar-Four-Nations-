@@ -62,13 +62,14 @@ class SweepEffect implements WaterEffect {
     const k = clamp01(this.t / D);
     this.rad = SWEEP.r0 + (SWEEP.r1 - SWEEP.r0) * easeOut(k);
     const fade = this.t > D ? clamp01((this.t - D) / 0.3) : 0;
-    const h = 0.45 * (1 - 0.5 * k) * (1 - fade);
+    // A real wave: tall at first, flattening as it spreads.
+    const h = 0.95 * (1 - 0.55 * k) * (1 - fade);
     for (let i = 0; i < ARC_PTS; i++) {
       const edge = Math.sin((Math.PI * i) / (ARC_PTS - 1));
       this.arcPoint(i, this.rad, h * (0.6 + 0.4 * edge) + 0.12, this.crest.pts[i]);
       this.arcPoint(i, Math.max(SWEEP.r0, this.rad - 1.1), 0.08, this.wake.pts[i]);
     }
-    this.crest.radius = (0.36 + 0.14 * (1 - k)) * (1 - fade);
+    this.crest.radius = (0.42 + 0.2 * (1 - k)) * (1 - fade);
     this.crest.profile = (u) => capTaper(u, 0.12, 0.12) * (0.75 + 0.25 * Math.sin(Math.PI * u));
     this.crest.build(ARC_PTS);
     this.wake.radius = 0.2 * (1 - fade);
@@ -77,11 +78,16 @@ class SweepEffect implements WaterEffect {
     if (fade < 1 && this.t <= D) {
       // Foam along the leading edge.
       const ctx = this.cast.ctx;
+      // Spray thrown forward off the crest, foam along the leading edge.
+      const spd = (this.rad - prevRad) / Math.max(1e-3, dt);
       for (let i = 0; i < 3; i++) {
         const j = Math.floor(Math.random() * ARC_PTS);
-        ctx.vfx.burst('splash', this.crest.pts[j], { count: 1, speed: 0.6, size: 0.8 });
+        const q = this.crest.pts[j];
+        tA.set(q.x - this.center.x, 0, q.z - this.center.z).normalize().multiplyScalar(spd * 0.8);
+        tA.y = 2.5;
+        this.fx.shed(q, tA, 1, 1.2);
       }
-      if (Math.random() < 0.5) ctx.vfx.burst('spray', this.crest.pts[Math.floor(ARC_PTS / 2)], { count: 2, size: 0.9 });
+      if (Math.random() < 0.5) ctx.vfx.burst('splash', this.crest.pts[Math.floor(Math.random() * ARC_PTS)], { count: 1, speed: 0.6, size: 0.7 });
       this.hitBand(prevRad, this.rad);
     }
     if (this.t > D && !this.cast.data.spilled) {

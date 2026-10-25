@@ -60,6 +60,7 @@ export function getWaterFX(ctx: GameContext): WaterFX {
 export class WaterFX {
   readonly group = new THREE.Group();
   readonly tubes: TubePool;
+  readonly drops: Droplets;
   private effects: WaterEffect[] = [];
   private readonly reserves = new Map<Combatant, ReserveVisual>();
   private readonly meltables = new Set<Meltable>();
@@ -73,6 +74,7 @@ export class WaterFX {
     this.group.name = 'waterbending_fx';
     ctx.vfx.group.add(this.group);
     this.tubes = new TubePool(this.group, () => this.quality);
+    this.drops = new Droplets(this);
   }
 
   get quality(): Quality {
@@ -143,6 +145,7 @@ export class WaterFX {
       this.traceLog.push({ frame: this.ctx.time.frame, time: this.ctx.time.elapsed, effects: frameTrace });
       if (this.traceLog.length > 900) this.traceLog.splice(0, this.traceLog.length - 900);
     }
+    this.drops.update(dt);
     for (const [c, r] of this.reserves) {
       if (c.disposed || !c.alive) {
         r.dispose();
@@ -226,11 +229,46 @@ export class WaterFX {
   // Shared feedback helpers
   // ---------------------------------------------------------------------------
 
+  /**
+   * Splash crown: drops thrown out in a ring and up, biased along `dir` (the way the
+   * water was travelling), that arc down under gravity.
+   */
+  crown(pos: THREE.Vector3, size = 1, dir?: THREE.Vector3): void {
+    const s = Math.max(0.3, size);
+    const k = Math.sqrt(s);
+    const n = Math.round((8 + 16 * s) * (this.quality === 'low' ? 0.5 : 1));
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const hs = (1.4 + 2.8 * Math.random()) * k;
+      tmpB.set(Math.cos(a) * hs, (2.2 + 3.6 * Math.random()) * k, Math.sin(a) * hs);
+      if (dir) tmpB.addScaledVector(tmpC.copy(dir).setY(0), hs * 0.7);
+      this.drops.emit(pos, tmpB, (0.022 + 0.05 * Math.random()) * (0.75 + 0.25 * s), 0.9 + 0.6 * Math.random());
+    }
+  }
+
+  /** A few drops peeling off a moving body of water at `pos` (velocity `vel`). */
+  shed(pos: THREE.Vector3, vel: THREE.Vector3, count = 1, spread = 1.2): void {
+    for (let i = 0; i < count; i++) {
+      tmpB.copy(vel).multiplyScalar(0.35 + 0.3 * Math.random());
+      tmpB.x += (Math.random() - 0.5) * spread;
+      tmpB.y += (Math.random() - 0.2) * spread;
+      tmpB.z += (Math.random() - 0.5) * spread;
+      this.drops.emit(pos, tmpB, 0.018 + 0.03 * Math.random(), 0.8 + 0.5 * Math.random());
+    }
+  }
+
   splash(pos: THREE.Vector3, size = 1, opts: { ice?: boolean; sound?: boolean; volume?: number; dir?: THREE.Vector3; ring?: boolean } = {}): void {
     const vfx = this.ctx.vfx;
     const s = Math.max(0.3, size);
-    vfx.burst(opts.ice ? 'ice' : 'splash', pos, { count: Math.round(10 + 10 * s), speed: 0.7 + 0.35 * s, size: 0.8 + 0.35 * s, dir: opts.dir, spread: opts.dir ? 0.9 : undefined });
-    vfx.burst(opts.ice ? 'snowpuff' : 'spray', pos, { count: Math.round(4 + 6 * s), size: 0.5 + 0.5 * s });
+    if (opts.ice) {
+      vfx.burst('ice', pos, { count: Math.round(10 + 10 * s), speed: 0.7 + 0.35 * s, size: 0.8 + 0.35 * s, dir: opts.dir, spread: opts.dir ? 0.9 : undefined });
+      vfx.burst('snowpuff', pos, { count: Math.round(4 + 6 * s), size: 0.5 + 0.5 * s });
+    } else {
+      // Real drops (crown) plus a little fine spray and mist; no white flash.
+      this.crown(pos, s, opts.dir);
+      vfx.burst('splash', pos, { count: Math.round(4 + 6 * s), speed: 0.6 + 0.3 * s, size: 0.5 + 0.25 * s, dir: opts.dir, spread: opts.dir ? 0.9 : undefined });
+      vfx.burst('spray', pos, { count: Math.round(2 + 3 * s), size: 0.35 + 0.3 * s });
+    }
     if (opts.ring !== false && s >= 0.7) {
       const g = this.ctx.world.groundAt(pos.x, pos.z, pos.y + 1);
       if (Math.abs(g.y - pos.y) < 2.5) vfx.ring(tmpA.set(pos.x, g.y + 0.06, pos.z), opts.ice ? '#e6f8ff' : '#bfe8ff', 1.1 * s + 0.6, 0.45, { opacity: 0.45 });
@@ -273,7 +311,118 @@ export class WaterFX {
     for (const r of this.reserves.values()) r.dispose();
     this.reserves.clear();
     this.meltables.clear();
+    this.drops.clear();
     this.traceLog = [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Droplets: instanced beads of real (shaded) water with ballistic flight
+// ---------------------------------------------------------------------------
+
+const DROP_CAP: Record<Quality, number> = { low: 70, medium: 160, high: 260 };
+const DROP_UP = new THREE.Vector3(0, 1, 0);
+const dQ = new THREE.Quaternion();
+const dS = new THREE.Vector3();
+const dP = new THREE.Vector3();
+const dV = new THREE.Vector3();
+const dM = new THREE.Matrix4();
+
+/**
+ * Splash crowns, spray shed by fast streams and drips from carried water. Each
+ * drop is a small sphere drawn with the bent-water shader, stretched along its
+ * velocity, pulled down by gravity and removed when it reaches the ground.
+ */
+export class Droplets {
+  readonly mesh: THREE.InstancedMesh;
+  private readonly geo: THREE.IcosahedronGeometry;
+  readonly mat: THREE.ShaderMaterial;
+  private readonly pos: Float32Array;
+  private readonly vel: Float32Array;
+  private readonly life: Float32Array;
+  private readonly size: Float32Array;
+  private readonly floor: Float32Array;
+  private readonly max = DROP_CAP.high;
+  count = 0;
+
+  constructor(private readonly fx: WaterFX) {
+    this.geo = new THREE.IcosahedronGeometry(1, 1);
+    this.mat = createWaterMaterial({ foam: 0.45, flow: 1.2, opacity: 0.95 });
+    this.mesh = new THREE.InstancedMesh(this.geo, this.mat, this.max);
+    this.mesh.count = 0;
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 12;
+    this.mesh.name = 'water_droplets';
+    this.pos = new Float32Array(this.max * 3);
+    this.vel = new Float32Array(this.max * 3);
+    this.life = new Float32Array(this.max);
+    this.size = new Float32Array(this.max);
+    this.floor = new Float32Array(this.max);
+    fx.group.add(this.mesh);
+  }
+
+  /** One drop: position, velocity (m/s), radius (m), lifetime (s). */
+  emit(p: THREE.Vector3, v: THREE.Vector3, radius = 0.05, life = 1.4): void {
+    const cap = DROP_CAP[this.fx.quality] ?? DROP_CAP.medium;
+    let i = this.count;
+    if (i >= cap) i = Math.floor(Math.random() * cap); // full: recycle a random drop
+    else this.count++;
+    this.pos[i * 3] = p.x;
+    this.pos[i * 3 + 1] = p.y;
+    this.pos[i * 3 + 2] = p.z;
+    this.vel[i * 3] = v.x;
+    this.vel[i * 3 + 1] = v.y;
+    this.vel[i * 3 + 2] = v.z;
+    this.size[i] = radius;
+    this.life[i] = life;
+    this.floor[i] = this.fx.ctx.world.heightAt(p.x, p.z);
+  }
+
+  update(dt: number): void {
+    const n = this.count;
+    if (n === 0) {
+      this.mesh.count = 0;
+      return;
+    }
+    let w = 0;
+    for (let i = 0; i < n; i++) {
+      let life = this.life[i] - dt;
+      const o = i * 3;
+      let vx = this.vel[o], vy = this.vel[o + 1] - 13 * dt, vz = this.vel[o + 2];
+      const drag = Math.max(0, 1 - 0.6 * dt);
+      vx *= drag;
+      vz *= drag;
+      const x = this.pos[o] + vx * dt, y = this.pos[o + 1] + vy * dt, z = this.pos[o + 2] + vz * dt;
+      if (y < this.floor[i]) life = 0; // landed
+      if (life <= 0) continue;
+      // Compact into slot w.
+      const q = w * 3;
+      this.pos[q] = x;
+      this.pos[q + 1] = y;
+      this.pos[q + 2] = z;
+      this.vel[q] = vx;
+      this.vel[q + 1] = vy;
+      this.vel[q + 2] = vz;
+      this.life[w] = life;
+      this.size[w] = this.size[i];
+      this.floor[w] = this.floor[i];
+      const speed = Math.hypot(vx, vy, vz);
+      const r = this.size[i] * Math.min(1, life * 4);
+      if (speed > 0.01) dQ.setFromUnitVectors(DROP_UP, dV.set(vx / speed, vy / speed, vz / speed));
+      else dQ.identity();
+      dS.set(r, r * (1 + Math.min(2.2, speed * 0.16)), r);
+      dM.compose(dP.set(x, y, z), dQ, dS);
+      this.mesh.setMatrixAt(w, dM);
+      w++;
+    }
+    this.count = w;
+    this.mesh.count = w;
+    this.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  clear(): void {
+    this.count = 0;
+    this.mesh.count = 0;
   }
 }
 
@@ -323,25 +472,40 @@ export class StreamBody {
 }
 
 // ---------------------------------------------------------------------------
-// Reserve: water orbiting the bender, proportional to waterReserve
+// Reserve: the water a bender carries, shaped by how much they hold
 // ---------------------------------------------------------------------------
 
-const RING_PTS = 10;
+const LOOP_PTS = 12;
+const ORB_PTS = 8;
+/** Below this fraction of a full reserve the water is a ball over the palm. */
+const ORB_FRAC = 0.3;
+const rA = new THREE.Vector3();
+const rB = new THREE.Vector3();
+const rF = new THREE.Vector3();
+const rR = new THREE.Vector3();
 
+/**
+ * Carried water, proportional to waterReserve. A little water is a wobbling ball
+ * floating over the bender's right palm; more becomes a stream that flows around
+ * the upper body (higher behind the back, lower in front) and passes through both
+ * hands, so it follows every arm movement of the animation. Drips fall from it.
+ */
 export class ReserveVisual {
-  private body: StreamBody | null = null;
+  private loop: StreamBody | null = null;
+  private orb: StreamBody | null = null;
   private readonly center = new THREE.Vector3();
+  private readonly handL = new THREE.Vector3();
+  private readonly handR = new THREE.Vector3();
   private angle = Math.random() * Math.PI * 2;
   private shown = 0;
   private icy = 0;
   private pulseT = 0;
-  private droplets: THREE.Mesh[] = [];
-  private dropMat: THREE.ShaderMaterial | null = null;
-  private dropGeo: THREE.SphereGeometry | null = null;
+  private dripT = 0.5;
+  /** 0 = ball over the palm, 1 = stream around the body. */
+  private form = 0;
   private initialized = false;
   /** Forced icy look (e.g. reserve gathered from snow). */
   frozenHint = 0;
-  private readonly ringR = { value: 0.85 };
 
   constructor(private readonly fx: WaterFX, readonly owner: Combatant) {}
 
@@ -349,40 +513,13 @@ export class ReserveVisual {
     this.pulseT = Math.min(1, this.pulseT + 0.35 * amount);
   }
 
-  private ensure(): StreamBody {
-    if (!this.body) {
-      this.body = new StreamBody(this.fx, { flow: 2.2, opacity: 0.88 }, 1, RING_PTS);
-      this.body.wobble = 0.02;
-    }
-    return this.body;
-  }
-
-  private ensureDroplets(n: number): void {
-    if (this.droplets.length === n) return;
-    if (!this.dropMat) {
-      this.dropMat = createWaterMaterial({ flow: 1, foam: 0.4 });
-      this.dropGeo = new THREE.SphereGeometry(1, 10, 8);
-    }
-    while (this.droplets.length < n) {
-      const m = new THREE.Mesh(this.dropGeo!, this.dropMat);
-      m.renderOrder = 12;
-      m.frustumCulled = false;
-      this.fx.group.add(m);
-      this.droplets.push(m);
-    }
-    while (this.droplets.length > n) {
-      const m = this.droplets.pop()!;
-      this.fx.group.remove(m);
-    }
-  }
-
   get fraction(): number {
     return this.owner.maxWaterReserve > 0 ? clamp01(this.owner.waterReserve / this.owner.maxWaterReserve) : 0;
   }
 
-  /** Debug/tests: whether the orbiting ring is currently drawn, and how icy it looks. */
+  /** Debug/tests: whether the carried water is currently drawn, and how icy it looks. */
   get visible(): boolean {
-    return !!this.body?.tube?.mesh.visible;
+    return !!(this.loop?.tube?.mesh.visible || this.orb?.tube?.mesh.visible);
   }
 
   get icyLevel(): number {
@@ -393,16 +530,32 @@ export class ReserveVisual {
     return this.shown;
   }
 
-  /** Point on the ring nearest to p (falls back to the waist). */
+  /** Point of the carried water nearest to p (falls back to the waist). */
   pointNear(p: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
-    if (!this.body || this.shown < 0.3 || this.body.path.length < 0.1) {
+    if (this.shown < 0.3) {
       const o = this.owner.position;
       return out.set(o.x, o.y + 1.0, o.z);
     }
+    if (this.form < 0.5 || !this.loop || this.loop.path.length < 0.1) return out.copy(this.handR).setY(this.handR.y + 0.18);
     const res = { s: 0 };
-    const L = this.body.path.length;
-    this.body.path.distanceTo(p, this.body.tail * L, this.body.head * L, 0.15, res);
-    return this.body.path.at(res.s, out);
+    const L = this.loop.path.length;
+    this.loop.path.distanceTo(p, this.loop.tail * L, this.loop.head * L, 0.15, res);
+    return this.loop.path.at(res.s, out);
+  }
+
+  private body(which: 'loop' | 'orb'): StreamBody {
+    if (which === 'loop') {
+      if (!this.loop) {
+        this.loop = new StreamBody(this.fx, { flow: 2.4, opacity: 0.92 }, 1, LOOP_PTS);
+        this.loop.wobble = 0.025;
+      }
+      return this.loop;
+    }
+    if (!this.orb) {
+      this.orb = new StreamBody(this.fx, { flow: 1.6, opacity: 0.94 }, 1, ORB_PTS);
+      this.orb.wobble = 0.02;
+    }
+    return this.orb;
   }
 
   update(dt: number): void {
@@ -412,65 +565,106 @@ export class ReserveVisual {
     this.shown += (amount - this.shown) * Math.min(1, dt * 8);
     if (Math.abs(this.shown - amount) < 0.05) this.shown = amount;
     const frac = o.maxWaterReserve > 0 ? clamp01(this.shown / o.maxWaterReserve) : 0;
-    const target = tmpA.set(o.position.x, o.position.y + 1.02, o.position.z);
+    const chest = tmpA.set(o.position.x, o.position.y + 1.1, o.position.z);
+    o.castOrigin('handL', rA);
+    o.castOrigin('handR', rB);
     if (!this.initialized) {
-      this.center.copy(target);
+      this.center.copy(chest);
+      this.handL.copy(rA);
+      this.handR.copy(rB);
       this.initialized = true;
-    } else this.center.lerp(target, Math.min(1, dt * 14));
-    // Hidden at zero.
+    } else {
+      this.center.lerp(chest, Math.min(1, dt * 14));
+      this.handL.lerp(rA, Math.min(1, dt * 20));
+      this.handR.lerp(rB, Math.min(1, dt * 20));
+    }
     if (this.shown < 0.35 || !o.alive) {
-      this.body?.hide();
-      this.ensureDroplets(0);
+      this.loop?.hide();
+      this.orb?.hide();
       return;
     }
-    const body = this.ensure();
-    // Icy look in the cold or when gathered from snow.
     const cold = biomeWeights(o.position.x, o.position.z).cold;
     const icyTarget = Math.max(this.frozenHint, cold > 0.55 && !(o.body?.swimming) ? 0.55 : 0);
     this.icy += (icyTarget - this.icy) * Math.min(1, dt * 1.5);
     this.frozenHint = Math.max(0, this.frozenHint - dt * 0.05);
     this.pulseT = Math.max(0, this.pulseT - dt * 1.6);
     const t = this.fx.time;
-    this.angle += dt * (1.5 + 1.4 * frac + this.pulseT * 3);
-    const R = 0.68 + 0.22 * frac + 0.08 * this.pulseT;
-    this.ringR.value = R;
-    const tilt = 0.12 * Math.sin(t * 0.7);
-    for (let i = 0; i < RING_PTS; i++) {
-      const a = this.angle + (i / RING_PTS) * Math.PI * 2;
-      const wave = 0.09 * Math.sin(3 * a + t * 2.2) + tilt * Math.cos(a);
-      const rr = R * (1 + 0.06 * Math.sin(2 * a - t * 1.7));
-      body.pts[i].set(this.center.x + Math.cos(a) * rr, this.center.y + wave, this.center.z + Math.sin(a) * rr);
-    }
-    const span = 0.16 + 0.78 * Math.pow(frac, 0.8);
-    body.tail = 0;
-    body.head = span;
-    body.radius = 0.035 + 0.085 * Math.pow(frac, 0.7) + 0.03 * this.pulseT;
-    body.profile = (u) => capTaper(u, 0.18, 0.25) * (0.85 + 0.15 * Math.sin(u * 18 - t * 6));
-    body.setLook({ ice: this.icy, flow: 2 + frac * 2 + this.pulseT * 4, glow: this.pulseT * 0.25 });
-    body.build(RING_PTS, true);
-    // Droplets orbit in a second, tilted plane (medium/high only).
-    const q = this.fx.quality;
-    const nd = q === 'low' ? 0 : Math.min(q === 'high' ? 5 : 3, Math.floor(frac * 6));
-    this.ensureDroplets(nd);
-    if (this.dropMat) {
-      this.dropMat.uniforms.uIce.value = this.icy;
-    }
-    for (let i = 0; i < this.droplets.length; i++) {
-      const a = -this.angle * 1.3 + (i / Math.max(1, this.droplets.length)) * Math.PI * 2;
-      const m = this.droplets[i];
-      const r2 = R * 1.18;
-      m.position.set(this.center.x + Math.cos(a) * r2, this.center.y + 0.25 * Math.sin(a * 1.0 + t) + 0.1, this.center.z + Math.sin(a) * r2 * 0.9);
-      m.scale.setScalar(0.05 + 0.03 * Math.sin(t * 3 + i));
+    this.angle += dt * (1.2 + 1.0 * frac + this.pulseT * 3);
+    this.form += ((frac >= ORB_FRAC ? 1 : 0) - this.form) * Math.min(1, dt * 5);
+    const look = { ice: this.icy, flow: 2 + frac * 2 + this.pulseT * 4, glow: this.pulseT * 0.2 };
+
+    // Ball over the right palm: a fat ring around a small circle reads as a wobbling ball.
+    const orbW = 1 - this.form;
+    if (orbW > 0.03) {
+      const b = this.body('orb');
+      const rb = 0.06 + 0.2 * Math.min(frac, ORB_FRAC);
+      rF.set(Math.sin(o.yaw), 0, Math.cos(o.yaw));
+      const c = rA.copy(this.handR).addScaledVector(rF, 0.1);
+      c.y += 0.16 + 0.03 * Math.sin(t * 2.3);
+      for (let i = 0; i < ORB_PTS; i++) {
+        const a = this.angle * 2.2 + (i / ORB_PTS) * Math.PI * 2;
+        const wob = 1 + 0.12 * Math.sin(3 * a + t * 4.1);
+        b.pts[i].set(c.x + Math.cos(a) * rb * wob, c.y + Math.sin(a) * rb * 0.8 * wob, c.z + Math.sin(a + 1.3) * rb * 0.6);
+      }
+      b.tail = 0;
+      b.head = 1;
+      b.radius = rb * 0.95 * orbW;
+      b.profile = (u) => 0.9 + 0.1 * Math.sin(u * 12 - t * 5);
+      b.setLook(look);
+      b.build(ORB_PTS, true);
+    } else this.orb?.hide();
+
+    // Stream around the body, threaded through both hands.
+    if (this.form > 0.03) {
+      const b = this.body('loop');
+      rF.set(Math.sin(o.yaw), 0, Math.cos(o.yaw));
+      rR.set(-rF.z, 0, rF.x);
+      const Rx = 0.64 + 0.2 * frac + 0.06 * this.pulseT;
+      const Rz = 0.52 + 0.12 * frac;
+      // Angles of the hands around the chest (right = +rR, forward = +rF).
+      const angOf = (h: THREE.Vector3) => Math.atan2(rF.dot(rB.copy(h).sub(this.center)), rR.dot(rB));
+      const aL = angOf(this.handL);
+      const aR = angOf(this.handR);
+      for (let i = 0; i < LOOP_PTS; i++) {
+        const th = this.angle + (i / LOOP_PTS) * Math.PI * 2;
+        const c = Math.cos(th), sn = Math.sin(th);
+        const p = b.pts[i]
+          .copy(this.center)
+          .addScaledVector(rR, c * Rx)
+          .addScaledVector(rF, sn * Rz);
+        // Rises behind the back, dips in front; a travelling wave along the stream.
+        p.y += -0.24 * sn + 0.08 * Math.sin(2 * th + t * 2.6);
+        // Pulled through the palms (the arms carry the water).
+        const wl = Math.pow(Math.max(0, Math.cos(th - aL)), 6) * 0.85;
+        const wr = Math.pow(Math.max(0, Math.cos(th - aR)), 6) * 0.85;
+        if (wl > 0.01) p.lerp(this.handL, wl);
+        if (wr > 0.01) p.lerp(this.handR, wr);
+      }
+      b.tail = 0;
+      b.head = 0.35 + 0.6 * Math.pow(frac, 0.8);
+      b.radius = (0.055 + 0.11 * Math.pow(frac, 0.7) + 0.03 * this.pulseT) * this.form;
+      b.profile = (u) => capTaper(u, 0.14, 0.2) * (0.86 + 0.14 * Math.sin(u * 16 - t * 5.5));
+      b.setLook(look);
+      b.build(LOOP_PTS, true);
+    } else this.loop?.hide();
+
+    // Drips: carried water is real water.
+    this.dripT -= dt;
+    if (this.dripT <= 0 && this.icy < 0.5) {
+      this.dripT = (0.35 + Math.random() * 0.7) / (0.4 + frac);
+      const src = this.form > 0.5 ? this.loop : this.orb;
+      if (src && src.path.length > 0.1) {
+        const L = src.path.length;
+        src.path.at((src.tail + (src.head - src.tail) * Math.random()) * L, rA);
+        this.fx.drops.emit(rA, rB.set((Math.random() - 0.5) * 0.4, -0.4, (Math.random() - 0.5) * 0.4), 0.018 + 0.016 * Math.random(), 1.2);
+      }
     }
   }
 
   dispose(): void {
-    this.body?.dispose();
-    this.body = null;
-    this.ensureDroplets(0);
-    this.dropMat?.dispose();
-    this.dropGeo?.dispose();
-    this.dropMat = null;
-    this.dropGeo = null;
+    this.loop?.dispose();
+    this.orb?.dispose();
+    this.loop = null;
+    this.orb = null;
   }
 }
