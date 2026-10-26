@@ -66,6 +66,7 @@ public class MainActivity extends Activity {
         if (path.endsWith(".woff2")) return "font/woff2";
         if (path.endsWith(".woff")) return "font/woff";
         if (path.endsWith(".json")) return "application/json";
+        if (path.endsWith(".mp3")) return "audio/mpeg";
         return null;
     }
 

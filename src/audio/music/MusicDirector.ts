@@ -2,6 +2,8 @@ import { createReverb, makeResources, type AudioResources, type Reverb } from '.
 import { INSTRUMENTS, type InstrumentId, type NoteCtx } from './instruments';
 import { composePiece, degreeMidi, midiToHz, rngFrom, type MNote, type Piece, type Rng } from './theory';
 import { themeFor, THEMES, type AccompPart, type PercMap, type ThemeDef } from './themes';
+import { TrackPlayer } from './TrackPlayer';
+import menuTrackUrl from './tracks/menu-theme.mp3?url';
 
 /**
  * Generative music director (replaces the old MusicPlayer).
@@ -15,12 +17,24 @@ import { themeFor, THEMES, type AccompPart, type PercMap, type ThemeDef } from '
  * low-string ostinato in the current key) rises with combat intensity and
  * decays after combat. Stingers (discovery, quest, learning, mastery...) are
  * played in the current key on the beat grid while the bed ducks.
+ *
+ * Themes listed in TRACKS play a recorded track instead (the main menu theme), with
+ * the generative theme of the same id as the fallback if the file cannot play.
  */
 
 export type StingerKind = 'discovery' | 'questStart' | 'quest' | 'learn' | 'mastery' | 'levelup' | 'sphere' | 'defeat';
 
 const LOOKAHEAD = 0.4;
 const COMBAT_HOLD = 7;
+
+/**
+ * Recorded tracks by theme id: the file and its linear gain on the music bus. The menu
+ * theme is mastered loud (-10 LUFS): -6 dB keeps its climaxes above the generative
+ * themes without blasting, and its quiet intro still audible.
+ */
+const TRACKS: Record<string, { url: string; gain: number }> = {
+  menu: { url: menuTrackUrl, gain: 0.5 },
+};
 
 class Performance {
   readonly out: GainNode;
@@ -309,6 +323,8 @@ export interface MusicState {
   ducked: number;
   lastStinger: string | null;
   restRemaining: number;
+  /** Recorded track (main menu) when one is playing instead of a generative theme. */
+  track: ReturnType<TrackPlayer['state']> | null;
 }
 
 export class MusicDirector {
@@ -334,9 +350,28 @@ export class MusicDirector {
   private avatarUntil = 0;
   private ducked = 1;
   private lastStinger: string | null = null;
+  private tracks = new Map<string, TrackPlayer>();
+  /** The recorded track currently playing (or fading in), if any. */
+  private track: TrackPlayer | null = null;
 
   get theme(): string | null {
     return this.requested;
+  }
+
+  /** Player for a theme's recorded track (null: generative, or the track cannot play here). */
+  private trackFor(id: string | null): TrackPlayer | null {
+    const def = id ? TRACKS[id] : undefined;
+    if (!id || !def || !TrackPlayer.supported(this.ac)) return null;
+    let t = this.tracks.get(id);
+    if (!t) {
+      t = new TrackPlayer(id, def.url, def.gain, () => {
+        // The file failed: play the generative theme instead if it is still wanted.
+        if (this.track === t) this.track = null;
+        if (this.requested === id && this.ac) this.switchTo(id, 1.5);
+      });
+      this.tracks.set(id, t);
+    }
+    return t.failed ? null : t;
   }
 
   attach(ac: BaseAudioContext, bus: AudioNode): void {
@@ -368,6 +403,8 @@ export class MusicDirector {
   setTheme(id: string | null): void {
     if (id === this.requested) return;
     this.requested = id;
+    // Start downloading a recorded track early (before the first tap unlocks audio).
+    this.trackFor(id)?.prefetch();
     if (this.ac) this.switchTo(id, 2.5);
   }
 
@@ -383,6 +420,13 @@ export class MusicDirector {
       cur.stop(now, 3.2);
       this.fading.push({ p: cur, until: now + 9 });
       this.current = null;
+    }
+    const track = this.trackFor(id);
+    if (this.track && this.track !== track) this.track.stop(3.2);
+    this.track = track;
+    if (track) {
+      track.play(ac as AudioContext, this.master, fadeIn);
+      return;
     }
     if (!id) return;
     const th = themeFor(id);
@@ -567,6 +611,7 @@ export class MusicDirector {
       }
     }
     this.avatarBed(now);
+    for (const t of this.tracks.values()) t.update();
     if (this.fading.length) {
       this.fading = this.fading.filter((f) => {
         if (now < f.until) return true;
@@ -576,12 +621,19 @@ export class MusicDirector {
     }
   }
 
+  /** A theme's recorded track (null if the theme has none or it was never used). */
+  trackState(id: string): ReturnType<TrackPlayer['state']> | null {
+    return this.tracks.get(id)?.state() ?? null;
+  }
+
   state(): MusicState {
     const c = this.current;
+    const tr = this.track;
     return {
       theme: this.requested,
-      playing: c?.theme.id ?? null,
-      mode: c?.mode ?? 'off',
+      playing: tr ? tr.id : c?.theme.id ?? null,
+      mode: tr ? 'track' : c?.mode ?? 'off',
+      track: tr?.state() ?? null,
       section: c?.sectionName ?? '',
       bar: c?.bar ?? 0,
       pieces: c?.pieces ?? 0,

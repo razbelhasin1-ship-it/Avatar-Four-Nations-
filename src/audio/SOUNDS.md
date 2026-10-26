@@ -1,7 +1,10 @@
 # Sound library (`src/audio`)
 
 Everything is synthesised at runtime with WebAudio (noise + oscillators + filters + envelopes,
-Karplus-Strong plucks, FM bells, waveshaping, formant voices, comb-filter reverb). No audio files.
+Karplus-Strong plucks, FM bells, waveshaping, formant voices, comb-filter reverb). The one audio
+file is the main menu theme, `music/tracks/menu-theme.mp3` (provided by the project owner): an
+extended epic version of the Avatar: The Last Airbender theme, streamed by `music/TrackPlayer.ts`
+(see `audio_music` below).
 This file lists every id the shared library registers and what it is for. It is generated from
 the live registry (keep it in sync when adding ids: `listSounds()` / `listLoops()` in `registry.ts`).
 
@@ -34,7 +37,7 @@ registerSound('my_module_thing', (ac, out, t, o) => { /* build graph into out at
 | Module | File | What it does |
 |---|---|---|
 | `audio_ambience` | `AmbienceDirector.ts` | Samples region, biome weights, altitude, distance to sea / rivers / waterfalls / lake shores, settlements, markets, harbours, temples, caves, time of day and the weather system 4×/s; crossfades up to 25 looping beds (budget 7 on Low, 10 otherwise), scatters positional spot sounds, sets the environment reverb. Also plays behind the main menu. |
-| `audio_music` | `MusicSystem.ts` + `music/` | Generative themes (`water`, `earth`, `fire`, `air`, `desert`, `swamp`, `spirit`, `wild`, `menu`, `battle`) with phrases, motifs, cadences and dynamics; region crossfades; combat layer driven by hits/damage and engaged enemies (bosses = full), decaying ~7 s after combat; stingers (`discovery`, `questStart`, `quest`, `learn`, `mastery`, `levelup`, `sphere`, `defeat`) in the current key; dialogue ducking; Avatar State choir bed. |
+| `audio_music` | `MusicSystem.ts` + `music/` | Generative themes (`water`, `earth`, `fire`, `air`, `desert`, `swamp`, `spirit`, `wild`, `menu`, `battle`) with phrases, motifs, cadences and dynamics; region crossfades; combat layer driven by hits/damage and engaged enemies (bosses = full), decaying ~7 s after combat; stingers (`discovery`, `questStart`, `quest`, `learn`, `mastery`, `levelup`, `sphere`, `defeat`) in the current key; dialogue ducking; Avatar State choir bed. The `menu` theme is the recorded menu track (`TRACKS` in `music/MusicDirector.ts`, -6 dB): fetched once into a blob, streamed by an `<audio>` element into the music bus, looped, fading in on the menu and out (then rewound) when play starts; paused while hidden; the generative `menu` theme is its fallback if the file cannot play. Debug: `music.track('menu')`. |
 | `audio_events` | `AudioEvents.ts` | Event → sound bindings (below) and delegated DOM UI sounds; installs `window.__game.debug.audio`. |
 
 ### Event bindings

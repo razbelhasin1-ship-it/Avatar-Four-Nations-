@@ -78,7 +78,15 @@ try {
     assert.equal(s.engine.state, 'running');
     assert.equal(s.music.theme, 'menu');
     assert.equal(s.music.playing, 'menu');
-    assert.ok(s.music.bar >= 0 && s.music.mode !== 'off', JSON.stringify(s.music));
+    // The main menu plays the recorded theme (src/audio/music/tracks/menu-theme.mp3), looped.
+    assert.equal(s.music.mode, 'track', JSON.stringify(s.music));
+    assert.ok(s.music.track.loaded && s.music.track.playing && !s.music.track.failed, JSON.stringify(s.music.track));
+    assert.ok(s.music.track.duration > 400, 'track duration ' + s.music.track.duration);
+    const t0 = s.music.track.time;
+    await h.wait(1200);
+    const tr = await audio((g) => g.debug.audio.music.track('menu'));
+    assert.ok(tr.time > t0 + 0.5, `track not advancing: ${t0} → ${tr.time}`);
+    assert.ok(tr.level > 0.3, 'track faded in: ' + tr.level);
     // The menu backdrop orbits the Air Temple: high-altitude wind + temple chimes.
     assert.ok(s.ambience.playing.includes('amb.wind.high'), JSON.stringify(s.ambience.playing));
     assert.ok(s.ambience.playing.includes('amb.temple'), JSON.stringify(s.ambience.playing));
@@ -325,6 +333,9 @@ try {
     m = await audio((g) => g.debug.audio.music.state());
     assert.equal(m.theme, 'air');
     assert.equal(m.playing, 'air');
+    // In the world the menu track has faded out and paused (rewound for the next menu visit).
+    const menuTrack = await audio((g) => g.debug.audio.music.track('menu'));
+    assert.ok(menuTrack && !menuTrack.playing && menuTrack.paused && menuTrack.time === 0, JSON.stringify(menuTrack));
     // Enemies engage: hits against the player raise the combat layer...
     await audio((g) => {
       const p = g.state().player;

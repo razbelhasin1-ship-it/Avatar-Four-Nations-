@@ -116,6 +116,8 @@ export function installAudioDebug(ctx: GameContext): void {
         stinger: (kind: StingerKind) => mus()?.stinger(kind) ?? ctx.audio.music.stinger(kind),
         pulse: (amount = 0.3) => ctx.audio.music.pulseCombat(amount),
         setCombat: (level: number) => ctx.audio.music.setCombat(level),
+        /** Recorded track of a theme (main menu), whether or not it is the one playing. */
+        track: (id = 'menu') => ctx.audio.music.trackState(id),
       },
       events: () => evs()?.state() ?? null,
     };

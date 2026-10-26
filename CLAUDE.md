@@ -2,7 +2,8 @@
 
 Browser 3D open-world action RPG inspired by Avatar: The Last Airbender.
 Stack: **TypeScript 7 (tsgo) + Vite 8 + three.js r186**, no other runtime deps. Everything
-(models, textures, audio) is procedural — no binary assets, no external services at runtime.
+(models, textures, audio) is procedural — no binary assets, no external services at runtime —
+except the main menu music, `src/audio/music/tracks/menu-theme.mp3`, chosen by the project owner.
 
 ## Commands
 
