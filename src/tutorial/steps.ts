@@ -191,8 +191,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 'water_draw',
     title: 'Drawing Water',
-    text: 'Walk to the pond or stream and hold {drawWater} to draw water to you. The water you carry swirls around you and powers your techniques anywhere — until it runs out.',
-    touch: 'Walk to the pond or stream and hold DRAW to pull water to you. The water you carry swirls around you and powers your techniques anywhere — until it runs out.',
+    text: 'Walk to the pond or stream and hold {drawWater} to draw water to you. The water you carry swirls around you and powers your techniques anywhere — until it runs out, or until you switch elements and let it fall.',
+    touch: 'Walk to the pond or stream and hold DRAW to pull water to you. The water you carry swirls around you and powers your techniques anywhere — until it runs out, or until you switch elements and let it fall.',
     element: 'water',
     onEvent: { 'water:drawn': () => 'drawn' },
     check: (rt) => c(rt, 'drawn') >= 1 && (rt.ctx.player?.waterReserve ?? 0) > 5,

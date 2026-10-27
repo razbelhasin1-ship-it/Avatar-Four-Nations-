@@ -637,6 +637,43 @@ try {
       await h.eval((g) => (g.ctx.water.heldWaterOnly = false));
     }
   });
+
+  await check('10. letting go: with another element active the carried water falls, splashes and leaves a puddle', async () => {
+    await prep(DESERT, null, 0);
+    await h.eval((g) => g.setElement('water'));
+    await h.eval((g) => g.debug.water.setReserve(40));
+    await h.step(30);
+    const vis = await h.eval((g) => g.debug.water.reserveVisual());
+    assert.ok(vis.visible, 'the carried water should be visible before letting go: ' + JSON.stringify(vis));
+    const puddles = () =>
+      h.eval((g) => [...g.ctx.water.list()].filter((s) => s.type === 'puddle' && s.id.startsWith('dyn_')).map((s) => ({ id: s.id, amount: +s.amount.toFixed(1), d: +Math.hypot(s.x - g.ctx.player.position.x, s.z - g.ctx.player.position.z).toFixed(2) })));
+    const before = await puddles();
+    await h.eval((g) => g.setElement('air'));
+    await h.step(1);
+    const s1 = await h.eval((g) => ({ r: g.ctx.player.waterReserve, falling: g.debug.water.falling(), vis: g.debug.water.reserveVisual() }));
+    assert.equal(s1.r, 0, 'switching to Air must empty the reserve');
+    assert.equal(s1.falling.length, 1, 'the carried water should be falling: ' + JSON.stringify(s1));
+    assert.ok(!s1.vis.visible, 'the water must not keep circling an airbender: ' + JSON.stringify(s1.vis));
+    await h.step(25);
+    const s2 = await h.eval((g) => g.debug.water.falling());
+    assert.ok(s2.length === 0 || s2[0].splashed, 'the water should have reached the ground: ' + JSON.stringify(s2));
+    const after = await puddles();
+    assert.ok(after.some((p) => p.d < 3 && p.amount > 10 && !before.some((b) => b.id === p.id && b.amount >= p.amount)), 'no puddle where the water fell: ' + JSON.stringify({ before, after }));
+    await h.step(20);
+    assert.equal((await h.eval((g) => g.debug.water.falling())).length, 0, 'the falling water was not cleaned up');
+    // Water given while another element is active is let go at once (never shown circling).
+    await h.eval((g) => g.debug.water.setReserve(20));
+    await h.step(2);
+    const s3 = await h.eval((g) => ({ r: g.ctx.player.waterReserve, vis: g.debug.water.reserveVisual() }));
+    assert.ok(s3.r === 0 && !s3.vis.visible, 'an airbender carries no water: ' + JSON.stringify(s3));
+    // Draw Water pressed with Air active switches to Water.
+    await h.eval((g) => g.debug.water.startDraw());
+    await h.step(3);
+    const el = await h.eval((g) => g.ctx.player.element);
+    await h.eval((g) => g.debug.water.stopDraw());
+    await h.step(3);
+    assert.equal(el, 'water', 'Draw Water should switch to Water');
+  });
 } finally {
   for (const r of results) console.log(r.join(' | '));
   console.log(`total ${((Date.now() - t0) / 1000).toFixed(0)}s`);

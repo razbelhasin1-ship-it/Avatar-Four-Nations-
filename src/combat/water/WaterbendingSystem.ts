@@ -248,6 +248,7 @@ export class WaterbendingSystem implements GameSystem, Persistable {
       this.updateDraw(dt, p);
       this.updateFlask(dt, p);
       this.updateCharge(dt, p);
+      this.updateLetGo(p);
     }
     this.fx.update(dt);
     this.updatePuddles(dt);
@@ -294,7 +295,9 @@ export class WaterbendingSystem implements GameSystem, Persistable {
       this.autoGatherT -= dt;
       if (p.waterReserve >= this.autoGatherTarget - 0.01) this.autoGatherT = 0;
     }
-    const wants = (input.isDown('drawWater') || auto) && this.canDraw(p);
+    // Drawing water is waterbending: pressing it with another element active switches to Water.
+    if (input.wasPressed('drawWater') && p.element !== 'water' && ctx.progression.canBend('water') && this.canDraw(p)) p.switchElement('water');
+    const wants = (input.isDown('drawWater') || auto) && this.canDraw(p) && p.element === 'water';
     if (input.wasPressed('drawWater') && !ctx.progression.canBend('water')) {
       ctx.events.emit('ui:notify', { text: 'You cannot bend water yet — find a waterbending master.', kind: 'warning', duration: 2.5 });
       return;
@@ -313,6 +316,24 @@ export class WaterbendingSystem implements GameSystem, Persistable {
       this.drawStep(p, step);
     }
     this.updateDrawVisual(dt, p);
+  }
+
+  /**
+   * Carried water only stays up while the player is waterbending. With any other element active
+   * (switched, a loaded save, a new session) it is let go: the water around them falls, splashes
+   * and leaves a puddle where it lands — real water that can be drawn again.
+   */
+  private updateLetGo(p: Player): void {
+    if (p.element === 'water' || p.waterReserve <= 0) return;
+    const ctx = this.ctx;
+    const amount = p.waterReserve;
+    p.waterReserve = 0;
+    this.autoGatherT = 0;
+    this.fx.reserveOf(p)?.letGo((at) => {
+      ctx.water.release(at, amount);
+      ctx.world.fx.wet(at, Math.min(2.2, 0.6 + amount * 0.03));
+    });
+    ctx.events.emit('water:reserve', { amount: 0, max: p.maxWaterReserve });
   }
 
   private startDraw(p: Player): void {
@@ -833,6 +854,8 @@ export class WaterbendingSystem implements GameSystem, Persistable {
           p.waterReserve = Math.max(0, Math.min(p.maxWaterReserve, n));
           return p.waterReserve;
         },
+        /** Carried water that was let go and is still falling / splashing. */
+        falling: () => self.fx.effectsOf('reserve-fall').map((e) => e.trace?.() ?? null),
         flask: () => ({ equipped: self.hasFlask(), amount: self.flask.amount, capacity: self.flask.capacity }),
         setFlask: (n: number) => (self.flask.amount = Math.max(0, Math.min(self.flask.capacity, n))),
         equipFlask: (on = true) => {

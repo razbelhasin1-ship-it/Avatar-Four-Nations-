@@ -664,7 +664,8 @@ export class Game {
     p.characterName = 'Avatar';
     if (!p.appearance) p.setAppearance(structuredClone(DEFAULT_APPEARANCE.air));
     p.element = 'air';
-    p.waterReserve = 30;
+    // Carried water exists only while waterbending: the pond beside the spawn is where to draw it.
+    p.waterReserve = 0;
     const spawn = new THREE.Vector3(TUTORIAL_SPAWN.x, 0, TUTORIAL_SPAWN.z);
     await this.beginSession('tutorial', spawn, TUTORIAL_SPAWN.yaw, true, null);
   }

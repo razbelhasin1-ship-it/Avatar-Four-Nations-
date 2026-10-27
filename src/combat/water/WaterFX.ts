@@ -662,10 +662,158 @@ export class ReserveVisual {
     }
   }
 
+  /**
+   * The bender lets go of the water (they stopped waterbending): what is shown — the stream
+   * around the body or the ball over the palm — keeps its shape and falls, splashing where it
+   * lands (`onLand` gets that point). False when no water was visible.
+   */
+  letGo(onLand: (at: THREE.Vector3) => void): boolean {
+    const asLoop = this.form >= 0.5;
+    const body = asLoop ? this.loop : this.orb;
+    const visible = !!body?.tube?.mesh.visible && this.shown >= 0.35;
+    const frac = this.owner.maxWaterReserve > 0 ? clamp01(this.shown / this.owner.maxWaterReserve) : 0;
+    // A blend between the two forms: the fainter one just goes.
+    (asLoop ? this.orb : this.loop)?.hide();
+    this.shown = 0;
+    this.form = 0;
+    if (!body || !visible) return false;
+    if (asLoop) this.loop = null;
+    else this.orb = null;
+    // The loop carries its swirl into the fall (same angular speed as update()); the ball just drops.
+    const spin = asLoop ? 1.2 + 1.0 * frac : 0;
+    this.fx.add(new FallingWater(this.fx, body, asLoop ? LOOP_PTS : ORB_PTS, spin, frac, this.icy > 0.6, onLand));
+    return true;
+  }
+
   dispose(): void {
     this.loop?.dispose();
     this.orb?.dispose();
     this.loop = null;
     this.orb = null;
+  }
+}
+
+const fC = new THREE.Vector3();
+
+/**
+ * Carried water let go of: the tube keeps the shape it had, sheds its swirl outward and falls
+ * under gravity. The first part to reach the ground (or a water surface) splashes there; each
+ * part collapses as it lands, throwing small crowns of drops.
+ */
+class FallingWater implements WaterEffect {
+  readonly kind = 'reserve-fall';
+  private readonly vel: THREE.Vector3[] = [];
+  /** Per point: 1 while falling, fading to 0 once landed. */
+  private readonly life: number[] = [];
+  private readonly landedAt: number[] = [];
+  private readonly r0: number;
+  private t = 0;
+  private splashed = false;
+
+  constructor(
+    private readonly fx: WaterFX,
+    private readonly body: StreamBody,
+    private readonly n: number,
+    spin: number,
+    private readonly size: number,
+    private readonly ice: boolean,
+    private readonly onLand: (at: THREE.Vector3) => void,
+  ) {
+    this.r0 = body.radius;
+    const pts = body.pts;
+    fC.set(0, 0, 0);
+    for (let i = 0; i < n; i++) fC.add(pts[i]);
+    fC.multiplyScalar(1 / n);
+    for (let i = 0; i < n; i++) {
+      // Swirl: each point was moving toward the next one along the ring.
+      const v = new THREE.Vector3().subVectors(pts[(i + 1) % n], pts[(i + n - 1) % n]).setY(0);
+      const len = v.length();
+      if (len > 1e-4) v.multiplyScalar((spin * fC.distanceTo(pts[i])) / len);
+      // Drifts outward a little as the hold lets go.
+      v.x += (pts[i].x - fC.x) * 0.6;
+      v.z += (pts[i].z - fC.z) * 0.6;
+      v.y = 0.3;
+      this.vel.push(v);
+      this.life.push(1);
+      this.landedAt.push(-1);
+    }
+    const tail = body.tail;
+    const span = body.head - body.tail;
+    const prof = body.profile;
+    // Parts that have landed thin out and vanish (closed path: point i sits at fraction i/n).
+    body.profile = (u) => {
+      const f = (((tail + u * span) % 1) + 1) % 1 * n;
+      const i0 = Math.floor(f) % n;
+      const w = f - Math.floor(f);
+      return prof(u) * (this.life[i0] * (1 - w) + this.life[(i0 + 1) % n] * w);
+    };
+  }
+
+  private floorAt(p: THREE.Vector3): number {
+    const w = this.fx.ctx.world;
+    const g = w.groundAt(p.x, p.z, p.y + 0.5).y;
+    const l = w.liquidAt(p.x, p.z);
+    return l ? Math.max(g, l.level) : g;
+  }
+
+  update(dt: number): boolean {
+    this.t += dt;
+    const pts = this.body.pts;
+    let alive = 0;
+    for (let i = 0; i < this.n; i++) {
+      const p = pts[i];
+      const v = this.vel[i];
+      if (this.landedAt[i] < 0) {
+        v.y -= 11 * dt;
+        p.addScaledVector(v, dt);
+        const floor = this.floorAt(p);
+        if (p.y <= floor + 0.02) {
+          p.y = floor + 0.02;
+          this.landedAt[i] = this.t;
+          // It spreads over the ground as it lands.
+          v.y = 0;
+          v.x *= 1.5;
+          v.z *= 1.5;
+          if (!this.splashed) this.splash();
+          else if (i % 3 === 0) this.fx.crown(p, 0.3 + 0.3 * this.size);
+        }
+      } else {
+        v.multiplyScalar(Math.max(0, 1 - dt * 7));
+        p.x += v.x * dt;
+        p.z += v.z * dt;
+        this.life[i] = Math.max(0, 1 - (this.t - this.landedAt[i]) / 0.18);
+      }
+      if (this.life[i] > 0.02) alive++;
+    }
+    // Spent, or fell out of sight (off a cliff).
+    if (alive === 0 || this.t > 2.5) return false;
+    // Drops peel off while it falls.
+    if (!this.splashed && Math.random() < dt * 18) {
+      const i = Math.floor(Math.random() * this.n);
+      this.fx.shed(pts[i], this.vel[i], 1, 0.6);
+    }
+    this.body.radius = this.r0 * (1 - 0.25 * Math.min(1, this.t / 0.5));
+    this.body.build(this.n, true);
+    return true;
+  }
+
+  /** The water comes down: one splash where it lands (below the middle of the ring). */
+  private splash(): void {
+    this.splashed = true;
+    const pts = this.body.pts;
+    fC.set(0, 0, 0);
+    for (let i = 0; i < this.n; i++) fC.add(pts[i]);
+    fC.multiplyScalar(1 / this.n);
+    fC.y = this.floorAt(fC) + 0.05;
+    this.fx.splash(fC, 0.6 + 0.8 * this.size, { ice: this.ice, volume: 0.6 });
+    this.onLand(fC.clone());
+  }
+
+  trace(): Record<string, unknown> {
+    return { splashed: this.splashed, landed: this.landedAt.filter((t) => t >= 0).length, n: this.n };
+  }
+
+  dispose(): void {
+    this.body.dispose();
   }
 }
