@@ -274,6 +274,44 @@ export function flameArc(ctx: GameContext, origin: THREE.Vector3, dir: THREE.Vec
   });
 }
 
+/**
+ * Crescent of flame thrown by a sweeping slash (fire arc): a curved burning band that flies
+ * along `dir` and widens as it goes, its flames streaming along the arc, a hotter core inside.
+ * `roll` tilts the crescent about the travel axis (to follow the angle of the slash).
+ */
+export function flameBlade(
+  ctx: GameContext,
+  origin: THREE.Vector3,
+  dir: THREE.Vector3,
+  o: { length: number; duration: number; r0?: number; r1?: number; height?: number; arc?: number; roll?: number; palette?: FlameOptions['palette'] },
+): void {
+  const low = q(ctx) === 'low';
+  const arc = o.arc ?? 2.3;
+  const geo = shared(`fx_fblade_${arc.toFixed(2)}_${low ? 'l' : 'h'}`, () => arcSheet({ radius: 1, arc, height: 1, segA: low ? 18 : 32, segH: 3, taper: 1, flow: 'arc' }));
+  const d = dir.clone().normalize();
+  const quat = new THREE.Quaternion().setFromUnitVectors(Z, d);
+  if (o.roll) quat.multiply(new THREE.Quaternion().setFromAxisAngle(Z, o.roll));
+  const r0 = o.r0 ?? 0.6, r1 = o.r1 ?? 2.6, h = o.height ?? 0.6;
+  const layers = low ? 1 : 2;
+  for (let i = 0; i < layers; i++) {
+    const core = i === 1;
+    const mat = flameMaterial({ sheet: true, scroll: [0.4, core ? -3.2 : -2.4], scale: [1.2, 4], intensity: core ? 2 : 1.45, palette: core ? 'hot' : o.palette, heat: core ? 0.35 : 0 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.quaternion.copy(quat);
+    const lag = core ? 0.03 : 0;
+    ctx.vfx.addTransient(mesh, o.duration + lag, (t) => {
+      const lt = Math.max(0, Math.min(1, (t * (o.duration + lag) - lag) / o.duration));
+      const e = 1 - (1 - lt) * (1 - lt);
+      mesh.position.copy(origin).addScaledVector(d, o.length * e - (1 - e) * 0.3);
+      const r = (r0 + (r1 - r0) * e) * (core ? 0.94 : 1);
+      // Flares up off the hand, then thins out as it burns away.
+      const hh = h * (core ? 0.45 : 1) * (lt < 0.15 ? 0.45 + lt * 3.6 : 1.0 - (lt - 0.15) * 0.55);
+      mesh.scale.set(r, hh, r * 0.55);
+      setOpacity(mat, lt < 0.1 ? lt / 0.1 : lt > 0.55 ? 1 - (lt - 0.55) / 0.45 : 1);
+    }, () => mat.dispose());
+  }
+}
+
 /** Expanding horizontal ring of fire (spinning kicks, novas). */
 export function flameRing(ctx: GameContext, center: THREE.Vector3, o: { r0: number; r1: number; height: number; duration: number; palette?: FlameOptions['palette'] }): void {
   const disk = flameMaterial({ sheet: true, scroll: [-1.2, -1.6], scale: [8, 1], intensity: 1.35, palette: o.palette, heat: 0 });

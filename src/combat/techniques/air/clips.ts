@@ -30,7 +30,24 @@ const times = [0, 0.08, 0.18, 0.4];
 registerClip({ id: 'air_palm_r', duration: 0.4, mask: 'upper', events: [{ t: 0.08, name: 'release' }], keys: palmR.map((pose, i) => ({ t: times[i], pose, ease: i === 1 ? 'out' : 'inout' })) });
 registerClip({ id: 'air_palm_l', duration: 0.4, mask: 'upper', events: [{ t: 0.08, name: 'release' }], keys: palmR.map((pose, i) => ({ t: times[i], pose: mirror(pose), ease: i === 1 ? 'out' : 'inout' })) });
 
-// Third strike: full spin, then a two-palm push. Play with fadeOut ~0 (ends at -2π).
+// Third strike: Baguazhang crescent kick. The right leg swings up across the body and over in
+// a high vertical arc (straight leg, hips turning with it), arms opened wide, the bender light
+// on the toes of the support foot; at the top of the arc the foot cuts a tall blade of air.
+registerClip({
+  id: 'air_palm_kick',
+  duration: 0.56,
+  mask: 'full',
+  events: [{ t: 0.18, name: 'release' }],
+  keys: [
+    { t: 0, pose: { hips: [0, 0, 0], spine: [0.06, -0.25, 0], thighR: [-0.25, 0, 0.12], shinR: [0.7, 0, 0], thighL: [-0.2, 0, 0.08], shinL: [0.35, 0, 0], upperArmL: [-0.9, 0, 0.55], foreArmL: [-0.7, 0, 0], handL: [-0.4, 0, 0], upperArmR: [-0.35, 0, -0.6], foreArmR: [-0.6, 0, 0], hipsY: -0.07 } },
+    { t: 0.09, pose: { hips: [0, 0.3, 0], spine: [-0.04, 0.1, 0], thighR: [-1.0, 0, 0.5], shinR: [0.2, 0, 0], footR: [0.35, 0, 0], thighL: [-0.08, 0, 0.06], shinL: [0.15, 0, 0], footL: [0.25, 0, 0], upperArmL: [-0.35, 0, 1.2], foreArmL: [-0.2, 0, 0], upperArmR: [-0.15, 0, -1.15], foreArmR: [-0.2, 0, 0], hipsY: 0.02 }, ease: 'out' },
+    { t: 0.18, pose: { hips: [0, 0.05, 0], spine: [-0.16, -0.05, 0], thighR: [-1.8, 0, 0.02], shinR: [0.04, 0, 0], footR: [-0.15, 0, 0], thighL: [0, 0, 0.05], shinL: [0.08, 0, 0], footL: [0.35, 0, 0], upperArmL: [-0.15, 0, 1.4], upperArmR: [-0.1, 0, -1.35], hipsY: 0.05 }, ease: 'out' },
+    { t: 0.3, pose: { hips: [0, -0.3, 0], spine: [-0.06, -0.2, 0], thighR: [-1.15, 0, -0.8], shinR: [0.12, 0, 0], footR: [0.1, 0, 0], hipsY: 0.02 } },
+    { t: 0.56, pose: { hips: [0, 0, 0], spine: [0.04, 0, 0], thighR: [-0.1, 0, -0.06], shinR: [0.15, 0, 0], footR: [0, 0, 0], thighL: [-0.1, 0, 0.06], shinL: [0.15, 0, 0], footL: [0, 0, 0], upperArmL: [-0.5, 0, 0.3], foreArmL: [-0.9, 0, 0], handL: [0, 0, 0], upperArmR: [-0.5, 0, -0.3], foreArmR: [-0.9, 0, 0], hipsY: 0 }, ease: 'inout' },
+  ],
+});
+
+// Fourth strike: full spin, then a two-palm push. Play with fadeOut ~0 (ends at -2π).
 registerClip({
   id: 'air_palm_spin',
   duration: 0.62,

@@ -19,10 +19,10 @@ const playerHits = (r) => r.events.filter((e) => e.type === 'hit' && e.target ==
 try {
   await run({
     id: 'earth_strike',
-    casts: 3,
+    casts: 4,
     gap: 13,
-    frames: 50,
-    shots: [7, 36],
+    frames: 66,
+    shots: [7, 33, 52],
     check: (r) => {
       const t = r.targets[0];
       assert.ok(t.totalDamage > 0, 'rock strikes dealt no damage');

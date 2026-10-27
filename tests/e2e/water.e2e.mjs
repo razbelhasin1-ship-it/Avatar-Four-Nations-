@@ -362,6 +362,42 @@ try {
     await h.step(30);
   });
 
+  await check('7b. spinning lash: the third whip strike circles the bender and hits a dummy behind it once', async () => {
+    await prep(RIVER, null, 60);
+    const front = await h.eval((g) => g.spawnDummy(4, 0, 400));
+    const back = await h.eval((g) => g.spawnDummy(-3.5, 0.6, 400));
+    await h.eval((g, d) => g.faceTowards(d.x, d.z), front);
+    await h.step(35); // let the previous whip combo lapse
+    const aim = { x: front.x, y: front.y + 1.2, z: front.z };
+    for (let i = 0; i < 2; i++) {
+      const r = await h.eval((g, a) => g.cast('water_whip', a), aim);
+      assert.ok(r.ok, JSON.stringify(r));
+      await h.step(12);
+    }
+    const backBefore = await h.eval((g, id) => g.entityInfo(id).hits, back.id);
+    assert.equal(backBefore, 0, 'the straight lashes must not reach behind the bender');
+    await h.eval((g) => {
+      g.debug.water.trace(true);
+      window.__hits.length = 0;
+    });
+    const r3 = await h.eval((g, a) => g.cast('water_whip', a), aim);
+    assert.ok(r3.ok, JSON.stringify(r3));
+    await h.step(26);
+    const res = await h.eval((g, id) => {
+      const e = g.ctx.entities.get(id);
+      const frames = g.debug.water.traceLog().map((f) => ({ frame: f.frame, whip: f.effects.find((x) => x.kind === 'whip') })).filter((f) => f.whip);
+      const dist = (f) => (f ? Math.min(...f.whip.samples.map((s) => Math.hypot(s[0] - e.position.x, s[2] - e.position.z))) : null);
+      const hits = window.__hits.filter((x) => x.targetId === id);
+      return { hits: hits.map((hh) => ({ frame: hh.frame, phase: frames.find((f) => f.frame === hh.frame)?.whip.phase ?? null, d: dist(frames.find((f) => f.frame === hh.frame)), dPrev: dist(frames.find((f) => f.frame === hh.frame - 1)) })), r: frames[0]?.whip.hitRadius ?? null };
+    }, back.id);
+    await h.eval((g) => g.debug.water.trace(false));
+    assert.equal(res.hits.length, 1, 'the spinning lash must hit the dummy behind exactly once: ' + JSON.stringify(res));
+    const hit = res.hits[0];
+    assert.equal(hit.phase, 'swing', 'hit outside the swing: ' + JSON.stringify(res));
+    // The whip sweeps through the dummy between two drawn frames: one of them shows it there.
+    assert.ok(Math.min(hit.d ?? 99, hit.dPrev ?? 99) < 1.6, 'the drawn whip was nowhere near the dummy when it was hit: ' + JSON.stringify(res));
+  });
+
   await check('8. travel to another region + save/load: waterbending still works', async () => {
     await prep(GREAT_RIVER, null, 25);
     // Step onto dry ground near the bank (a save made while wading restores the last safe point).

@@ -59,7 +59,26 @@ registerClip({
   ],
 });
 
-// ---- Water Whip 3: two-handed overhead crack -----------------------------------
+// ---- Water Whip 3: spinning lash (Tai Chi turn) ---------------------------------
+// Wound up to the left, the bender turns a full circle to the right on bent knees with both
+// arms reaching toward the water, so the whip circles them at waist height; the turn ends
+// square to the front in a low step with the arms extended. Ends at hips -2π: play with
+// fadeOut ~0.
+registerClip({
+  id: 'water_whip_spin',
+  duration: 0.76,
+  mask: 'full',
+  events: [{ t: 0.1, name: 'release' }],
+  keys: [
+    { t: 0, pose: { hips: [0, 0.45, 0], spine: [0.1, 0.25, 0], upperArmR: [-0.9, 0, 0.35], foreArmR: [-1.1, 0, 0], upperArmL: [-0.7, 0, 0.5], foreArmL: [-1.0, 0, 0], thighL: [-0.3, 0, 0.15], shinL: [0.45, 0, 0], thighR: [-0.1, 0, -0.15], shinR: [0.35, 0, 0], hipsY: -0.12 } },
+    { t: 0.1, pose: { hips: [0, 0.1, 0], spine: [0.12, -0.1, 0], upperArmR: [-1.4, 0, -0.55], foreArmR: [-0.25, 0, 0], handR: [0.2, 0, 0], upperArmL: [-1.25, 0, 0.2], foreArmL: [-0.5, 0, 0], hipsY: -0.16 }, ease: 'out' },
+    { t: 0.3, pose: { hips: [0, -Math.PI, 0], spine: [0.1, -0.15, 0], upperArmR: [-1.45, 0, -0.6], foreArmR: [-0.2, 0, 0], upperArmL: [-1.2, 0, 0.25], foreArmL: [-0.45, 0, 0], thighL: [-0.45, 0, 0.2], shinL: [0.7, 0, 0], thighR: [-0.25, 0, -0.2], shinR: [0.55, 0, 0], hipsY: -0.2 }, ease: 'linear' },
+    { t: 0.5, pose: { hips: [0, -2 * Math.PI, 0], spine: [0.15, 0, 0], upperArmR: [-1.5, 0, -0.25], foreArmR: [-0.1, 0, 0], handR: [0, 0, 0], upperArmL: [-1.45, 0, 0.2], foreArmL: [-0.15, 0, 0], thighL: [-0.6, 0, 0.15], shinL: [0.6, 0, 0], thighR: [0.3, 0, -0.12], shinR: [0.3, 0, 0], hipsY: -0.18, hipsZ: 0.06 }, ease: 'out' },
+    { t: 0.76, pose: { hips: [0, -2 * Math.PI, 0], spine: [0.08, 0, 0], upperArmR: [-0.5, 0, -0.3], foreArmR: [-0.7, 0, 0], upperArmL: [-0.5, 0, 0.3], foreArmL: [-0.7, 0, 0], thighL: [-0.12, 0, 0.1], shinL: [0.15, 0, 0], thighR: [0, 0, -0.1], shinR: [0.15, 0, 0], hipsY: 0, hipsZ: 0 }, ease: 'inout' },
+  ],
+});
+
+// ---- Water Whip 4: two-handed overhead crack -----------------------------------
 registerClip({
   id: 'water_whip_slam',
   duration: 0.72,

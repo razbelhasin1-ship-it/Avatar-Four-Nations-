@@ -21,6 +21,8 @@ function q(ctx: GameContext): 'low' | 'medium' | 'high' {
 /**
  * A rock that erupts from the ground and hovers, waiting to be thrown. Animate
  * with the windup; hand it to a projectile with toVisual() at release.
+ * `disc`: a flat stone disc (earth disc) that spins flat while it hovers and
+ * flies spinning flat, like a thrown plate, instead of tumbling.
  */
 export class RisingRock {
   readonly mesh: THREE.Mesh;
@@ -36,9 +38,11 @@ export class RisingRock {
     readonly radius: number,
     readonly tint: string,
     private readonly riseTime = 0.2,
+    readonly disc = false,
   ) {
     this.mesh = new THREE.Mesh(rockGeometry(Math.floor(Math.random() * 8), q(ctx) === 'high' ? 2 : 1), stoneMaterial(tint));
     this.mesh.scale.setScalar(radius);
+    if (disc) this.mesh.scale.y = radius * 0.3;
     this.mesh.castShadow = q(ctx) !== 'low';
     this.mesh.position.copy(ground).setY(ground.y - radius);
     this.current.copy(this.mesh.position);
@@ -54,7 +58,7 @@ export class RisingRock {
         const e = 1 - Math.pow(1 - k, 3);
         const y = ground.y - radius + (hoverY - (ground.y - radius)) * e + (k >= 1 ? Math.sin(this.t * 9) * 0.03 : 0);
         this.mesh.position.set(ground.x, y, ground.z);
-        this.mesh.rotation.y += dt * 2;
+        this.mesh.rotation.y += dt * (disc ? 14 : 2);
         this.current.copy(this.mesh.position);
         return true;
       },
@@ -69,7 +73,7 @@ export class RisingRock {
     this.launched = true;
     this.mesh.removeFromParent();
     this.mesh.position.set(0, 0, 0);
-    return rockVisualFor(this.ctx, this.mesh, this.radius, this.tint, true);
+    return rockVisualFor(this.ctx, this.mesh, this.radius, this.tint, true, this.disc);
   }
 
   /** Crumble without throwing (interrupted). */
@@ -86,10 +90,15 @@ export class RisingRock {
   }
 }
 
-function rockVisualFor(ctx: GameContext, mesh: THREE.Mesh, radius: number, tint: string, owned: boolean): ProjectileVisual {
+function rockVisualFor(ctx: GameContext, mesh: THREE.Mesh, radius: number, tint: string, owned: boolean, disc = false): ProjectileVisual {
   const group = new THREE.Group();
   group.add(mesh);
-  const spin = new THREE.Vector3(Math.random() * 8 - 4, Math.random() * 8 - 4, Math.random() * 8 - 4);
+  // A disc spins flat about its own axis (slightly tilted, like a thrown plate); rocks tumble.
+  const spin = disc ? new THREE.Vector3(0, 24, 0) : new THREE.Vector3(Math.random() * 8 - 4, Math.random() * 8 - 4, Math.random() * 8 - 4);
+  if (disc) {
+    mesh.rotation.set(0, 0, 0);
+    group.rotation.z = 0.12;
+  }
   const dust = ctx.vfx.emitter('dust', q(ctx) === 'low' ? 10 : 22, { speed: 0.3, size: 0.25 + radius * 0.5, color: '#b8a488' }, 3);
   let t = 0;
   return {

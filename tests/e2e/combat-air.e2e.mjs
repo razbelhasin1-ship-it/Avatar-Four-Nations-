@@ -16,13 +16,14 @@ const run = async (spec) => shots.push(...(await trial(h, E, spec, results)));
 try {
   await run({
     id: 'air_palm',
-    casts: 3,
+    casts: 4,
     gap: 9,
-    frames: 34,
-    shots: [5, 27],
+    frames: 46,
+    shots: [5, 22, 33],
     check: (r) => {
       assert.ok(dealt(r) > 0, 'no damage');
       assert.ok(r.targets.some((t) => t.moved > 0.8), 'palm strikes did not knock anyone back');
+      assert.equal(r.casts.length, 4, 'expected the full 4-strike chain (palms, crescent kick, spin)');
     },
   });
   await run({

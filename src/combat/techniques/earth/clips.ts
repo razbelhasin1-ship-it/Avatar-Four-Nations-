@@ -33,7 +33,25 @@ const strikeR: Array<{ t: number; pose: Pose; ease?: 'in' | 'out' | 'inout' }> =
 registerClip({ id: 'earth_strike_r', duration: 0.62, mask: 'full', events: [{ t: 0.22, name: 'release' }], keys: strikeR });
 registerClip({ id: 'earth_strike_l', duration: 0.62, mask: 'full', events: [{ t: 0.22, name: 'release' }], keys: strikeR.map((k) => ({ ...k, pose: mirror(k.pose) })) });
 
-// Heavy third strike: crouch, scoop a slab up with both hands, heave it forward.
+// Third strike: earth disc kick. Knee up and a left stomp (palms pressing down) pops a flat
+// stone disc up to hip height; the right knee chambers and the heel drives it away in a
+// front push kick, the body leaning back against the kick.
+registerClip({
+  id: 'earth_strike_kick',
+  duration: 0.8,
+  mask: 'full',
+  events: [{ t: 0.32, name: 'release' }],
+  keys: [
+    { t: 0, pose: { spine: [0.05, 0.1, 0], thighL: [-1.1, 0, 0.15], shinL: [1.3, 0, 0], thighR: [-0.2, 0, -0.15], shinR: [0.3, 0, 0], upperArmL: [-0.8, 0, 0.35], foreArmL: [-1.5, 0, 0], upperArmR: [-0.8, 0, -0.35], foreArmR: [-1.5, 0, 0], hipsY: -0.04 } },
+    { t: 0.13, pose: { spine: [0.22, 0, 0], thighL: [-0.45, 0, 0.3], shinL: [0.5, 0, 0], thighR: [-0.3, 0, -0.25], shinR: [0.5, 0, 0], upperArmL: [-0.35, 0, 0.35], foreArmL: [-0.4, 0, 0], handL: [0.9, 0, 0], upperArmR: [-0.35, 0, -0.35], foreArmR: [-0.4, 0, 0], handR: [0.9, 0, 0], hipsY: -0.22 }, ease: 'in' },
+    { t: 0.24, pose: { spine: [0, 0, 0], thighR: [-1.4, 0, -0.05], shinR: [1.95, 0, 0], footR: [-0.35, 0, 0], thighL: [-0.35, 0, 0.2], shinL: [0.45, 0, 0], upperArmL: [-1.0, 0, 0.45], foreArmL: [-1.7, 0, 0], handL: [0, 0, 0], upperArmR: [-0.25, 0, -0.5], foreArmR: [-1.6, 0, 0], handR: [0, 0, 0], hipsY: -0.12 }, ease: 'out' },
+    { t: 0.32, pose: { spine: [-0.25, 0, 0], thighR: [-1.45, 0, -0.05], shinR: [0.05, 0, 0], footR: [-0.55, 0, 0], hipsY: -0.1, hipsZ: 0.1 }, ease: 'out' },
+    { t: 0.46, pose: { spine: [-0.2, 0, 0], thighR: [-1.35, 0, -0.05], shinR: [0.25, 0, 0] } },
+    { t: 0.8, pose: { ...STAND, footR: [0, 0, 0] }, ease: 'inout' },
+  ],
+});
+
+// Heavy fourth strike: crouch, scoop a slab up with both hands, heave it forward.
 registerClip({
   id: 'earth_strike_heavy',
   duration: 0.9,

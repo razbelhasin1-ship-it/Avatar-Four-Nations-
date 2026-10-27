@@ -30,6 +30,23 @@ const jab = (id: string, side: 'R' | 'L') => {
 jab('fire_jab_r', 'R');
 jab('fire_jab_l', 'L');
 
+// Third strike: fire arc — the right knife-hand cocks across the body and sweeps
+// out wide to the right on a stepping lunge (left foot in), the left fist pulled
+// back to the hip; the slash throws a crescent of flame.
+registerClip({
+  id: 'fire_jab_arc',
+  duration: 0.5,
+  mask: 'full',
+  events: [{ t: 0.1, name: 'release' }],
+  keys: [
+    { t: 0, pose: { spine: [0.08, 0.55, 0], chest: [0, 0.18, 0], upperArmR: [-1.15, 0, 0.62], foreArmR: [-1.05, 0, 0], handR: [0.15, 0, 0], upperArmL: [-0.55, 0, 0.45], foreArmL: [-1.7, 0, 0], thighL: [-0.3, 0, 0.14], shinL: [0.4, 0, 0], thighR: [-0.08, 0, -0.14], shinR: [0.35, 0, 0], hipsY: -0.08, fistR: 0.3 } },
+    { t: 0.1, pose: { spine: [0.15, 0.02, 0], chest: [0, 0, 0], upperArmR: [-1.56, 0, -0.12], foreArmR: [-0.1, 0, 0], handR: [-0.2, 0, 0], upperArmL: [0.42, 0, 0.16], foreArmL: [-2.0, 0, 0], fistL: 1, thighL: [-0.78, 0, 0.14], shinL: [0.8, 0, 0], thighR: [0.38, 0, -0.1], shinR: [0.3, 0, 0], hipsY: -0.17, hipsZ: 0.09, fistR: 0 }, ease: 'out' },
+    { t: 0.19, pose: { spine: [0.12, -0.5, 0], chest: [0, -0.16, 0], upperArmR: [-1.32, 0, -1.02], foreArmR: [-0.06, 0, 0], handR: [0, 0, 0.3], hipsY: -0.16, hipsZ: 0.08 }, ease: 'out' },
+    { t: 0.3, pose: { spine: [0.12, -0.42, 0], chest: [0, -0.12, 0], upperArmR: [-1.25, 0, -0.95], foreArmR: [-0.12, 0, 0] } },
+    { t: 0.5, pose: { spine: [0.1, 0, 0], chest: [0, 0, 0], upperArmR: [-0.6, 0, -0.3], foreArmR: [-1.5, 0, 0], handR: [0, 0, 0], upperArmL: [-0.6, 0, 0.3], foreArmL: [-1.5, 0, 0], thighL: [-0.15, 0, 0.12], shinL: [0.25, 0, 0], thighR: [-0.1, 0, -0.12], shinR: [0.25, 0, 0], hipsY: -0.04, hipsZ: 0, fistR: 1 }, ease: 'inout' },
+  ],
+});
+
 // Fourth strike: chambered roundhouse kick from the right leg.
 registerClip({
   id: 'fire_jab_kick',

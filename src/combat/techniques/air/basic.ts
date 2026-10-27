@@ -7,9 +7,10 @@ import { anim, groundY, push, shake, sweep } from '../bending/util';
 import { deflectProjectiles, takeSlipstream } from './common';
 
 /**
- * Air basics: Air Palm (3-step chain, spinning finisher) and the charged Air
- * Blast. Low damage, big knockback; strikes thrown right after an evasion
- * (dodge / Air Dash) become Slipstream blows — faster and stronger.
+ * Air basics: Air Palm (4-step chain: right and left palms, a crescent kick that
+ * cuts a blade of air, a spinning finisher) and the charged Air Blast. Low damage,
+ * big knockback; strikes thrown right after an evasion (dodge / Air Dash) become
+ * Slipstream blows — faster and stronger.
  */
 
 const tmp = new THREE.Vector3();
@@ -30,8 +31,8 @@ registerTechnique({
   kind: 'basic',
   tier: 1,
   starter: true,
-  description: 'Open-palm strikes that throw crescents of wind; the third strike spins into a swirling gust that bowls enemies over.',
-  usage: 'Primary attack — chain three strikes. Light damage, strong knockback. Strike right after a dodge or Air Dash for an empowered Slipstream blow.',
+  description: 'Open-palm strikes that throw crescents of wind, a crescent kick that cuts a tall blade of air through everyone in its line, and a spinning finisher that bowls enemies over.',
+  usage: 'Primary attack — chain four strikes. Light damage, strong knockback; the third (crescent kick) reaches far and slices through a line of foes. Strike right after a dodge or Air Dash for an empowered Slipstream blow.',
   icon: 'air',
   chiCost: 4,
   cooldown: 0,
@@ -41,31 +42,38 @@ registerTechnique({
   airborne: true,
   interruptible: false,
   range: 9,
-  comboLength: 3,
+  comboLength: 4,
   begin(cast) {
     const step = cast.comboIndex;
-    const fin = step === 2;
+    const kick = step === 2;
+    const fin = step === 3;
     const slip = takeSlipstream(cast);
     cast.data.slip = slip;
-    anim(cast.caster, fin ? 'air_palm_spin' : step ? 'air_palm_l' : 'air_palm_r', { speed: fin ? 1.3 : 1.15, fadeIn: 0.03, fadeOut: fin ? 0.01 : 0.12 });
+    anim(cast.caster, fin ? 'air_palm_spin' : kick ? 'air_palm_kick' : step ? 'air_palm_l' : 'air_palm_r', { speed: fin ? 1.3 : 1.15, fadeIn: 0.03, fadeOut: fin ? 0.01 : 0.12 });
     if (fin) cast.elapsed -= 0.15;
+    // The kick swings up across the body first: the blade leaves at the top of the arc.
+    if (kick) cast.elapsed -= 0.08;
     if (slip) cast.elapsed += 0.05;
-    const hand = cast.caster.castOrigin(fin ? 'hands' : step ? 'handL' : 'handR', new THREE.Vector3());
-    cast.ctx.vfx.burst('swirl', hand, { count: fin ? 8 : 4, swirl: 7, speed: 0.4 });
+    const hand = cast.caster.castOrigin(fin ? 'hands' : step % 2 ? 'handL' : 'handR', new THREE.Vector3());
+    cast.ctx.vfx.burst('swirl', kick ? cast.caster.position : hand, { count: fin || kick ? 8 : 4, swirl: 7, speed: 0.4 });
     if (cast.isPlayer) cast.ctx.events.emit('combo:advanced', { element: 'air', index: step });
   },
   release(cast) {
     const ctx = cast.ctx;
     const c = cast.caster;
     const step = cast.comboIndex;
-    const fin = step === 2;
+    if (step === 2) {
+      airSlice(cast, !!cast.data.slip);
+      return;
+    }
+    const fin = step === 3;
     const slip = !!cast.data.slip;
     const mul = slip ? 1.4 : 1;
     const hand = c.castOrigin(fin ? 'hands' : step ? 'handL' : 'handR', new THREE.Vector3());
     const dir = airDir(cast, hand);
     const length = fin ? 9.5 : 7.5;
     const dur = fin ? 0.3 : 0.22;
-    windBlade(ctx, hand, dir, { length, duration: dur + 0.08, r0: 0.45, r1: fin ? 3.2 : 2.3, height: fin ? 1.9 : 1.35, roll: step === 0 ? 0.3 : step === 1 ? -0.3 : 0, layers: fin || slip ? 3 : 2, opacity: 1 });
+    windBlade(ctx, hand, dir, { length, duration: dur + 0.08, r0: 0.45, r1: fin ? 3.2 : 2.3, height: fin ? 1.9 : 1.35, roll: fin ? 0 : step === 0 ? 0.3 : -0.3, layers: fin || slip ? 3 : 2, opacity: 1 });
     // A short streaming gust behind each palm so the push reads as moving air, not a flat decal.
     if (!fin) windCone(ctx, hand, dir, { length: 4.5 + step, radius: 1.1, duration: 0.26, opacity: slip ? 0.6 : 0.42 });
     if (fin) {
@@ -104,6 +112,52 @@ registerTechnique({
   },
   aiScore: (_c, _t, dist) => (dist < 8 ? 0.6 : 0),
 });
+
+/**
+ * Third strike: the crescent kick cuts a tall, thin blade of air (a vertical crescent) that
+ * flies straight and fast and slices through everyone in its line, deflecting projectiles.
+ */
+function airSlice(cast: Cast, slip: boolean): void {
+  const ctx = cast.ctx;
+  const c = cast.caster;
+  const mul = slip ? 1.4 : 1;
+  const chest = c.castOrigin('chest', new THREE.Vector3());
+  const dir = airDir(cast, chest, 0.25);
+  const origin = chest.addScaledVector(dir, 0.7);
+  origin.y -= 0.15;
+  const length = 13;
+  const dur = 0.34;
+  // Vertical crescent: rolled a quarter turn about its flight line; a second, fainter one trails.
+  windBlade(ctx, origin, dir, { length, duration: dur + 0.1, r0: 0.95, r1: 1.5, height: 0.55, arc: 2.0, roll: Math.PI / 2, layers: 3, opacity: 1 });
+  windBlade(ctx, origin, dir, { length: length * 0.7, duration: dur + 0.14, r0: 0.7, r1: 1.25, height: 0.4, arc: 1.8, roll: Math.PI / 2, layers: 1, opacity: 0.55 });
+  if (slip) windRing(ctx, origin, { r0: 0.2, r1: 1.4, duration: 0.25, height: 0.5, axis: dir });
+  let n = 0;
+  sweep(cast, {
+    from: origin,
+    dir,
+    length,
+    duration: dur,
+    radius: 0.65,
+    height: 1.5,
+    hit: (_e, pushDir) => ({ damage: 7 * (slip ? 1.25 : 1), knockback: push(pushDir, 8 * mul), launch: 0.6 * mul, stagger: 28 }),
+    onHit: (e) => airPuff(ctx, e.aimPoint(tmp).clone(), dir, 1),
+    onStep: (center) => {
+      deflectProjectiles(cast, center, 0.9, dir);
+      // The blade parts the grass and lifts a thin line of dust beneath it.
+      if (n++ % 2 === 0) {
+        ctx.world.fx.disturb(center, 1.3, 0.8);
+        const g = tmp.copy(center);
+        g.y = groundY(ctx, g.x, g.z, g.y);
+        if (center.y - g.y < 2.2) ctx.vfx.burst('dust', g, { count: 2, dir, spread: 0.3, speed: 1.6 });
+      }
+    },
+  });
+  ctx.vfx.burst('air', origin, { count: 10, dir, spread: 0.2, speed: 2.4 });
+  ctx.audio.play('bend_air_blast', { position: origin, volume: 0.65, pitch: 1.55 });
+  ctx.audio.play('bend_air_puff', { position: origin, volume: 0.5, pitch: 0.85 });
+  const b = c.body;
+  if (b && !b.grounded) b.velocity.y = Math.max(b.velocity.y, 2);
+}
 
 registerTechnique({
   id: 'air_blast',

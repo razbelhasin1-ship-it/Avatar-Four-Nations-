@@ -1,22 +1,46 @@
 import * as THREE from 'three';
 import type { Entity } from '../../../entities/Entity';
-import { fireballVisual, fireBoltVisual, fireExplosion, fireMuzzle } from '../../../vfx/effects/fire';
+import { fireballVisual, fireBoltVisual, fireExplosion, fireMuzzle, flameArc, flameBlade, flameTrail } from '../../../vfx/effects/fire';
+import { effect } from '../../../vfx/effects/loop';
 import { flameMaterial, setOpacity } from '../../../vfx/effects/materials';
 import { shared } from '../../../vfx/effects/shapes';
 import { registerTechnique } from '../../CombatSystem';
 import type { Cast, ProjectileVisual } from '../../types';
 import { bending, registerWarmup } from '../bending/runtime';
-import { anchorPos, anim, hitSphere, push, shake } from '../bending/util';
+import { anchorPos, anim, hitSphere, push, shake, sweep } from '../bending/util';
 import { aimFrom, fireOnEntity, fireWorldImpact, heat, quenchCheck } from './common';
 
 /**
- * Fire basics: Flame Punch (fire_jab) 4-step chain and the Charged Fireball
+ * Fire basics: Flame Punch (fire_jab) 4-step chain — right and left punches, a
+ * sweeping fire-arc slash, a spinning kick — and the Charged Fireball
  * (fire_blast). Fire rewards aggression: every fire hit builds Heat (up to 5
  * stacks, decays 1.6 s after the last hit) which makes bolts bigger, hotter and
  * eventually igniting.
  */
 
 const tmp = new THREE.Vector3();
+
+/** A flame trail that follows a limb for `time` seconds (the slashing hand), then burns away. */
+function limbTrail(cast: Cast, bone: 'handR' | 'footR', time: number, width: number, hot: boolean): void {
+  const ctx = cast.ctx;
+  const c = cast.caster;
+  const { trail, mat } = flameTrail(ctx, width, 0.28, { palette: hot ? 'hot' : 'fire' });
+  const at = new THREE.Vector3();
+  let t = 0;
+  effect(
+    (dt) => {
+      t += dt;
+      if (t < time && c.alive) trail.push(anchorPos(c, bone, at), ctx.time.elapsed);
+      trail.update(ctx.time.elapsed, ctx.camera.position);
+      return t < time + 0.45;
+    },
+    () => {
+      trail.mesh.removeFromParent();
+      trail.dispose();
+      mat.dispose();
+    },
+  );
+}
 
 function withQuench(cast: Cast, vis: ProjectileVisual): ProjectileVisual {
   const base = vis.update;
@@ -76,8 +100,8 @@ registerTechnique({
   kind: 'basic',
   tier: 1,
   starter: true,
-  description: 'Fast alternating punches that hurl bolts of flame; the fourth strike is a spinning kick that launches a heavier, igniting blast.',
-  usage: 'Primary attack — chain four strikes. Landing fire hits builds Heat: hotter, bigger bolts that start to burn.',
+  description: 'Fast alternating punches that hurl bolts of flame, a sweeping slash that throws a wide crescent of fire, then a spinning kick that launches a heavier, igniting blast.',
+  usage: 'Primary attack — chain four strikes. The third (fire arc) catches everyone in front of you. Landing fire hits builds Heat: hotter, bigger bolts that start to burn.',
   icon: 'fire',
   chiCost: 3,
   cooldown: 0,
@@ -91,9 +115,16 @@ registerTechnique({
   begin(cast) {
     const step = cast.comboIndex;
     const kick = step === 3;
-    anim(cast.caster, kick ? 'fire_jab_kick' : step % 2 ? 'fire_jab_l' : 'fire_jab_r', { speed: kick ? 1.15 : 1.1, fadeIn: 0.03, fadeOut: 0.12 });
+    const arc = step === 2;
+    anim(cast.caster, kick ? 'fire_jab_kick' : arc ? 'fire_jab_arc' : step % 2 ? 'fire_jab_l' : 'fire_jab_r', { speed: kick ? 1.15 : 1.1, fadeIn: 0.03, fadeOut: 0.12 });
     // The kick chambers a little longer (clear anticipation before the big bolt).
     if (kick) cast.elapsed -= 0.11;
+    // The slash cocks across the body first and releases as the hand crosses the centre;
+    // flame trails the knife-hand through the whole sweep.
+    if (arc) {
+      cast.elapsed -= 0.04;
+      limbTrail(cast, 'handR', 0.3, 0.55, bending.heat(cast.caster) >= 3);
+    }
     const c = cast.caster;
     const hand = kick ? anchorPos(c, 'footR') : c.castOrigin(step % 2 ? 'handL' : 'handR', new THREE.Vector3());
     cast.ctx.vfx.burst('flame', hand, { count: kick ? 6 : 3, speed: 0.4, size: kick ? 1 : 0.6 });
@@ -107,6 +138,10 @@ registerTechnique({
     const h = bending.heat(c);
     const hot = h >= 3;
     const hk = 1 + h * 0.07;
+    if (step === 2) {
+      fireArc(cast, h);
+      return;
+    }
     const from = kick ? anchorPos(c, 'footR') : c.castOrigin(step % 2 ? 'handL' : 'handR', new THREE.Vector3());
     const dir = aimFrom(cast, from);
     const r = kick ? 0.5 + h * 0.03 : 0.26 + h * 0.025;
@@ -144,6 +179,51 @@ registerTechnique({
   },
   aiScore: (_c, _t, dist) => (dist < 18 ? 0.65 - dist * 0.015 : 0),
 });
+
+/**
+ * Third strike: the fire arc. The slash throws a crescent of flame that widens as it flies
+ * and burns everything in a wide cone in front (a sweep matching the crescent's growth).
+ */
+function fireArc(cast: Cast, h: number): void {
+  const ctx = cast.ctx;
+  const c = cast.caster;
+  const hot = h >= 3;
+  const hk = 1 + h * 0.07;
+  const chest = c.castOrigin('chest', new THREE.Vector3());
+  const dir = aimFrom(cast, chest).clone();
+  dir.y = Math.max(-0.25, Math.min(0.25, dir.y));
+  dir.normalize();
+  const origin = chest.addScaledVector(dir, 0.45);
+  const length = 8.5;
+  const widen = 3.4 + h * 0.15;
+  flameBlade(ctx, origin, dir, { length, duration: 0.4, r0: 0.9, r1: widen, height: 0.8 + h * 0.06, arc: 2.6, roll: -0.22, palette: hot ? 'hot' : 'fire' });
+  // The fan of fire the hand leaves in the air as it sweeps across the front.
+  flameArc(ctx, tmp.copy(chest).setY(chest.y - 0.45), dir, { r0: 0.7, r1: 1.9, arc: 2.4, height: 0.75, duration: 0.3, palette: hot ? 'hot' : 'fire' });
+  const hand = c.castOrigin('handR', new THREE.Vector3());
+  ctx.vfx.burst('flame', hand, { count: 8, speed: 1.2 });
+  ctx.vfx.burst('embers', origin, { count: 10, dir, spread: 0.8, speed: 3 });
+  ctx.vfx.flash(origin, '#ff9a40', 2.2, 0.12, 8);
+  sweep(cast, {
+    from: origin,
+    dir,
+    length,
+    duration: 0.26,
+    radius: (t) => 1.0 + t * (widen - 0.6),
+    height: 1.3,
+    hit: (_e, pushDir) => ({ damage: 8 * hk, knockback: push(pushDir, 6), stagger: 22, status: [{ type: 'burn', duration: hot ? 1.6 : 0.8 }] }),
+    onHit: (e) => {
+      const at = e.aimPoint(new THREE.Vector3());
+      ctx.vfx.burst('fire', at, { count: 10, speed: 1.2 });
+      fireOnEntity(ctx, e, at, 0.7);
+    },
+    onStop: (pt) => fireWorldImpact(ctx, cast, pt, 0.7),
+  });
+  ctx.audio.play('bend_fire_whoosh', { position: hand, volume: 0.8, pitch: 1.25 });
+  ctx.audio.play('bend_fire_puff', { position: hand, volume: 0.45, pitch: 0.95 });
+  const b = c.body;
+  if (b && b.grounded) b.impulse(dir.x * 2.5, 0, dir.z * 2.5);
+  else if (b) b.velocity.y = Math.max(b.velocity.y, 1.2);
+}
 
 // ---------------------------------------------------------------------------
 // Charged Fireball

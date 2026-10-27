@@ -17,7 +17,7 @@ import { basis, contactsAlongPath, douse, fxOf, handPos, refundWater, returnToRe
  * hit test (sub-stepped so fast swings cannot tunnel through targets).
  */
 
-export type WhipStyle = 'right' | 'left' | 'overhead' | 'freeze';
+export type WhipStyle = 'right' | 'left' | 'overhead' | 'freeze' | 'spin';
 
 export interface WhipOptions {
   style: WhipStyle;
@@ -141,6 +141,19 @@ export class WhipEffect implements WaterEffect {
       c2.copy(piv).addScaledVector(dirV(phi + 0.32 * lag, tC), rho * 0.7);
       return;
     }
+    if (o.style === 'spin') {
+      // The bender turns a full circle and the whip circles with them, level at waist height,
+      // reaching out early and sweeping everything around before ending square to the front.
+      const th = -0.7 + (2 * Math.PI + 0.7) * e;
+      const rho = 1.2 + (o.range - 1.2) * easeOut(Math.min(1, p / 0.3));
+      const dirS = (a: number, out: THREE.Vector3) => out.copy(f).multiplyScalar(Math.cos(a)).addScaledVector(r, Math.sin(a));
+      const drop = -0.25 + 0.12 * Math.sin(2 * Math.PI * p);
+      tip.copy(piv).addScaledVector(dirS(th, tC), rho).addScaledVector(UP, drop);
+      const lag = -(0.25 + 0.75 * Math.sin(Math.PI * Math.min(1, p)));
+      c1.copy(piv).addScaledVector(dirS(th + 0.55 * lag, tC), rho * 0.4).addScaledVector(UP, drop * 0.4);
+      c2.copy(piv).addScaledVector(dirS(th + 0.3 * lag, tC), rho * 0.72).addScaledVector(UP, drop * 0.8);
+      return;
+    }
     let th0: number, th1: number;
     if (o.style === 'left') {
       th0 = -1.25;
@@ -242,7 +255,8 @@ export class WhipEffect implements WaterEffect {
     if (!this.finished) {
       // Swept hit test: sub-step from the previous swing progress to now.
       const dp = p - this.prevP;
-      const steps = Math.max(1, Math.min(8, Math.ceil(dp / 0.06)));
+      // The spinning lash sweeps a full circle in one swing: finer sub-steps so its arc has no gaps.
+      const steps = o.style === 'spin' ? Math.max(1, Math.min(16, Math.ceil(dp / 0.012))) : Math.max(1, Math.min(8, Math.ceil(dp / 0.06)));
       for (let k = 1; k <= steps; k++) {
         const pk = this.prevP + (dp * k) / steps;
         this.buildWhipPath(pk, this.scratchPath, this.scratchPts);
@@ -357,12 +371,14 @@ export class WhipEffect implements WaterEffect {
 }
 
 // ---------------------------------------------------------------------------
-// Water Whip — 3-step basic combo
+// Water Whip — 4-step basic combo
 // ---------------------------------------------------------------------------
 
 const STEPS: Array<Pick<WhipOptions, 'style' | 'hand' | 'range' | 'swing' | 'radius' | 'damage' | 'knockback' | 'stagger' | 'launch' | 'delay'> & { clip: string }> = [
   { style: 'right', hand: 'handR', range: 9.5, swing: 0.26, radius: 0.28, damage: 8, knockback: 4, stagger: 12, clip: 'water_whip_r' },
   { style: 'left', hand: 'handL', range: 9.5, swing: 0.26, radius: 0.29, damage: 9, knockback: 5, stagger: 14, clip: 'water_whip_l' },
+  // Spinning lash: a full turn with the whip circling the bender, hitting all around.
+  { style: 'spin', hand: 'handR', range: 6.2, swing: 0.44, radius: 0.33, damage: 11, knockback: 7, stagger: 24, launch: 0.8, delay: 0.02, clip: 'water_whip_spin' },
   { style: 'overhead', hand: 'hands', range: 10.5, swing: 0.3, radius: 0.37, damage: 15, knockback: 8, stagger: 30, launch: 3, delay: 0.06, clip: 'water_whip_slam' },
 ];
 
@@ -373,8 +389,8 @@ registerTechnique({
   kind: 'basic',
   tier: 1,
   description:
-    'Pull a ribbon of water from a river, the sea or a pond — or peel it off the water orbiting you — and lash it at foes. A flowing three-step combo; the third strike cracks down from overhead. Part of the water snaps back to you after each lash.',
-  usage: 'Primary attack. Chain up to three lashes. Needs real water nearby or in your reserve.',
+    'Pull a ribbon of water from a river, the sea or a pond — or peel it off the water orbiting you — and lash it at foes. A flowing four-step combo: right and left lashes, a spinning lash that circles you and strikes everything around, then a crack down from overhead. Part of the water snaps back to you after each lash.',
+  usage: 'Primary attack. Chain up to four lashes — the third spins all around you. Needs real water nearby or in your reserve.',
   icon: 'water',
   chiCost: 4,
   cooldown: 0,
@@ -386,10 +402,11 @@ registerTechnique({
   interruptible: false,
   range: 10,
   starter: true,
-  comboLength: 3,
+  comboLength: 4,
   begin(cast) {
-    const step = STEPS[cast.comboIndex % 3];
-    cast.caster.humanoid?.animator.play(step.clip, { speed: step.style === 'overhead' ? 1.15 : 1.1, fadeIn: 0.05 });
+    const step = STEPS[cast.comboIndex % 4];
+    // The spin ends a full turn round (-2π): no fade-out, or the body would unwind.
+    cast.caster.humanoid?.animator.play(step.clip, { speed: step.style === 'overhead' ? 1.15 : step.style === 'spin' ? 1 : 1.1, fadeIn: 0.05, fadeOut: step.style === 'spin' ? 0.01 : undefined });
     const fx = fxOf(cast);
     cast.data.whip = fx.add(
       new WhipEffect(cast, {
@@ -414,7 +431,7 @@ registerTechnique({
     );
   },
   release(cast) {
-    const step = STEPS[cast.comboIndex % 3];
+    const step = STEPS[cast.comboIndex % 4];
     (cast.data.whip as WhipEffect | undefined)?.release();
     const h = handPos(cast.caster, step.hand, tA);
     cast.ctx.audio.play('water_whip', { position: h, volume: 0.75, pitch: 1.05 - cast.comboIndex * 0.08 });

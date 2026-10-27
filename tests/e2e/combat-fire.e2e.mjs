@@ -25,6 +25,7 @@ try {
       const t = r.targets[0];
       assert.ok(t.totalDamage > 0, 'flame punches dealt no damage');
       assert.ok(t.hits >= 3, `expected the 4-step chain to land several bolts (hits ${t.hits})`);
+      assert.ok(hitCount(r) >= 2, `the fire arc (third strike) should catch more than the aimed dummy (hit ${hitCount(r)})`);
       assert.ok(r.peaks.projectiles >= 1, 'no fire bolts were thrown');
     },
   });
