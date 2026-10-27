@@ -13,8 +13,8 @@ import { aimRay, HeldFollow, holdBand, holdPoint, type PlayInteraction } from '.
 
 /**
  * Waterbending play: hold the attack while looking at real water (river, lake, sea, pond,
- * fountain, canal, puddle, a water jar or rain barrel) and it is pulled out in a stream
- * that gathers into a floating orb. The orb follows the aim (look up/down to raise/lower
+ * fountain, canal, puddle, a water jar or rain barrel), or at snow and ice (melted into
+ * water as it is drawn), and it is pulled out in a stream that gathers into a floating orb. The orb follows the aim (look up/down to raise/lower
  * it), lags and sloshes with every turn, ripples, spins and sheds drops. Letting go drops
  * it: it falls, splashes and the water returns to the world (a puddle on dry ground, back
  * into a nearby jar or pond, or just into the river).
@@ -32,7 +32,9 @@ const ORB_R = 0.42;
 const REACH = 15;
 /** Metres in front of the chest the orb floats. */
 const HOLD_DIST = 2.6;
-const BENDABLE: ReadonlySet<WaterSourceType> = new Set<WaterSourceType>(['ocean', 'river', 'lake', 'waterfall', 'stream', 'pond', 'canal', 'fountain', 'puddle']);
+const BENDABLE: ReadonlySet<WaterSourceType> = new Set<WaterSourceType>(['ocean', 'river', 'lake', 'waterfall', 'stream', 'pond', 'canal', 'fountain', 'puddle', 'snow', 'ice']);
+/** Ground a waterbender melts into water. */
+const FROZEN_GROUND: ReadonlySet<string> = new Set(['snow', 'packedsnow', 'ice']);
 
 export interface WaterTarget {
   id: string;
@@ -71,8 +73,10 @@ function insideSource(s: WaterSource, x: number, y: number, z: number): boolean 
 
 /**
  * The water under the crosshair: the first bendable water surface (or water vessel) the aim
- * ray reaches before anything solid, within REACH of the bender and in line of sight.
- * Returns it even when a finite source is too low (`available` tells), null otherwise.
+ * ray reaches before anything solid, within REACH of the bender and in line of sight; else
+ * snow or ice there (frozen lakes, rivers and sea, glacier ice, snowfields), which melts into
+ * water as it is drawn. Returns it even when a finite source is too low (`available` tells),
+ * null otherwise.
  */
 export function findWaterTarget(ctx: GameContext, player: Player): WaterTarget | null {
   aimRay(ctx, player, tO, tD);
@@ -101,11 +105,17 @@ export function findWaterTarget(ctx: GameContext, player: Player): WaterTarget |
       break;
     }
     if (reg) break;
-    const w = ctx.world.liquidAt(x, z);
-    if (w && y <= w.level + 0.06) {
+    const w = ctx.world.waterAt(x, z);
+    if (w && y <= w.level + (w.frozen ? 0.3 : 0.06)) {
       hitPoint = tA.set(x, w.level, z);
       break;
     }
+  }
+  // Snow or ice where the aim meets the ground (or the side of an ice wall or boulder).
+  if (!hitPoint && solid && Math.hypot(solid.point.x - p.x, solid.point.z - p.z) <= REACH) {
+    const sp = solid.point;
+    const g = ctx.world.groundAt(sp.x, sp.z, sp.y + 0.5);
+    if (FROZEN_GROUND.has(g.surface) || ctx.world.collision.get(solid.colliderId)?.surface === 'ice') hitPoint = tA.copy(sp);
   }
   if (!hitPoint) return null;
   const point = hitPoint.clone();
@@ -116,7 +126,8 @@ export function findWaterTarget(ctx: GameContext, player: Player): WaterTarget |
     const finite = Number.isFinite(reg.capacity);
     return { id: reg.id, label: reg.label, type: reg.type, point, available: finite ? reg.amount : Infinity, finite };
   }
-  const hit = ctx.water.findAll(point, 3, { allowLiquid: true, includeDepleted: true }).find((h) => !h.frozen && BENDABLE.has(h.type));
+  const all = ctx.water.findAll(point, 3, { allowLiquid: true, allowIce: true, allowSnow: ctx.water.snowCapable(player), includeDepleted: true });
+  const hit = all.find((h) => !h.frozen && BENDABLE.has(h.type)) ?? all.find((h) => h.frozen && (BENDABLE.has(h.type) || h.type === 'ocean' || h.type === 'river' || h.type === 'lake'));
   if (!hit) return null;
   const finite = Number.isFinite(hit.capacity ?? Infinity);
   return { id: hit.id, label: hit.label, type: hit.type, point, available: finite ? hit.available : Infinity, finite };

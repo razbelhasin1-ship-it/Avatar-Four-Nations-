@@ -57,6 +57,7 @@ const DRAW_RATE: Partial<Record<WaterSourceType, number>> = {
   fountain: 16,
   puddle: 16,
   snow: 12,
+  ice: 14,
   rain: 6,
 };
 
@@ -359,8 +360,10 @@ export class WaterbendingSystem implements GameSystem, Persistable {
     // Peek the best source to pick the rate (drawToReserve picks the same one).
     const range = water.rangeFor(p);
     const snow = water.snowCapable(p);
-    const best = water.findBest(p.position, range, { allowLiquid: true, allowIce: false, allowSnow: snow, facing });
-    const rate = (best ? DRAW_RATE[best.type] ?? 20 : 20) * rateBoost;
+    const best = water.findBest(p.position, range, { allowLiquid: true, allowIce: true, allowSnow: snow, facing });
+    // Snow and ice melt slowly; Snow Gathering (Healer Yugoda's teaching) draws them faster.
+    const melt = best && (best.type === 'snow' || best.frozen) && ctx.progression.knows('water_snow_draw') ? 1.6 : 1;
+    const rate = (best ? (best.frozen && best.type !== 'snow' ? DRAW_RATE.ice! : DRAW_RATE[best.type] ?? 20) : 20) * rateBoost * melt;
     const hit = water.drawToReserve(p, rate * step, facing, { allowSnow: snow });
     if (hit) {
       const drawn = hit.drawn ?? 0;
@@ -374,7 +377,7 @@ export class WaterbendingSystem implements GameSystem, Persistable {
       const r = this.fx.reserveOf(p);
       if (r) {
         r.pulse(0.25);
-        if (hit.type === 'snow') r.frozenHint = Math.min(1, r.frozenHint + 0.15);
+        if (hit.type === 'snow' || hit.frozen) r.frozenHint = Math.min(1, r.frozenHint + 0.15);
       }
       return;
     }
@@ -567,7 +570,7 @@ export class WaterbendingSystem implements GameSystem, Persistable {
       let feed: StreamBody | null = null;
       const from = new THREE.Vector3();
       if (p.waterReserve < def.water.amount) {
-        const hit = this.ctx.water.findBest(p.position, this.ctx.water.rangeFor(p), { allowLiquid: true, allowSnow: this.ctx.water.snowCapable(p), facing: p.aimDir });
+        const hit = this.ctx.water.findBest(p.position, this.ctx.water.rangeFor(p), { allowLiquid: true, allowIce: true, allowSnow: this.ctx.water.snowCapable(p), facing: p.aimDir });
         if (hit) {
           from.copy(hit.point);
           feed = new StreamBody(this.fx, { flow: 8, opacity: 0.75 }, 1.2, 3);

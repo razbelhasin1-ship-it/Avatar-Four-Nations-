@@ -165,25 +165,28 @@ describe('WaterSourceSystem', () => {
     expect(ws.acquire(c, { amount: 10 }, aim, aimPt)).not.toBeNull();
   });
 
-  it('frozen sources only serve ice techniques; liquid techniques get a clear reason', () => {
+  it('ice melts into water for liquid techniques and stays ice for ice techniques', () => {
     ws.register({ id: 'test:ice', type: 'ice', label: 'Ice Block', x: DESERT.x + 2, y: 0, z: DESERT.z, r: 1, capacity: 40, regen: 0, frozen: true });
     const c = makeCaster(0);
-    expect(ws.acquire(c, { amount: 4 }, aim, aimPt)).toBeNull();
-    expect(ws.lastFailure?.reason).toBe('frozen');
+    const melted = ws.acquire(c, { amount: 4 }, aim, aimPt)!;
+    expect(melted.sourceId).toBe('test:ice');
+    expect(melted.frozen).toBe(false);
     const g = ws.acquire(c, { amount: 4, allowIce: true }, aim, aimPt)!;
     expect(g.frozen).toBe(true);
     expect(g.sourceId).toBe('test:ice');
+    // Draw Water melts it into the reserve.
+    expect(ws.drawToReserve(c, 10, aim)?.id).toBe('test:ice');
+    expect(c.waterReserve).toBeCloseTo(10);
   });
 
-  it('snow needs the Snow Gathering passive', () => {
+  it('any waterbender gathers water from snow (Snow Gathering only speeds it up)', () => {
     const c = makeCaster(0);
     // A world whose ground is snow.
     (ws as any).ctx.world.groundAt = () => ({ y: 0, surface: 'snow', nx: 0, ny: 1, nz: 0, colliderId: 0 });
-    expect(ws.acquire(c, { amount: 4 }, aim, aimPt)).toBeNull();
-    expect(ws.lastFailure?.reason).toBe('snow');
-    fake.knows.add('water_snow_draw');
     const g = ws.acquire(c, { amount: 4 }, aim, aimPt)!;
     expect(g.sourceType).toBe('snow');
+    expect(ws.drawToReserve(c, 6, aim)?.type).toBe('snow');
+    expect(c.waterReserve).toBeCloseTo(6);
   });
 
   it('large-source requirements ignore the reserve and small sources', () => {

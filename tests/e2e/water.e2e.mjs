@@ -8,7 +8,7 @@
  *   1. Beside a river the player gathers water (reserve rises, water:drawn, source id river:*).
  *   2. A water whip drawn from the river succeeds; its stream/hitbox start at the river surface.
  *   3. An attack beside the ocean works with source 'ocean'.
- *   4. A frozen source (Moonlit Frozen Lake) works for ice techniques, refuses liquid ones.
+ *   4. A frozen source (Moonlit Frozen Lake) works for ice techniques, and liquid ones melt it into water.
  *   5. Far from water with an empty reserve: refused with reason 'water' + water:unavailable,
  *      before any windup and without consuming anything.
  *   6. A small finite source (test fountain) depletes, refuses after exhaustion, then regenerates.
@@ -183,16 +183,20 @@ try {
     await h.step(30);
   });
 
-  await check('4. frozen lake: ice techniques carve the ice; liquid techniques are refused', async () => {
+  await check('4. frozen lake: ice techniques carve the ice; liquid techniques melt it into water', async () => {
     await prep(FROZEN, { x: FROZEN.x + 10, z: FROZEN.z }, 0);
     const near = await h.eval((g) => g.debug.water.sources(16));
     assert.ok(near.some((n) => n.id === 'lake:frozen_lake' && n.frozen), JSON.stringify(near));
     await events();
+    // A liquid technique melts the lake's ice into water (drawn straight from it here: held-water rule off).
     const whip = await h.eval((g) => g.cast('water_whip', null));
-    assert.equal(whip.ok, false);
-    assert.equal(whip.reason, 'water', JSON.stringify(whip));
-    const fail = await h.eval((g) => g.debug.water.lastFailure());
-    assert.equal(fail.reason, 'frozen', JSON.stringify(fail));
+    assert.ok(whip.ok, 'the whip melts the frozen lake: ' + JSON.stringify(whip));
+    const melted = await h.eval((g) => g.debug.water.castLog().slice(-1)[0]);
+    // The lake's ice or the snow on its shore: either melts into water for the whip.
+    assert.ok(['lake:frozen_lake', 'snowfield'].includes(melted.sourceId), JSON.stringify(melted));
+    assert.equal(melted.frozen, false, 'melted into water: ' + JSON.stringify(melted));
+    await h.step(25);
+    await h.eval((g) => g.debug.water.setReserve(0));
     const shards = await h.eval((g, f) => g.cast('ice_shards', { x: f.x + 12, y: 30, z: f.z }), FROZEN);
     assert.ok(shards.ok, JSON.stringify(shards));
     const log = await h.eval((g) => g.debug.water.castLog().slice(-1)[0]);

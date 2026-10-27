@@ -17,8 +17,8 @@ import { fxOf, handPos, notifyPlayer, returnToReserve } from './shared';
  * area for a while and the technique has a long cooldown, so it never
  * replaces real sources. Threads of moisture visibly converge on the bender.
  *
- * Snow Gathering (water_snow_draw) is a passive: knowing it lets Draw Water and
- * every water technique use snow fields as a source.
+ * Snow Gathering (water_snow_draw) is a passive: every waterbender can melt snow
+ * and ice into water; knowing it draws water from them faster.
  */
 
 const tA = new THREE.Vector3();
@@ -194,8 +194,8 @@ registerTechnique({
   element: 'water',
   kind: 'passive',
   tier: 2,
-  description: 'Healer Yugoda’s teaching: snow is only water at rest. While you know this, snow fields count as a water source for Draw Water and for every water technique.',
-  usage: 'Passive. Hold Draw Water on snowy ground, or bend snow directly into attacks.',
+  description: 'Healer Yugoda’s teaching: snow is only water at rest. Any waterbender can melt snow and ice into water; knowing this, you draw it from snow and ice much faster.',
+  usage: 'Passive. Hold Draw Water on snow or ice, or bend it straight into attacks.',
   icon: 'water',
   chiCost: 0,
   cooldown: 0,

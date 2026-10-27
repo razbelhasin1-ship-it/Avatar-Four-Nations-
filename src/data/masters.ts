@@ -384,7 +384,7 @@ export const MASTERS: MasterDef[] = [
         intro: 'Snow is only sleeping water. Wake it: draw from the snowdrifts in the yard, then break the practice posts.',
         demo: { fx: 'glow', cast: 'water_whip', line: 'See how the drift melts into my hands? Patience, and warmth.' },
         challenge: { type: 'waterTargets', count: 3, time: 75, snow: true },
-        hint: 'Snow Gathering (passive): Draw Water and water techniques can now use snow fields as a source.',
+        hint: 'Snow Gathering (passive): you now draw water out of snow and ice much faster.',
       },
     ],
   },

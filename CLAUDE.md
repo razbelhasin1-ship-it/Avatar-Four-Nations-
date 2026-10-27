@@ -40,11 +40,12 @@ Screenshots are how you judge visuals — take them, open them with the Read too
 | `world/Terrain.ts` `Water.ts` `Sky.ts` | Chunked LOD terrain, water surfaces, sky/time-of-day |
 | `world/World.ts` | Facade: ground/water/surface/region queries, raycast, region content streaming, `world.fx` env hooks, discoveries |
 | `world/Collision.ts` | Static/dynamic colliders (Y-rotated boxes, cylinders, spheres; walkable tops, ramps) |
+| `world/LiftableRocks.ts` | `ctx.world.rocks`: region-placed rocks earthbenders can lift (registered by `ContentBuilder.rock()` / `rockInstance()`) |
 | `world/RegionContent.ts` + `world/regions/` | Cities/temples/villages; register factories in `world/regions/index.ts` |
 | `world/Interactables.ts` | E-prompt interactions (`ctx.interactions.register(...)`) |
 | `entities/` | `Entity` (health/poise/status/receiveHit), `KinematicBody`, `EntityManager` (spatial queries), `TrainingDummy` |
 | `character/` | `Humanoid` (procedural rigged model), `Animator` (clips + procedural locomotion), `Appearance` data, base clips |
-| `player/` | `Player` (Combatant; movement styles per element; aim; input→techniques), `CameraRig`; `play/` = held-attack play while exploring (water orb from real sources, lifting real rocks or stones torn from the ground — `Stones.ts` keeps them as re-liftable loose stones, palm flame; never Air) |
+| `player/` | `Player` (Combatant; movement styles per element; aim; input→techniques), `CameraRig`; `play/` = held-attack play while exploring (water orb from real sources incl. snow and ice, lifting real rocks or stones torn from the ground — `Stones.ts` keeps them as re-liftable loose stones, palm flame; never Air) |
 | `combat/` | `types.ts` contracts, `CombatSystem` (casts, projectiles, hits), `WaterSources.ts`, `techniques/` |
 | `vfx/` | `VFXSystem` (particle presets, emitters, rings, flashes, transients) |
 | `audio/AudioEngine.ts` | Procedural WebAudio; `registerSound` / `registerLoop`; music themes |
@@ -62,9 +63,10 @@ Screenshots are how you judge visuals — take them, open them with the Read too
 - Character's **left is +X, right is −X**. Pose conventions are documented at the top of `character/Animator.ts` — read them before authoring clips.
 - Entities: `root.position` = feet. `aimPoint()` = chest. Teams: `player | ally | hostile | neutral | wildlife`.
 - Damage only through `CombatSystem` (`cast.hit`, `cast.areaHit`, projectiles, or `combat.applyHit`) so dedup, events, XP and feedback work. One collision event must never deal repeated damage unless intended.
-- Techniques: `registerTechnique({...})` in `combat/techniques/<file>.ts`, import the file from `combat/techniques/index.ts`. Water techniques declare `water: { amount }` — water comes only from `ctx.water.acquire` (reserve → nearby real source). Never conjure water except `canConjure` ultimates.
+- Techniques: `registerTechnique({...})` in `combat/techniques/<file>.ts`, import the file from `combat/techniques/index.ts`. Water techniques declare `water: { amount }` — water comes only from `ctx.water.acquire` (reserve → nearby real source). Snow and ice are real sources too: waterbenders melt them into water (open water within reach is preferred). Never conjure water except `canConjure` ultimates.
 - New systems: implement `GameSystem`, add to `src/modules.ts`. Persistent state: also implement `Persistable` (Game auto-registers modules with `saveKey`). Tolerate `undefined`/partial data in `deserialize`.
 - New regions: implement `RegionContent`, add the factory to `world/regions/index.ts`. Static geometry/colliders/water sources in `build()`; session entities (NPCs, creatures, interactables) in `onSessionStart()` and clean up in `onSessionEnd()`.
+- Loose rocks and boulders in regions: place them with `ContentBuilder.rock()` / `rockInstance()` (not `mesh()` / `instance()`) so earthbenders can lift them; anything too big to lift (cliff pieces, house-sized boulders) is merged automatically.
 - New events: add to `core/events.ts` (append; never rename existing keys).
 - Data (quests, NPCs, dialogues, cosmetics, items) lives in `src/data/`. Prefer data over code.
 - Settings must affect real behaviour and apply live. Graphics-heavy features read `ctx.settings.data.graphics` and scale (Low must stay playable; never disable gameplay — collision, water detection, damage — to save performance).

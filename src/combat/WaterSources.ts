@@ -18,9 +18,12 @@ import type { Combatant, WaterGrant, WaterRequirement } from './types';
  * Large sources (ocean, rivers, lakes, the swamp) are effectively unlimited but
  * rate-limited locally; small sources (ponds, fountains, puddles, ice walls)
  * have finite capacity that visibly/mechanically depletes and regenerates.
- * Frozen sources (frozen lakes/rivers, sea ice, glaciers, ice walls) only serve
- * ice techniques (allowIce); snow needs the Snow Gathering passive
- * (water_snow_draw); rain is a weak, slow source.
+ * Waterbenders melt snow and ice into water: snowfields and frozen sources
+ * (frozen lakes/rivers, sea ice, glaciers, ice walls) can be drawn as water
+ * (Draw Water, the gather of a water attack, liquid techniques); ice
+ * techniques (allowIce) also bend solid ice in place. Snow Gathering
+ * (water_snow_draw) only speeds up drawing from snow and ice. Rain is a weak,
+ * slow source.
  *
  * ── Registering sources (regions, constructs) ──────────────────────────────
  *
@@ -204,9 +207,8 @@ export class WaterSourceSystem implements GameSystem {
   lastFailure: WaterFailure | null = null;
   /** Carried water (water skin) for a caster; installed by the waterbending module. */
   carriedSupply: (caster: Combatant) => CarriedSupply | null = () => null;
-  /** Whether a caster may bend snow (player: knows water_snow_draw). */
-  snowCapable: (caster: Combatant) => boolean = (c) =>
-    c.isPlayer ? !!this.ctx?.progression?.knows?.('water_snow_draw') : !!(c as unknown as { canBendSnow?: boolean }).canBendSnow;
+  /** Whether a caster may bend snow (every waterbending player; other benders when flagged). */
+  snowCapable: (caster: Combatant) => boolean = (c) => (c.isPlayer ? true : !!(c as unknown as { canBendSnow?: boolean }).canBendSnow);
   private supplyCache: { x: number; z: number; t: number; liquid: SourceHit[]; all: SourceHit[] } | null = null;
 
   init(ctx: GameContext): void {
@@ -437,13 +439,17 @@ export class WaterSourceSystem implements GameSystem {
         const surf = g.surface;
         const p = new THREE.Vector3(pos.x, g.y, pos.z);
         const dist = Math.max(0, pos.y - p.y);
-        // No "snow" on a river/lake/sea bed: there the water body itself is the source.
-        const wet = waterAt(pos.x, pos.z);
+        // No "snow" on a river/lake/sea bed or on a frozen lake's own ice: there the water body
+        // itself is the source. Snow and ice laid over frozen water (piers and streets over
+        // sea ice) still count.
+        const w = waterAt(pos.x, pos.z);
+        const wet = !!w && (!w.frozen || g.colliderId === 0);
         if (o.allowSnow && !wet && (b.cold > 0.5 || surf === 'snow' || surf === 'packedsnow')) {
           consider({ id: 'snowfield', type: 'snow', label: 'Snow', point: p, distance: dist, available: 60, frozen: true, capacity: Infinity, size: 'small' });
         }
-        if (o.allowIce && surf === 'ice' && g.colliderId === 0 && !wet) {
-          consider({ id: 'glacier', type: 'ice', label: 'Glacier Ice', point: p, distance: dist, available: 999, frozen: true, capacity: Infinity, size: 'medium' });
+        if (o.allowIce && surf === 'ice' && !wet) {
+          // Glacier ice, or the ice floors and terraces of the Water Tribes.
+          consider({ id: g.colliderId ? 'ice_floor' : 'glacier', type: 'ice', label: g.colliderId ? 'Ice' : 'Glacier Ice', point: p, distance: dist, available: 999, frozen: true, capacity: Infinity, size: 'medium' });
         }
       }
     }
@@ -510,9 +516,11 @@ export class WaterSourceSystem implements GameSystem {
       const dot = (dx * f.x + dz * f.z) / (dl * (Math.hypot(f.x, f.z) || 1));
       score *= 1.35 - 0.35 * dot;
     }
-    if (o.preferFrozen && h.frozen) score *= 0.55;
+    if (o.preferFrozen && h.frozen && h.type !== 'snow') score *= 0.55;
     // Snow and rain are weak sources: real liquid water nearby wins.
     else if (h.type === 'snow') score = score * 1.5 + 6;
+    // Ice has to be melted first: open water anywhere within reach wins.
+    else if (h.frozen) score = score * 1.5 + 18;
     else if (h.type === 'rain') score = score * 1.5 + 9;
     // Prefer unlimited / well-stocked sources over nearly empty ones.
     if (Number.isFinite(h.capacity ?? Infinity) && (h.capacity ?? 0) > 0) score *= 1.4 - 0.4 * Math.min(1, h.available / (h.capacity ?? 1));
@@ -597,9 +605,11 @@ export class WaterSourceSystem implements GameSystem {
 
   private reqOptions(caster: Combatant, req: WaterRequirement): FindOptions {
     const snowOk = req.allowSnow !== false && this.snowCapable(caster);
+    const liquid = req.allowLiquid ?? true;
     return {
-      allowLiquid: req.allowLiquid ?? true,
-      allowIce: !!req.allowIce,
+      allowLiquid: liquid,
+      // Ice serves ice techniques in place, and melts into water for liquid ones.
+      allowIce: !!req.allowIce || liquid,
       allowSnow: snowOk,
       largeOnly: !!req.largeSource,
       preferFrozen: !!req.preferFrozen,
@@ -667,7 +677,7 @@ export class WaterSourceSystem implements GameSystem {
     const pos = caster.position;
     const all = this.findAll(pos, range, { allowLiquid: true, allowIce: true, allowSnow: true });
     const flask = this.carriedSupply(caster);
-    if (!req.allowIce && all.some((h) => h.frozen && h.type !== 'snow')) {
+    if (req.allowLiquid === false && !req.allowIce && all.some((h) => h.frozen && h.type !== 'snow')) {
       return { reason: 'frozen', message: 'The water here is frozen solid — ice techniques can still shape it.' };
     }
     if (all.some((h) => h.type === 'snow') && !this.snowCapable(caster)) {
@@ -702,8 +712,10 @@ export class WaterSourceSystem implements GameSystem {
       let partial: { h: SourceHit; cap: number } | null = null;
       for (const h of cands) {
         const cap = this.capFor(h);
-        // Liquid water, snow and rain must be gathered into the hands first; only solid ice is bent in place.
-        if (hold && !(h.frozen && h.type !== 'snow')) {
+        // Liquid water, snow, rain and ice to melt must be gathered into the hands first; only ice
+        // techniques bend solid ice in place.
+        const inPlace = h.frozen && h.type !== 'snow' && !!req.allowIce;
+        if (hold && !inPlace) {
           if (!gatherable && cap > 0.01) gatherable = h;
           continue;
         }
@@ -751,7 +763,8 @@ export class WaterSourceSystem implements GameSystem {
     if (srcHit && fromSource > 0) {
       this.consume(srcHit, fromSource, caster);
       if (fromFlask > 0) flask!.take(fromFlask);
-      grant = { amount: need, from: srcHit.point.clone(), sourceId: srcHit.id, sourceType: srcHit.type, frozen: srcHit.frozen };
+      // Ice drawn by a liquid technique is melted water by the time it moves.
+      grant = { amount: need, from: srcHit.point.clone(), sourceId: srcHit.id, sourceType: srcHit.type, frozen: srcHit.frozen && !!req.allowIce };
       if (caster.isPlayer) {
         this.ctx?.events.emit('water:drawn', { sourceId: srcHit.id, sourceType: srcHit.type, amount: fromSource, position: { x: srcHit.point.x, y: srcHit.point.y, z: srcHit.point.z } });
       }
@@ -778,7 +791,8 @@ export class WaterSourceSystem implements GameSystem {
     const space = caster.maxWaterReserve - caster.waterReserve;
     if (space <= 0.01) return this.fail({ reason: 'full', message: 'Your water reserve is full.' });
     const allowSnow = opts.allowSnow ?? this.snowCapable(caster);
-    const cands = this.ranked(caster.position, this.effectiveRange(caster), { allowLiquid: true, allowIce: false, allowSnow, facing, includeDepleted: true });
+    // Snow and ice are melted into the reserve as water.
+    const cands = this.ranked(caster.position, this.effectiveRange(caster), { allowLiquid: true, allowIce: true, allowSnow, facing, includeDepleted: true });
     let sawRateLimited = false;
     let sawDry: string | null = null;
     for (const hit of cands) {
@@ -812,7 +826,8 @@ export class WaterSourceSystem implements GameSystem {
    * or null (see lastFailure).
    */
   drawFrom(caster: Combatant, id: string, near: THREE.Vector3, amount: number): SourceHit | null {
-    const hit = this.findAll(near, 3, { allowLiquid: true, includeDepleted: true }).find((h) => h.id === id && !h.frozen) ?? null;
+    // Snow and ice included: drawn out, they melt into water.
+    const hit = this.findAll(near, 3, { allowLiquid: true, allowIce: true, allowSnow: this.snowCapable(caster), includeDepleted: true }).find((h) => h.id === id) ?? null;
     if (!hit) return this.fail({ reason: 'none', message: 'That water is out of reach.' });
     if (this.capFor(hit) < amount - 1e-6) {
       const finite = this.sources.get(hit.id);
