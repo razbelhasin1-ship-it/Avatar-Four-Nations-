@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { GameContext } from '../../core/GameContext';
 import type { SurfaceType } from '../../core/types';
 import type { ColliderDef } from '../Collision';
+import { liftableSize, rockExtents } from '../LiftableRocks';
 import { kitMaterial, type KitMaterialName } from './Materials';
 
 /**
@@ -16,6 +17,8 @@ import { kitMaterial, type KitMaterialName } from './Materials';
  * Geometry added with box()/mesh() is merged per material at finish() (one draw
  * call per material per builder). Repeated props use instance() (InstancedMesh).
  * Colliders are registered immediately (tagged so the region can remove them).
+ * Loose rocks and boulders use rock() / rockInstance(): they stay separate so an
+ * earthbender can lift them (ctx.world.rocks), unless they are too big to lift.
  *
  * Transform convention: (x, y, z) is the CENTER of boxes unless noted; `yaw`
  * rotates about +Y with three.js convention (local +X → (cos yaw, 0, -sin yaw)),
@@ -110,6 +113,8 @@ export class ContentBuilder {
   readonly colliderIds: number[] = [];
   readonly meshes: THREE.Object3D[] = [];
   private readonly ownedGeometries: THREE.BufferGeometry[] = [];
+  /** Liftable instanced rocks, registered once their InstancedMesh exists (finish). */
+  private pendingRocks: Array<{ key: string; index: number; collider?: ColliderDef }> = [];
 
   constructor(
     readonly ctx: GameContext,
@@ -133,6 +138,52 @@ export class ContentBuilder {
       this.batches.set(mat, b);
     }
     b.geos.push(g);
+  }
+
+  /**
+   * A loose rock or boulder an earthbender can lift (ctx.world.rocks): its own mesh, not
+   * merged, so it can be picked up and set down elsewhere with its collider (`collider`, world
+   * coordinates). Rocks too big to lift (cliff pieces, house-sized boulders) are merged like
+   * mesh() and collide like collider().
+   */
+  rock(material: MatKey, geometry: THREE.BufferGeometry, t: Xform, collider?: ColliderDef, opts: { castShadow?: boolean } = {}): void {
+    const local = matrixFor(t, new THREE.Matrix4());
+    const ext = rockExtents(geometry, local);
+    if (!liftableSize(ext.radius, ext.halfHeight)) {
+      this.mesh(material, geometry, t, opts);
+      if (collider) this.collider(collider);
+      return;
+    }
+    const mat = this.mat(material);
+    const g = geometry.clone();
+    if (!g.getAttribute('normal')) g.computeVertexNormals();
+    this.ownedGeometries.push(g);
+    const mesh = new THREE.Mesh(g, mat);
+    mesh.name = 'world_rock';
+    mesh.castShadow = opts.castShadow ?? true;
+    mesh.receiveShadow = true;
+    mesh.matrixAutoUpdate = false;
+    mesh.matrix.copy(local);
+    this.group.add(mesh);
+    this.meshes.push(mesh);
+    this.group.updateWorldMatrix(true, false);
+    const world = new THREE.Matrix4().multiplyMatrices(this.group.matrixWorld, local);
+    this.ctx.world.rocks.add({ owner: this, geometry: g, material: mat, matrix: world, mesh, collider: collider ? { ...collider, tag: collider.tag ?? this.tag } : undefined });
+  }
+
+  /**
+   * Instanced liftable rock (many small stones share one draw call): instance() registered
+   * with ctx.world.rocks at finish(). Too big to lift: a plain instance with its collider.
+   */
+  rockInstance(key: string, geometryFactory: () => THREE.BufferGeometry, material: MatKey, matrix: THREE.Matrix4, collider?: ColliderDef, castShadow = true): void {
+    this.instance(key, geometryFactory, material, matrix, castShadow);
+    const inst = this.instances.get(key)!;
+    const ext = rockExtents(inst.geo, matrix);
+    if (!liftableSize(ext.radius, ext.halfHeight)) {
+      if (collider) this.collider(collider);
+      return;
+    }
+    this.pendingRocks.push({ key, index: inst.matrices.length - 1, collider: collider ? { ...collider, tag: collider.tag ?? this.tag } : undefined });
   }
 
   /** Register a collider in the world. Returns its id. */
@@ -427,7 +478,8 @@ export class ContentBuilder {
       }
     }
     this.batches.clear();
-    for (const inst of this.instances.values()) {
+    const built = new Map<string, THREE.InstancedMesh>();
+    for (const [key, inst] of this.instances) {
       const im = new THREE.InstancedMesh(inst.geo, inst.mat, inst.matrices.length);
       inst.matrices.forEach((m, i) => im.setMatrixAt(i, m));
       im.instanceMatrix.needsUpdate = true;
@@ -436,6 +488,18 @@ export class ContentBuilder {
       im.computeBoundingSphere();
       this.group.add(im);
       this.meshes.push(im);
+      built.set(key, im);
+    }
+    if (this.pendingRocks.length) {
+      this.group.updateWorldMatrix(true, false);
+      for (const p of this.pendingRocks) {
+        const inst = this.instances.get(p.key);
+        const im = built.get(p.key);
+        if (!inst || !im) continue;
+        const world = new THREE.Matrix4().multiplyMatrices(this.group.matrixWorld, inst.matrices[p.index]);
+        this.ctx.world.rocks.add({ owner: this, geometry: inst.geo, material: inst.mat, matrix: world, inst: im, index: p.index, collider: p.collider });
+      }
+      this.pendingRocks = [];
     }
     this.instances.clear();
   }
@@ -444,6 +508,8 @@ export class ContentBuilder {
   dispose(): void {
     for (const id of this.colliderIds) this.ctx.world.collision.remove(id);
     this.colliderIds.length = 0;
+    this.ctx.world.rocks.removeOwner(this);
+    this.pendingRocks = [];
     for (const m of this.meshes) this.group.remove(m);
     this.meshes.length = 0;
     for (const g of this.ownedGeometries) g.dispose();

@@ -163,7 +163,7 @@ export class EnvFXSystem implements EnvironmentFX, WorldUpdatable {
       let n = 0;
       for (const t of near) {
         if (n >= 3) break;
-        if (t.species === 'rock' || t.species === 'deadtree' || t.species === 'pine_snow' || t.species === 'bush_snow') {
+        if (t.species === 'rock' || t.species === 'ice_rock' || t.species === 'deadtree' || t.species === 'pine_snow' || t.species === 'bush_snow') {
           if (t.species === 'pine_snow') {
             vfx.burst('snow', this.tmp.set(t.x, t.y + 3.5 * t.scale, t.z), { count: 8, radius: 1.5, speed: 0.6 });
             n++;

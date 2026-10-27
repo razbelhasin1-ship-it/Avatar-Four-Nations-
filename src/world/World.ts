@@ -4,6 +4,7 @@ import type { Persistable } from '../core/Save';
 import type { BiomeId, SurfaceType } from '../core/types';
 import type { PhysicsWorld } from '../entities/KinematicBody';
 import { CollisionWorld } from './Collision';
+import { LiftableRocks } from './LiftableRocks';
 import { biomeAt, heightAt, initHeightfield, normalAt, terrainSurfaceAt, waterAt, type WaterHit } from './Heightfield';
 import type { RegionContent, RegionFactory } from './RegionContent';
 import { REGION_FACTORIES } from './regions';
@@ -11,7 +12,7 @@ import { envUniforms } from './env/EnvShared';
 import { SkySystem } from './Sky';
 import { ICE_TOP, TerrainManager } from './Terrain';
 import { WaterRenderer } from './Water';
-import { LANDMARKS, REGIONS, type LandmarkDef, type RegionDef } from './WorldLayout';
+import { LANDMARKS, regionAt, type LandmarkDef, type RegionDef } from './WorldLayout';
 
 /**
  * Environment reaction hooks used by combat, movement and weather. The world
@@ -66,6 +67,8 @@ export class World implements PhysicsWorld, Persistable {
   readonly saveKey = 'world';
   readonly group = new THREE.Group();
   readonly collision = new CollisionWorld();
+  /** Region-placed rocks an earthbender can lift (ContentBuilder.rock / rockInstance). */
+  readonly rocks = new LiftableRocks(this.collision);
   readonly terrain = new TerrainManager();
   water!: WaterRenderer;
   sky!: SkySystem;
@@ -303,18 +306,7 @@ export class World implements PhysicsWorld, Persistable {
 
   /** Region containing (x,z) — nearest region whose radius covers the point. */
   regionAt(x: number, z: number): RegionDef | null {
-    let best: RegionDef | null = null;
-    let bestScore = Infinity;
-    for (const r of REGIONS) {
-      const d = Math.hypot(x - r.x, z - r.z);
-      if (d > r.r) continue;
-      const score = d / r.r;
-      if (score < bestScore) {
-        bestScore = score;
-        best = r;
-      }
-    }
-    return best;
+    return regionAt(x, z);
   }
 
   landmark(id: string): LandmarkDef | undefined {

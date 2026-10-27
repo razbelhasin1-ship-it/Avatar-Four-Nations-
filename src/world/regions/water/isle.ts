@@ -254,7 +254,7 @@ export class MeditationIsle extends WaterRegion {
         if (r.chance(0.35)) continue;
         const d = half + r.range(0.3, 0.8);
         const x = c.x - tg.y * d * s, z = c.y + tg.x * d * s;
-        p.instance('isle_pebble', () => boulder(5, 0.32, 0.22, 0.28, 0), wtMat('rock'), new THREE.Matrix4().compose(V(x, heightAt(x, z) - 0.05, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, r.range(0, 6), 0)), V(r.range(0.7, 1.6), r.range(0.7, 1.3), r.range(0.7, 1.6))));
+        p.rockInstance('isle_pebble', () => boulder(5, 0.32, 0.22, 0.28, 0), wtMat('rock'), new THREE.Matrix4().compose(V(x, heightAt(x, z) - 0.05, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, r.range(0, 6), 0)), V(r.range(0.7, 1.6), r.range(0.7, 1.3), r.range(0.7, 1.6))));
       }
     }
     // Rock pool at the end of the brook.
@@ -266,7 +266,7 @@ export class MeditationIsle extends WaterRegion {
     for (let i = 0; i < 9; i++) {
       const a = (i / 9) * Math.PI * 2;
       const x = pg.x + Math.cos(a) * (pg.r + 0.5), z = pg.z + Math.sin(a) * (pg.r + 0.5);
-      p.instance('isle_pebble', () => boulder(5, 0.32, 0.22, 0.28, 0), wtMat('rock'), new THREE.Matrix4().compose(V(x, heightAt(x, z) - 0.05, z), new THREE.Quaternion(), V(1.6, 1.3, 1.6)));
+      p.rockInstance('isle_pebble', () => boulder(5, 0.32, 0.22, 0.28, 0), wtMat('rock'), new THREE.Matrix4().compose(V(x, heightAt(x, z) - 0.05, z), new THREE.Quaternion(), V(1.6, 1.3, 1.6)));
     }
     this.registerWater({ id: 'isle:stream', type: 'stream', label: 'Spirit Brook', x: STREAM[2].x, y: G + 0.07, z: STREAM[2].z, r: half, path: STREAM.map((q) => ({ x: q.x, z: q.z })), capacity: Infinity, regen: 0, size: 'medium' });
     this.registerWater({ id: 'isle:rock_pool', type: 'pond', label: 'Rock Pool', x: pg.x, y: heightAt(pg.x, pg.z) + 0.1, z: pg.z, r: pg.r, capacity: 60, regen: 3, size: 'small' });
@@ -353,7 +353,7 @@ export class MeditationIsle extends WaterRegion {
       }
       this.registerWater({ id: 'isle:ice', type: 'ice', label: 'Ice Sheet', x, y: top, z, r, capacity: 180, regen: 4, frozen: true, size: 'medium' });
     }
-    // SNOW: a soft snowfield with drifts (snow source for Snow Gathering).
+    // SNOW: a soft snowfield with drifts (snow a waterbender melts into water).
     {
       const { x, z, r } = SNOW;
       const top = G + 0.22;
@@ -388,9 +388,8 @@ export class MeditationIsle extends WaterRegion {
       }
       for (const [sx, sz, s] of [[-3.2, -1.2, 1.0], [2.6, 1.6, 0.8], [3.8, -2.0, 0.55]] as const) {
         const g = boulder(40 + sx, s, s * 0.7, s * 0.9, 1);
-        b.mesh(wtMat('rock'), g, { x: x + sx, y: top - 0.1, z: z + sz });
+        b.rock(wtMat('rock'), g, { x: x + sx, y: top - 0.1, z: z + sz }, { shape: 'cylinder', x: x + sx, y: top + s * 0.35, z: z + sz, r: s * 0.85, hy: s * 0.4, walkable: true, solid: true, surface: 'rock' });
         g.dispose();
-        b.collider({ shape: 'cylinder', x: x + sx, y: top + s * 0.35, z: z + sz, r: s * 0.85, hy: s * 0.4, walkable: true, solid: true, surface: 'rock' });
         const ring = flatRing(s * 1.15, s * 1.3, 24);
         p.mesh(wtMat('sand'), ring, { x: x + sx, y: top + 0.04, z: z + sz }, { castShadow: false });
         ring.dispose();
@@ -406,9 +405,9 @@ export class MeditationIsle extends WaterRegion {
       const rocks: Array<[number, number, number]> = [[-3.5, -2.0, 1.1], [3.0, -2.6, 0.9], [0.5, 3.4, 1.3], [-2.6, 2.8, 0.7], [3.6, 1.8, 0.75]];
       for (const [ox, oz, s] of rocks) {
         const bg = boulder(60 + ox * 3, s, s * 0.85, s * 0.95, 1);
-        b.mesh(wtMat('rock_dark'), bg, { x: x + ox, y: G, z: z + oz, yaw: ox });
+        // Real boulders an earthbender can lift (and set down anywhere).
+        b.rock(wtMat('rock_dark'), bg, { x: x + ox, y: G, z: z + oz, yaw: ox }, { shape: 'cylinder', x: x + ox, y: G + s * 0.45, z: z + oz, r: s * 0.9, hy: s * 0.5, walkable: true, solid: true, surface: 'rock' });
         bg.dispose();
-        b.collider({ shape: 'cylinder', x: x + ox, y: G + s * 0.45, z: z + oz, r: s * 0.9, hy: s * 0.5, walkable: true, solid: true, surface: 'rock' });
       }
     }
   }

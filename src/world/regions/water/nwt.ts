@@ -1193,12 +1193,12 @@ export class NorthernWaterTribe extends WaterRegion {
       this.propBuilder(x, z).mesh(wtMat('ice_clear'), c, { x, y: L1 - 0.05, z, yaw: rnd.range(0, 6) });
       c.dispose();
     }
-    // A few snowy boulders on the outer snowfield.
+    // A few boulders of white ice on the outer snowfield (ice, not stone: no earthbending them).
     for (let i = 0; i < 6; i++) {
       const x = rnd.range(-360, -40), z = rnd.range(-1835, -1765);
       if (JETTIES.some((j) => inRect(j, x, z, 3)) || inRect(CANALS.grand_out, x, z, 3) || inRect(CANALS.harbor_out, x, z, 3)) continue;
       const b = boulder(80 + i, 1.4, 0.9, 1.2, 1);
-      k.props.mesh(wtMat('rock'), b, { x, y: heightAt(x, z) - 0.2, z });
+      k.props.mesh(wtMat('ice_massive'), b, { x, y: heightAt(x, z) - 0.2, z });
       b.dispose();
     }
     void G0;

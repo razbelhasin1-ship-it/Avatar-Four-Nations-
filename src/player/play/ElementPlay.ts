@@ -5,7 +5,7 @@ import type { Player } from '../Player';
 import './clips';
 import { aimRay, type PlayInteraction, type PlayKind } from './common';
 import { PalmFlame } from './PalmFlame';
-import { findLiftTarget, liftRock, type LiftTarget } from './RockLift';
+import { findLiftTarget, liftRock, type HeavyTarget, type LiftTarget } from './RockLift';
 import { LooseStones } from './Stones';
 import { findWaterTarget, ORB_UNITS, WaterOrb, type WaterTarget } from './WaterOrb';
 
@@ -34,7 +34,7 @@ const COMBAT_COOLDOWN = 0.8;
 
 type Pending =
   | { kind: 'water'; t: number; target: WaterTarget }
-  | { kind: 'earth'; t: number; target: LiftTarget }
+  | { kind: 'earth'; t: number; target: LiftTarget | HeavyTarget }
   | { kind: 'fire'; t: number; target: null };
 
 const tO = new THREE.Vector3();
@@ -127,7 +127,7 @@ export class ElementPlay {
     if (kind === 'earth') {
       // A rock in view; bare earth only once the bender has been exploring a while (like fire).
       const t = findLiftTarget(this.ctx, this.player, this.stones);
-      return t && (t.source !== 'ground' || this.player.sinceCombat > 12) ? 'earth' : null;
+      return t && t.source !== 'heavy' && (t.source !== 'ground' || this.player.sinceCombat > 12) ? 'earth' : null;
     }
     return this.player.sinceCombat > 12 ? 'fire' : null;
   }
@@ -224,6 +224,13 @@ export class ElementPlay {
         }
         this.current = new WaterOrb(ctx, player, target);
       } else if (p.kind === 'earth') {
+        if (p.target.source === 'heavy') {
+          // A boulder or rock face too big to lift, or ice: say so instead of attacking.
+          const s = p.target.spot;
+          const msg = p.target.reason === 'ice' ? "That's ice, not stone. Earthbending can't move it." : 'That rock is too big to lift. Try a smaller one.';
+          this.refuse(msg, 'earth', tA.set(s.x, s.y, s.z));
+          return true;
+        }
         const lift = liftRock(ctx, player, p.target, this.stones);
         if (!lift) return false;
         this.current = lift;
@@ -239,13 +246,21 @@ export class ElementPlay {
     return true;
   }
 
-  private refuse(message: string): void {
+  private refuse(message: string, kind: 'water' | 'earth' = 'water', at?: THREE.Vector3): void {
     const ctx = this.ctx;
     this.stats.refused++;
-    const h = this.player.castOrigin('hands', tA);
-    ctx.vfx.burst('mist', h, { count: 4, size: 0.4 });
-    ctx.audio.play('water_fizzle', { position: h, volume: 0.5 });
-    this.player.humanoid.animator.play('water_fizzle', { fadeIn: 0.05 });
+    if (kind === 'earth' && at) {
+      // The bender strains, the rock only shudders: a little dust and grit at its foot.
+      const foot = tA.set(at.x, ctx.world.groundAt(at.x, at.z, at.y + 0.5).y + 0.1, at.z);
+      ctx.vfx.burst('dust', foot, { count: 8, radius: 1.2, speed: 0.6 });
+      ctx.audio.play('bend_earth_crumble', { position: foot, volume: 0.5 });
+      this.player.humanoid.animator.play('play_earth_drop', { fadeIn: 0.08 });
+    } else {
+      const h = this.player.castOrigin('hands', tA);
+      ctx.vfx.burst('mist', h, { count: 4, size: 0.4 });
+      ctx.audio.play('water_fizzle', { position: h, volume: 0.5 });
+      this.player.humanoid.animator.play('water_fizzle', { fadeIn: 0.05 });
+    }
     ctx.events.emit('ui:notify', { text: message, kind: 'info', duration: 2.5 });
   }
 
@@ -299,8 +314,8 @@ export class ElementPlay {
         if (kind === 'earth') {
           const t = findLiftTarget(this.ctx, this.player, this.stones);
           if (!t) return null;
-          const r = t.rock;
-          return { kind, source: t.source, scale: +r.sxz.toFixed(2), pos: [+r.x.toFixed(2), +r.y.toFixed(2), +r.z.toFixed(2)] };
+          const s = t.spot;
+          return { kind, source: t.source, size: +s.radius.toFixed(2), pos: [+s.x.toFixed(2), +s.y.toFixed(2), +s.z.toFixed(2)] };
         }
         return { kind };
       },

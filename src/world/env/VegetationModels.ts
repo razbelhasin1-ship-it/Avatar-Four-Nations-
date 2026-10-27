@@ -27,6 +27,7 @@ export type SpeciesId =
   | 'bush_snow'
   | 'shrub_dry'
   | 'rock'
+  | 'ice_rock'
   | 'flowers'
   | 'reeds'
   | 'fern';
@@ -63,6 +64,8 @@ export const SPECIES: Record<SpeciesId, SpeciesDef> = {
   bush_snow: { id: 'bush_snow', category: 'bush', flex: 0.4, push: 0.4, shadow: false, trunkR: 0, height: 1.4 },
   shrub_dry: { id: 'shrub_dry', category: 'bush', flex: 0.5, push: 0.5, shadow: false, trunkR: 0, height: 1.1 },
   rock: { id: 'rock', category: 'rock', flex: 0, push: 0, shadow: true, trunkR: 0, height: 1.4 },
+  // The Water Tribes' boulders are white ice (never earthbendable): placed instead of rocks there.
+  ice_rock: { id: 'ice_rock', category: 'rock', flex: 0, push: 0, shadow: true, trunkR: 0, height: 1.4 },
   flowers: { id: 'flowers', category: 'small', flex: 1.0, push: 1.0, shadow: false, trunkR: 0, height: 0.5 },
   reeds: { id: 'reeds', category: 'small', flex: 1.2, push: 0.9, shadow: false, trunkR: 0, height: 1.8 },
   fern: { id: 'fern', category: 'small', flex: 0.8, push: 0.9, shadow: false, trunkR: 0, height: 0.8 },
@@ -554,6 +557,18 @@ function rock(): LODs {
   return [build(0), build(1), build(2)];
 }
 
+/** A boulder of old white ice: the rock's shape, faceted, pale blue in the hollows and snow-white on top. */
+function iceRock(): LODs {
+  const build = (lod: number): THREE.BufferGeometry => {
+    const g = new GeoBuilder();
+    const deep = lin('#8fb9d6'), mid = lin('#cfe4f2'), light = lin('#f7fbff');
+    const col = (p: THREE.Vector3, n: THREE.Vector3) => tmpC.copy(deep).lerp(mid, Math.min(1, (p.y + 0.4) / 0.9)).lerp(light, Math.max(0, n.y) * 0.8);
+    g.blob(V(0, 0.25, 0), V(1, 0.66, 0.85), lod === 0 ? 1 : 0, 11, 0.26, col, 0, 1, null, true);
+    return g.build();
+  };
+  return [build(0), build(1), build(2)];
+}
+
 function flowers(): LODs {
   const stem = lin('#3d6a28');
   const petal = lin('#ffffff');
@@ -651,6 +666,7 @@ export function speciesGeometries(): Map<SpeciesId, LODs> {
     ['bush_snow', bush('snow')],
     ['shrub_dry', bush('dry')],
     ['rock', rock()],
+    ['ice_rock', iceRock()],
     ['flowers', flowers()],
     ['reeds', reeds()],
     ['fern', fern()],

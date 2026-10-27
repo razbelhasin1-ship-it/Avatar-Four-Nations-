@@ -419,6 +419,7 @@ export class VegetationSystem implements WorldUpdatable {
     const ids: number[] = [];
     const a = d.data;
     const rockIdx = SPECIES_IDS.indexOf('rock');
+    const iceIdx = SPECIES_IDS.indexOf('ice_rock');
     for (let i = 0; i < d.count; i++) {
       const o = i * VEG_STRIDE;
       if (a[o + 9] >= this.density) continue;
@@ -429,11 +430,11 @@ export class VegetationSystem implements WorldUpdatable {
         const r = def.trunkR * sxz;
         const hy = def.height * sy * 0.45;
         ids.push(this.ctx.world.collision.add({ shape: 'cylinder', x, y: y + hy, z, r, hy, solid: true, walkable: false, surface: 'wood', tag: 'vegetation' }));
-      } else if (sp === rockIdx && sxz >= 1.15) {
+      } else if ((sp === rockIdx || sp === iceIdx) && sxz >= 1.15) {
         // Boulder: walkable top a little below the rounded crest.
         const top = 0.82 * sy;
         const hy = (top + 0.6) / 2;
-        ids.push(this.ctx.world.collision.add({ shape: 'cylinder', x, y: y + top - hy, z, r: 0.78 * sxz, hy, solid: true, walkable: true, surface: 'rock', tag: 'vegetation' }));
+        ids.push(this.ctx.world.collision.add({ shape: 'cylinder', x, y: y + top - hy, z, r: 0.78 * sxz, hy, solid: true, walkable: true, surface: sp === iceIdx ? 'ice' : 'rock', tag: 'vegetation' }));
       }
     }
     cell.colliders = ids;
@@ -646,8 +647,8 @@ export class VegetationSystem implements WorldUpdatable {
    * assist: `slack` metres around the rock plus `cone` metres per metre of distance (far
    * rocks look small under the crosshair). Rocks already lifted are skipped.
    */
-  pickRock(origin: THREE.Vector3, dir: THREE.Vector3, maxDist: number, o: { minScale: number; maxScale: number; slack?: number; cone?: number }): RockRef | null {
-    const rockIdx = SPECIES_IDS.indexOf('rock');
+  pickRock(origin: THREE.Vector3, dir: THREE.Vector3, maxDist: number, o: { minScale: number; maxScale: number; slack?: number; cone?: number; species?: 'rock' | 'ice_rock' }): RockRef | null {
+    const rockIdx = SPECIES_IDS.indexOf(o.species ?? 'rock');
     const slack = o.slack ?? 0.25;
     const cone = o.cone ?? 0;
     let best: RockRef | null = null;

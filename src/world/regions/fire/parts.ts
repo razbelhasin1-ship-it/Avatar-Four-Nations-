@@ -738,13 +738,13 @@ export function tree(b: ContentBuilder, kind: TreeKind, o: { x: number; y: numbe
   if (o.collide !== false) b.collider({ shape: 'cylinder', x: o.x, y: o.y + 1.5, z: o.z, r: Math.max(0.25, o.s * 0.035), hy: 1.5, walkable: false, solid: true });
 }
 
-/** Rock / boulder (instanced, optional collider). */
+/** Rock / boulder (instanced, optional collider); liftable by earthbenders unless too big (rockInstance). */
 export function rock(b: ContentBuilder, o: { x: number; y: number; z: number; s: number; sy?: number; yaw?: number; variant?: number; mat?: Mat; collide?: boolean }): void {
   const v = (o.variant ?? 0) % 2;
   const m = new THREE.Matrix4().compose(new THREE.Vector3(o.x, o.y, o.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), o.yaw ?? 0), new THREE.Vector3(o.s, o.sy ?? o.s * 0.7, o.s));
   const matKey = typeof o.mat === 'string' ? o.mat : o.mat ? o.mat.uuid.slice(0, 8) : 'stone_grey';
-  b.instance(`fire_rock_${v}_${matKey}`, () => rockGeo(31 + v * 13), o.mat ?? 'stone_grey', m);
-  if (o.collide) b.collider({ shape: 'cylinder', x: o.x, y: o.y + (o.sy ?? o.s * 0.7) * 0.4, z: o.z, r: o.s * 0.85, hy: (o.sy ?? o.s * 0.7) * 0.6, walkable: true, solid: true, surface: 'rock' });
+  const col = o.collide ? { shape: 'cylinder' as const, x: o.x, y: o.y + (o.sy ?? o.s * 0.7) * 0.4, z: o.z, r: o.s * 0.85, hy: (o.sy ?? o.s * 0.7) * 0.6, walkable: true, solid: true, surface: 'rock' as const } : undefined;
+  b.rockInstance(`fire_rock_${v}_${matKey}`, () => rockGeo(31 + v * 13), o.mat ?? 'stone_grey', m, col);
 }
 
 /** Coiled dragon statue on a pedestal (faces local +Z). */

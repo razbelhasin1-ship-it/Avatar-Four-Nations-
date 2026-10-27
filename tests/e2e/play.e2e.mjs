@@ -1,8 +1,8 @@
 /**
  * Playful bending E2E (src/player/play): hold the attack while exploring to float a water orb
- * drawn from real water (river, rain barrel), lift a real rock (or tear a stone out of the
- * ground where there is none), or kindle a flame in the right palm — and the attack itself is
- * unchanged (taps, combat targets, Airbending).
+ * drawn from real water (river, rain barrel), lift a real rock — scattered or placed by a region,
+ * like the tutorial isle's boulders (or tear a stone out of the ground where there is none) — or
+ * kindle a flame in the right palm; and the attack itself is unchanged (taps, combat targets, Airbending).
  * Run: node tests/e2e/play.e2e.mjs   (SHOT_DIR=/path for screenshots)
  */
 import assert from 'node:assert/strict';
@@ -432,6 +432,55 @@ try {
     await fire('pointerup', 860, 376);
     await h.step(30);
     assert.equal((await st()).active, null, 'lifting the thumb lets go');
+  });
+
+  await check("12. every rock: the tutorial isle's own boulders lift and land with their colliders; a cliff is too big to lift", async () => {
+    await h.startTutorial();
+    await h.step(60);
+    await ev((g) => g.setElement('earth'));
+    const patch = await ev((g) => g.ctx.world.rocks.near(-1746, -1808, 8));
+    assert.ok(patch.length >= 5, 'earth patch boulders registered: ' + patch.length);
+    const r0 = patch.sort((a, b) => b.radius - a.radius)[0];
+    await ev((g, r) => g.teleport(r.pos[0] - 4, r.pos[2] + 4), r0);
+    await h.step(40);
+    await ev((g, r) => g.debug.play.aimAt(r.pos[0], r.pos[1], r.pos[2]), r0);
+    await h.step(2);
+    let t = await ev((g) => g.debug.play.target());
+    assert.equal(t?.source, 'world', 'boulder under the crosshair: ' + JSON.stringify(t));
+    const c0 = await attempts();
+    await down(true);
+    await h.step(16);
+    assert.equal((await st()).current?.rock?.source, 'world');
+    const held = await ev((g, id) => g.ctx.world.rocks.near(-1746, -1808, 20).find((x) => x.id === id), r0.id);
+    assert.ok(held?.lifted && !held.collider, 'lifted: hidden, collider removed: ' + JSON.stringify(held));
+    await h.step(30);
+    await ev((g) => { g.ctx.cameraRig.yaw += 0.8; g.ctx.cameraRig.pitch = 0.3; });
+    await h.step(30);
+    await shot('isle_boulder');
+    await down(false);
+    await h.step(70);
+    const after = await ev((g, id) => g.ctx.world.rocks.near(-1746, -1808, 20).find((x) => x.id === id), r0.id);
+    assert.ok(after && !after.lifted && after.collider, 'set down with its collider: ' + JSON.stringify(after));
+    assert.ok(Math.hypot(after.pos[0] - r0.pos[0], after.pos[2] - r0.pos[2]) > 0.8, 'resting where it was dropped');
+    assert.equal(await attempts(), c0, 'no attack');
+    assert.equal(await leftovers(), 0, 'nothing left floating');
+    // The waterfall cliff is too big: a message, never an attack or a stone in its place.
+    const spot = await ev((g) => { for (const [x, z] of [[-1771, -1806], [-1772, -1810], [-1770, -1802]]) if (!g.ctx.world.liquidAt(x, z)) return [x, z]; return null; });
+    assert.ok(spot, 'dry ground beside the cliff');
+    await ev((g, s) => g.teleport(s[0], s[1]), spot);
+    await h.step(40);
+    await ev((g) => g.debug.play.aimAt(-1781, 5.5, -1806.5));
+    await h.step(2);
+    t = await ev((g) => g.debug.play.target());
+    assert.equal(t?.source, 'heavy', 'the waterfall cliff: ' + JSON.stringify(t));
+    const r1 = (await st()).stats.refused;
+    const c1 = await attempts();
+    await down(true);
+    await h.step(16);
+    await down(false);
+    await h.step(5);
+    assert.equal((await st()).stats.refused, r1 + 1, 'refused with a message');
+    assert.equal(await attempts(), c1, 'and no attack');
   });
 
   await check('11. graphics settings: no console errors (low preset, high effects)', async () => {

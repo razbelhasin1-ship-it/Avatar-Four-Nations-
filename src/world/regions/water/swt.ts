@@ -238,16 +238,12 @@ export class SouthernWaterTribe extends WaterRegion {
   private centre(b: ReturnType<WaterRegion['builder']>, p: ReturnType<WaterRegion['builder']>): void {
     // Fire pit: ring of stones, logs and a real fire (emitters).
     const { x, z } = FIRE;
-    const stones: THREE.BufferGeometry[] = [];
+    // Blocks of white ice (three shapes shared by instancing): the Water Tribes have no stone to bend.
     for (let i = 0; i < 12; i++) {
       const a = (i / 12) * Math.PI * 2;
-      const s = boulder(300 + i, 0.38, 0.28, 0.34, 0);
-      s.translate(x + Math.cos(a) * 1.35, G + 0.08, z + Math.sin(a) * 1.35);
-      stones.push(s);
+      const m = new THREE.Matrix4().compose(new THREE.Vector3(x + Math.cos(a) * 1.35, G + 0.08, z + Math.sin(a) * 1.35), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), a * 3), new THREE.Vector3(1, 1, 1));
+      b.instance(`swt_firestone_${i % 3}`, () => boulder(300 + (i % 3), 0.38, 0.28, 0.34, 0), wtMat('ice_wall'), m);
     }
-    const sg = mergeParts(stones);
-    b.mesh(wtMat('rock_dark'), sg, { x: 0, y: 0, z: 0 });
-    sg.dispose();
     for (let i = 0; i < 4; i++) {
       const log = new THREE.CylinderGeometry(0.12, 0.14, 1.6, 6);
       b.mesh(wtMat('wood'), log, { x, y: G + 0.25, z, yaw: (i / 4) * Math.PI, pitch: Math.PI / 2 - 0.35 });

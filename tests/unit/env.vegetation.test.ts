@@ -80,7 +80,7 @@ describe('vegetation placement', () => {
             expect(s.waterKind).toBe(WATER_KIND.marsh);
           }
           // Trees need gentle ground.
-          if (layer === 'main' && it.species !== 'rock') expect(normalAt(it.x, it.z, 1.5, n).y).toBeGreaterThan(0.85);
+          if (layer === 'main' && it.species !== 'rock' && it.species !== 'ice_rock') expect(normalAt(it.x, it.z, 1.5, n).y).toBeGreaterThan(0.85);
         }
       }
     }
@@ -91,7 +91,7 @@ describe('vegetation placement', () => {
     // Find a forested cell, then clear a circle in it.
     let cell: [number, number] | null = null;
     for (const c of sampleCells()) {
-      if (instances(generateCellSync(c[0], c[1])).filter((i) => i.species !== 'rock').length > 15) {
+      if (instances(generateCellSync(c[0], c[1])).filter((i) => i.species !== 'rock' && i.species !== 'ice_rock').length > 15) {
         cell = c;
         break;
       }

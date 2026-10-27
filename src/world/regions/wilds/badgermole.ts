@@ -63,7 +63,7 @@ export class BadgermoleCavesSite extends WildsSite {
       // Burrow hole at the back.
       const by = ground(x1 - 0.3, zc);
       D.box(W('dark'), { x: x1 + 0.35, y: by + 1.2, z: zc + 1.5, sx: 0.05, sy: 2.4, sz: 3, yaw: 0 }, { castShadow: false });
-      rock(D, W('sand'), x1 - 1.6, zc - 2.6, 2.4, 0.9, 2, { collide: false, variant: 2 });
+      rock(D, W('sand'), x1 - 1.6, zc - 2.6, 2.4, 0.9, 2, { collide: false, variant: 2, liftable: false });
     }
     // Mouth frame: two tall rocks and a lintel boulder.
     {
@@ -126,7 +126,7 @@ export class BadgermoleCavesSite extends WildsSite {
       const foot = Bm.stepsFoot, top = Bm.stepsTop;
       M.stairs({ from: v3(foot.x, ground(foot.x, foot.z) - 0.05, foot.z), to: v3(top.x, l.top, top.z), width: 2.6, material: 'stone_dark', stepHeight: 0.32 });
       D.cylinder(W('dark'), { x: l.x + 2.4, y: l.top - 0.02, z: l.z - 1.5, r: 1.5, h: 0.05, segments: 14 });
-      rock(D, W('sand'), l.x + 3.6, l.z - 3.2, 2.2, 0.8, 1.8, { y: l.top - 0.2, collide: false, variant: 1 });
+      rock(D, W('sand'), l.x + 3.6, l.z - 3.2, 2.2, 0.8, 1.8, { y: l.top - 0.2, collide: false, variant: 1, liftable: false });
       this.mark('ledge', l.x, l.top, l.z);
       this.mark('stepsFoot', foot.x, ground(foot.x, foot.z), foot.z);
     }

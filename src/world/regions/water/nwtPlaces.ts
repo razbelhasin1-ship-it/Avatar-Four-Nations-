@@ -314,8 +314,8 @@ export function buildOasis(k: NwtKit): void {
   frame.dispose();
   // Passage through the door (L1) and steps down into the garden.
   cb.box(wtMat('paving'), { x: x0 + T / 2, y: L1 - 0.25, z: (door.z0 + door.z1) / 2, sx: T + 0.2, sy: 0.5, sz: door.z1 - door.z0 }, { collide: true, walkable: true, surface: 'packedsnow' });
-  flight(cb, V(x0 + T + 4, OASIS_FLOOR, (door.z0 + door.z1) / 2), V(x0 + T, L1, (door.z0 + door.z1) / 2), 3.6, 'rock', null, 'stone');
-  for (const s of [-1, 1]) cb.box(wtMat('rock_dark'), { x: x0 + T + 2, y: (L1 + 3.9) / 2, z: (door.z0 + door.z1) / 2 + s * 2.1, sx: 4.2, sy: L1 - 3.9 + 0.6, sz: 0.6 }, { collide: true, walkable: false });
+  flight(cb, V(x0 + T + 4, OASIS_FLOOR, (door.z0 + door.z1) / 2), V(x0 + T, L1, (door.z0 + door.z1) / 2), 3.6, 'ice_wall', null, 'ice');
+  for (const s of [-1, 1]) cb.box(wtMat('ice_trim'), { x: x0 + T + 2, y: (L1 + 3.9) / 2, z: (door.z0 + door.z1) / 2 + s * 2.1, sx: 4.2, sy: L1 - 3.9 + 0.6, sz: 0.6 }, { collide: true, walkable: false });
   // Garden floor: grass slabs around a pond.
   const pond = { x: -106, z: -1444, r: 6.5 };
   const inner: [number, number, number, number] = [x0 + T, z0 + T, x1 - T, z1];
@@ -331,17 +331,14 @@ export function buildOasis(k: NwtKit): void {
   k.sheets.disc(wtWater('spirit'), pond.x, pond.z, pond.r + 0.9, level, 40);
   k.water({ id: 'nwt:spirit_oasis', type: 'pond', label: 'Spirit Oasis Pond', x: pond.x, y: level, z: pond.z, r: pond.r, capacity: 300, regen: 15, size: 'medium' });
   const rnd = new Random(1212);
-  const stones: THREE.BufferGeometry[] = [];
+  // Ring of white ice stones (four shapes shared by instancing, each sized on its own).
   for (let i = 0; i < 22; i++) {
     const a = (i / 22) * Math.PI * 2 + rnd.range(-0.08, 0.08);
     const rr = pond.r + 0.7 + rnd.range(-0.2, 0.3);
-    const g = boulder(900 + i, rnd.range(0.5, 0.9), rnd.range(0.3, 0.5), rnd.range(0.5, 0.8), 0);
-    g.translate(pond.x + Math.cos(a) * rr, OASIS_FLOOR - 0.15, pond.z + Math.sin(a) * rr);
-    stones.push(g);
+    const v = i % 4;
+    const m = new THREE.Matrix4().compose(new THREE.Vector3(pond.x + Math.cos(a) * rr, OASIS_FLOOR - 0.15, pond.z + Math.sin(a) * rr), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), i * 2.4), new THREE.Vector3(rnd.range(0.5, 0.9), rnd.range(0.3, 0.5), rnd.range(0.5, 0.8)));
+    cb.instance(`oasis_stone_${v}`, () => boulder(900 + v, 1, 1, 1, 0), wtMat('ice_wall'), m);
   }
-  const sg = mergeParts(stones);
-  cb.mesh(wtMat('rock'), sg, { x: 0, y: 0, z: 0 });
-  sg.dispose();
   for (let i = 0; i < 9; i++) {
     const a = rnd.range(0, Math.PI * 2), d = rnd.range(1.5, pond.r - 0.8);
     k.props.instance('oasis_lily', () => {
@@ -372,7 +369,7 @@ export function buildOasis(k: NwtKit): void {
   for (const s of [-1, 1]) cb.cylinder(wtMat('lacquer'), { x: sx + s * 1.3, y: OASIS_FLOOR, z: sz, r: 0.13, h: 2.6, segments: 8 }, { collide: true, walkable: false });
   cb.box(wtMat('lacquer'), { x: sx, y: OASIS_FLOOR + 2.65, z: sz, sx: 3.6, sy: 0.22, sz: 0.3 });
   cb.box(wtMat('lacquer'), { x: sx, y: OASIS_FLOOR + 2.2, z: sz, sx: 2.9, sy: 0.14, sz: 0.2 });
-  cb.cylinder(wtMat('rock'), { x: sx, y: OASIS_FLOOR, z: sz + 2.6, r: 0.4, rTop: 0.25, h: 1.0, segments: 6 }, { collide: true, walkable: false });
+  cb.cylinder(wtMat('ice_trim'), { x: sx, y: OASIS_FLOOR, z: sz + 2.6, r: 0.4, rTop: 0.25, h: 1.0, segments: 6 }, { collide: true, walkable: false });
   k.props.instance('oasis_lamp', () => new THREE.SphereGeometry(0.22, 10, 8), wtMat('spirit'), new THREE.Matrix4().makeTranslation(sx, OASIS_FLOOR + 1.2, sz + 2.6), false);
   // Trees, bamboo, bushes, reeds: a warm, green contrast to the ice city.
   const trees: Array<[number, number, 'round' | 'pine', number]> = [
@@ -642,7 +639,7 @@ export function buildCaves(k: NwtKit): void {
       const c = new THREE.DodecahedronGeometry(0.24, 0);
       c.translate(0, 1.4, 0);
       return mergeParts([a, b2, c]);
-    }, wtMat('rock'), new THREE.Matrix4().makeTranslation(tx, heightAt(tx, tz) - 0.1, tz));
+    }, wtMat('ice_wall'), new THREE.Matrix4().makeTranslation(tx, heightAt(tx, tz) - 0.1, tz));
   }
   iceSpikes(k.props, entrance.x + nx * (W / 2 + 4), heightAt(entrance.x + nx * (W / 2 + 4), entrance.z), entrance.z + nz * (W / 2 + 4), 4, 61);
   iceSpikes(k.props, entrance.x - nx * (W / 2 + 4), heightAt(entrance.x - nx * (W / 2 + 4), entrance.z), entrance.z - nz * (W / 2 + 4), 3.5, 62);

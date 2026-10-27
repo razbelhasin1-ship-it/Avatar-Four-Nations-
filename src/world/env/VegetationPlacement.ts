@@ -16,6 +16,7 @@ import {
   type TerrainSample,
 } from '../Heightfield';
 import { SPECIES, SPECIES_IDS, type SpeciesCategory, type SpeciesId } from './VegetationModels';
+import { waterTribeAt } from '../WorldLayout';
 
 /**
  * Deterministic vegetation placement (pure: no three.js scene state).
@@ -287,7 +288,10 @@ export function* generateCellMain(cx: number, cz: number, exclusions: readonly V
         tint3[1] = s.soil[1] * (0.92 + rng.next() * 0.16);
         tint3[2] = s.soil[2] * (0.92 + rng.next() * 0.16);
         if (b.volcanic > 0.5) { tint3[0] *= 0.62; tint3[1] *= 0.58; tint3[2] *= 0.58; }
-        sink.push(SPECIES_INDEX.rock, x, h - 0.1 - slope * 1.6 * sc, z, yawR * Math.PI * 2, sc, sc * (0.6 + rng.next() * 0.6), tint3[0], tint3[1], tint3[2], k);
+        // The Water Tribes' boulders are ice (their own white-blue colours, untinted).
+        const ice = waterTribeAt(x, z);
+        if (ice) tint3[0] = tint3[1] = tint3[2] = 1;
+        sink.push(ice ? SPECIES_INDEX.ice_rock : SPECIES_INDEX.rock, x, h - 0.1 - slope * 1.6 * sc, z, yawR * Math.PI * 2, sc, sc * (0.6 + rng.next() * 0.6), tint3[0], tint3[1], tint3[2], k);
         if ((work & 31) === 0) yield;
       }
     }

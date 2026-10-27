@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { SurfaceType } from '../../../core/types';
 import { heightAt } from '../../Heightfield';
-import type { ContentBuilder } from '../../kit/Builder';
+import { matrixFor, type ContentBuilder } from '../../kit/Builder';
 import type { KitMaterialName } from '../../kit/Materials';
+import { liftableSize, rockExtents } from '../../LiftableRocks';
 import { SIGN_NAMES, wildsMaterial, type SignName, type WildsMat } from './materials';
 
 /**
@@ -101,15 +102,24 @@ export function rockGeo(variant: number): THREE.BufferGeometry {
 /**
  * Boulder resting on the ground: (x, z), base at y (default terrain), size sx/sy/sz.
  * Collider: yawed box (walkable top) slightly inside the visual.
+ * Rocks an earthbender can lift (ctx.world.rocks) share one instanced draw per shape and
+ * material; bigger ones (cliff and cave pieces), or `liftable: false`, merge into the scenery.
  */
-export function rock(b: B, mat: Mat, x: number, z: number, sx: number, sy: number, sz: number, o: { y?: number; yaw?: number; variant?: number; collide?: boolean; pitch?: number } = {}): void {
+export function rock(b: B, mat: Mat, x: number, z: number, sx: number, sy: number, sz: number, o: { y?: number; yaw?: number; variant?: number; collide?: boolean; pitch?: number; liftable?: boolean } = {}): void {
   const y = o.y ?? heightAt(x, z) - sy * 0.12;
   const yaw = o.yaw ?? 0;
+  const v = (((o.variant ?? Math.floor(Math.abs(x * 7 + z * 13)) % 6) % 6) + 6) % 6;
   // Unit rock spans y ≈ -0.33 (flattened base) .. +0.5.
-  b.mesh(mat, rockGeo(o.variant ?? Math.floor(Math.abs(x * 7 + z * 13)) % 6), { x, y: y + sy * 0.33, z, yaw, sx, sy, sz, pitch: o.pitch ?? 0 });
-  if (o.collide !== false && sx > 0.6 && sz > 0.6) {
-    b.collider({ shape: 'box', x, y: y + sy * 0.38, z, hx: sx * 0.38, hy: sy * 0.38, hz: sz * 0.38, yaw, walkable: true, solid: true, surface: 'rock' });
+  const t = { x, y: y + sy * 0.33, z, yaw, sx, sy, sz, pitch: o.pitch ?? 0 };
+  const col = o.collide !== false && sx > 0.6 && sz > 0.6 ? { shape: 'box' as const, x, y: y + sy * 0.38, z, hx: sx * 0.38, hy: sy * 0.38, hz: sz * 0.38, yaw, walkable: true, solid: true, surface: 'rock' as const } : undefined;
+  const m = matrixFor(t);
+  const ext = rockExtents(rockGeo(v), m);
+  if (o.liftable !== false && liftableSize(ext.radius, ext.halfHeight)) {
+    b.rockInstance(`wild_rock_${v}_${typeof mat === 'string' ? mat : mat.uuid}`, () => rockGeo(v).clone(), mat, m, col);
+    return;
   }
+  b.mesh(mat, rockGeo(v), t);
+  if (col) b.collider(col);
 }
 
 // ---------------------------------------------------------------------------
@@ -266,7 +276,7 @@ export function firePit(b: B, x: number, z: number, y = heightAt(x, z)): void {
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * Math.PI * 2;
     m.compose(new THREE.Vector3(x + Math.cos(a) * 0.95, y + 0.1, z + Math.sin(a) * 0.95), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), a * 3), new THREE.Vector3(0.42, 0.3, 0.36));
-    b.instance('firepit_stone', () => rockGeo(i).clone(), 'stone_grey', m);
+    b.rockInstance('firepit_stone', () => rockGeo(i).clone(), 'stone_grey', m);
   }
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * Math.PI * 2 + 0.4;

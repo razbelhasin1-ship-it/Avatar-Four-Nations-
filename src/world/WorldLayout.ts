@@ -611,6 +611,28 @@ export const REGIONS: RegionDef[] = [
   },
 ];
 
+/** Region containing (x, z): the nearest region whose radius covers the point (pure; World.regionAt). */
+export function regionAt(x: number, z: number): RegionDef | null {
+  let best: RegionDef | null = null;
+  let bestScore = Infinity;
+  for (const r of REGIONS) {
+    const d = Math.hypot(x - r.x, z - r.z);
+    if (d > r.r) continue;
+    const score = d / r.r;
+    if (score < bestScore) {
+      bestScore = score;
+      best = r;
+    }
+  }
+  return best;
+}
+
+/** In the Northern or Southern Water Tribe: their rocks are ice, never earth (no earthbending them). */
+export function waterTribeAt(x: number, z: number): boolean {
+  const id = regionAt(x, z)?.id;
+  return id === 'northern_water_tribe' || id === 'southern_water_tribe';
+}
+
 export const LANDMARKS: LandmarkDef[] = [
   // Northern Water Tribe
   { id: 'nwt_gate', name: 'Great Ice Gate', regionId: 'northern_water_tribe', x: -220, z: -1735, kind: 'landmark', discoverRadius: 60, fastTravel: false },
