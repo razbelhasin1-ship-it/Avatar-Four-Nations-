@@ -380,7 +380,7 @@ ring-out, DC), `verifyAll()`, `ambience.{state, override, snap, targetsAt}`, `mu
 
 ## Module-specific ids registered elsewhere
 
-Owned by their modules (not part of the library); verified offline with the rest. Trimmed in `trims.ts`: `bend_earth_rise`, `bend_earth_slam`, `bend_explosion`, `bend_fire_whoosh`, `bend_flame_loop`, `bend_rumble_loop`, `water_impact`, `water_jet`.
+Owned by their modules (not part of the library); verified offline with the rest. Trimmed in `trims.ts`: `bend_air_blast`, `bend_earth_rise`, `bend_earth_slam`, `bend_explosion`, `bend_fire_puff`, `bend_fire_whoosh`, `bend_flame_loop`, `bend_rumble_loop`, `water_impact`, `water_jet`, `water_spout`.
 
 | Id | Kind | File |
 |---|---|---|

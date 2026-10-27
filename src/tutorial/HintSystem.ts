@@ -28,6 +28,9 @@ const HINTS: Record<string, HintDef> = {
   avatar: { id: 'avatar', text: 'In danger? Press {avatarState} to enter the Avatar State.', touch: 'In danger? Tap AVATAR at the top of the screen to enter the Avatar State.' },
   sphere: { id: 'sphere', text: 'The Elements Sphere! Unleash Hurricane, Tsunami, Earthquake and Fire Tornado with {ability1}–{ability4}, and the Avatar Cataclysm with {ability5}.', touch: 'The Elements Sphere! Unleash Hurricane, Tsunami, Earthquake and Fire Tornado with your technique buttons, and the Avatar Cataclysm with the fifth.' },
   defeated: { id: 'defeated', text: 'The Avatar recovers at the last safe place. Nothing is lost.' },
+  play_water: { id: 'play_water', text: 'Hold {attack} while looking at water to draw out a floating orb. Look up and down to steer it; let go to drop it.', touch: 'Hold ATTACK while looking at water to draw out a floating orb. Slide your thumb to steer it; let go to drop it.' },
+  play_earth: { id: 'play_earth', text: 'Hold {attack} while looking at a loose rock to lift it. Look around to move it; let go to set it down.', touch: 'Hold ATTACK while looking at a loose rock to lift it. Slide your thumb to move it; let go to set it down.' },
+  play_fire: { id: 'play_fire', text: 'Out of combat, hold {attack} to kindle a small flame in your palm.', touch: 'Out of combat, hold ATTACK to kindle a small flame in your palm.' },
 };
 
 export class HintSystem implements GameSystem, Persistable {
@@ -38,6 +41,8 @@ export class HintSystem implements GameSystem, Persistable {
   private el: HTMLElement | null = null;
   private showTimer = 0;
   private checkTimer = 0;
+  /** Seconds something to play with (water, a rock, a free hand) has been in view. */
+  private playSeen = 0;
 
   init(ctx: GameContext): void {
     this.ctx = ctx;
@@ -110,6 +115,12 @@ export class HintSystem implements GameSystem, Persistable {
       if (hit && !hit.frozen) this.trigger('near_water');
     }
     if (p.element === 'air' && p.body && !p.body.grounded && p.body.velocity.y < -8 && !p.gliding) this.trigger('glide');
+    // Playful bending: once something to play with has been in view for a moment.
+    if (p.element !== 'air' && !this.seen.has('play_' + p.element)) {
+      const k = p.play.hintFor();
+      this.playSeen = k ? this.playSeen + 0.5 : 0;
+      if (k && this.playSeen >= 1.5) this.trigger('play_' + k);
+    }
     const inter = this.ctx.interactions.current;
     if (inter && inter.priority === 2) this.trigger('master');
     if (p.health && p.health.hp / p.health.maxHp < 0.35 && !this.ctx.avatar.active && this.ctx.avatar.spirit > 20) this.trigger('avatar');

@@ -11,6 +11,7 @@ import { Entity, Health, type HitInfo, type HitResult } from '../entities/Entity
 import { KinematicBody } from '../entities/KinematicBody';
 import { STARTS } from '../world/WorldLayout';
 import { cosmeticById } from '../data/cosmetics';
+import { ElementPlay } from './play/ElementPlay';
 
 /** Movement profile per element (the Avatar moves in the style of the active element). */
 export interface MoveStyle {
@@ -92,6 +93,8 @@ export class Player extends Entity implements Combatant, Persistable {
   /** External systems can lock controls (cutscene/training intro). */
   controlLock = 0;
   playTime = 0;
+  /** Playful bending while exploring (held attack): water orb, lifted rock, palm flame. */
+  readonly play: ElementPlay;
 
   constructor(private readonly ctx: GameContext) {
     super();
@@ -106,6 +109,7 @@ export class Player extends Entity implements Combatant, Persistable {
     this.body = new KinematicBody(0.34, this.height);
     this.health = new Health(120, 60, 20);
     this.humanoid.animator.onFootstep = (foot) => this.onFootstep(foot);
+    this.play = new ElementPlay(ctx, this);
   }
 
   setAppearance(a: Appearance): void {
@@ -152,6 +156,7 @@ export class Player extends Entity implements Combatant, Persistable {
   /** Switch active bending element (only to unlocked elements). */
   switchElement(e: Element, silent = false): boolean {
     if (!this.ctx.progression.canBend(e) || e === this.element) return false;
+    this.play.stop('cancel');
     this.element = e;
     this.humanoid.animator.loco.style = e;
     this.chargeId = null;
@@ -268,6 +273,9 @@ export class Player extends Entity implements Combatant, Persistable {
     const input = this.ctx.input;
     const e = this.element;
     const sphere = this.ctx.avatar.sphereActive;
+    // Playful bending first (another action pressed ends it): a quick tap held back while
+    // exploring comes out as the normal attack here.
+    const tapped = this.play.update(dt, true);
     // Ultimates replace slots while the Elements Sphere is active.
     const slotIds: Array<string | null> = sphere
       ? ['ult_hurricane', 'ult_tsunami', 'ult_earthquake', 'ult_fire_tornado']
@@ -284,7 +292,9 @@ export class Player extends Entity implements Combatant, Persistable {
       if (sphere) this.useTechnique('ult_cataclysm');
       else this.ctx.events.emit('ui:notify', { text: 'Combined techniques require the Elements Sphere.', kind: 'warning', duration: 2 });
     }
-    if (input.wasPressed('attack')) {
+    // Attack: fires on press, except exploring with water, a rock or (fire) an open hand to play
+    // with, where a hold becomes play and a tap fires on release (ElementPlay).
+    if ((input.wasPressed('attack') && !this.play.pressAttack()) || tapped) {
       const id = this.techniqueFor('basic', e);
       if (id) this.useTechnique(id);
     }
@@ -374,6 +384,8 @@ export class Player extends Entity implements Combatant, Persistable {
     speed *= this.speedFactor;
     if (body.swimming) speed = Math.min(speed, 3.2);
     else if (body.inWater) speed *= 0.75;
+    // Holding a water orb or a rock: a careful walk.
+    if (this.play.moveFactor < 1) speed = Math.min(speed, st.run) * this.play.moveFactor;
     speed *= ctx.avatar.boosts.speed; // [avatar] Avatar State boost (1 when inactive)
 
     // Dodge
@@ -417,7 +429,7 @@ export class Player extends Entity implements Combatant, Persistable {
     if (this.lockTarget && this.lockTarget.alive) {
       const t = this.lockTarget.position;
       desiredYaw = Math.atan2(t.x - this.root.position.x, t.z - this.root.position.z);
-    } else if (aimingHeavy || ctx.combat.isBusy(this)) {
+    } else if (aimingHeavy || ctx.combat.isBusy(this) || this.play.facesAim) {
       desiredYaw = Math.atan2(this.aimDir.x, this.aimDir.z);
     } else if (moving && this.dodgeTimer <= 0) {
       desiredYaw = Math.atan2(body.move.x, body.move.z);
@@ -564,6 +576,7 @@ export class Player extends Entity implements Combatant, Persistable {
   }
 
   teleport(p: THREE.Vector3, yaw?: number): void {
+    this.play.stop('cancel');
     this.body!.place(p, this.root.position);
     this.safePoint.copy(p);
     if (yaw !== undefined) {
@@ -612,11 +625,13 @@ export class Player extends Entity implements Combatant, Persistable {
       this.humanoid.animator.loco.grounded = true;
       this.updateAim();
       if (!ctx.ui.blocksGameplay) this.handleCombatInput(dt);
+      else this.play.update(dt, false);
       this.humanoid.update(dt);
       return;
     }
 
     if (this.defeated) {
+      this.play.update(dt, false);
       this.defeatTimer += dt;
       this.body!.move.set(0, 0, 0);
       this.body!.step(dt, this.root.position, ctx.world);
@@ -634,6 +649,7 @@ export class Player extends Entity implements Combatant, Persistable {
     this.updateAim();
     this.updateMovement(dt);
     if (!ctx.ui.blocksGameplay && this.controlLock <= 0) this.handleCombatInput(dt);
+    else this.play.update(dt, false);
     this.updateSafePoint(dt);
     this.humanoid.update(dt);
   }

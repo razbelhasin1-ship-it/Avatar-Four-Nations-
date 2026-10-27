@@ -806,6 +806,31 @@ export class WaterSourceSystem implements GameSystem {
   }
 
   /**
+   * Take `amount` from one particular source — the one a bender is looking at (`near` is a
+   * point on its surface) — if it holds that much (finite sources) or its local draw budget
+   * allows it (unlimited ones). Never takes a partial amount. Returns the hit (with `drawn`)
+   * or null (see lastFailure).
+   */
+  drawFrom(caster: Combatant, id: string, near: THREE.Vector3, amount: number): SourceHit | null {
+    const hit = this.findAll(near, 3, { allowLiquid: true, includeDepleted: true }).find((h) => h.id === id && !h.frozen) ?? null;
+    if (!hit) return this.fail({ reason: 'none', message: 'That water is out of reach.' });
+    if (this.capFor(hit) < amount - 1e-6) {
+      const finite = this.sources.get(hit.id);
+      return this.fail(
+        finite && Number.isFinite(finite.capacity)
+          ? { reason: 'dry', message: `${hit.label} does not hold enough water.` }
+          : { reason: 'busy', message: 'The water here is still churning — give it a moment.' },
+      );
+    }
+    this.consume(hit, amount, caster);
+    hit.drawn = amount;
+    hit.available = Math.max(0, hit.available - amount);
+    this.lastFailure = null;
+    if (caster.isPlayer) this.ctx?.events.emit('water:drawn', { sourceId: hit.id, sourceType: hit.type, amount, position: { x: hit.point.x, y: hit.point.y, z: hit.point.z } });
+    return hit;
+  }
+
+  /**
    * Return spent water to the world near a point: refills a nearby finite
    * source, otherwise leaves a temporary puddle (a bendable source) on dry
    * ground. Returns the id of the source that received the water, if any.

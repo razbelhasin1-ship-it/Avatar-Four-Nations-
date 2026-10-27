@@ -51,6 +51,28 @@ interface CellState {
   colliderDensity: number;
 }
 
+/**
+ * A rock instance an earthbender can lift (ElementPlay): which cell/instance it is and its
+ * current transform. Borrowing hides the instance and its collider; returning writes the
+ * new resting transform back into the cell (until the cell is regenerated far away).
+ */
+export interface RockRef {
+  cell: string;
+  index: number;
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  sxz: number;
+  sy: number;
+  tint: [number, number, number];
+  /** Distance along the picking ray. */
+  distance: number;
+}
+
+/** Keep rank written while a rock is lifted: above any foliage density, so it is never drawn or collided. */
+const BORROWED_RANK = 9;
+
 interface Job {
   key: string;
   layer: number;
@@ -610,6 +632,100 @@ export class VegetationSystem implements WorldUpdatable {
       cols += c.colliders?.length ?? 0;
     }
     return { cells: this.cells.size, instances: inst, drawn: this.drawn, colliders: cols, jobs: this.jobs.size };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Liftable rocks (earthbending play)
+  // ---------------------------------------------------------------------------
+
+  /** Original keep ranks of borrowed rocks ("cell:index"). */
+  private readonly borrowed = new Map<string, number>();
+
+  /**
+   * Nearest visible rock (scale minScale..maxScale) hit by the ray within maxDist, with a
+   * little aim assist (`slack` metres around the rock). Rocks already lifted are skipped.
+   */
+  pickRock(origin: THREE.Vector3, dir: THREE.Vector3, maxDist: number, o: { minScale: number; maxScale: number; slack?: number }): RockRef | null {
+    const rockIdx = SPECIES_IDS.indexOf('rock');
+    const slack = o.slack ?? 0.25;
+    let best: RockRef | null = null;
+    const reach = maxDist + 4;
+    for (const cell of this.cells.values()) {
+      const d = cell.data[0];
+      if (!d) continue;
+      const mx = (cell.cx + 0.5) * VEG_CELL, mz = (cell.cz + 0.5) * VEG_CELL;
+      if (Math.hypot(mx - origin.x, mz - origin.z) > reach + VEG_CELL * 0.75) continue;
+      const a = d.data;
+      for (let i = 0; i < d.count; i++) {
+        if (d.species[i] !== rockIdx) continue;
+        const k = i * VEG_STRIDE;
+        if (a[k + 9] >= this.density) continue;
+        const sxz = a[k + 4], sy = a[k + 5];
+        if (sxz < o.minScale || sxz > o.maxScale) continue;
+        // Bounding sphere of the rounded rock (blob centred 0.25 up, radii 1 x 0.66 x 0.85).
+        const cx = a[k], cy = a[k + 1] + 0.25 * sy, cz = a[k + 2];
+        const r = 0.9 * Math.max(sxz, 0.7 * sy) + slack;
+        const ox = cx - origin.x, oy = cy - origin.y, oz = cz - origin.z;
+        const t = ox * dir.x + oy * dir.y + oz * dir.z;
+        if (t < 0 || t - r > maxDist) continue;
+        const d2 = ox * ox + oy * oy + oz * oz - t * t;
+        if (d2 > r * r) continue;
+        const hitT = Math.max(0, t - Math.sqrt(Math.max(0, r * r - d2)));
+        if (best && hitT >= best.distance) continue;
+        best = { cell: cell.key, index: i, x: a[k], y: a[k + 1], z: a[k + 2], yaw: a[k + 3], sxz, sy, tint: [a[k + 6], a[k + 7], a[k + 8]], distance: hitT };
+      }
+    }
+    return best;
+  }
+
+  /** LOD0 geometry of the rock species (shared: never dispose it). */
+  rockGeometry(): THREE.BufferGeometry | null {
+    this.ensureBatches();
+    const row = this.batches[SPECIES_IDS.indexOf('rock')];
+    return row?.[0]?.base ?? null;
+  }
+
+  /** Hide a rock instance (and its collider) while it is lifted. False if it no longer exists. */
+  borrowRock(ref: RockRef): boolean {
+    const cell = this.cells.get(ref.cell);
+    const d = cell?.data[0];
+    const key = ref.cell + ':' + ref.index;
+    if (!cell || !d || ref.index >= d.count || this.borrowed.has(key)) return false;
+    const k = ref.index * VEG_STRIDE;
+    this.borrowed.set(key, d.data[k + 9]);
+    d.data[k + 9] = BORROWED_RANK;
+    this.syncColliders(cell, true);
+    this.dirty = true;
+    return true;
+  }
+
+  /**
+   * Put a borrowed rock back: at its new resting transform (`matrix`: rock-local → world,
+   * scale included) or, without one, where it was. Restores its collider. False if the
+   * cell was regenerated meanwhile (the rock is then simply back at its original place).
+   */
+  returnRock(ref: RockRef, matrix?: THREE.Matrix4): boolean {
+    const key = ref.cell + ':' + ref.index;
+    const rank = this.borrowed.get(key);
+    this.borrowed.delete(key);
+    const cell = this.cells.get(ref.cell);
+    const d = cell?.data[0];
+    const mats = cell?.mats[0];
+    if (!cell || !d || !mats || rank === undefined || ref.index >= d.count) return false;
+    const k = ref.index * VEG_STRIDE;
+    if (matrix) {
+      const e = matrix.elements;
+      const q = ref.index * 16;
+      for (let n = 0; n < 16; n++) mats[q + n] = e[n];
+      d.data[k] = e[12];
+      d.data[k + 1] = e[13];
+      d.data[k + 2] = e[14];
+      d.data[k + 3] = Math.atan2(e[8], e[10]);
+    }
+    d.data[k + 9] = rank;
+    this.syncColliders(cell, true);
+    this.dirty = true;
+    return true;
   }
 
   /** Visible (density-kept) instances within radius r of (x,z): species ids and positions. */

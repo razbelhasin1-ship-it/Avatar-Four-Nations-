@@ -69,6 +69,19 @@ time) and set `animator.busy` while their weight is above 0.5.
 Element-specific technique clips live next to their techniques
 (`src/combat/techniques/<element>/clips.ts`, `src/combat/water/clips.ts`).
 
+## Playful bending (`src/player/play/clips.ts`)
+
+Held-attack play while exploring (`player/play/ElementPlay.ts`). The hold clips come in three
+heights; the interaction switches between them as the held object rises or sinks.
+
+| id | duration (s) | event | mask | description |
+|---|---|---|---|---|
+| `play_water_hold_low` `play_water_hold` `play_water_hold_high` | 2.40 loop | — | upper | Palms toward a floating water orb (low / chest / overhead), arms flowing in slow circles. |
+| `play_earth_lift` | 0.62 | `lift` @ 0.24 | full | Sink into a wide stance with palms low, then heave both fists up to raise a rock. |
+| `play_earth_hold_low` `play_earth_hold` `play_earth_hold_high` | 2.00 loop | — | upper | Tense fists holding a lifted rock aloft (low / chest / overhead). |
+| `play_earth_drop` | 0.45 | — | upper | Open the fists and lower the arms, letting the rock fall. |
+| `play_fire_palm` | 2.60 loop | — | armR | Right forearm forward, palm turned up, holding a small flame (breathing). |
+
 ## Procedural layers (no clip needed)
 
 Set `animator.loco` every frame; the Animator blends these automatically:

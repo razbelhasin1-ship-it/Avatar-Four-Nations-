@@ -206,6 +206,18 @@ export class TouchControls {
     el.addEventListener('pointercancel', release);
     el.addEventListener('lostpointercapture', release);
     el.addEventListener('contextmenu', (e) => e.preventDefault());
+    if (action === 'attack') {
+      // Holding ATTACK to play with an element (water orb, lifted rock, palm flame): sliding the
+      // same thumb turns the camera, and with it the held orb or rock — no second finger needed.
+      let last = { x: 0, y: 0 };
+      el.addEventListener('pointerdown', (e) => (last = { x: e.clientX, y: e.clientY }));
+      el.addEventListener('pointermove', (e) => {
+        if (e.pointerId !== b.pointer) return;
+        const dx = e.clientX - last.x, dy = e.clientY - last.y;
+        last = { x: e.clientX, y: e.clientY };
+        if (this.ctx.player?.play.active) this.ctx.input.addLook(dx * 2.2, dy * 2.2, 'touch');
+      });
+    }
     // No synthetic mouse events / ghost click after a touch press (it could land on a menu this button opened).
     el.addEventListener(
       'touchstart',
