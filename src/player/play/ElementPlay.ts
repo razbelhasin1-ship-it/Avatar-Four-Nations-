@@ -1,26 +1,26 @@
 import * as THREE from 'three';
 import type { GameContext } from '../../core/GameContext';
-import type { EnvironmentSystem } from '../../world/env/EnvironmentSystem';
 import type { Entity } from '../../entities/Entity';
 import type { Player } from '../Player';
 import './clips';
 import { aimRay, type PlayInteraction, type PlayKind } from './common';
 import { PalmFlame } from './PalmFlame';
-import { findRockTarget, RockLift } from './RockLift';
+import { findLiftTarget, liftRock, type LiftTarget } from './RockLift';
+import { LooseStones } from './Stones';
 import { findWaterTarget, ORB_UNITS, WaterOrb, type WaterTarget } from './WaterOrb';
-import type { RockRef } from '../../world/env/Vegetation';
 
 /**
  * Playful bending while exploring (Water, Earth and Fire — never Air): hold the ordinary
- * attack to float a water orb drawn from the water you look at, lift the rock you look at,
- * or kindle a small flame in the right palm.
+ * attack to float a water orb drawn from the water you look at, lift the rock you look at
+ * (or tear a stone out of the ground in front of you), or kindle a small flame in the right palm.
  *
  * Input contract (the existing attack is never weakened):
  *  - In combat — a locked or crosshair target, a hostile within reach, a fight a moment
  *    ago, a technique in progress — the attack fires on press exactly as before.
- *  - Exploring with something to play with in view (bendable water, a liftable rock; for
- *    fire just the open hand), the press is held back for HOLD_TIME: let go sooner and the
- *    normal attack fires at once on release; keep holding and the interaction starts.
+ *  - Exploring with something to play with in view (bendable water; a liftable rock or earth
+ *    to tear one from; for fire just the open hand), the press is held back for HOLD_TIME:
+ *    let go sooner and the normal attack fires at once on release; keep holding and the
+ *    interaction starts.
  *  - It lasts while the attack stays held and ends on release; abilities, the heavy attack,
  *    dodging, an element switch, being hit, menus, mounting, defeat, travel and session end
  *    all end it. Released things finish on their own (the orb falls and splashes, the rock
@@ -34,7 +34,7 @@ const COMBAT_COOLDOWN = 0.8;
 
 type Pending =
   | { kind: 'water'; t: number; target: WaterTarget }
-  | { kind: 'earth'; t: number; target: RockRef }
+  | { kind: 'earth'; t: number; target: LiftTarget }
   | { kind: 'fire'; t: number; target: null };
 
 const tO = new THREE.Vector3();
@@ -48,11 +48,18 @@ export class ElementPlay {
   /** Counters for tests/debugging. */
   readonly stats = { taps: 0, started: 0, released: 0, cancelled: 0, refused: 0 };
   private lastEnd = '';
+  /** Stones torn from the ground and set down: they stay and can be lifted again. */
+  readonly stones: LooseStones;
 
   constructor(private readonly ctx: GameContext, private readonly player: Player) {
+    this.stones = new LooseStones(ctx);
     const ev = ctx.events;
-    ev.on('session:ending', () => this.stop('dispose'));
-    ev.on('session:ended', () => this.stop('dispose'));
+    const end = (): void => {
+      this.stop('dispose');
+      this.stones.clear();
+    };
+    ev.on('session:ending', end);
+    ev.on('session:ended', end);
     ev.on('player:defeated', () => this.stop('cancel'));
     ev.on('player:damaged', (e) => {
       if (e.amount >= 2) this.stop('cancel');
@@ -117,7 +124,11 @@ export class ElementPlay {
       const t = findWaterTarget(this.ctx, this.player);
       return t && (!t.finite || t.available >= ORB_UNITS) ? 'water' : null;
     }
-    if (kind === 'earth') return findRockTarget(this.ctx, this.player) ? 'earth' : null;
+    if (kind === 'earth') {
+      // A rock in view; bare earth only once the bender has been exploring a while (like fire).
+      const t = findLiftTarget(this.ctx, this.player, this.stones);
+      return t && (t.source !== 'ground' || this.player.sinceCombat > 12) ? 'earth' : null;
+    }
     return this.player.sinceCombat > 12 ? 'fire' : null;
   }
 
@@ -134,7 +145,7 @@ export class ElementPlay {
       if (!target) return false;
       this.pending = { kind, t: 0, target };
     } else if (kind === 'earth') {
-      const target = findRockTarget(this.ctx, this.player);
+      const target = findLiftTarget(this.ctx, this.player, this.stones);
       if (!target) return false;
       this.pending = { kind, t: 0, target };
     } else {
@@ -149,6 +160,7 @@ export class ElementPlay {
    */
   update(dt: number, gameplay: boolean): boolean {
     const input = this.ctx.input;
+    this.stones.update(dt, this.player.position);
     if (this.pending) {
       if (!gameplay) {
         this.pending = null;
@@ -212,10 +224,9 @@ export class ElementPlay {
         }
         this.current = new WaterOrb(ctx, player, target);
       } else if (p.kind === 'earth') {
-        const veg = (ctx.extra.get('environment') as EnvironmentSystem | undefined)?.vegetation;
-        const geo = veg?.rockGeometry();
-        if (!veg || !geo || !veg.borrowRock(p.target)) return false;
-        this.current = new RockLift(ctx, player, p.target, geo);
+        const lift = liftRock(ctx, player, p.target, this.stones);
+        if (!lift) return false;
+        this.current = lift;
       } else {
         this.current = new PalmFlame(ctx, player);
       }
@@ -275,6 +286,7 @@ export class ElementPlay {
         inCombat: this.inCombat(),
         lastEnd: this.lastEnd,
         stats: { ...this.stats },
+        stones: this.stones.debug(),
       }),
       /** What a hold would play with right now (null = nothing: the press attacks). */
       target: () => {
@@ -285,8 +297,10 @@ export class ElementPlay {
           return t ? { kind, id: t.id, type: t.type, label: t.label, available: Number.isFinite(t.available) ? +t.available.toFixed(1) : 'unlimited', point: t.point.toArray().map((v) => +v.toFixed(2)) } : null;
         }
         if (kind === 'earth') {
-          const r = findRockTarget(this.ctx, this.player);
-          return r ? { kind, cell: r.cell, index: r.index, scale: +r.sxz.toFixed(2), pos: [+r.x.toFixed(2), +r.y.toFixed(2), +r.z.toFixed(2)] } : null;
+          const t = findLiftTarget(this.ctx, this.player, this.stones);
+          if (!t) return null;
+          const r = t.rock;
+          return { kind, source: t.source, scale: +r.sxz.toFixed(2), pos: [+r.x.toFixed(2), +r.y.toFixed(2), +r.z.toFixed(2)] };
         }
         return { kind };
       },

@@ -29,7 +29,7 @@ const HINTS: Record<string, HintDef> = {
   sphere: { id: 'sphere', text: 'The Elements Sphere! Unleash Hurricane, Tsunami, Earthquake and Fire Tornado with {ability1}–{ability4}, and the Avatar Cataclysm with {ability5}.', touch: 'The Elements Sphere! Unleash Hurricane, Tsunami, Earthquake and Fire Tornado with your technique buttons, and the Avatar Cataclysm with the fifth.' },
   defeated: { id: 'defeated', text: 'The Avatar recovers at the last safe place. Nothing is lost.' },
   play_water: { id: 'play_water', text: 'Hold {attack} while looking at water to draw out a floating orb. Look up and down to steer it; let go to drop it.', touch: 'Hold ATTACK while looking at water to draw out a floating orb. Slide your thumb to steer it; let go to drop it.' },
-  play_earth: { id: 'play_earth', text: 'Hold {attack} while looking at a loose rock to lift it. Look around to move it; let go to set it down.', touch: 'Hold ATTACK while looking at a loose rock to lift it. Slide your thumb to move it; let go to set it down.' },
+  play_earth: { id: 'play_earth', text: 'Hold {attack} to lift the rock you look at, or to tear a stone out of the ground in front of you. Look around to move it; let go to set it down.', touch: 'Hold ATTACK to lift the rock you look at, or to tear a stone out of the ground in front of you. Slide your thumb to move it; let go to set it down.' },
   play_fire: { id: 'play_fire', text: 'Out of combat, hold {attack} to kindle a small flame in your palm.', touch: 'Out of combat, hold ATTACK to kindle a small flame in your palm.' },
 };
 

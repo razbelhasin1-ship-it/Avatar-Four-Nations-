@@ -642,12 +642,14 @@ export class VegetationSystem implements WorldUpdatable {
   private readonly borrowed = new Map<string, number>();
 
   /**
-   * Nearest visible rock (scale minScale..maxScale) hit by the ray within maxDist, with a
-   * little aim assist (`slack` metres around the rock). Rocks already lifted are skipped.
+   * Nearest visible rock (scale minScale..maxScale) hit by the ray within maxDist, with aim
+   * assist: `slack` metres around the rock plus `cone` metres per metre of distance (far
+   * rocks look small under the crosshair). Rocks already lifted are skipped.
    */
-  pickRock(origin: THREE.Vector3, dir: THREE.Vector3, maxDist: number, o: { minScale: number; maxScale: number; slack?: number }): RockRef | null {
+  pickRock(origin: THREE.Vector3, dir: THREE.Vector3, maxDist: number, o: { minScale: number; maxScale: number; slack?: number; cone?: number }): RockRef | null {
     const rockIdx = SPECIES_IDS.indexOf('rock');
     const slack = o.slack ?? 0.25;
+    const cone = o.cone ?? 0;
     let best: RockRef | null = null;
     const reach = maxDist + 4;
     for (const cell of this.cells.values()) {
@@ -664,15 +666,44 @@ export class VegetationSystem implements WorldUpdatable {
         if (sxz < o.minScale || sxz > o.maxScale) continue;
         // Bounding sphere of the rounded rock (blob centred 0.25 up, radii 1 x 0.66 x 0.85).
         const cx = a[k], cy = a[k + 1] + 0.25 * sy, cz = a[k + 2];
-        const r = 0.9 * Math.max(sxz, 0.7 * sy) + slack;
         const ox = cx - origin.x, oy = cy - origin.y, oz = cz - origin.z;
         const t = ox * dir.x + oy * dir.y + oz * dir.z;
+        const r = 0.9 * Math.max(sxz, 0.7 * sy) + slack + cone * Math.max(0, t);
         if (t < 0 || t - r > maxDist) continue;
         const d2 = ox * ox + oy * oy + oz * oz - t * t;
         if (d2 > r * r) continue;
         const hitT = Math.max(0, t - Math.sqrt(Math.max(0, r * r - d2)));
         if (best && hitT >= best.distance) continue;
         best = { cell: cell.key, index: i, x: a[k], y: a[k + 1], z: a[k + 2], yaw: a[k + 3], sxz, sy, tint: [a[k + 6], a[k + 7], a[k + 8]], distance: hitT };
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Nearest visible rock (scale minScale..maxScale) within `radius` metres of (x, z) on the
+   * ground plane that `accept` agrees to (distance = horizontal distance). Lifted rocks are skipped.
+   */
+  nearestRock(x: number, z: number, radius: number, o: { minScale: number; maxScale: number; accept?: (ref: RockRef) => boolean }): RockRef | null {
+    const rockIdx = SPECIES_IDS.indexOf('rock');
+    let best: RockRef | null = null;
+    for (const cell of this.cells.values()) {
+      const d = cell.data[0];
+      if (!d) continue;
+      const mx = (cell.cx + 0.5) * VEG_CELL, mz = (cell.cz + 0.5) * VEG_CELL;
+      if (Math.hypot(mx - x, mz - z) > radius + VEG_CELL * 0.75) continue;
+      const a = d.data;
+      for (let i = 0; i < d.count; i++) {
+        if (d.species[i] !== rockIdx) continue;
+        const k = i * VEG_STRIDE;
+        if (a[k + 9] >= this.density) continue;
+        const sxz = a[k + 4];
+        if (sxz < o.minScale || sxz > o.maxScale) continue;
+        const dist = Math.hypot(a[k] - x, a[k + 2] - z);
+        if (dist > radius || (best && dist >= best.distance)) continue;
+        const ref: RockRef = { cell: cell.key, index: i, x: a[k], y: a[k + 1], z: a[k + 2], yaw: a[k + 3], sxz, sy: a[k + 5], tint: [a[k + 6], a[k + 7], a[k + 8]], distance: dist };
+        if (o.accept && !o.accept(ref)) continue;
+        best = ref;
       }
     }
     return best;

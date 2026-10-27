@@ -44,7 +44,7 @@ Screenshots are how you judge visuals — take them, open them with the Read too
 | `world/Interactables.ts` | E-prompt interactions (`ctx.interactions.register(...)`) |
 | `entities/` | `Entity` (health/poise/status/receiveHit), `KinematicBody`, `EntityManager` (spatial queries), `TrainingDummy` |
 | `character/` | `Humanoid` (procedural rigged model), `Animator` (clips + procedural locomotion), `Appearance` data, base clips |
-| `player/` | `Player` (Combatant; movement styles per element; aim; input→techniques), `CameraRig`; `play/` = held-attack play while exploring (water orb from real sources, lifting real rocks, palm flame; never Air) |
+| `player/` | `Player` (Combatant; movement styles per element; aim; input→techniques), `CameraRig`; `play/` = held-attack play while exploring (water orb from real sources, lifting real rocks or stones torn from the ground — `Stones.ts` keeps them as re-liftable loose stones, palm flame; never Air) |
 | `combat/` | `types.ts` contracts, `CombatSystem` (casts, projectiles, hits), `WaterSources.ts`, `techniques/` |
 | `vfx/` | `VFXSystem` (particle presets, emitters, rings, flashes, transients) |
 | `audio/AudioEngine.ts` | Procedural WebAudio; `registerSound` / `registerLoop`; music themes |

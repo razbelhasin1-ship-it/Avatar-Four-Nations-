@@ -1,7 +1,8 @@
 /**
  * Playful bending E2E (src/player/play): hold the attack while exploring to float a water orb
- * drawn from real water (river, rain barrel), lift a real rock, or kindle a flame in the right
- * palm — and the attack itself is unchanged (taps, combat targets, Airbending).
+ * drawn from real water (river, rain barrel), lift a real rock (or tear a stone out of the
+ * ground where there is none), or kindle a flame in the right palm — and the attack itself is
+ * unchanged (taps, combat targets, Airbending).
  * Run: node tests/e2e/play.e2e.mjs   (SHOT_DIR=/path for screenshots)
  */
 import assert from 'node:assert/strict';
@@ -184,7 +185,7 @@ try {
     await ev((g, r) => g.debug.play.aimAt(r.x, r.y + 0.3 * r.scale, r.z), rock);
     await h.step(2);
     const t = await ev((g) => g.debug.play.target());
-    assert.equal(t?.kind, 'earth', 'rock under the crosshair: ' + JSON.stringify(t));
+    assert.equal(t?.source, 'rock', 'rock under the crosshair: ' + JSON.stringify(t));
     const c0 = await castCount();
     await down(true);
     await h.step(14);
@@ -210,6 +211,60 @@ try {
     assert.equal(now.length, 1, 'the rock is back in the world');
     assert.ok(Math.hypot(now[0].x - rock.x, now[0].z - rock.z) > 0.8, 'resting where it was dropped');
     await shot('rock_landed');
+  });
+
+  await check('5b. earth anywhere: with no rock around, a hold tears a stone out of the ground; set down, it stays and lifts again', async () => {
+    // Open ground east of the river by Riverbend Village (no world rocks close by).
+    let t = null;
+    for (const [dx, dz] of [[6, 0], [10, 8], [12, -10], [20, 0]]) {
+      await ev((g, b, dx, dz) => g.teleport(b.x + dx, b.z + dz), bank, dx, dz);
+      await h.step(40);
+      await ev((g, b, dx, dz) => g.debug.play.aimAt(b.x + dx + 5, g.ctx.world.heightAt(b.x + dx + 5, b.z + dz), b.z + dz), bank, dx, dz);
+      await h.step(2);
+      t = await ev((g) => g.debug.play.target());
+      if (t?.source === 'ground') break;
+    }
+    assert.equal(t?.source, 'ground', 'bare earth ahead: ' + JSON.stringify(t));
+    const s0 = (await st()).stones.length;
+    const c0 = await castCount();
+    await down(true);
+    await h.step(14);
+    let s = await st();
+    assert.equal(s.active, 'earth');
+    assert.equal(s.current.rock.source, 'ground');
+    const groundY = await ev((g, p) => g.ctx.world.heightAt(p[0], p[2]), s.current.start);
+    assert.ok(s.current.start[1] < groundY, `it starts buried and breaks out of the ground (${s.current.start[1]} < ${groundY})`);
+    await h.step(30);
+    s = await st();
+    assert.ok(!s.current.rising && s.current.pos[1] > groundY + 0.6, 'floating: ' + JSON.stringify(s.current));
+    await shot('stone_held');
+    await down(false);
+    await h.step(60);
+    s = await st();
+    assert.equal(s.active, null);
+    assert.equal(await leftovers(), 0, 'no floating stone left');
+    assert.equal(await castCount(), c0, 'no Rock Strike');
+    assert.equal(s.stones.length, s0 + 1, 'set down, it stays as a loose stone');
+    const stone = s.stones[s.stones.length - 1];
+    // It can be lifted again.
+    await ev((g, p) => g.debug.play.aimAt(p[0], p[1] + 0.3, p[2]), stone.pos);
+    await h.step(2);
+    t = await ev((g) => g.debug.play.target());
+    assert.equal(t?.source, 'stone', 'the loose stone under the crosshair: ' + JSON.stringify(t));
+    await down(true);
+    await h.step(14);
+    s = await st();
+    assert.equal(s.current?.rock?.source, 'stone');
+    assert.ok(s.stones.find((x) => x.id === stone.id)?.lifted, 'that stone is the one lifted');
+    await ev((g) => { g.ctx.cameraRig.yaw += 0.8; });
+    await h.step(30);
+    await down(false);
+    await h.step(60);
+    s = await st();
+    const moved = s.stones.find((x) => x.id === stone.id);
+    assert.ok(moved && !moved.lifted && Math.hypot(moved.pos[0] - stone.pos[0], moved.pos[2] - stone.pos[2]) > 0.8, 'set down somewhere new: ' + JSON.stringify(moved));
+    assert.equal(s.stones.length, s0 + 1, 'no extra stones');
+    await shot('stone_landed');
   });
 
   await check('6-7. fire: a small flame in the right palm, following the hand while walking', async () => {
@@ -343,6 +398,8 @@ try {
     await down(false);
     assert.equal((await st()).active, null);
     assert.equal(await leftovers(), 0, 'no orb left behind after the session');
+    assert.equal((await st()).stones.length, 0, 'loose stones cleared with the session');
+    assert.equal(await ev((g) => { let n = 0; g.ctx.scene.traverse((o) => { if (o.name === 'loose_stone') n++; }); return n; }), 0, 'no loose stone meshes left');
   });
 
   await check('touch: holding the ATTACK button and sliding the thumb steers the camera (and the held element)', async () => {
