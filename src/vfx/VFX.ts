@@ -26,6 +26,7 @@ export type ParticlePreset =
   | 'snowpuff'
   | 'fire'
   | 'flame'
+  | 'fireball'
   | 'embers'
   | 'smoke'
   | 'air'
@@ -75,6 +76,8 @@ interface PresetDef {
   up: number; // default upward bias
   soft: boolean;
   spin?: number;
+  /** Flame tongue / smoke puff sprites (see Particles.ts). */
+  shape?: 'flame' | 'smoke';
 }
 
 const PRESETS: Record<ParticlePreset, PresetDef> = {
@@ -85,10 +88,12 @@ const PRESETS: Record<ParticlePreset, PresetDef> = {
   mist: { additive: false, count: 10, speed: [0.3, 1.2], life: [1.4, 2.8], size0: [1.5, 2.5], size1: [3, 5], color0: '#e8f4fa', color1: '#d0e6f2', alpha0: 0.25, alpha1: 0, gravity: -0.2, drag: 1.5, spread: 2, up: 0.2, soft: true },
   snow: { additive: false, count: 14, speed: [1, 3.5], life: [0.6, 1.4], size0: [0.12, 0.25], size1: [0.2, 0.35], color0: '#ffffff', color1: '#e6f2fb', alpha0: 0.95, alpha1: 0, gravity: 4, drag: 1.5, spread: 1.2, up: 0.8, soft: true },
   snowpuff: { additive: false, count: 12, speed: [0.8, 2.5], life: [0.6, 1.2], size0: [0.3, 0.6], size1: [1.0, 1.8], color0: '#f6fbff', color1: '#e3eff8', alpha0: 0.7, alpha1: 0, gravity: 0.5, drag: 2.5, spread: 1.8, up: 0.5, soft: true },
-  fire: { additive: true, count: 16, speed: [1.5, 4], life: [0.35, 0.7], size0: [0.5, 0.9], size1: [0.1, 0.25], color0: '#ffd27a', color1: '#ff3a0a', alpha0: 1, alpha1: 0, gravity: -5, drag: 2, spread: 0.8, up: 0.6, soft: true },
-  flame: { additive: true, count: 10, speed: [0.5, 1.5], life: [0.25, 0.5], size0: [0.6, 1.0], size1: [0.15, 0.3], color0: '#fff0b0', color1: '#ff5a10', alpha0: 1, alpha1: 0, gravity: -8, drag: 3, spread: 0.6, up: 1.0, soft: true },
+  fire: { additive: false, count: 16, speed: [1.5, 4], life: [0.35, 0.7], size0: [0.55, 0.95], size1: [0.15, 0.3], color0: '#ffc65a', color1: '#d42e08', alpha0: 1, alpha1: 0, gravity: -5, drag: 2, spread: 0.8, up: 0.6, soft: true, shape: 'flame', spin: 0.4 },
+  flame: { additive: false, count: 10, speed: [0.5, 1.5], life: [0.25, 0.5], size0: [0.65, 1.05], size1: [0.2, 0.35], color0: '#ffd36e', color1: '#e2400a', alpha0: 1, alpha1: 0, gravity: -8, drag: 3, spread: 0.6, up: 1.0, soft: true, shape: 'flame', spin: 0.3 },
+  /** Billowing fireball puffs (explosions): swell, rise and cool from yellow-white to deep red. */
+  fireball: { additive: false, count: 12, speed: [1.5, 4.5], life: [0.45, 0.85], size0: [0.8, 1.3], size1: [1.7, 2.5], color0: '#ffe39a', color1: '#a8240a', alpha0: 1, alpha1: 0, gravity: -3.5, drag: 4, spread: 2, up: 0.3, soft: true, shape: 'flame', spin: 0.6 },
   embers: { additive: true, count: 12, speed: [1, 4], life: [0.8, 1.8], size0: [0.05, 0.1], size1: [0.02, 0.05], color0: '#ffb347', color1: '#ff4010', alpha0: 1, alpha1: 0, gravity: -1.5, drag: 0.8, spread: 1.4, up: 0.8, soft: false },
-  smoke: { additive: false, count: 8, speed: [0.5, 1.6], life: [1.2, 2.6], size0: [0.6, 1.0], size1: [2.2, 3.6], color0: '#5a5450', color1: '#3a3634', alpha0: 0.45, alpha1: 0, gravity: -1.2, drag: 1.2, spread: 1.0, up: 1.0, soft: true },
+  smoke: { additive: false, count: 8, speed: [0.5, 1.6], life: [1.2, 2.6], size0: [0.6, 1.0], size1: [2.2, 3.6], color0: '#5a5450', color1: '#3a3634', alpha0: 0.45, alpha1: 0, gravity: -1.2, drag: 1.2, spread: 1.0, up: 1.0, soft: true, shape: 'smoke', spin: 0.3 },
   air: { additive: false, count: 14, speed: [3, 7], life: [0.35, 0.7], size0: [0.3, 0.6], size1: [1.2, 2.0], color0: '#f4f8ff', color1: '#e2ecf8', alpha0: 0.38, alpha1: 0, gravity: 0, drag: 3, spread: 0.7, up: 0.0, soft: true },
   swirl: { additive: false, count: 20, speed: [1, 3], life: [0.6, 1.2], size0: [0.25, 0.5], size1: [0.6, 1.2], color0: '#ffffff', color1: '#dfe9f6', alpha0: 0.45, alpha1: 0, gravity: -0.5, drag: 1.0, spread: 2, up: 0.3, soft: true },
   sparks: { additive: true, count: 14, speed: [5, 11], life: [0.2, 0.5], size0: [0.05, 0.1], size1: [0.01, 0.03], color0: '#fff4c0', color1: '#ff8a20', alpha0: 1, alpha1: 0, gravity: 9, drag: 1, spread: 1.4, up: 0.6, soft: false },
@@ -204,6 +209,7 @@ export class VFXSystem {
         drag: p.drag,
         spin: (p.spin ?? 0.5) * (Math.random() - 0.5) * 2,
         soft: p.soft,
+        shape: p.shape,
         swirl: o.swirl,
         cx: pos.x,
         cz: pos.z,

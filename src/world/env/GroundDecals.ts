@@ -189,10 +189,11 @@ void main() {
     float r = length( p ) * 2.0;
     float n = envFbm( p * 5.0 + seed * 7.0 );
     float edge = r + ( n - 0.5 ) * 0.45;
-    float charred = smoothstep( 0.95, 0.35, edge );
+    float charred = smoothstep( 0.88, 0.3, edge );
     float ring = smoothstep( 1.05, 0.75, edge ) * ( 1.0 - charred );
-    col = mix( vec3( 0.5 ), vec3( 0.36, 0.3, 0.26 ), ring );
-    col = mix( col, vec3( 0.07, 0.065, 0.06 ), charred * ( 0.75 + 0.25 * n ) );
+    col = mix( vec3( 0.5 ), vec3( 0.37, 0.31, 0.27 ), ring );
+    // Charred, not ink-black: the ground still reads through.
+    col = mix( col, vec3( 0.17, 0.15, 0.13 ), charred * ( 0.62 + 0.25 * n ) );
     float fleck = step( 0.82, envHash( floor( p * 60.0 ) + seed ) ) * charred;
     col = mix( col, vec3( 0.42, 0.4, 0.38 ), fleck * 0.6 );
     // Embers die quickly; the char lingers.

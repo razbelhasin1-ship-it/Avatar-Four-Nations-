@@ -74,6 +74,7 @@ nearest real source). Ice techniques may use ice; snow only with `water_snow_dra
 | `breath_of_fire` | Breath of Fire | ability | 2 | master | Cone of fire breathed out; also melts ice |
 | `explosive_finisher` | Explosive Finisher | ability | 3 | master | Leaping two-fisted strike detonating a large explosion |
 | `fire_lightning` | Lightning Generation | ability | 4 | master | Charged lightning bolt; near-instant, high damage, chains |
+| `fire_shield` | Fire Shield | defense | 2 | master | Held wheel of fire: burns projectiles away, blocks 75%, scorches attackers; perfect block bursts into a counter blast |
 
 ## Avatar — Elements Sphere only (granted by `Progression.checkSphere`)
 
@@ -106,7 +107,7 @@ the Cataclysm; `src/combat/techniques/avatar/common.ts`), checked before any cos
 | Earth | Lin the Blind | Gaoling | `seismic_sense`, `rock_armor` |
 | Earth | Oyagi of Kyoshi | Kyoshi Village | `ground_spikes`, `earth_surf` |
 | Fire | Master Jeong | Agni Kai Arena, Fire Nation Capital | `fire_dash`, `spinning_flame_kick` |
-| Fire | Sage Hira | Royal Plaza | `breath_of_fire` |
+| Fire | Sage Hira | Royal Plaza | `breath_of_fire`, `fire_shield` |
 | Fire | General Iro (retired) | Ember Island tea house | `fire_stream`, `fire_lightning` |
 | Fire | **Sun Chief Ahkon (grandmaster)** | Sun Warrior Ruins | `explosive_finisher`, Trial of the Eternal Flame |
 

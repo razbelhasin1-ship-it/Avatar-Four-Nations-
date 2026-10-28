@@ -9,3 +9,4 @@ import './fire/basic';
 import './fire/abilities';
 import './fire/movement';
 import './fire/lightning';
+import './fire/defense';

@@ -116,6 +116,32 @@ try {
       assert.ok(hitCount(r) >= 2, 'lightning did not chain to a second dummy');
     },
   });
+  // Fire Shield: a turret bolt is burned out of the air before it reaches the player; a dummy
+  // pressing in beside the wheel is scorched and driven back.
+  const alive = [];
+  await run({
+    id: 'fire_shield',
+    targets: [[11, 0], [1.6, 0.9]],
+    aim: { dist: 6 },
+    frames: 60,
+    hooks: [10, 14, 18, 22, 26, 30, 34],
+    shots: [18],
+    cam: { back: 4.5, side: 2.2, up: 2.2 },
+    during: async (hh, f) => {
+      if (f === 10) await hh.eval((g) => g.debug.bending.shootAt(window.__ct.targets[0].id, { speed: 18, damage: 12 }));
+      else alive.push(await hh.eval((g) => g.debug.bending.projectiles().filter((p) => p.owner !== g.game.player.id).length));
+    },
+    check: (r) => {
+      assert.ok(r.peaks.phases.includes('channel'), 'shield never channelled');
+      const turret = r.targets[0];
+      const onPlayer = r.events.filter((e) => e.type === 'hit' && e.attacker === turret.id);
+      assert.equal(onPlayer.length, 0, `the shielded player was hit: ${JSON.stringify(onPlayer)}`);
+      assert.ok(alive.some((n) => n > 0) && alive[alive.length - 1] === 0, `the bolt was not burned away (alive per hook: ${alive.join(',')})`);
+      const near = r.targets[1];
+      assert.ok(near.totalDamage > 0 && near.moved > 0.5, `the dummy pressing in was not scorched back (${near.totalDamage} dmg, ${near.moved} m)`);
+    },
+    settle: 120,
+  });
 } finally {
   await finish(h, E, results, shots);
 }

@@ -22,6 +22,16 @@ export function shared(key: string, build: () => THREE.BufferGeometry): THREE.Bu
   return g;
 }
 
+/** Unit quad centred on the origin, for camera-facing billboards (flameBallMaterial). */
+export function billboardGeometry(): THREE.BufferGeometry {
+  return shared('fx_billboard', () => new THREE.PlaneGeometry(1, 1));
+}
+
+/** Strip for flameStreakMaterial: uv.x across, uv.y along (0 = head .. 1 = tail). */
+export function streakGeometry(): THREE.BufferGeometry {
+  return shared('fx_streak', () => new THREE.PlaneGeometry(1, 1, 1, 10));
+}
+
 /** Dispose a geometry unless it is a shared/cached one. */
 export function disposeGeometry(g: THREE.BufferGeometry | null | undefined): void {
   if (g && !g.userData.shared) g.dispose();

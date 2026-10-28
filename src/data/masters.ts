@@ -717,6 +717,16 @@ export const MASTERS: MasterDef[] = [
         challenge: { type: 'flame', mode: 'sustain', duration: 20, time: 45, technique: 'breath_of_fire' },
         hint: 'Breath of Fire: a cone of fire breathed out — it also melts ice.',
       },
+      {
+        id: 'hira_fire_shield',
+        title: 'The Temple Ward',
+        technique: 'fire_shield',
+        requires: ['hira_breath_of_fire'],
+        intro: 'For a hundred years the Sages kept the temple flame alive against wind and rain. My acolytes will throw water at you now. Turn your fire into a wheel and burn every bolt to steam before it reaches you.',
+        demo: { cast: 'fire_shield', line: 'Turn the fire like a wheel — and nothing passes.' },
+        challenge: { type: 'defense', launchers: 3, shots: 10, need: 5, time: 50, mode: 'block', technique: 'fire_shield', maxHits: 4 },
+        hint: 'Fire Shield is a defense: hold it to spin a wheel of fire that burns projectiles away and scorches attackers. Raise it just as a blow lands for a counter blast.',
+      },
     ],
   },
   {

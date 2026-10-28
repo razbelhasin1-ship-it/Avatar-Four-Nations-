@@ -141,6 +141,20 @@ registerClip({
   ],
 });
 
+// Fire shield: braced front stance, both palms pushed out at chest height; the hands circle in
+// opposition as they turn the wheel of fire (loops while held).
+registerClip({
+  id: 'fire_shield_hold',
+  duration: 0.8,
+  mask: 'full',
+  loop: true,
+  keys: [
+    { t: 0, pose: { spine: [0.14, 0, 0], upperArmL: [-1.35, 0.15, 0.2], upperArmR: [-1.62, -0.15, -0.1], foreArmL: [-0.35, 0, 0], foreArmR: [-0.22, 0, 0], handL: [-1.1, 0, 0], handR: [-1.1, 0, 0], thighL: [-0.55, 0, 0.28], shinL: [0.7, 0, 0], thighR: [0.3, 0, -0.25], shinR: [0.4, 0, 0], hipsY: -0.16, hipsZ: 0.04 } },
+    { t: 0.4, pose: { spine: [0.16, 0, 0], upperArmL: [-1.62, 0.15, 0.1], upperArmR: [-1.35, -0.15, -0.2], foreArmL: [-0.22, 0, 0], foreArmR: [-0.35, 0, 0], hipsY: -0.17 }, ease: 'inout' },
+    { t: 0.8, pose: { spine: [0.14, 0, 0], upperArmL: [-1.35, 0.15, 0.2], upperArmR: [-1.62, -0.15, -0.1], foreArmL: [-0.35, 0, 0], foreArmR: [-0.22, 0, 0], hipsY: -0.16 }, ease: 'inout' },
+  ],
+});
+
 // Breath of fire: inhale (lean back, chest open) → exhale forward.
 registerClip({
   id: 'fire_breath',
