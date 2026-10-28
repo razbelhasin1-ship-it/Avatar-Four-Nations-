@@ -4,6 +4,7 @@ import type { ProjectileVisual } from '../../combat/types';
 import type { BoneName } from '../../character/Animator';
 import type { Humanoid } from '../../character/Humanoid';
 import { debris, effect } from './loop';
+import { fbm3 } from './noise';
 import { rockGeometry, spikeGeometry, stoneMaterial } from './rocks';
 
 /**
@@ -237,5 +238,280 @@ export class BoneArmor {
     if (!this.alive) return;
     this.alive = false;
     for (const p of this.parts) p.mesh.removeFromParent();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Earth Surf wave
+// ---------------------------------------------------------------------------
+
+const WAVE_HALF_W = 1.45;
+const WAVE_BACK = -2.9;
+const WAVE_FRONT = 2.1;
+/** The crest sits a little ahead of the rider's feet: they ride its back slope. */
+const WAVE_CREST = 0.35;
+const WAKE_MAX = 40;
+const wM = new THREE.Matrix4();
+const wQ = new THREE.Quaternion();
+const wE = new THREE.Euler();
+const wS = new THREE.Vector3();
+const wP = new THREE.Vector3();
+const wD = new THREE.Vector3();
+
+interface WakeRidge {
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  sx: number;
+  sz: number;
+  age: number;
+  life: number;
+}
+
+/**
+ * Earth Surf's wave: a crest of earth that swells out of the ground under and just ahead of the
+ * rider and travels with them, conforming to the terrain, its surface churning. Boulders tumble
+ * over its front, clods spray off its flanks, and two ridges of pushed-aside earth settle back
+ * into the ground behind it. ride() every frame while riding; update() runs from the effect
+ * loop; collapse() sinks it into rubble, after which `done` turns true and dispose() frees it.
+ */
+export class EarthWave {
+  private readonly mesh: THREE.Mesh;
+  private readonly geo = new THREE.BufferGeometry();
+  private readonly nx: number;
+  private readonly nz: number;
+  private readonly boulders: Array<{ mesh: THREE.Mesh; x: number; s: number; phase: number }> = [];
+  private readonly wake: THREE.InstancedMesh;
+  private readonly ridges: WakeRidge[] = [];
+  private readonly origin = new THREE.Vector3();
+  private readonly lastRidge = new THREE.Vector3();
+  private yaw = 0;
+  private speed = 0;
+  private t = 0;
+  private roll = 0;
+  private sprayT = 0;
+  private height = 0;
+  private riding = false;
+  private collapsing = false;
+  /** True once collapsed and every ridge has settled. */
+  done = false;
+
+  constructor(private readonly ctx: GameContext, private readonly tint: string) {
+    const q = ctx.vfx.quality;
+    this.nx = q === 'low' ? 9 : q === 'medium' ? 11 : 13;
+    this.nz = q === 'low' ? 13 : q === 'medium' ? 17 : 21;
+    const n = this.nx * this.nz;
+    this.geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage));
+    this.geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage));
+    const idx: number[] = [];
+    for (let j = 0; j < this.nz - 1; j++) {
+      for (let i = 0; i < this.nx - 1; i++) {
+        const a = j * this.nx + i;
+        const b = a + 1;
+        const c = a + this.nx;
+        const d = c + 1;
+        idx.push(a, c, b, b, c, d);
+      }
+    }
+    this.geo.setIndex(idx);
+    this.mesh = new THREE.Mesh(this.geo, stoneMaterial(tint));
+    this.mesh.frustumCulled = false;
+    this.mesh.castShadow = q !== 'low';
+    this.mesh.receiveShadow = true;
+    this.mesh.visible = false;
+    ctx.vfx.group.add(this.mesh);
+    const nb = q === 'low' ? 3 : 4;
+    for (let i = 0; i < nb; i++) {
+      const mesh = new THREE.Mesh(rockGeometry(i * 3 + 1, 0), stoneMaterial(tint));
+      mesh.castShadow = q !== 'low';
+      mesh.visible = false;
+      ctx.vfx.group.add(mesh);
+      this.boulders.push({ mesh, x: (i - (nb - 1) / 2) * 0.62, s: 0.26 + 0.08 * ((i * 5) % 3) * 0.5, phase: i * 2.1 });
+    }
+    this.wake = new THREE.InstancedMesh(rockGeometry(5, 0), stoneMaterial(tint), WAKE_MAX);
+    // The shoved-aside earth is the same dark soil as the wave, not pale stone.
+    const soil = new THREE.Color(0.62, 0.53, 0.44);
+    for (let i = 0; i < WAKE_MAX; i++) this.wake.setColorAt(i, soil);
+    this.wake.count = 0;
+    this.wake.frustumCulled = false;
+    this.wake.receiveShadow = true;
+    ctx.vfx.group.add(this.wake);
+  }
+
+  /** How high the crest lifts the rider's feet (m). */
+  get lift(): number {
+    return this.height * 0.9;
+  }
+
+  /** The rider's position, travel heading and speed this frame. */
+  ride(pos: THREE.Vector3, yaw: number, speed: number): void {
+    if (this.collapsing) return;
+    if (!this.riding) this.lastRidge.copy(pos);
+    this.riding = true;
+    this.origin.copy(pos);
+    this.yaw = yaw;
+    this.speed = speed;
+  }
+
+  /** The rider stepped off (or the wave broke): it sinks back into the ground as rubble. */
+  collapse(): void {
+    if (this.collapsing) return;
+    this.collapsing = true;
+    if (!this.riding) return;
+    const top = wP.set(this.origin.x + Math.sin(this.yaw) * WAVE_CREST, this.origin.y + this.height * 0.6, this.origin.z + Math.cos(this.yaw) * WAVE_CREST);
+    debris(top, this.ctx.vfx.quality === 'low' ? 8 : 14, { spread: 1.3, speed: 4.5, size: 0.14, radius: 0.8, color: this.tint, life: 1.3 });
+    this.ctx.vfx.burst('dust', top, { count: 10, radius: 1.1, speed: 1.4 });
+  }
+
+  update(dt: number): void {
+    this.t += dt;
+    if (!this.riding) {
+      if (this.collapsing) this.done = true;
+      return;
+    }
+    const want = this.collapsing ? 0 : 0.5 + 0.3 * Math.min(1, this.speed / 14);
+    this.height += (want - this.height) * Math.min(1, dt * (this.collapsing ? 6 : 5));
+    this.build();
+    this.updateBoulders(dt);
+    if (!this.collapsing) this.spray(dt);
+    this.updateWake(dt);
+    if (this.collapsing && this.height < 0.03) {
+      this.mesh.visible = false;
+      for (const b of this.boulders) b.mesh.visible = false;
+      if (this.ridges.length === 0) this.done = true;
+    }
+  }
+
+  private build(): void {
+    const world = this.ctx.world;
+    const pos = this.geo.attributes.position as THREE.BufferAttribute;
+    const col = this.geo.attributes.color as THREE.BufferAttribute;
+    const P = pos.array as Float32Array;
+    const C = col.array as Float32Array;
+    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+    const sx = Math.cos(this.yaw), sz = -Math.sin(this.yaw);
+    const o = this.origin;
+    const H = this.height;
+    const nx = this.nx, nz = this.nz;
+    this.mesh.position.copy(o);
+    this.mesh.visible = true;
+    for (let j = 0; j < nz; j++) {
+      const v = j / (nz - 1);
+      const z = WAVE_BACK + (WAVE_FRONT - WAVE_BACK) * v;
+      const dz = z - WAVE_CREST;
+      // A steep front face, the back slope the rider stands on, a settling ripple behind.
+      const prof = (dz > 0 ? Math.exp(-(dz * dz) / 0.3) : Math.exp(-(dz * dz) / 1.8)) + 0.25 * Math.exp(-((z + 2.0) * (z + 2.0)) / 0.3);
+      const endFade = Math.min(1, v / 0.12, (1 - v) / 0.1);
+      for (let i = 0; i < nx; i++) {
+        const u = i / (nx - 1);
+        const x = (u * 2 - 1) * WAVE_HALF_W;
+        const ax = Math.abs(x) / WAVE_HALF_W;
+        const cross = Math.pow(Math.max(0, 1 - ax * ax), 1.3) * endFade;
+        const wx = o.x + sx * x + fx * z;
+        const wz = o.z + sz * x + fz * z;
+        const g = world.groundAt(wx, wz, o.y + 2.5).y;
+        // Churning clods that roll forward with the wave (coarse lumps plus grit).
+        const churn = (fbm3(wx * 2.2, wz * 2.2, this.t * 2.2) * 0.16 + fbm3(wx * 5.1, wz * 5.1, this.t * 3) * 0.05) * Math.min(1, H * 3) * (0.35 + prof);
+        const h = (H * prof + churn) * cross - 0.05 * (1 - cross);
+        const k = (j * nx + i) * 3;
+        P[k] = wx - o.x;
+        P[k + 1] = g + h - o.y;
+        P[k + 2] = wz - o.z;
+        // Freshly turned soil: dark and moist in the folds and at the edges, drier and paler
+        // where the crest breaks open.
+        const shade = (0.5 + 0.24 * Math.min(1, prof * cross) + churn * 1.3) * (0.72 + 0.28 * cross);
+        C[k] = shade;
+        C[k + 1] = shade * 0.86;
+        C[k + 2] = shade * 0.72;
+      }
+    }
+    pos.needsUpdate = true;
+    col.needsUpdate = true;
+    this.geo.computeVertexNormals();
+  }
+
+  private updateBoulders(dt: number): void {
+    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+    const sx = Math.cos(this.yaw), sz = -Math.sin(this.yaw);
+    const H = this.height;
+    // They roll over the front face as fast as the wave travels.
+    this.roll += (this.speed / 0.25) * dt;
+    for (const b of this.boulders) {
+      const z = WAVE_CREST + 0.55 + 0.1 * Math.sin(this.t * 3 + b.phase);
+      const x = b.x + 0.12 * Math.sin(this.t * 2.3 + b.phase);
+      const wx = this.origin.x + sx * x + fx * z;
+      const wz = this.origin.z + sz * x + fz * z;
+      const g = this.ctx.world.groundAt(wx, wz, this.origin.y + 2.5).y;
+      const s = b.s * Math.min(1, H / 0.35);
+      b.mesh.visible = s > 0.02;
+      b.mesh.position.set(wx, g + H * 0.55 + s * 0.45 + 0.06 * Math.abs(Math.sin(this.t * 7 + b.phase)), wz);
+      b.mesh.rotation.set(this.roll + b.phase, this.yaw, 0, 'YXZ');
+      b.mesh.scale.setScalar(s);
+    }
+  }
+
+  /** Clods and dust thrown off the flanks, faster and further the quicker it rides. */
+  private spray(dt: number): void {
+    this.sprayT -= dt * (2 + this.speed * 0.9);
+    if (this.sprayT > 0) return;
+    this.sprayT = 1;
+    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+    const sx = Math.cos(this.yaw), sz = -Math.sin(this.yaw);
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const x = side * WAVE_HALF_W * 0.7;
+    const z = WAVE_CREST - 0.3;
+    const at = wP.set(this.origin.x + sx * x + fx * z, 0, this.origin.z + sz * x + fz * z);
+    at.y = this.ctx.world.groundAt(at.x, at.z, this.origin.y + 2.5).y + this.height * 0.45;
+    wD.set(sx * side - fx * 0.5, 0.9, sz * side - fz * 0.5);
+    debris(at, this.ctx.vfx.quality === 'low' ? 2 : 3, { dir: wD, spread: 0.4, speed: 2.5 + this.speed * 0.2, size: 0.07 + Math.random() * 0.07, color: this.tint, life: 1 });
+    if (Math.random() < 0.6) this.ctx.vfx.burst('dust', at, { count: 1, dir: wD, speed: 0.8, radius: 0.2 });
+  }
+
+  /** Two ridges of pushed-aside earth flank the furrow and settle back into the ground. */
+  private updateWake(dt: number): void {
+    if (!this.collapsing && this.origin.distanceToSquared(this.lastRidge) > 0.64) {
+      const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+      const sx = Math.cos(this.yaw), sz = -Math.sin(this.yaw);
+      // Just behind the wave and beside its path: the earth it shoved aside.
+      const back = WAVE_BACK + 0.4;
+      for (const side of [-1, 1]) {
+        const x = side * (1.15 + Math.random() * 0.3);
+        const wx = this.origin.x + sx * x + fx * back;
+        const wz = this.origin.z + sz * x + fz * back;
+        if (this.ridges.length >= WAKE_MAX) this.ridges.shift();
+        this.ridges.push({ x: wx, y: this.ctx.world.groundAt(wx, wz, this.origin.y + 2.5).y, z: wz, yaw: this.yaw + (Math.random() - 0.5) * 0.4, sx: 0.38 + Math.random() * 0.14, sz: 0.7 + Math.random() * 0.25, age: 0, life: 2 + Math.random() * 0.6 });
+      }
+      const mid = wP.set(this.origin.x + fx * back, this.origin.y, this.origin.z + fz * back);
+      if (Math.random() < 0.35) this.ctx.world.fx.crack(mid, 0.7, this.yaw);
+      this.ctx.world.fx.disturb(mid, 1.6, 0.5);
+      this.ctx.vfx.burst('dust', mid, { count: 1, radius: 0.8, speed: 0.6 });
+      this.lastRidge.copy(this.origin);
+    }
+    for (let k = this.ridges.length - 1; k >= 0; k--) {
+      this.ridges[k].age += dt;
+      if (this.ridges[k].age >= this.ridges[k].life) this.ridges.splice(k, 1);
+    }
+    let n = 0;
+    for (const r of this.ridges) {
+      const a = r.age / r.life;
+      // Shoved up as the wave passes, then settling slowly back into the ground.
+      const rise = a < 0.08 ? a / 0.08 : 1 - Math.pow((a - 0.08) / 0.92, 1.6);
+      wP.set(r.x, r.y - 0.12 + 0.14 * rise, r.z);
+      wQ.setFromEuler(wE.set(0, r.yaw, 0));
+      wS.set(r.sx, 0.3 * (0.25 + 0.75 * rise), r.sz);
+      wM.compose(wP, wQ, wS);
+      this.wake.setMatrixAt(n++, wM);
+    }
+    this.wake.count = n;
+    this.wake.instanceMatrix.needsUpdate = true;
+  }
+
+  dispose(): void {
+    this.mesh.removeFromParent();
+    this.geo.dispose();
+    for (const b of this.boulders) b.mesh.removeFromParent();
+    this.wake.removeFromParent();
+    this.wake.dispose();
   }
 }

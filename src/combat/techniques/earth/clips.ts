@@ -190,16 +190,18 @@ registerClip({
   ],
 });
 
-// Earth surf: sideways surfing stance on the moving wave (body lifted onto the crest).
+// Earth surf: a low, sideways stance on the crest (the model is lifted onto it); the arms drive
+// the wave in a rolling push — the lead hand presses forward and down while the rear one draws
+// back, then they trade — the knees soaking up the ride.
 registerClip({
   id: 'earth_surf_ride',
   duration: 1.0,
   mask: 'full',
   loop: true,
   keys: [
-    { t: 0, pose: { hips: [0, 0.75, 0], spine: [0.15, -0.6, 0], head: [0, -0.15, 0], thighL: [-0.75, 0, 0.3], shinL: [1.0, 0, 0], thighR: [0.3, 0, -0.35], shinR: [0.75, 0, 0], upperArmL: [-0.5, 0, 1.0], upperArmR: [-0.2, 0, -0.8], foreArmL: [-0.4, 0, 0], foreArmR: [-0.8, 0, 0], hipsY: 0.22 } },
-    { t: 0.5, pose: { hips: [0, 0.72, 0], spine: [0.2, -0.6, 0.05], upperArmL: [-0.6, 0, 1.05], upperArmR: [-0.15, 0, -0.75], hipsY: 0.18 }, ease: 'inout' },
-    { t: 1.0, pose: { hips: [0, 0.75, 0], spine: [0.15, -0.6, 0], upperArmL: [-0.5, 0, 1.0], upperArmR: [-0.2, 0, -0.8], hipsY: 0.22 }, ease: 'inout' },
+    { t: 0, pose: { hips: [0, 0.8, 0], spine: [0.22, -0.55, 0.04], head: [0.05, -0.25, 0], thighL: [-0.85, 0, 0.32], shinL: [1.15, 0, 0], thighR: [0.25, 0, -0.38], shinR: [0.95, 0, 0], footL: [-0.25, 0, 0], footR: [-0.35, 0, 0], upperArmL: [-1.1, 0, 0.55], foreArmL: [-0.35, 0, 0], handL: [-0.9, 0, 0], upperArmR: [-0.2, 0, -0.95], foreArmR: [-1.1, 0, 0], handR: [-0.4, 0, 0], hipsY: -0.04 } },
+    { t: 0.5, pose: { hips: [0, 0.76, 0], spine: [0.26, -0.6, 0], upperArmL: [-0.45, 0, 0.9], foreArmL: [-0.9, 0, 0], handL: [-0.4, 0, 0], upperArmR: [-1.0, 0, -0.4], foreArmR: [-0.3, 0, 0], handR: [-0.9, 0, 0], thighL: [-0.9, 0, 0.32], shinL: [1.25, 0, 0], thighR: [0.22, 0, -0.38], shinR: [1.05, 0, 0], hipsY: -0.08 }, ease: 'inout' },
+    { t: 1.0, pose: { hips: [0, 0.8, 0], spine: [0.22, -0.55, 0.04], upperArmL: [-1.1, 0, 0.55], foreArmL: [-0.35, 0, 0], handL: [-0.9, 0, 0], upperArmR: [-0.2, 0, -0.95], foreArmR: [-1.1, 0, 0], handR: [-0.4, 0, 0], thighL: [-0.85, 0, 0.32], shinL: [1.15, 0, 0], thighR: [0.25, 0, -0.38], shinR: [0.95, 0, 0], hipsY: -0.04 }, ease: 'inout' },
   ],
 });
 

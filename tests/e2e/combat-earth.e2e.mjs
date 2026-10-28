@@ -172,21 +172,24 @@ try {
     },
     settle: 30,
   });
+  let surfLift = 0;
   await run({
     id: 'earth_surf',
     targets: [[9, 3]],
     aim: { dist: 10 },
-    hooks: [8, 70],
+    hooks: [8, 40, 70],
     frames: 110,
     shots: [36],
     cam: { back: 6, side: 3, up: 2.4, follow: true },
     during: async (hh, f) => {
       if (f === 8) await hh.eval((g) => g.ctx.input.setVirtualMove(0, 1));
+      if (f === 40) surfLift = await hh.eval((g) => g.game.player.humanoid.root.position.y);
       if (f === 70) await hh.eval((g) => g.ctx.input.setVirtualMove(0, 0));
     },
     check: (r) => {
       assert.ok(r.peaks.phases.includes('channel'), 'surf never channelled');
       assert.ok(r.peaks.playerMoved > 10, `earth surf carried the player only ${r.peaks.playerMoved.toFixed(1)} m`);
+      assert.ok(surfLift > 0.3, `the rider should stand on the crest of the wave (lift ${surfLift})`);
     },
     settle: 160,
   });

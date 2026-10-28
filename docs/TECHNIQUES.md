@@ -57,7 +57,7 @@ nearest real source). Ice techniques may use ice; snow only with `water_snow_dra
 | `boulder_roll` | Boulder Roll | ability | 2 | master | Huge boulder rolls forward crushing enemies |
 | `stone_guard` | Stone Guard | defense | 2 | master | Brace with rock forearms: heavy damage reduction, perfect-timing counter |
 | `rock_armor` | Rock Armor | defense | 3 | master | Encase in stone plates: armor status, stagger immunity, slower |
-| `earth_surf` | Earth Surf | movement | 2 | master | Ride a travelling wave of earth (fast ground movement) |
+| `earth_surf` | Earth Surf | movement | 2 | master | Ride the crest of a travelling wave of earth (toggle): builds speed, carves, feels slopes, breaks against walls, bowls enemies over; jump off with its momentum |
 | `earth_launch` | Earth Launch | movement | 3 | master | Pillar catapults you high into the air |
 | `seismic_sense` | Seismic Sense | passive | 3 | master | Stomp/landings briefly reveal nearby enemies and hidden things (outline/markers) |
 
