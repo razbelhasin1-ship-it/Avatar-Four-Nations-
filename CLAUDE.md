@@ -52,7 +52,7 @@ Screenshots are how you judge visuals — take them, open them with the Read too
 | `progression/` | Elements, learned techniques, loadouts, mastery (proficiency+lessons+trial), Elements Sphere rule |
 | `quests/` + `data/quests.ts` | Data-driven quests; objectives complete from events |
 | `npc/` + `data/npcs.ts` `data/dialogues.ts` | NPC streaming, behaviours, dialogue runtime (`ctx.npcs.onAction(type, handler)`) |
-| `companions/` | Companion system (bonded records, mount state) |
+| `companions/` | Companion system (bonded records, mount state); `models/` = procedural creatures: `ModelKit` (primitives, skinned template builder) and `Sculpt` (signed-distance bodies meshed seamlessly with surface nets, layers draped over them, fur locks) |
 | `avatar/` | Avatar State / Elements Sphere |
 | `inventory/` + `data/items.ts` `data/cosmetics.ts` | Items, currency, cosmetic unlocks |
 | `ui/` | DOM UI: `UIManager` (screens, toasts, dialogue, loading, confirm), `hud/HUD.ts`, `screens/*`, `styles.css` |

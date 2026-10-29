@@ -5,7 +5,7 @@ import { KinematicBody } from '../entities/KinematicBody';
 import type { SurfaceType } from '../core/types';
 import type { SpeciesDef } from '../data/creatures';
 import { defaultAnim, type AnimInput, type CreatureAction, type CreatureModel } from './models/CreatureModel';
-import { createModel } from './models';
+import { createModel, modelDetail } from './models';
 
 /**
  * A living creature in the world: wild habitat member, ambient wildlife or a
@@ -150,9 +150,7 @@ export class Creature extends Entity {
     this.variant = opts.variant ?? 0;
     this.scale = opts.scale ?? 1;
     this.rand = rng(opts.seed ?? Math.floor(Math.random() * 1e9));
-    const q = ctx.settings.data.graphics.preset as string;
-    const detail = q === 'low' ? 0.6 : q === 'medium' ? 0.8 : 1;
-    const model = createModel(def.id, this.variant, detail, this.scale);
+    const model = createModel(def.id, this.variant, modelDetail(ctx.settings.data.graphics.preset), this.scale);
     if (!model) throw new Error(`[Creature] no model for ${def.id}`);
     this.model = model;
     this.model.setShadows(ctx.settings.data.graphics.shadows !== 'off' && def.size.length > 1.2);

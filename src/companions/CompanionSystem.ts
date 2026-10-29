@@ -11,6 +11,7 @@ import { HabitatManager } from './Habitats';
 import { TamingManager } from './Taming';
 import { RidingController } from './Riding';
 import { DragonTrial } from './DragonTrial';
+import { modelDetail, prewarmModels } from './models';
 import { StableScreen } from './StableScreen';
 
 /**
@@ -229,6 +230,7 @@ export class CompanionSystem implements GameSystem, Persistable {
       if (food && !ctx.inventory.has(food.item)) ctx.inventory.add(food.item, food.count, true);
     }
     this.lastPlayerPos.copy(ctx.player?.position ?? this.lastPlayerPos);
+    prewarmModels(modelDetail(ctx.settings.data.graphics.preset));
     // Companions that were out with you come back.
     for (const r of this.bonded) if (r.summoned) this.spawnCompanion(r, 'near');
   }

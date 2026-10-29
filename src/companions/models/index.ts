@@ -1,6 +1,6 @@
 import type { CreatureModel } from './CreatureModel';
-import { SkyBisonModel } from './SkyBison';
-import { DragonModel } from './Dragon';
+import { prewarmSkyBison, SkyBisonModel } from './SkyBison';
+import { DragonModel, prewarmDragon } from './Dragon';
 import { PolarBearDogModel } from './PolarBearDog';
 import { BadgermoleModel } from './Badgermole';
 import { OstrichHorseModel } from './OstrichHorse';
@@ -41,4 +41,15 @@ export function createModel(speciesId: string, variant = 0, detail = 1, scale = 
 
 export function hasModel(speciesId: string): boolean {
   return speciesId in FACTORIES;
+}
+
+/** Model tessellation for a graphics preset. */
+export function modelDetail(preset: string): number {
+  return preset === 'low' ? 0.6 : preset === 'medium' ? 0.8 : 1;
+}
+
+/** Pre-build the heavy sculpted creature parts (sky bison, dragon) — cached for the whole run. */
+export function prewarmModels(detail: number): void {
+  prewarmSkyBison(detail);
+  prewarmDragon(detail);
 }

@@ -23,19 +23,22 @@ import { SimplexNoise } from '../../core/Noise';
 
 export const PAT = { none: 0, scales: 1, fur: 2, feathers: 3, shell: 4, glow: 5 } as const;
 
-export type ColorFn = (p: THREE.Vector3, n: THREE.Vector3) => THREE.ColorRepresentation;
+/** Vertex colour from its bone-local position, normal and index in the piece. */
+export type ColorFn = (p: THREE.Vector3, n: THREE.Vector3, i: number) => THREE.ColorRepresentation;
 
 export interface PieceOpts {
   color: THREE.ColorRepresentation | ColorFn;
   /** Surface pattern (PAT.*). */
   pat?: number;
+  /** Per-vertex pattern (overrides `pat`); keep neighbouring codes adjacent (e.g. none ↔ scales). */
+  patFn?: (p: THREE.Vector3, n: THREE.Vector3, i: number) => number;
   /** Multipliers applied to the geometry UVs to drive the pattern. */
   patScale?: [number, number];
   /**
    * Smooth skinning: weights for a vertex (given in the owning bone's local
-   * space, bind pose). Default: 100 % to the owning bone.
+   * space, bind pose; i = vertex index in the piece). Default: 100 % to the owning bone.
    */
-  blend?: (p: THREE.Vector3) => Array<[string, number]>;
+  blend?: (p: THREE.Vector3, i: number) => Array<[string, number]>;
 }
 
 const noise = new SimplexNoise(424242);
@@ -148,6 +151,8 @@ export interface TubeOpts {
   squash?: [number, number];
   /** Per-ring radius multiplier noise (fluffy tubes). */
   lumps?: LumpOpts;
+  /** Radius multiplier per vertex: angle around (0 = frame normal) and distance along (m). */
+  profile?: (angle: number, along: number) => number;
 }
 
 /**
@@ -169,7 +174,7 @@ export function tube(points: THREE.Vector3[], radii: number | number[] | ((t: nu
     for (let j = 0; j <= radial; j++) {
       const a = (j / radial) * Math.PI * 2;
       const cn = Math.cos(a) * sq[0], cb = Math.sin(a) * sq[1];
-      let rr = r;
+      let rr = o.profile ? r * o.profile(a, v) : r;
       if (o.lumps && r > 0) {
         const px = c.x + (f.n.x * cn + f.b.x * cb) * r, py = c.y + (f.n.y * cn + f.b.y * cb) * r, pz = c.z + (f.n.z * cn + f.b.z * cb) * r;
         const fq = o.lumps.freq;
@@ -385,13 +390,13 @@ export class ModelBuilder {
       tmpV.fromBufferAttribute(pos, i);
       tmpN.fromBufferAttribute(nrm, i);
       if (fixed) tmpC.copy(fixed);
-      else tmpC.set((o.color as ColorFn)(tmpV, tmpN));
+      else tmpC.set((o.color as ColorFn)(tmpV, tmpN, i));
       this.C.push(tmpC.r, tmpC.g, tmpC.b);
-      this.T.push(uv ? uv.getX(i) * su : 0, uv ? uv.getY(i) * sv : 0, pat, 0);
+      this.T.push(uv ? uv.getX(i) * su : 0, uv ? uv.getY(i) * sv : 0, o.patFn ? o.patFn(tmpV, tmpN, i) : pat, 0);
       // Skin weights (computed in bone-local space).
       weights.length = 0;
       if (o.blend) {
-        for (const [bn, w] of o.blend(tmpV)) {
+        for (const [bn, w] of o.blend(tmpV, i)) {
           const j = this.index.get(bn);
           if (j !== undefined && w > 0) weights.push([j, w]);
         }
@@ -427,8 +432,8 @@ export class ModelBuilder {
     const blend = o.blend;
     this.add(boneR, m, {
       ...o,
-      color: typeof o.color === 'function' ? (p, n) => (o.color as ColorFn)(new THREE.Vector3(-p.x, p.y, p.z), new THREE.Vector3(-n.x, n.y, n.z)) : o.color,
-      blend: blend ? (p) => blend(new THREE.Vector3(-p.x, p.y, p.z)).map(([b, w]) => [b.replace(/L(\d*)$/, 'R$1'), w] as [string, number]) : undefined,
+      color: typeof o.color === 'function' ? (p, n, i) => (o.color as ColorFn)(new THREE.Vector3(-p.x, p.y, p.z), new THREE.Vector3(-n.x, n.y, n.z), i) : o.color,
+      blend: blend ? (p, i) => blend(new THREE.Vector3(-p.x, p.y, p.z), i).map(([b, w]) => [b.replace(/L(\d*)$/, 'R$1'), w] as [string, number]) : undefined,
     });
     return this;
   }
