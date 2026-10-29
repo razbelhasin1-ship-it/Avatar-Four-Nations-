@@ -66,6 +66,8 @@ export class Player extends Entity implements Combatant, Persistable {
   chi = 100;
   maxChi = 100;
   waterReserve = 0;
+  /** Something carrying the player (a water spout) sets its own pace and full control instead of walking. */
+  ride: { speed: number; sprint: number; accel: number } | null = null;
   maxWaterReserve = 60;
   /** Seconds since last combat action (chi regen, music). */
   sinceCombat = 99;
@@ -374,9 +376,10 @@ export class Player extends Entity implements Combatant, Persistable {
     const wishLen = Math.min(1, wish.length());
     if (wishLen > 1e-3) wish.normalize();
 
-    const sprinting = !locked && input.isDown('sprint') && wishLen > 0.3 && body.grounded;
+    const sprinting = !locked && input.isDown('sprint') && wishLen > 0.3 && (body.grounded || !!this.ride);
     let speed = wishLen < 0.5 ? st.walk + (st.run - st.walk) * (wishLen / 0.5) * 0.5 : st.run;
     if (sprinting) speed = st.sprint;
+    if (this.ride) speed = (sprinting ? this.ride.sprint : this.ride.speed) * Math.min(1, wishLen * 1.6);
     // Movement restrictions from casting.
     const mm = ctx.combat.movementMode(this);
     if (mm === 'root') speed = 0;
@@ -414,7 +417,7 @@ export class Player extends Entity implements Combatant, Persistable {
       body.move.copy(targetVel);
     } else {
       const ice = body.surface === 'ice' && body.grounded;
-      let accel = body.grounded ? st.accel : st.accel * st.airControl;
+      let accel = this.ride ? this.ride.accel : body.grounded ? st.accel : st.accel * st.airControl;
       if (ice) accel *= this.element === 'water' ? 0.6 : 0.18; // waterbenders surf the ice
       if (ice && this.element === 'water' && sprinting) targetVel.multiplyScalar(1.35);
       const k = 1 - Math.exp(-accel * dt);

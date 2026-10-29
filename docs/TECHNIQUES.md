@@ -39,7 +39,7 @@ nearest real source). Ice techniques may use ice; snow only with `water_snow_dra
 | `water_sweep` | Water Sweep | ability | 2 | master | Ground-level wave sweeping a wide arc, knocks down |
 | `freezing_strike` | Freezing Strike | ability | 2 | master | Water lash that freezes the target in place (freeze status) |
 | `water_jet` | Water Jet | ability | 3 | master | High-pressure channeled stream, pushes and damages over time |
-| `water_spout` | Water Spout | movement | 3 | master | Ride a column of water upward / launch from water (aerial water attacks start from it); needs a big source |
+| `water_spout` | Water Spout | movement | 3 | master | Toggle: ride a spinning column of water above a big source with no time limit and no cooldown; glide across the water (it leans over a shore, never leaves the water), aerial water attacks start from it; press again to sink, jump to leap off |
 | `water_heal` | Healing Waters | ability | 2 | master | Glowing water heals the bender over a few seconds (needs water) |
 | `water_snow_draw` | Snow Gathering | passive | 2 | master | Allows drawing usable water from snow fields |
 | `water_moisture` | Moisture Extraction | ability | 3 | master | Pulls a limited amount of water from plants/humid air into the reserve; context-sensitive (swamp, forest, rain good; desert/volcanic poor) |

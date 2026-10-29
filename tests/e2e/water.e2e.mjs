@@ -579,9 +579,18 @@ try {
     await h.eval((g) => g.debug.water.setReserve(0));
     const aerial = await h.eval((g) => g.cast('water_whip', null));
     assert.ok(aerial.ok && aerial.water.source === 'river', 'aerial whip from the spout: ' + JSON.stringify(aerial));
+    // No time limit: the spout keeps carrying the bender until they choose to come down.
     await h.step(150);
     const y2 = await h.eval((g) => g.ctx.player.position.y);
-    assert.ok(y2 < y1 - 3, `spout never ended: ${y1} -> ${y2}`);
+    assert.ok(y2 > y0 + 4.5, `the spout dropped the rider on its own: ${y1} -> ${y2}`);
+    // Jump leaps off; the column falls away and the rider comes down.
+    await h.eval((g) => g.ctx.input.setVirtual('jump', true));
+    await h.step(2);
+    await h.eval((g) => g.ctx.input.setVirtual('jump', false));
+    await h.step(100);
+    const y3 = await h.eval((g) => g.ctx.player.position.y);
+    const riding = await h.eval((g) => !!g.ctx.player.ride);
+    assert.ok(!riding && y3 < y2 - 3, `leaping off the spout: ${y2} -> ${y3} (riding ${riding})`);
   });
 
   await check('extra: water skin works anywhere, moisture is context-sensitive', async () => {

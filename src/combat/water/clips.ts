@@ -214,16 +214,18 @@ registerClip({
   ],
 });
 
-// ---- Water Spout: balancing on a column of water ------------------------------
+// ---- Water Spout: riding the column --------------------------------------------
+// A loose front stance on the swirling top, knees soft, the arms bending the column: the hands
+// circle in slow opposition, one pressing down and out while the other draws in and up.
 registerClip({
   id: 'water_spout_ride',
-  duration: 1.6,
+  duration: 1.8,
   loop: true,
   mask: 'full',
   keys: [
-    { t: 0, pose: { spine: [0.08, 0, 0], upperArmL: [-0.45, 0, 1.15], upperArmR: [-0.45, 0, -1.15], foreArmL: [-0.4, 0, 0], foreArmR: [-0.4, 0, 0], thighL: [-0.5, 0, 0.18], thighR: [-0.22, 0, -0.18], shinL: [0.75, 0, 0], shinR: [0.5, 0, 0], hipsY: -0.08 } },
-    { t: 0.8, pose: { spine: [0.04, 0.1, 0.04], upperArmL: [-0.6, 0, 1.0], upperArmR: [-0.3, 0, -1.25], foreArmL: [-0.55, 0, 0], foreArmR: [-0.3, 0, 0], thighL: [-0.42, 0, 0.18], thighR: [-0.3, 0, -0.18], shinL: [0.65, 0, 0], shinR: [0.6, 0, 0], hipsY: -0.04 }, ease: 'inout' },
-    { t: 1.6, pose: { spine: [0.08, 0, 0], upperArmL: [-0.45, 0, 1.15], upperArmR: [-0.45, 0, -1.15], foreArmL: [-0.4, 0, 0], foreArmR: [-0.4, 0, 0], thighL: [-0.5, 0, 0.18], thighR: [-0.22, 0, -0.18], shinL: [0.75, 0, 0], shinR: [0.5, 0, 0], hipsY: -0.08 }, ease: 'inout' },
+    { t: 0, pose: { spine: [0.1, 0.12, 0], head: [0, -0.1, 0], upperArmL: [-0.75, 0, 0.6], foreArmL: [-0.55, 0, 0], handL: [0.35, 0, 0], upperArmR: [-0.35, 0, -0.95], foreArmR: [-0.9, 0, 0], handR: [-0.3, 0, 0], thighL: [-0.42, 0, 0.16], shinL: [0.6, 0, 0], thighR: [-0.12, 0, -0.16], shinR: [0.45, 0, 0], hipsY: -0.07 } },
+    { t: 0.9, pose: { spine: [0.1, -0.12, 0], head: [0, 0.1, 0], upperArmL: [-0.35, 0, 0.95], foreArmL: [-0.9, 0, 0], handL: [-0.3, 0, 0], upperArmR: [-0.75, 0, -0.6], foreArmR: [-0.55, 0, 0], handR: [0.35, 0, 0], thighL: [-0.36, 0, 0.16], shinL: [0.5, 0, 0], thighR: [-0.18, 0, -0.16], shinR: [0.55, 0, 0], hipsY: -0.04 }, ease: 'inout' },
+    { t: 1.8, pose: { spine: [0.1, 0.12, 0], head: [0, -0.1, 0], upperArmL: [-0.75, 0, 0.6], foreArmL: [-0.55, 0, 0], handL: [0.35, 0, 0], upperArmR: [-0.35, 0, -0.95], foreArmR: [-0.9, 0, 0], handR: [-0.3, 0, 0], thighL: [-0.42, 0, 0.16], shinL: [0.6, 0, 0], thighR: [-0.12, 0, -0.16], shinR: [0.45, 0, 0], hipsY: -0.07 }, ease: 'inout' },
   ],
 });
 registerClip({
