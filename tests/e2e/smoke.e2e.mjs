@@ -38,7 +38,9 @@ try {
     const r = await h.eval((g) => g.cast('water_whip', null));
     if (near.length === 0) assert.equal(r.reason, 'water', JSON.stringify(r));
     else assert.equal(r.reason, 'gather', 'water, snow or ice nearby: the empty-handed press gathers it: ' + JSON.stringify({ r, near }));
-    await h.step(60);
+    // Long waits run the simulation without drawing every frame (the city is slow to software-render).
+    await h.eval((g) => g.debug.companions.fastSteps(60));
+    await h.step(2);
   });
   await check('water: canal source → first press gathers water into the hands, second press bends it', async () => {
     await h.eval((g) => g.teleport(-246, -1720));
@@ -49,7 +51,8 @@ try {
     // Empty hands: the press becomes a gather instead of bending the river from a distance.
     const first = await h.eval((g) => g.cast('water_whip', null));
     assert.equal(first.reason, 'gather', JSON.stringify(first));
-    await h.step(60);
+    await h.eval((g) => g.debug.companions.fastSteps(60));
+    await h.step(2);
     const held = await h.eval((g) => g.ctx.player.waterReserve);
     assert.ok(held >= 8, 'water should now be held: ' + held);
     const r = await h.eval((g) => g.cast('water_whip', null));
@@ -65,6 +68,8 @@ try {
     // Software-rendered reloads can take well over 30 s on a loaded machine.
     await h.page.reload({ timeout: 120000 });
     await h.page.waitForFunction(() => window.__ready === true, null, { timeout: 120000 });
+    // Only the state is checked here: no real-time frames of the city while it loads.
+    await h.eval((g) => g.game.stop());
     const loaded = await h.eval((g) => g.loadGame('slot3'));
     assert.ok(loaded, 'load failed');
     const after = await h.state();
