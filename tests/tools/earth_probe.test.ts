@@ -56,12 +56,9 @@ describe.skipIf(!process.env.EARTH_PROBE)('earth probe', () => {
     if (mode === 'layout') {
       const L = await import('../../src/world/regions/earth/bssLayout');
       const r1 = (o: unknown) => JSON.stringify(o, (_k, v) => (typeof v === 'number' ? Math.round(v * 10) / 10 : v));
-      out.push('OUTER_GATES ' + r1(L.OUTER_GATES.map((g) => ({ ...g, deg: (g.theta * 180) / Math.PI }))));
-      out.push('INNER_GATES ' + r1(L.INNER_GATES.map((g) => ({ ...g, deg: (g.theta * 180) / Math.PI }))));
-      out.push('MID_GATES ' + r1(L.MID_GATES));
-      out.push('UP_GATES ' + r1(L.UP_GATES));
-      out.push('AGRARIAN ' + r1(L.AGRARIAN_AVENUES));
-      out.push('LOWER ' + r1(L.LOWER_AVENUES));
+      out.push('GATES ' + r1(L.GATES.map((g) => ({ ...g, deg: (g.theta * 180) / Math.PI }))));
+      out.push('AVENUES ' + r1(L.AVENUES));
+      out.push('FARM_ROADS ' + r1(L.FARM_ROADS));
       out.push('STATIONS ' + r1(L.STATIONS));
       for (const id of ['ba_sing_se_west', 'southern_road', 'eastern_road', 'northern_road']) {
         const { ROADS } = await import('../../src/world/WorldLayout');

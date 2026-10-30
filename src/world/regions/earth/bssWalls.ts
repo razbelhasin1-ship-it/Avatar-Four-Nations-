@@ -1,364 +1,571 @@
 import * as THREE from 'three';
+import type { GameContext } from '../../../core/GameContext';
 import type { ContentBuilder } from '../../kit/Builder';
-import type { KitMaterialName } from '../../kit/Materials';
 import type { P2 } from '../../WorldLayout';
-import { C, DEG, GROUND, INNER, INNER_GATES, OUTER, OUTER_GATES, outerR, polar, qkey, type GateDef } from './bssLayout';
+import { annulusGeometry, stripGeometry } from './geom';
+import { hangingBanner } from './parts';
+import { prismGeometry } from './walls';
 import type { BuildEnv } from './env';
-import { bannerPole, hangingBanner, paifang, stoneLantern } from './parts';
-import { gatehouse, longStairs, LoopPath, loopWall, sectionsBetween, type WallStyle } from './walls';
+import {
+  AVENUES,
+  C,
+  DEG,
+  FARM_ROADS,
+  FOOT,
+  GATES,
+  GROUND,
+  R,
+  RAIL,
+  RAIL_LINES,
+  RING_STREETS,
+  WALL,
+  gatesOf,
+  polar,
+  wrapAngle,
+  type GateDef,
+} from './bssLayout';
+import { BssMats, RailPath, batteredSegment, gateBlock, medallion, pillarTower, ringChords, ringFrame, ringSections, sign, slabGeometry, type Frame, type Portal } from './bssKit';
 
 /**
- * Ba Sing Se fortifications: the Outer Wall (34 m, walkable top, three
- * monumental gatehouses, wall stairs and watch towers), the Inner Wall (20 m,
- * four gates) and the raised ring terraces (Middle / Upper Ring retaining walls
- * with parapets, walkable tops, stair-gates).
+ * Ba Sing Se walls: the backdrop-scale Outer Wall (180 m, with homes and
+ * sentry houses, three gate towers), the earthen Inner Wall (60 m, main gate
+ * with the road tunnel and three viaduct portals), the 30 m ring walls with
+ * 中環 / 上環 gates (viaducts pass through notches flanked by pagoda pillar
+ * towers), the palace wall, ground surfaces and the earthbent gate slabs.
  */
 
-export const OUTER_STYLE: WallStyle = {
-  height: OUTER.height,
-  thick: OUTER.thick,
-  batterOut: 3,
-  batterIn: 1.2,
-  body: 'stone_tan',
-  trim: 'stone_light',
-  band: 'stone_light',
-  bands: [0.34, 0.68],
-  plinthH: 2.6,
-  walk: 'paving',
-  merlonW: 2.2,
-  merlonH: 1.6,
-  merlonGap: 1.5,
-  parapetH: 1.3,
-  innerParapetH: 1.1,
-};
-
-export const INNER_STYLE: WallStyle = {
-  height: INNER.height,
-  thick: INNER.thick,
-  batterOut: 1.8,
-  batterIn: 0.8,
-  body: 'stone_light',
-  trim: 'stone_tan',
-  band: 'stone_tan',
-  bands: [0.5],
-  plinthH: 1.8,
-  walk: 'paving',
-  merlonW: 1.8,
-  merlonH: 1.3,
-  merlonGap: 1.3,
-  parapetH: 1.2,
-  innerParapetH: 1.0,
-  innerMerlons: true,
-};
-
-export const OUTER_GATE = { W: 48, D: 24, passage: 12, spring: 10 };
-export const INNER_GATE = { W: 30, D: 16, passage: 10, spring: 7 };
-
-export interface WallRecord {
-  outerPath: LoopPath;
-  innerPath: LoopPath;
-  /** Wall-top stair landings: bottom point, top point (y = wall top). */
-  stairs: Array<{ id: string; bottom: P2; top: P2; topY: number; walkTop: P2; landing: P2 }>;
-  gates: Array<{ id: string; ring: 'outer' | 'inner'; x: number; z: number; inX: number; inZ: number; outX: number; outZ: number }>;
+export interface WallSite {
+  env: BuildEnv;
+  bm: BssMats;
+  gates: GateRuntime;
+  mark(id: string, x: number, y: number, z: number): void;
 }
 
-/** Wall chunk for an arc position (both loops share four quadrant chunks per material). */
-function arcChunk(env: BuildEnv, path: LoopPath, s: number) {
-  const p = path.at(s);
-  return env.chunks.named('major', `q:${qkey(p.x, p.z)}`);
+const ARCS = { outer: 16, inner: 12, ring: 8 };
+
+function arcChunk(env: BuildEnv, key: string, theta: number, arcs: number): ContentBuilder {
+  const i = Math.floor((wrapAngle(theta) / (Math.PI * 2)) * arcs) % arcs;
+  return env.chunks.named('major', `${key}:${i}`).builder;
 }
 
-function gateOut(g: GateDef): P2 {
-  return { x: Math.cos(g.theta), z: Math.sin(g.theta) };
-}
-
-/** Build one loop wall with gates, stair landings and towers. */
-function cityWall(
-  env: BuildEnv,
-  o: {
-    key: string;
-    path: LoopPath;
-    style: WallStyle;
-    gates: GateDef[];
-    gate: { W: number; D: number; passage: number; spring: number };
-    tower: { w: number; d: number; h: number; tiers: number };
-    stairs: Array<{ gate: string; side: 1 | -1; gap: number }>;
-    arcs: number;
-    rec: WallRecord;
-    ring: 'outer' | 'inner';
-  },
-): void {
-  const { path, style } = o;
-  const top = GROUND + style.height;
-  const total = path.total;
-  const gaps: Array<[number, number]> = o.gates.map((g) => {
-    const s = path.sOf(g.theta);
-    return [s - o.gate.W / 2, s + o.gate.W / 2];
-  });
-  // Stair runs (straight chords inside the wall) and their landing ranges.
-  const tread = 0.42;
-  const steps = Math.round(style.height / 0.25);
-  const run = steps * tread;
-  const inset = style.thick / 2 + style.batterIn + 2.6; // stair centre line distance inside the wall centre line
-  const landings: Array<[number, number]> = [];
-  const stairDefs: Array<{ id: string; sTop: number; sBot: number }> = [];
-  for (const st of o.stairs) {
-    const g = o.gates.find((q) => q.id === st.gate);
-    if (!g) continue;
-    const sg = path.sOf(g.theta);
-    const sTop = sg + st.side * (o.gate.W / 2 + st.gap);
-    // Find sBot so that the chord length (on the inset curve) equals the run.
-    let sBot = sTop + st.side * run;
-    for (let k = 0; k < 6; k++) {
-      const a = path.offset(sTop, -inset), b = path.offset(sBot, -inset);
-      const l = Math.hypot(a.x - b.x, a.z - b.z);
-      sBot = sTop + ((sBot - sTop) * run) / Math.max(1, l);
-    }
-    stairDefs.push({ id: `${o.key}_${st.gate}_${st.side > 0 ? 'a' : 'b'}`, sTop, sBot });
-    landings.push([sTop - 7, sTop + 7]);
+/** Smoothed rail centre lines (shared with the viaduct builder). */
+let railPaths: Map<string, RailPath> | null = null;
+export function railPath(id: string): RailPath {
+  if (!railPaths) {
+    railPaths = new Map();
+    for (const l of RAIL_LINES) railPaths.set(l.id, new RailPath(l.pts, l.kind === 'loop'));
   }
-  loopWall(env.chunks, { path, sections: sectionsBetween(total, gaps), parapetGaps: landings.map(([a, b]) => [path.wrap(a), path.wrap(a) + (b - a)]), baseY: GROUND, style, key: 'walls', arcs: 4, segLen: 15, chunkKey: (a, b) => `q:${qkey((a.x + b.x) / 2, (a.z + b.z) / 2)}` });
+  return railPaths.get(id)!;
+}
 
-  // Gatehouses
-  for (const g of o.gates) {
-    const b = arcChunk(env, path, path.sOf(g.theta)).builder;
-    const out = gateOut(g);
-    gatehouse(b, env.mats, {
-      x: g.x,
-      z: g.z,
-      out,
-      baseY: GROUND,
-      width: o.gate.W,
-      depth: o.gate.D,
-      height: style.height,
-      passageW: o.gate.passage,
-      spring: o.gate.spring,
-      body: style.body,
-      trim: style.trim,
-      roof: 'roof_green',
-      tower: o.tower,
-      banners: true,
-      doors: true,
-    });
-    const inP = { x: g.x - out.x * (o.gate.D / 2 + 3), z: g.z - out.z * (o.gate.D / 2 + 3) };
-    const outP = { x: g.x + out.x * (o.gate.D / 2 + 3), z: g.z + out.z * (o.gate.D / 2 + 3) };
-    o.rec.gates.push({ id: g.id, ring: o.ring, x: g.x, z: g.z, inX: inP.x, inZ: inP.z, outX: outP.x, outZ: outP.z });
-    // Keep the passage, both mouths and the flanks of the approach clear.
-    env.excl.seg(g.x - out.x * (o.gate.D / 2 + 30), g.z - out.z * (o.gate.D / 2 + 30), g.x + out.x * (o.gate.D / 2 + 30), g.z + out.z * (o.gate.D / 2 + 30), o.gate.passage / 2 + 4);
-    env.excl.box(g.x, g.z, o.gate.W / 2 + 2, o.gate.D / 2 + 2, Math.atan2(out.x, out.z));
-    // Guardian lanterns and banner poles at the inner mouth.
-    const pb = env.chunks.at('props', inP.x, inP.z).builder;
-    const right = { x: Math.cos(Math.atan2(out.x, out.z)), z: -Math.sin(Math.atan2(out.x, out.z)) };
+/** Where rail lines cross a wall of radius r: θ, lateral offset in a gate frame and the gap width along the wall. */
+function railCrossings(r: number): Array<{ theta: number; p: P2; along: number }> {
+  const out: Array<{ theta: number; p: P2; along: number }> = [];
+  for (const l of RAIL_LINES) {
+    if (l.kind !== 'shuttle') continue;
+    for (const c of railPath(l.id).crossings(r)) {
+      const nr = Math.abs(c.tx * Math.cos(c.theta) + c.tz * Math.sin(c.theta));
+      out.push({ theta: c.theta, p: { x: c.x, z: c.z }, along: RAIL.deckW / Math.max(0.35, nr) });
+    }
+  }
+  return out;
+}
+
+function gateHalf(g: GateDef, W: number, r: number): [number, number] {
+  return [g.theta, W / 2 + 0.2 + 0 * r];
+}
+
+function lateral(f: Frame, p: P2): number {
+  const rx = Math.cos(f.yaw), rz = -Math.sin(f.yaw);
+  return (p.x - f.x) * rx + (p.z - f.z) * rz;
+}
+
+// ---------------------------------------------------------------------------
+// Outer Wall
+// ---------------------------------------------------------------------------
+
+export function buildOuterWall(site: WallSite): void {
+  const { env, bm } = site;
+  const W = WALL.outer;
+  const H = W.h + 2;
+  const base = GROUND - 2;
+  const gateW = (g: GateDef) => (g.main ? 58 : 42);
+  const gates = gatesOf('outer');
+  const secs = ringSections(R.outer, gates.map((g) => gateHalf(g, gateW(g), R.outer)));
+  let k = 0;
+  for (const [t0, t1] of secs) {
+    for (const [a, c, tm] of ringChords(R.outer, t0, t1, 18)) {
+      const b = arcChunk(env, 'outer', tm, ARCS.outer);
+      batteredSegment(b, bm.outerStone, a, c, base, H, W.base, W.top, { coping: 'stone_light', bands: [0.16, 0.34, 0.52, 0.7, 0.88], bandMat: 'stone_tan', parapet: 1.6, stack: 3, extend: 0.7 });
+      const yaw = Math.atan2(-(c.z - a.z), c.x - a.x);
+      const s = Math.sin(yaw) * Math.cos(tm) + Math.cos(yaw) * Math.sin(tm) >= 0 ? 1 : -1;
+      const mx = (a.x + c.x) / 2, mz = (a.z + c.z) / 2;
+      // Stepped battered buttresses on the city face.
+      if (k % 4 === 1) {
+        const dIn = (y: number) => W.base / 2 - ((W.base - W.top) / 2) * (y / H);
+        const hb = H * 0.82;
+        const g = prismGeometry([[-s * (dIn(0) - 1), 0], [-s * (dIn(0) + 6), 0], [-s * (dIn(hb) - 0.6), hb]], 8);
+        b.mesh(bm.outerStone, g, { x: mx, y: base, z: mz, yaw });
+        g.dispose();
+        const g2 = prismGeometry([[s * (dIn(0) - 1), 0], [s * (dIn(0) + 6), 0], [s * (dIn(hb) - 0.6), hb]], 8);
+        b.mesh(bm.outerStone, g2, { x: mx, y: base, z: mz, yaw });
+        g2.dispose();
+        const pIn = polar(tm, R.outer - dIn(0) - 3);
+        b.collider({ shape: 'box', x: pIn.x, y: base + 20, z: pIn.z, hx: 4, hz: 3.2, hy: 20, yaw, walkable: false, solid: true });
+      }
+      // Sentry houses on the walkway.
+      if (k % 5 === 2) {
+        const top = base + H;
+        b.block('plaster_tan', { x: mx, y: top, z: mz, sx: 7, sy: 4.4, sz: 7, yaw });
+        b.box('wood_red', { x: mx, y: top + 2.2, z: mz, sx: 7.3, sy: 0.5, sz: 7.3, yaw });
+        b.roof('roof_green', { x: mx, y: top + 4.4, z: mz, w: 7, d: 7, height: 2.6, yaw, overhang: 1.4, curve: 0.8, style: 'hip', ridge: null });
+      }
+      k++;
+    }
+  }
+  // Homes built into the city face around the main gate: windows, doors, balconies, lanterns.
+  const main = gates.find((g) => g.main)!;
+  const homes = env.chunks.named('props', 'outer_homes').builder;
+  for (let lat = -150; lat <= 150; lat += 6.5) {
+    if (Math.abs(lat) < gateW(main) / 2 + 6) continue;
+    const t = main.theta + lat / R.outer;
+    const r = env.rnd;
+    for (let lvl = 0; lvl < 6; lvl++) {
+      if (r.next() < 0.28 + lvl * 0.05) continue;
+      const y = 2.2 + lvl * 8.5;
+      const dIn = W.base / 2 - ((W.base - W.top) / 2) * ((y + 2) / H);
+      const p = polar(t, R.outer - dIn - 0.12);
+      const yaw = Math.atan2(-Math.cos(t), -Math.sin(t));
+      if (lvl === 0) {
+        homes.box('wood_dark', { x: p.x, y: GROUND + 1.25, z: p.z, sx: 1.6, sy: 2.5, sz: 0.3, yaw });
+        homes.box('stone_tan', { x: p.x - Math.cos(t) * 0.8, y: GROUND + 0.15, z: p.z - Math.sin(t) * 0.8, sx: 2.6, sy: 0.3, sz: 1.4, yaw });
+        homes.box('roof_dark', { x: p.x - Math.cos(t) * 0.5, y: GROUND + 3.0, z: p.z - Math.sin(t) * 0.5, sx: 2.6, sy: 0.18, sz: 1.2, yaw, pitch: -0.25 });
+        continue;
+      }
+      homes.box('wood_dark', { x: p.x, y: GROUND + y, z: p.z, sx: 1.3, sy: 1.7, sz: 0.3, yaw });
+      homes.box('wood_red', { x: p.x, y: GROUND + y + 1.0, z: p.z, sx: 1.7, sy: 0.22, sz: 0.4, yaw });
+      if (r.next() < 0.45) {
+        const q = polar(t, R.outer - dIn - 0.9);
+        homes.box('wood', { x: q.x, y: GROUND + y - 1.05, z: q.z, sx: 2.6, sy: 0.18, sz: 1.6, yaw });
+        homes.box('wood_dark', { x: q.x - Math.cos(t) * 0.75, y: GROUND + y - 0.55, z: q.z - Math.sin(t) * 0.75, sx: 2.6, sy: 0.9, sz: 0.08, yaw });
+      }
+      if (r.next() < 0.2) homes.lantern(new THREE.Vector3(p.x - Math.cos(t) * 0.6, GROUND + y + 1.3, p.z - Math.sin(t) * 0.6), { color: 'red', hanging: true });
+    }
+  }
+  // Gate towers.
+  for (const g of gates) {
+    const Wg = gateW(g);
+    const D = W.base + 6;
+    const f = ringFrame(g.theta, g.r);
+    const b = env.chunks.named('major', `outer_gate:${g.id}`).builder;
+    const Ht = H + 10;
+    gateBlock(b, { f, baseY: base, W: Wg, D, H: Ht, mat: bm.outerStone, trim: 'stone_light', tunnel: { aw: g.width, spring: g.height - g.width / 2 + 2 }, bands: [0.16, 0.34, 0.52, 0.7, 0.88].map((q) => (q * H) / Ht) });
+    // Gate hall on top.
+    const top = base + Ht;
+    const hw = Wg * 0.62, hd = D * 0.42;
+    b.block('plaster_tan', { x: f.x, y: top, z: f.z, sx: hw, sy: 9, sz: hd, yaw: f.yaw });
+    for (let i = 0; i <= 8; i++) {
+      for (const sd of [-1, 1]) {
+        const q = f.at(-hw / 2 + (i * hw) / 8, sd * (hd / 2 + 0.2));
+        b.box('wood_red', { x: q.x, y: top + 4.5, z: q.z, sx: 0.7, sy: 9, sz: 0.5, yaw: f.yaw });
+      }
+    }
+    b.roof('roof_green', { x: f.x, y: top + 9, z: f.z, w: hw, d: hd, height: 6, yaw: f.yaw, overhang: 3.2, curve: 0.9, style: 'hip', ridge: 'roof_dark' });
+    b.block('plaster_tan', { x: f.x, y: top + 11.5, z: f.z, sx: hw * 0.62, sy: 6, sz: hd * 0.62, yaw: f.yaw });
+    b.roof('roof_green', { x: f.x, y: top + 17.5, z: f.z, w: hw * 0.62, d: hd * 0.62, height: 5.5, yaw: f.yaw, overhang: 2.6, curve: 0.9, style: 'hip', ridge: 'roof_dark' });
+    // Medallions and banners on both faces.
+    for (const side of [1, -1]) {
+      const p = f.at(0, side * (D / 2 + 0.25));
+      const faceYaw = side > 0 ? f.yaw : f.yaw + Math.PI;
+      medallion(b, bm, p.x, base + g.height + 16, p.z, faceYaw, g.main ? 7 : 5.5, 0.6);
+      for (const bx of [-1, 1]) {
+        const q = f.at(bx * (g.width / 2 + 7), side * (D / 2 + 0.3));
+        hangingBanner(b, env.mats, q.x, base + g.height + 30, q.z, faceYaw - Math.PI / 2, 5, 24);
+      }
+    }
+    // Paved passage through the gate.
+    const floor = new THREE.PlaneGeometry(g.width, D + 8);
+    floor.rotateX(-Math.PI / 2);
+    b.mesh('paving', floor, { x: f.x, y: GROUND + 0.05, z: f.z, yaw: f.yaw }, { castShadow: false });
+    floor.dispose();
+    site.gates.add({ id: g.id, f, lz: D / 2 - 2, baseY: GROUND, aw: g.width, spring: g.height - g.width / 2, thick: 2.6, openR: g.main ? 46 : 36 });
+    site.mark(`gate_${g.id}`, f.x, GROUND, f.z);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Inner Wall
+// ---------------------------------------------------------------------------
+
+export function buildInnerWall(site: WallSite): void {
+  const { env, bm } = site;
+  const W = WALL.inner;
+  const H = W.h + 1;
+  const base = GROUND - 1;
+  const gates = gatesOf('inner');
+  const gateW = (g: GateDef) => (g.main ? 66 : 30);
+  for (const [t0, t1] of ringSections(R.inner, gates.map((g) => gateHalf(g, gateW(g), R.inner)))) {
+    for (const [a, c, tm] of ringChords(R.inner, t0, t1, 12)) {
+      batteredSegment(arcChunk(env, 'inner', tm, ARCS.inner), bm.earthen, a, c, base, H, W.base, W.top, { coping: 'stone_tan', bands: [0.33, 0.66], bandMat: 'stone_grey', parapet: 1.4, stack: 2, extend: 0.5 });
+    }
+  }
+  const crossings = railCrossings(R.inner);
+  for (const g of gates) {
+    const Wg = gateW(g);
+    const D = W.base + 4;
+    const f = ringFrame(g.theta, g.r);
+    const b = env.chunks.named('major', `inner_gate:${g.id}`).builder;
+    const portals: Portal[] = [];
+    if (g.main) {
+      for (const c of crossings) {
+        const lat = lateral(f, c.p);
+        if (Math.abs(lat) < Wg / 2) portals.push({ lat, w: RAIL.deckW + 2, y0: GROUND + RAIL.deck - 1.7 - base, jamb: 7.2 });
+      }
+    }
+    gateBlock(b, { f, baseY: base, W: Wg, D, H: H + 4, mat: bm.earthen, trim: 'stone_tan', tunnel: { aw: g.width, spring: g.height - g.width / 2 + 1 }, portals, bands: [0.33, 0.66].map((q) => (q * H) / (H + 4)) });
+    // Corner bastions frame the gate on the farm side.
     for (const sd of [-1, 1]) {
-      const q = { x: inP.x + right.x * sd * (o.gate.passage / 2 + 3), z: inP.z + right.z * sd * (o.gate.passage / 2 + 3) };
-      stoneLantern(pb, q.x, GROUND, q.z, 1.6);
-      const bp = { x: inP.x - out.x * 4 + right.x * sd * (o.gate.passage / 2 + 5), z: inP.z - out.z * 4 + right.z * sd * (o.gate.passage / 2 + 5) };
-      bannerPole(pb, env.mats, bp.x, GROUND, bp.z, Math.atan2(out.x, out.z) + Math.PI / 2, 9);
+      const p = f.at(sd * (Wg / 2 + 3.5), D / 2 - 1);
+      b.box(bm.earthen, { x: p.x, y: base + (H + 6) / 2, z: p.z, sx: 7, sy: H + 6, sz: 9, yaw: f.yaw }, { collide: true, walkable: true });
+      b.box('stone_tan', { x: p.x, y: base + H + 6, z: p.z, sx: 7.6, sy: 0.8, sz: 9.6, yaw: f.yaw });
+    }
+    const top = base + H + 4;
+    if (g.main) {
+      const hw = 34, hd = 13;
+      const c0 = f.at(0, -1);
+      b.block('plaster_tan', { x: c0.x, y: top, z: c0.z, sx: hw, sy: 8, sz: hd, yaw: f.yaw });
+      for (let i = 0; i <= 10; i++) {
+        for (const sd of [-1, 1]) {
+          const q = f.at(-hw / 2 + (i * hw) / 10, -1 + sd * (hd / 2 + 0.2));
+          b.box('wood_red', { x: q.x, y: top + 4, z: q.z, sx: 0.6, sy: 8, sz: 0.45, yaw: f.yaw });
+        }
+      }
+      b.roof('roof_green', { x: c0.x, y: top + 8, z: c0.z, w: hw, d: hd, height: 5, yaw: f.yaw, overhang: 2.8, curve: 0.9, style: 'hip', ridge: 'roof_dark' });
+      b.block('plaster_tan', { x: c0.x, y: top + 10, z: c0.z, sx: hw * 0.6, sy: 5.5, sz: hd * 0.66, yaw: f.yaw });
+      b.roof('roof_green', { x: c0.x, y: top + 15.5, z: c0.z, w: hw * 0.6, d: hd * 0.66, height: 4.5, yaw: f.yaw, overhang: 2.2, curve: 0.9, style: 'hip', ridge: 'roof_dark' });
+    }
+    for (const side of [1, -1]) {
+      const p = f.at(0, side * (D / 2 + 0.2));
+      const faceYaw = side > 0 ? f.yaw : f.yaw + Math.PI;
+      medallion(b, bm, p.x, base + g.height + 5, p.z, faceYaw, g.main ? 4.2 : 3.2, 0.45);
+      if (side > 0) {
+        for (const bx of [-1, 1]) {
+          const q = f.at(bx * (g.width / 2 + 4), D / 2 + 0.25);
+          hangingBanner(b, env.mats, q.x, base + g.height + 12, q.z, faceYaw - Math.PI / 2, 3.4, 14);
+        }
+      }
+    }
+    const floor = new THREE.PlaneGeometry(g.width, D + 6);
+    floor.rotateX(-Math.PI / 2);
+    b.mesh('paving', floor, { x: f.x, y: GROUND + 0.05, z: f.z, yaw: f.yaw }, { castShadow: false });
+    floor.dispose();
+    site.gates.add({ id: g.id, f, lz: D / 2 - 1.5, baseY: GROUND, aw: g.width, spring: g.height - g.width / 2, thick: 2.2, openR: g.main ? 40 : 30 });
+    site.mark(`gate_${g.id}`, f.x, GROUND, f.z);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Ring walls (中環 / 上環)
+// ---------------------------------------------------------------------------
+
+export function buildRingWall(site: WallSite, which: 'middle' | 'upper'): void {
+  const { env, bm } = site;
+  const W = WALL.ring;
+  const r = which === 'middle' ? R.middle : R.upper;
+  const H = W.h + 1;
+  const base = GROUND - 1;
+  const lowTop = GROUND + RAIL.deck - 1.7;
+  const gates = gatesOf(which);
+  const gateW = 24;
+  const crossings = railCrossings(r);
+  // Crossings that pass through a gate get a notch; the others lower a stretch of wall.
+  const inGate = (c: { p: P2 }) => gates.some((g) => Math.abs(lateral(ringFrame(g.theta, g.r), c.p)) < gateW / 2 && Math.hypot(c.p.x - polar(g.theta, r).x, c.p.z - polar(g.theta, r).z) < gateW);
+  const open = crossings.filter((c) => !inGate(c));
+  const gaps: Array<[number, number]> = gates.map((g) => gateHalf(g, gateW, r));
+  for (const c of open) gaps.push([c.theta, c.along / 2 + 1.5]);
+  const key = `ring_${which}`;
+  for (const [t0, t1] of ringSections(r, gaps)) {
+    for (const [a, c, tm] of ringChords(r, t0, t1, 10)) {
+      const b = arcChunk(env, key, tm, ARCS.ring);
+      batteredSegment(b, bm.ringStone, a, c, base, H, W.base, W.top, { coping: 'stone_tan', bands: [0.09, 0.5], bandMat: 'stone_tan', parapet: 1.3, stack: 1, extend: 0.4 });
+      // Merlons on the outer edge.
+      const dx = c.x - a.x, dz = c.z - a.z;
+      const len = Math.hypot(dx, dz);
+      const yaw = Math.atan2(-dz, dx);
+      const n = Math.max(1, Math.floor(len / 2.6));
+      for (let i = 0; i < n; i++) {
+        const u = (i + 0.5) / n;
+        const p = { x: a.x + dx * u + Math.cos(tm) * (W.top / 2 - 0.4), z: a.z + dz * u + Math.sin(tm) * (W.top / 2 - 0.4) };
+        b.box(bm.ringStone, { x: p.x, y: base + H + 1.3 + 0.5, z: p.z, sx: 1.2, sy: 1.0, sz: 0.8, yaw });
+      }
     }
   }
-
-  // Wall stairs: straight flight along the inside, with a landing pier bridging to the walkway.
-  for (const sd of stairDefs) {
-    const bot = path.offset(sd.sBot, -inset), tp = path.offset(sd.sTop, -inset);
-    const L = Math.hypot(tp.x - bot.x, tp.z - bot.z);
-    const dir = { x: (tp.x - bot.x) / L, z: (tp.z - bot.z) / L };
-    const b = arcChunk(env, path, sd.sTop).builder;
-    const res = longStairs(b, { x: bot.x, z: bot.z, dir, baseY: GROUND, rise: style.height, width: 4.2, material: style.trim, rail: 2, railMat: style.body });
-    // Landing pier: starts exactly where the flight ends (no step to climb) and
-    // reaches across to the walkway, full height.
-    const wt = path.at(sd.sTop + (sd.sTop > sd.sBot ? 1.5 : -1.5));
-    let vx = -dir.z, vz = dir.x;
-    if (vx * (wt.x - res.top.x) + vz * (wt.z - res.top.z) < 0) {
-      vx = -vx;
-      vz = -vz;
+  // Lowered stretches under oblique viaducts, flanked by pagoda pillar towers.
+  for (const c of open) {
+    const hw = c.along / 2 + 1.5;
+    const b = env.chunks.named('major', `${key}_rail:${Math.round(c.theta * 100)}`).builder;
+    for (const [a, q] of ringChords(r, c.theta - hw / r, c.theta + hw / r, 10).map(([a1, c1]) => [a1, c1] as [P2, P2])) {
+      batteredSegment(b, bm.ringStone, a, q, base, lowTop - base, W.base, W.top, { coping: 'stone_tan', bands: [0.09], bandMat: 'stone_tan', stack: 1, extend: 0.3 });
     }
-    const dv = vx * (wt.x - res.top.x) + vz * (wt.z - res.top.z);
-    const PL = 5.4;
-    const pc = { x: res.top.x + dir.x * (PL / 2 - 0.05) + vx * (dv / 2), z: res.top.z + dir.z * (PL / 2 - 0.05) + vz * (dv / 2) };
-    const yawA = Math.atan2(-dir.z, dir.x);
-    b.box(style.body, { x: pc.x, y: GROUND + style.height / 2 - 0.25, z: pc.z, sx: PL, sy: style.height + 0.5, sz: dv + 3, yaw: yawA }, { collide: true, walkable: true, surface: 'stone' });
-    b.box('paving', { x: pc.x, y: GROUND + style.height + 0.03, z: pc.z, sx: PL - 0.4, sy: 0.06, sz: dv + 2.6, yaw: yawA }, { castShadow: false });
-    env.excl.seg(bot.x, bot.z, tp.x, tp.z, 5);
-    env.excl.circle(pc.x, pc.z, 6);
-    o.rec.stairs.push({ id: sd.id, bottom: { x: bot.x - dir.x * 2, z: bot.z - dir.z * 2 }, top: res.top, topY: top, walkTop: wt, landing: { x: res.top.x + dir.x * 2, z: res.top.z + dir.z * 2 } });
+    for (const sd of [-1, 1]) {
+      const p = polar(c.theta + (sd * (hw + 3.2)) / r, r);
+      pillarTower(b, bm, p.x, p.z, GROUND, c.theta + Math.PI / 2, 6.4, 38);
+    }
   }
+  for (const g of gates) {
+    const f = ringFrame(g.theta, g.r);
+    const b = env.chunks.named('major', `${key}_gate:${g.id}`).builder;
+    const thru = crossings.find((c) => !open.includes(c) && Math.abs(lateral(f, c.p)) < gateW / 2);
+    const D = W.base + 3;
+    gateBlock(b, {
+      f,
+      baseY: base,
+      W: gateW,
+      D,
+      H: H + 4,
+      mat: bm.ringStone,
+      trim: 'stone_tan',
+      tunnel: { aw: g.width, spring: g.height - g.width / 2 + 1 },
+      notch: thru ? { lat: lateral(f, thru.p), w: RAIL.deckW + 2, y0: lowTop - base } : undefined,
+      bands: [0.09, 0.5],
+    });
+    if (thru) {
+      for (const sd of [-1, 1]) {
+        const p = f.at(lateral(f, thru.p) + sd * (RAIL.deckW / 2 + 4.6), 0);
+        pillarTower(b, bm, p.x, p.z, GROUND, f.yaw, 6.4, 40);
+      }
+    } else {
+      const top = base + H + 4;
+      b.block('plaster_tan', { x: f.x, y: top, z: f.z, sx: 15, sy: 5, sz: 7, yaw: f.yaw });
+      b.roof('roof_green', { x: f.x, y: top + 5, z: f.z, w: 15, d: 7, height: 3.4, yaw: f.yaw, overhang: 1.8, curve: 0.9, style: 'hip', ridge: 'roof_dark' });
+    }
+    // Sign on the outward face (seen when walking in), medallion on the inner face.
+    const apex = g.height;
+    const po = f.at(0, D / 2 + 0.05);
+    sign(b, bm, g.sign ?? '', po.x, GROUND + apex + 4.2, po.z, f.yaw, 5.6, { vertical: true });
+    const pi = f.at(0, -D / 2 - 0.25);
+    medallion(b, bm, pi.x, GROUND + apex + 4.5, pi.z, f.yaw + Math.PI, 2.4, 0.35);
+    for (const bx of [-1, 1]) {
+      const q = f.at(bx * (g.width / 2 + 3.2), D / 2 + 0.25);
+      hangingBanner(b, env.mats, q.x, GROUND + apex + 8, q.z, f.yaw - Math.PI / 2, 2.6, 10);
+    }
+    const floor = new THREE.PlaneGeometry(g.width, D + 4);
+    floor.rotateX(-Math.PI / 2);
+    b.mesh('paving', floor, { x: f.x, y: GROUND + 0.06, z: f.z, yaw: f.yaw }, { castShadow: false });
+    floor.dispose();
+    site.gates.add({ id: g.id, f, lz: 0, baseY: GROUND, aw: g.width, spring: g.height - g.width / 2, thick: 1.8, openR: 24 });
+    site.mark(`gate_${g.id}`, f.x, GROUND, f.z);
+  }
+}
 
-  // Watch towers on the outer face (big silhouettes), skipping gates and stairs.
-  if (o.ring === 'outer') {
-    const n = Math.round(total / 150);
-    for (let i = 0; i < n; i++) {
-      const s = (i + 0.5) * (total / n);
-      const near = gaps.some(([a, bnd]) => {
-        const m = (a + bnd) / 2;
-        const d = Math.abs(((s - m + total * 1.5) % total) - total / 2);
-        return d < o.gate.W;
-      });
-      if (near) continue;
-      const p = path.offset(s, style.thick / 2 + style.batterOut + 2.5);
-      const out = path.outward(p.x, p.z);
-      const yaw = Math.atan2(out.x, out.z);
-      const b = arcChunk(env, path, s).builder;
-      const th = style.height + 7;
-      b.block(style.body, { x: p.x, y: GROUND, z: p.z, sx: 11, sy: th, sz: 7, yaw }, { collide: true, walkable: true });
-      b.box(style.trim, { x: p.x, y: GROUND + th - 0.3, z: p.z, sx: 11.8, sy: 0.6, sz: 7.8, yaw });
-      b.box(style.trim, { x: p.x, y: GROUND + style.height * 0.5, z: p.z, sx: 11.4, sy: 0.6, sz: 7.4, yaw });
-      b.block('wood_red', { x: p.x, y: GROUND + th, z: p.z, sx: 7, sy: 3.2, sz: 4.4, yaw });
-      b.roof('roof_green', { x: p.x, y: GROUND + th + 3.2, z: p.z, w: 7, d: 4.4, height: 2.6, yaw, overhang: 1.4, style: 'hip', curve: 0.8 });
-      hangingBanner(b, env.mats, p.x + out.x * 3.6, GROUND + th - 3, p.z + out.z * 3.6, yaw - Math.PI / 2, 3.2, 12);
+// ---------------------------------------------------------------------------
+// Palace wall
+// ---------------------------------------------------------------------------
+
+export const PALACE_GATES: Array<{ id: string; theta: number; w: number }> = [
+  { id: 'palace_south', theta: 90 * DEG, w: 30 },
+  { id: 'palace_north', theta: 270 * DEG, w: 12 },
+];
+
+export function buildPalaceWall(site: WallSite): void {
+  const { env, bm } = site;
+  const W = WALL.palace;
+  const b0 = env.chunks.named('major', 'palace_wall').builder;
+  for (const [t0, t1] of ringSections(R.palace, PALACE_GATES.map((g) => [g.theta, g.w / 2] as [number, number]))) {
+    for (const [a, c] of ringChords(R.palace, t0, t1, 6)) {
+      batteredSegment(b0, 'stone_white', a, c, GROUND - 0.5, W.h + 0.5, W.base, W.top, { coping: 'gold', stack: 1, extend: 0.2 });
+      const dx = c.x - a.x, dz = c.z - a.z;
+      const yaw = Math.atan2(-dz, dx);
+      const len = Math.hypot(dx, dz) + 0.5;
+      b0.roof(bm.palaceRoof, { x: (a.x + c.x) / 2, y: GROUND + W.h + 0.1, z: (a.z + c.z) / 2, w: len, d: W.top + 1.2, height: 1.1, yaw, overhang: 0.5, curve: 0.6, style: 'gable', ridge: null });
+      b0.box('plaster_red', { x: (a.x + c.x) / 2, y: GROUND + 0.6, z: (a.z + c.z) / 2, sx: len, sy: 1.2, sz: W.base + 0.4, yaw });
     }
   }
 }
 
-export function buildOuterWall(env: BuildEnv, rec: WallRecord): void {
-  cityWall(env, {
-    key: 'outer',
-    path: rec.outerPath,
-    style: OUTER_STYLE,
-    gates: OUTER_GATES,
-    gate: OUTER_GATE,
-    tower: { w: 30, d: 11, h: 7, tiers: 2 },
-    // West gate: stair south of the gate (the rail spur station sits north of it).
-    stairs: [
-      { gate: 'west', side: -1, gap: 8 },
-      { gate: 'south', side: 1, gap: 8 },
-      { gate: 'east', side: -1, gap: 8 },
-    ],
-    arcs: 8,
-    rec,
-    ring: 'outer',
-  });
-}
+// ---------------------------------------------------------------------------
+// Ground surfaces
+// ---------------------------------------------------------------------------
 
-export function buildInnerWall(env: BuildEnv, rec: WallRecord): void {
-  cityWall(env, {
-    key: 'inner',
-    path: rec.innerPath,
-    style: INNER_STYLE,
-    gates: INNER_GATES,
-    gate: INNER_GATE,
-    tower: { w: 18, d: 8, h: 5, tiers: 1 },
-    stairs: [{ gate: 'west', side: 1, gap: 6 }], // north of the gate (the square's stalls line the wall to the south)
-    arcs: 6,
-    rec,
-    ring: 'inner',
-  });
-}
-
-export function makeWallRecord(): WallRecord {
-  return {
-    outerPath: new LoopPath(C, outerR, 1440),
-    innerPath: new LoopPath(C, () => INNER.r, 960),
-    stairs: [],
-    gates: [],
+export function buildGrounds(site: WallSite): void {
+  const { env } = site;
+  const m = env.mats;
+  const g = env.chunks.named('major', 'grounds').builder;
+  const ring = (mat: THREE.Material | 'paving', r0: number, r1: number, y: number, tile: number, segs = 256) => {
+    const geo = annulusGeometry(C.x, C.z, () => r0, () => r1, y, tile, segs, 2);
+    g.mesh(mat, geo, { x: 0, y: 0, z: 0 }, { castShadow: false });
+    geo.dispose();
   };
+  ring(m.groundLower, FOOT.middleOut - 0.5, FOOT.innerIn + 0.5, GROUND + 0.03, 7);
+  ring(m.groundMiddle, FOOT.upperOut - 0.5, FOOT.middleIn + 0.5, GROUND + 0.03, 4);
+  ring(m.groundUpper, FOOT.palaceOut - 0.4, FOOT.upperIn + 0.5, GROUND + 0.03, 4);
+  ring('paving', 0.01, R.palace - WALL.palace.base / 2 + 0.3, GROUND + 0.03, 3, 96);
+  // Ring streets.
+  const rs = RING_STREETS;
+  for (const s of [rs.upper, rs.middleIn, rs.middleOut]) ring('paving', s.r - s.width / 2, s.r + s.width / 2, GROUND + 0.05, 3);
+  for (const s of [rs.lowerIn, rs.lowerMid]) ring(m.groundDirt, s.r - s.width / 2, s.r + s.width / 2, GROUND + 0.05, 5);
+  // Radial avenues (stone in the Lower Ring, flagstones further in).
+  for (const a of AVENUES) {
+    const segsR: Array<[number, number, THREE.Material | 'paving']> = [
+      [Math.max(a.r0, FOOT.middleOut - 1), FOOT.innerIn + 1, m.road],
+      [Math.max(a.r0, FOOT.upperOut - 1), FOOT.middleIn + 1, 'paving'],
+      [a.r0, FOOT.upperIn + 1, 'paving'],
+    ];
+    for (const [r0, r1, mat] of segsR) {
+      if (r1 <= r0) continue;
+      const geo = stripGeometry([polar(a.theta, r0), polar(a.theta, r1)], a.width / 2, GROUND + 0.07, mat === 'paving' ? 3 : 5);
+      g.mesh(mat, geo, { x: 0, y: 0, z: 0 }, { castShadow: false });
+      geo.dispose();
+    }
+  }
+  // Farm roads between the walls.
+  for (const rd of FARM_ROADS) {
+    const geo = stripGeometry(rd.points, rd.width / 2, GROUND + 0.06, 5);
+    g.mesh(m.road, geo, { x: 0, y: 0, z: 0 }, { castShadow: false });
+    geo.dispose();
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Ring terraces (Middle / Upper Ring)
+// Earthbent gate slabs (runtime)
 // ---------------------------------------------------------------------------
 
-export interface TerraceGateDef {
+export interface GateSlabDef {
   id: string;
-  /** Point on the outer face. */
+  f: Frame;
+  /** Offset of the slab along the passage axis (local Z of the gate frame). */
+  lz: number;
+  baseY: number;
+  aw: number;
+  spring: number;
+  thick: number;
+  /** Player distance that opens the gate. */
+  openR: number;
+}
+
+interface SlabRt {
+  d: GateSlabDef;
+  mesh: THREE.Mesh;
+  col: number;
+  open: number;
+  target: number;
+  dustT: number;
+  h: number;
   x: number;
   z: number;
-  nx: number;
-  nz: number;
-  width: number;
 }
 
-export interface TerraceOpts {
-  key: string;
-  c: P2;
-  /** Wall centre-line radius. */
-  r: number;
-  thick: number;
-  base: number;
-  level: number;
-  body: KitMaterialName;
-  trim: KitMaterialName;
-  ground: THREE.Material;
-  parapetH: number;
-  gates: TerraceGateDef[];
-  arcs: number;
-}
+/**
+ * Stone slabs closing the gate tunnels. Royal Earthbender Guards "open" them:
+ * the slab sinks into the ground (with dust and a grinding rumble) while the
+ * player is near and rises again once they have moved on. Colliders are
+ * dynamic (re-created each session; the world clears dynamic colliders).
+ */
+export class GateRuntime {
+  readonly group = new THREE.Group();
+  private readonly items: SlabRt[] = [];
+  private readonly geos: THREE.BufferGeometry[] = [];
+  private ctx: GameContext | null = null;
 
-export interface TerraceRecord {
-  stairs: Array<{ id: string; bottom: P2; top: P2; topY: number; baseY: number }>;
-}
+  constructor(parent: THREE.Group, private readonly bm: BssMats) {
+    this.group.name = 'bss_gate_slabs';
+    parent.add(this.group);
+  }
 
-/** Raised terrace: retaining wall ring + walkable top + parapet + stair gates. */
-export function buildTerrace(env: BuildEnv, o: TerraceOpts): TerraceRecord {
-  const rec: TerraceRecord = { stairs: [] };
-  const H = o.level - o.base;
-  const outer = o.r + o.thick / 2;
-  const segs = Math.max(24, Math.ceil((2 * Math.PI * o.r) / 12));
-  const gateArc = o.gates.map((g) => ({ g, th: Math.atan2(g.z - o.c.z, g.x - o.c.x), half: (g.width / 2 + 1.2) / outer }));
-  const inGate = (t: number): boolean =>
-    gateArc.some(({ th, half }) => {
-      let d = Math.abs(t - th) % (Math.PI * 2);
-      if (d > Math.PI) d = Math.PI * 2 - d;
-      return d < half;
-    });
-  for (let i = 0; i < segs; i++) {
-    const t0 = (i / segs) * Math.PI * 2, t1 = ((i + 1) / segs) * Math.PI * 2, tm = (t0 + t1) / 2;
-    const a = polar(t0, o.r, o.c), c2 = polar(t1, o.r, o.c);
-    const len = Math.hypot(c2.x - a.x, c2.z - a.z) + 0.25;
-    const mx = (a.x + c2.x) / 2, mz = (a.z + c2.z) / 2;
-    const yaw = Math.atan2(-(c2.z - a.z), c2.x - a.x);
-    const ox = Math.cos(tm), oz = Math.sin(tm);
-    const b = env.chunks.named('major', `q:${qkey(mx, mz)}`).builder;
-    // Retaining wall body (walkable top = terrace level), plinth and coping.
-    b.box(o.body, { x: mx, y: o.base - 0.5 + (H + 0.5) / 2 - 0.25, z: mz, sx: len, sy: H, sz: o.thick, yaw });
-    b.box(o.trim, { x: mx + ox * 0.15, y: o.base + 0.5, z: mz + oz * 0.15, sx: len, sy: 1.2, sz: o.thick + 0.5, yaw });
-    b.box(o.trim, { x: mx, y: o.level - 0.25, z: mz, sx: len, sy: 0.5, sz: o.thick + 0.5, yaw });
-    b.collider({ shape: 'box', x: mx, y: (o.base - 0.5 + o.level) / 2, z: mz, hx: len / 2, hz: o.thick / 2 + 0.25, hy: (o.level - o.base + 0.5) / 2, yaw, walkable: true, solid: true, surface: 'stone' });
-    if (!inGate(tm)) {
-      // Outer parapet with merlons and a green tile cap.
-      const px = mx + ox * (o.thick / 2 - 0.35), pz = mz + oz * (o.thick / 2 - 0.35);
-      b.box(o.body, { x: px, y: o.level + o.parapetH / 2, z: pz, sx: len, sy: o.parapetH, sz: 0.7, yaw });
-      b.box('roof_green', { x: px, y: o.level + o.parapetH + 0.12, z: pz, sx: len, sy: 0.24, sz: 1.1, yaw });
-      b.collider({ shape: 'box', x: px, y: o.level + 0.75, z: pz, hx: len / 2, hz: 0.35, hy: 0.75, yaw, walkable: false, solid: true });
+  add(d: GateSlabDef): void {
+    const geo = slabGeometry(d.aw - 0.15, d.spring, d.thick);
+    this.geos.push(geo);
+    const mesh = new THREE.Mesh(geo, this.bm.slab);
+    const p = d.f.at(0, d.lz);
+    mesh.position.set(p.x, d.baseY, p.z);
+    mesh.rotation.y = d.f.yaw;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.name = `slab_${d.id}`;
+    // Emblem on both faces.
+    const disc = new THREE.CircleGeometry(Math.min(d.aw * 0.22, 3.2), 28);
+    this.geos.push(disc);
+    for (const side of [1, -1]) {
+      const em = new THREE.Mesh(disc, this.bm.emblem);
+      em.position.set(0, d.spring * 0.72, side * (d.thick / 2 + 0.03));
+      em.rotation.y = side > 0 ? 0 : Math.PI;
+      mesh.add(em);
+    }
+    this.group.add(mesh);
+    this.items.push({ d, mesh, col: 0, open: 0, target: 0, dustT: 0, h: d.spring + d.aw / 2, x: p.x, z: p.z });
+  }
+
+  get count(): number {
+    return this.items.length;
+  }
+
+  onSessionStart(ctx: GameContext): void {
+    this.ctx = ctx;
+    for (const it of this.items) {
+      it.col = ctx.world.collision.add(
+        { shape: 'box', x: it.x, y: it.d.baseY + it.h / 2 - it.h * it.open, z: it.z, hx: it.d.aw / 2, hz: it.d.thick / 2 + 0.1, hy: it.h / 2, yaw: it.d.f.yaw, solid: true, walkable: false, tag: 'ba_sing_se' },
+        true,
+      );
     }
   }
-  // Terrace top: walkable cylinder + visual disc.
-  const cyl = env.chunks.named('major', 'ground').builder;
-  cyl.collider({ shape: 'cylinder', x: o.c.x, y: (o.base - 0.5 + o.level) / 2, z: o.c.z, r: o.r - o.thick / 2 + 0.1, hy: (o.level - o.base + 0.5) / 2, walkable: true, solid: true, surface: 'stone' });
-  const disc = new THREE.CircleGeometry(o.r - o.thick / 2 + 0.2, 96);
-  disc.rotateX(-Math.PI / 2);
-  const uv = disc.getAttribute('uv') as THREE.BufferAttribute;
-  const pos = disc.getAttribute('position') as THREE.BufferAttribute;
-  for (let i = 0; i < pos.count; i++) uv.setXY(i, (pos.getX(i) + o.c.x) / 6, -(pos.getZ(i) + o.c.z) / 6);
-  cyl.mesh(o.ground, disc, { x: o.c.x, y: o.level + 0.01, z: o.c.z }, { castShadow: false });
-  disc.dispose();
 
-  // Stair gates.
-  for (const g of o.gates) {
-    const b = env.chunks.named('major', `q:${qkey(g.x, g.z)}`).builder;
-    const steps = Math.round(H / 0.25);
-    const run = steps * 0.42;
-    const bx = g.x + g.nx * (run + 0.3), bz = g.z + g.nz * (run + 0.3);
-    longStairs(b, { x: bx, z: bz, dir: { x: -g.nx, z: -g.nz }, baseY: o.base, rise: H, width: g.width, material: 'stone_light', rail: 2, railMat: o.trim });
-    // Gateway on the terrace edge.
-    const tx = -g.nz, tz = g.nx;
-    const yaw = Math.atan2(-tz, tx);
-    const pg = { x: g.x - g.nx * 1.6, z: g.z - g.nz * 1.6 };
-    paifang(b, pg.x, o.level, pg.z, yaw, g.width + 2.4, 8.5, { posts: 4, roof: 'roof_green' });
-    // Banners on the wall either side of the stairs.
-    for (const sd of [-1, 1]) {
-      const q = { x: g.x + tx * sd * (g.width / 2 + 3) + g.nx * 0.1, z: g.z + tz * sd * (g.width / 2 + 3) + g.nz * 0.1 };
-      hangingBanner(b, env.mats, q.x + g.nx * 0.05, o.level + o.parapetH, q.z + g.nz * 0.05, Math.atan2(g.nx, g.nz) - Math.PI / 2, 2.2, Math.min(5.5, H + 0.5));
-    }
-    env.excl.seg(bx + g.nx * 14, bz + g.nz * 14, g.x - g.nx * 14, g.z - g.nz * 14, g.width / 2 + 3);
-    rec.stairs.push({ id: `${o.key}_${g.id}`, bottom: { x: bx + g.nx * 1.5, z: bz + g.nz * 1.5 }, top: { x: g.x - g.nx * 3, z: g.z - g.nz * 3 }, topY: o.level, baseY: o.base });
+  onSessionEnd(): void {
+    if (this.ctx) for (const it of this.items) if (it.col) this.ctx.world.collision.remove(it.col);
+    for (const it of this.items) it.col = 0;
+    this.ctx = null;
   }
-  return rec;
-}
 
-/** Degrees helper for builders. */
-export const deg = (d: number): number => d * DEG;
+  /** Open (1) or close (0) a gate immediately (tests / cut-scenes). */
+  set(id: string, open: number): boolean {
+    const it = this.items.find((q) => q.d.id === id);
+    if (!it) return false;
+    it.open = it.target = open;
+    this.place(it);
+    return true;
+  }
 
-/** Unit vector helper. */
-export function v3(x: number, y: number, z: number): THREE.Vector3 {
-  return new THREE.Vector3(x, y, z);
+  state(): Array<{ id: string; open: number }> {
+    return this.items.map((it) => ({ id: it.d.id, open: +it.open.toFixed(2) }));
+  }
+
+  update(dt: number, ctx: GameContext): void {
+    const p = ctx.player?.position;
+    if (!p) return;
+    for (const it of this.items) {
+      const d = Math.hypot(p.x - it.x, p.z - it.z);
+      if (d < it.d.openR) it.target = 1;
+      else if (d > it.d.openR + 16) it.target = 0;
+      if (it.open === it.target) continue;
+      const was = it.open;
+      it.open = it.target > it.open ? Math.min(1, it.open + dt * 0.42) : Math.max(0, it.open - dt * 0.42);
+      if (was === 0 || was === 1) {
+        ctx.audio.play(it.target > 0 ? 'bend_earth_sink' : 'bend_earth_rise', { position: new THREE.Vector3(it.x, it.d.baseY + 2, it.z), volume: 0.9, pitch: 0.55 });
+        if (d < 30) ctx.events.emit('camera:shake', { intensity: 0.05, duration: 0.5 });
+      }
+      it.dustT -= dt;
+      if (it.dustT <= 0 && d < 160) {
+        it.dustT = 0.12;
+        for (const side of [-1, 1]) {
+          const q = it.d.f.at((Math.random() - 0.5) * it.d.aw, it.d.lz + side * (it.d.thick / 2 + 0.6));
+          ctx.vfx.burst('dust', new THREE.Vector3(q.x, it.d.baseY + 0.3, q.z), { count: 4, size: 1.4, radius: 0.8 });
+        }
+      }
+      this.place(it);
+    }
+  }
+
+  private place(it: SlabRt): void {
+    const k = it.open * it.open * (3 - 2 * it.open);
+    it.mesh.position.y = it.d.baseY - it.h * k - (k > 0.999 ? 0.2 : 0);
+    it.mesh.visible = k < 0.995;
+    if (this.ctx && it.col) this.ctx.world.collision.update(it.col, { y: it.d.baseY + it.h / 2 - it.h * k - (k > 0.97 ? 2 : 0) });
+  }
+
+  dispose(): void {
+    this.onSessionEnd();
+    for (const g of this.geos) g.dispose();
+    this.geos.length = 0;
+    this.group.removeFromParent();
+    this.group.clear();
+  }
 }

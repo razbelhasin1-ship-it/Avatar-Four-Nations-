@@ -168,6 +168,11 @@ float kitNoise(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.0-2.0*f);
   mat.customProgramCacheKey = () => 'kit-triplanar';
 }
 
+/** [additive: Ba Sing Se] World-space tri-planar mapping of `mat.map` with `tileMetres` per texture repeat. */
+export function applyTriplanar(mat: THREE.MeshStandardMaterial, tileMetres: number): void {
+  triplanar(mat, tileMetres);
+}
+
 export function kitMaterial(name: KitMaterialName): THREE.MeshStandardMaterial {
   let m = cache.get(name);
   if (m) return m;

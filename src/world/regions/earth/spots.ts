@@ -1,37 +1,18 @@
 import { defineSpots, type Spot } from '../../Spots';
-import { DEG, GROUND, MID, outerR, PALACE, polar, STATIONS, UP } from './bssLayout';
+import { BSS, C, GROUND, RAIL, STATIONS } from './bssLayout';
 
 /**
  * Named places of the Earth Kingdom settlements (pure data). Builders read
  * these constants so the published spots always match the geometry.
+ * Ba Sing Se features live in bssLayout.ts (BSS); re-exported here.
  */
 
-/** Ba Sing Se hand-placed features (world metres). */
-export const BSS = {
-  spawn: { x: 640, z: -30 },
-  elder: { x: 652, z: -22 },
-  /** Lower Ring Square (Earth start). */
-  square: { x0: 618, x1: 690, z0: -104, z1: -6 },
-  fountain: { x: 644, z: -68, r: 5.5 },
-  kingStatue: { x: 646, z: -90 },
-  /** Square stalls along the inner wall (west edge), counters face east. */
-  squareStalls: [-78, -66, -54, -42, -16].map((z) => ({ x: 630.5, z })),
-  /** Market street (Lower Ring, north of the square). */
-  market: { a: { x: 652, z: -106 }, b: { x: 684, z: -160 }, width: 9 },
-  /** Stone Fist Dojo on the Middle terrace. */
-  dojo: { yard: { x: 704, z: 36, hw: 13, hd: 13 }, hall: { x: 726, z: 37, w: 14, d: 24 }, street: { x: 704, z0: -42, z1: 23 } },
-  teaShop: { x: 742, z: -82 },
-  university: { x: 770, z: -132 },
-  gardenW: { x: 772, z: 32, r: 12 },
-  gardenE: { x: 962, z: -12, r: 10 },
-  middlePlaza: { x: 760, z: -50, r: 13 },
-  upperFountains: [
-    { x: 797, z: -68 },
-    { x: 797, z: -32 },
-  ],
-  lakeDock: { a: { x: 1004, z: 168 }, b: { x: 1030, z: 168 } },
-  boathouse: { x: 994, z: 160 },
-};
+export { BSS };
+
+/** Lower Ring square stalls along the west edge (counters face east). */
+export function squareStalls(): Array<{ x: number; z: number }> {
+  return [-12, -4, 4].map((dz) => ({ x: BSS.square.x - BSS.square.hw + 2.6, z: BSS.square.z + dz }));
+}
 
 export const GAOLING = {
   c: { x: 420, z: 300 },
@@ -54,25 +35,24 @@ export const RIVERBEND = {
 };
 
 const R = 'ba_sing_se';
-const st = STATIONS.lowerWest;
 
 export const EARTH_SPOTS: Record<string, Spot> = {
   // Ba Sing Se
   giver_bss_elder: { x: BSS.elder.x, z: BSS.elder.z, y: GROUND, yaw: -Math.PI / 2, r: 3, label: 'Old Man Shoji', region: R },
-  master_lien: { x: BSS.dojo.yard.x + 10.5, z: BSS.dojo.yard.z, y: MID.level, yaw: -Math.PI / 2, r: 2, label: 'Master Lien, Stone Fist Dojo', region: R },
-  training_lien: { x: BSS.dojo.yard.x, z: BSS.dojo.yard.z, y: MID.level, r: 12.5, label: 'Stone Fist Dojo sparring floor', region: R },
-  merchant_bss_1: { x: BSS.squareStalls[2].x - 1.9, z: BSS.squareStalls[2].z, y: GROUND, yaw: Math.PI / 2, r: 2, label: 'Lower Ring Square stall', region: R },
-  merchant_bss_2: { x: BSS.squareStalls[1].x - 1.9, z: BSS.squareStalls[1].z, y: GROUND, yaw: Math.PI / 2, r: 2, label: 'Lower Ring Square stall', region: R },
+  master_lien: { x: BSS.dojo.c.x + 9.5, z: BSS.dojo.c.z, y: GROUND, yaw: -Math.PI / 2, r: 2, label: 'Master Lien, Stone Fist Dojo', region: R },
+  training_lien: { x: BSS.dojo.c.x, z: BSS.dojo.c.z, y: GROUND, r: 11, label: 'Stone Fist Dojo sparring floor', region: R },
+  merchant_bss_1: { x: squareStalls()[1].x + 1.9, z: squareStalls()[1].z, y: GROUND, yaw: -Math.PI / 2, r: 2, label: 'Lower Ring Square stall', region: R },
+  merchant_bss_2: { x: squareStalls()[0].x + 1.9, z: squareStalls()[0].z, y: GROUND, yaw: -Math.PI / 2, r: 2, label: 'Lower Ring Square stall', region: R },
   merchant_bss_3: { x: 0, z: 0, y: GROUND, r: 2, label: 'Market Street stall', region: R },
   merchant_bss_4: { x: 0, z: 0, y: GROUND, r: 2, label: 'Market Street stall', region: R },
-  merchant_bss_tea: { x: BSS.teaShop.x, z: BSS.teaShop.z + 6.4, y: MID.level, yaw: 0, r: 2, label: 'Tea shop counter', region: R },
-  shrine_bss_earth_king: { x: BSS.kingStatue.x, z: BSS.kingStatue.z + 5, y: GROUND, yaw: Math.PI, r: 4, label: 'Statue of the Earth King', region: R },
-  viewpoint_bss_palace: { x: UP.x - 6, z: UP.z, y: PALACE.tiers[2].top, r: 6, label: 'Palace terrace', region: R },
-  viewpoint_bss_outer_wall: { ...polar(189 * DEG, outerR(189 * DEG)), y: GROUND + 34, r: 4, label: 'Outer Wall walkway', region: R },
-  station_bss_lower_west: { x: st.x, z: st.z, y: st.y, r: 6, label: 'Monorail station', region: R },
+  merchant_bss_tea: { x: BSS.paoTea.x, z: BSS.paoTea.z + 5.2, y: GROUND, yaw: 0, r: 2, label: 'Pao Family Tea House counter', region: R },
+  shrine_bss_earth_king: { x: BSS.kingStatue.x, z: BSS.kingStatue.z + 4, y: GROUND, yaw: Math.PI, r: 4, label: 'Statue of the Earth King', region: R },
+  viewpoint_bss_palace: { x: C.x, z: C.z + 22, y: GROUND + 6, r: 6, label: 'Palace terrace', region: R },
+  viewpoint_bss_outer_wall: { x: STATIONS.arrival_c.at.x, z: STATIONS.arrival_c.at.z, y: GROUND + RAIL.deck, r: 4, label: 'Arrival station platform', region: R },
+  station_bss_lower_west: { x: STATIONS.y_c.at.x, z: STATIONS.y_c.at.z, y: GROUND + RAIL.deck, r: 6, label: 'Monorail station', region: R },
   dock_laogai: { x: BSS.lakeDock.b.x - 1, z: BSS.lakeDock.b.z, y: 26.3, yaw: Math.PI / 2, r: 3, label: 'Lake Laogai boathouse pier', region: R },
   habitat_turtleduck_laogai: { x: 1040, z: 205, r: 14, label: 'Lake Laogai reeds', region: R },
-  bridge_bss_garden: { x: BSS.gardenW.x, z: BSS.gardenW.z, y: MID.level + 2.6, r: 2, label: 'Moon bridge', region: R },
+  bridge_bss_garden: { x: BSS.gardenW.x, z: BSS.gardenW.z, y: GROUND + 2.6, r: 2, label: 'Moon bridge', region: R },
   // Gaoling
   master_lin: { x: GAOLING.arena.x - 9, z: GAOLING.arena.z, y: GAOLING.y + 0.3, yaw: Math.PI / 2, r: 2, label: 'Lin the Blind, Earth Rumble champion', region: 'earth_heartland' },
   training_lin: { x: GAOLING.arena.x, z: GAOLING.arena.z, y: GAOLING.y + 0.3, r: 12.5, label: 'Earth Rumble ring', region: 'earth_heartland' },
