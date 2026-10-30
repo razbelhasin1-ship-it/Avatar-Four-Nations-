@@ -32,7 +32,7 @@ Wiki (avatar.fandom.com) is blocked by the session network policy: built from th
 - [x] 4 Middle Ring (commit)
 - [x] 5 Upper Ring + palace (commit)
 - [x] 6 Agrarian Zone, Lake Laogai, Dai Li base (commit)
-- [ ] 7 crowds, shops, vendors, audio (commit)
+- [x] 7 crowds, shops, vendors, audio (commit)
 - [ ] 8 polish, perf, screenshots (screenshots/ba-sing-se), 3 comparison passes, walk test, report (commit)
 
 ## Files
@@ -83,5 +83,17 @@ data/npcs.ts (bss_elder coords), spots.ts, tests/e2e/region-earth.e2e.mjs (BSS c
   brainwashing chamber + spinning lantern), GateRuntime sliding doors, green lamps, lights/fog dimmed while
   inside (after Sky), flag laogai_raided on boss_dai_li_captain kill -> door rubble + stones up.
   Debug: __game.debug.bss.laogai()/laogaiRaise()/laogaiOpen()/laogaiSet(r,o).
-  Harness note: soft particles force a depth pass; under SwiftShader frames then take >30 s (screenshot timeout).
+  Harness note: SwiftShader screenshots of the full city take 10-60 s: pass a 240 s timeout (bss_one.mjs does).
   Draw calls at street level: Lower ~800, Middle ~400, farm ~700-1000 (perf pass in phase 8).
+- Phase 7: bssCrowd.ts (CrowdSystem on the nav graph, drawn by FigureRenderer, which now culls to the view
+  frustum). ~490 people simulated (CROWD in bssLayout × graphics density) + 67 stall/shop keepers + gate guards and
+  wall soldiers. Roles per district (ROLES) and clothing by class (PAL); daily routine (activity(): out at dawn,
+  busiest by day, tea houses at dusk, home at night; walk to a door when seen). Density bubble: people out of
+  sight are moved into the streets around the camera (BUBBLE_TARGET per district within 80 m: Lower 200, Middle 90,
+  Upper 16, farm 18), arriving out of view or from doorways/stations; around the camera people mostly pick local
+  destinations weighted by place type (squares, stalls, shops, tea). Shops: shutters and stall covers 21:00-06:00,
+  keepers sweep at dawn, haggle, greet the player; hawking calls rate-limited. Lamps (bm.glow) lit at dusk.
+  Dai Li patrol the base and (new) a shore loop round Lake Laogai at night. Audio (bssAudio): crowd murmur by
+  local density, train rumble at the nearest moving train, Laogai hum, farm animals and birds by day.
+  Debug: __game.debug.bss.crowd() stats, crowdWarm(seconds) fast-forwards the crowd without rendering (shots).
+  Update cost ~0.1-0.4 ms/frame.

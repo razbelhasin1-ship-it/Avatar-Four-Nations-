@@ -403,6 +403,7 @@ function buildMarketPlaza(site: DistrictSite): void {
     const p = F.at(Math.cos(a) * rr, Math.sin(a) * rr);
     const yaw = F.yaw + Math.atan2(-Math.cos(a), -Math.sin(a));
     marketStall(b, p.x, GROUND, p.z, yaw, awnings[i % awnings.length], env.rnd, 3.6, 2);
+    site.stalls.push({ x: p.x, z: p.z, yaw, w: 3.6, d: 2 });
     const q = F.at(Math.cos(a) * (rr - 2.1), Math.sin(a) * (rr - 2.1));
     nav.poi(q.x, q.z, NavTag.stall | NavTag.middle, yaw + Math.PI);
     const pole = F.at(Math.cos(a) * (P.r - 0.5), Math.sin(a) * (P.r - 0.5));

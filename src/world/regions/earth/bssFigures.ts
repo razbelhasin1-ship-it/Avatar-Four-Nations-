@@ -358,6 +358,10 @@ export class FigureRenderer {
   private cam = new THREE.Vector3();
   private far2 = FAR * FAR;
   private near2 = NEAR * NEAR;
+  private readonly frustum = new THREE.Frustum();
+  private readonly pv = new THREE.Matrix4();
+  private readonly sphere = new THREE.Sphere(new THREE.Vector3(), 2);
+  private hasView = false;
   /** Figures pushed last frame (debug). */
   stats = { near: 0, far: 0, culled: 0 };
 
@@ -433,13 +437,28 @@ export class FigureRenderer {
     for (const l of this.layers) l.n = 0;
     for (const a of this.accs.values()) a.n = 0;
     this.shadowN = 0;
+    this.hasView = false;
     this.stats.near = this.stats.far = this.stats.culled = 0;
+  }
+
+  /** Optional (after begin): the view frustum, so figures off screen are skipped. */
+  view(camera: THREE.Camera): void {
+    this.pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    this.frustum.setFromProjectionMatrix(this.pv);
+    this.hasView = true;
+  }
+
+  /** True if a person standing at (x, y, z) is inside the view frustum (always true without a view). */
+  inView(x: number, y: number, z: number): boolean {
+    if (!this.hasView) return true;
+    this.sphere.center.set(x, y + 0.9, z);
+    return this.frustum.intersectsSphere(this.sphere);
   }
 
   /** True if a figure at (x, z) would be drawn (callers can skip work). */
   visible(x: number, y: number, z: number): boolean {
     const dx = x - this.cam.x, dy = y - this.cam.y, dz = z - this.cam.z;
-    return dx * dx + dy * dy + dz * dz < this.far2;
+    return dx * dx + dy * dy + dz * dz < this.far2 && this.inView(x, y, z);
   }
 
   push(x: number, y: number, z: number, yaw: number, pose: number, phase: number, amount: number, lean: number, robe: number, pants: number, skin: number, acc = 0, scale = 1): void {

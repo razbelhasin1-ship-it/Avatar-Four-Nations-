@@ -59,7 +59,7 @@ export const RAIL = {
 /** Trains per line (each line keeps a 60-90 s headway), cars per train, speeds and stops. */
 export const TRAINS = { radial: 2, outerLoop: 2, innerLoop: 1, carsMin: 3, carsMax: 5, cruise: 18, accel: 2.6, dwell: 15, terminalDwell: 16 };
 /** Crowd budget (simulated agents) per zone; scaled by the graphics preset at runtime. */
-export const CROWD = { lower: 190, middle: 92, upper: 26, farm: 34, laogai: 8, guards: 36 };
+export const CROWD = { lower: 250, middle: 110, upper: 26, farm: 34, laogai: 8, guards: 36 };
 
 // ---------------------------------------------------------------------------
 // Derived radii

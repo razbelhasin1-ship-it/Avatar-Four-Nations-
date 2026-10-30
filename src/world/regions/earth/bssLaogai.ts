@@ -416,6 +416,11 @@ function rooms(site: DistrictSite): void {
   nav.street([HF.at(-10, 4), HF.at(ROOMS.westHall.x0 - 1, 4), HF.at(-21, 4)], T2 | NavTag.street, 6, 3);
   nav.street([HF.at(10, 4), HF.at(ROOMS.eastHall.x1 + 1, 4), HF.at(22, 3)], T2 | NavTag.street, 6, 3);
   nav.join(HF.at(0, 4).x, HF.at(0, 4).z, 11);
+  // Night patrol along the east and south shore, from the stepping stones round to the pier.
+  const shoreLoop: P2[] = [L.path.a];
+  for (const deg of [5, 30, 60, 95, 130, 160]) shoreLoop.push({ x: LAKE.x + Math.cos((deg * Math.PI) / 180) * 57, z: LAKE.z + Math.sin((deg * Math.PI) / 180) * 57 });
+  shoreLoop.push({ x: BSS.lakeDock.a.x - 6, z: BSS.lakeDock.a.z });
+  nav.street(shoreLoop, T2 | NavTag.water | NavTag.street, 8, 4);
   site.mark('laogai_base', HF.at(0, 4).x, GROUND, HF.at(0, 4).z);
 }
 

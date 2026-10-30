@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { GameContext } from '../../../core/GameContext';
 import type { P2 } from '../../WorldLayout';
+import { CrowdSystem } from './bssCrowd';
 import { FigureRenderer } from './bssFigures';
 import { BssMats } from './bssKit';
 import { C, SEED } from './bssLayout';
@@ -34,6 +35,7 @@ export class BaSingSe extends EarthRegion {
   gates: GateRuntime | null = null;
   lifts: LiftRuntime | null = null;
   laogai: LaogaiRuntime | null = null;
+  crowd: CrowdSystem | null = null;
   trains: TrainSystem | null = null;
   figures: FigureRenderer | null = null;
   stations: StationRt[] = [];
@@ -56,6 +58,8 @@ export class BaSingSe extends EarthRegion {
       water: (b, o) => this.water(b, o),
       smoke,
       lifts: [],
+      shops: [],
+      stalls: [],
     };
     const wallSite: WallSite = site;
     buildGrounds(wallSite);
@@ -87,6 +91,7 @@ export class BaSingSe extends EarthRegion {
     this.trains = new TrainSystem(this.group, rail.stations);
     this.lifts = new LiftRuntime(this.group, rail.lifts as LiftDef[], this.bm);
     this.laogai = new LaogaiRuntime(this.group, this.bm, laogai);
+    this.crowd = new CrowdSystem(this.group, this.nav, this.figures, site.shops, site.stalls, () => this.trains?.summary() ?? []);
     this.installBssDebug();
   }
 
@@ -98,15 +103,21 @@ export class BaSingSe extends EarthRegion {
     this.camPos.copy(cam);
     const full = this.detailLevel === 'full';
     this.figures.begin(this.camPos);
+    if (ctx.camera) this.figures.view(ctx.camera);
     if (full) {
       this.gates?.update(dt, ctx);
       this.lifts?.update(dt, ctx, this.figures);
     }
     this.trains.update(dt, ctx, this.figures, this.camPos);
     this.laogai?.update(dt, ctx, full);
+    this.crowd?.update(dt, ctx, this.camPos, full);
     this.figures.end();
     if (full) this.updateSmoke(dt, ctx);
     this.figures.group.visible = full;
+    // Lamps and lanterns are lit at dusk and put out after dawn.
+    const h = ctx.world.sky.timeOfDay;
+    const lit = h >= 19.5 || h < 5 ? 1 : h >= 17.5 ? (h - 17.5) / 2 : h < 6.5 ? 1 - (h - 5) / 1.5 : 0;
+    if (this.bm) this.bm.glow.emissiveIntensity = 0.12 + 1.5 * lit;
   }
 
   /** Chimney smoke and stall steam near the camera. */
@@ -127,11 +138,12 @@ export class BaSingSe extends EarthRegion {
   override onSessionStart(ctx: GameContext): void {
     super.onSessionStart(ctx);
     if (this.building) return;
-    for (const s of [this.gates, this.lifts, this.trains, this.laogai]) s?.onSessionEnd();
+    for (const s of [this.gates, this.lifts, this.trains, this.laogai, this.crowd]) s?.onSessionEnd();
     this.gates?.onSessionStart(ctx);
     this.lifts?.onSessionStart(ctx);
     this.trains?.onSessionStart(ctx);
     this.laogai?.onSessionStart(ctx);
+    this.crowd?.onSessionStart(ctx);
   }
 
   override onSessionEnd(ctx: GameContext): void {
@@ -140,6 +152,7 @@ export class BaSingSe extends EarthRegion {
     this.lifts?.onSessionEnd();
     this.gates?.onSessionEnd();
     this.laogai?.onSessionEnd();
+    this.crowd?.onSessionEnd();
   }
 
   override dispose(ctx: GameContext): void {
@@ -147,6 +160,8 @@ export class BaSingSe extends EarthRegion {
     this.trains?.dispose();
     this.laogai?.dispose();
     this.laogai = null;
+    this.crowd?.dispose();
+    this.crowd = null;
     this.lifts?.dispose();
     this.gates?.dispose();
     this.figures?.dispose();
@@ -188,6 +203,21 @@ export class BaSingSe extends EarthRegion {
       laogaiRaise: () => this.laogai?.raise(),
       laogaiOpen: () => this.laogai?.openDoor(),
       laogaiSet: (rise: number, open: number) => this.laogai?.setState(rise, open),
+      crowd: () => (this.crowd ? { ...this.crowd.stats, figures: { ...this.figures?.stats } } : null),
+      /** Fast-forward the crowd alone (no rendering) by `seconds` of game time at 30 Hz. */
+      crowdWarm: (seconds: number) => {
+        const ctx = this.ctx;
+        const cam = ctx?.camera?.position;
+        if (!ctx || !cam || !this.crowd || !this.figures) return false;
+        this.camPos.copy(cam);
+        for (let i = 0; i < seconds * 30; i++) {
+          this.figures.begin(this.camPos);
+          this.figures.view(ctx.camera);
+          this.crowd.update(1 / 30, ctx, this.camPos, true);
+          this.figures.end();
+        }
+        return true;
+      },
       stations: () =>
         this.stations.map((s) => {
           const p = railPath(s.line.id).at(s.s);

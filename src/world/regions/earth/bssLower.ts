@@ -44,6 +44,10 @@ export interface DistrictSite extends WallSite {
   smoke: Array<{ x: number; y: number; z: number; rate: number; steam?: boolean }>;
   /** Station lift towers (filled in once the railways are built). */
   lifts: Array<{ id: string; station: string; x: number; z: number }>;
+  /** Shop fronts (door point on the street, facing yaw, width, façade set-back) for shutters and sweepers. */
+  shops: Array<{ x: number; z: number; yaw: number; w: number; off: number }>;
+  /** Market stalls (centre, facing yaw, width, depth) for night tarps and stall keepers. */
+  stalls: Array<{ x: number; z: number; yaw: number; w: number; d: number }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -144,6 +148,7 @@ export function fillRing(site: DistrictSite, row: RingRow): PlacedHouse[] {
     env.excl.box(cx, cz, hw, hd, yaw);
     const door = polar(tc, row.rFront - row.facing * -0.6);
     const tag = row.tag | (id === 'N3' || id === 'N3b' ? NavTag.shop : NavTag.home);
+    if (id === 'N3' || id === 'N3b') site.shops.push({ x: door.x, z: door.z, yaw, w, off: 0.6 + arch.front * s });
     nav.poi(door.x, door.z, tag, Math.atan2(-fx, -fz));
     out.push({ x: p.x, z: p.z, yaw, theta: tc, id, w, d: depth, door });
     const gap = row.gap[0] + (row.gap[1] - row.gap[0]) * hash01(seed, k, 6);
@@ -366,6 +371,7 @@ function buildSquare(site: DistrictSite): void {
   b.box('stone_light', { x: BSS.kingStatue.x, y: GROUND + 0.6, z: BSS.kingStatue.z, sx: 3.6, sy: 1.2, sz: 3.6 }, { collide: true, walkable: true });
   for (const s of squareStalls()) {
     marketStall(b, s.x, GROUND, s.z, Math.PI / 2, 'cloth_green', env.rnd, 3.2, 2);
+    site.stalls.push({ x: s.x, z: s.z, yaw: Math.PI / 2, w: 3.2, d: 2 });
     crates(env.chunks.at('detail', s.x, s.z).builder, s.x - 1.6, GROUND, s.z + 1.6, env.rnd, 2);
   }
   for (const [dx, dz] of [[-14, -14], [14, -14], [-14, 14], [14, 14]]) {
@@ -500,6 +506,7 @@ function buildMarket(site: DistrictSite): void {
   ms.forEach((s, i) => {
     const b = env.chunks.at('props', s.x, s.z).builder;
     marketStall(b, s.x, GROUND, s.z, s.yaw, awnings[i % awnings.length], env.rnd, 3.2, 2);
+    site.stalls.push({ x: s.x, z: s.z, yaw: s.yaw, w: 3.2, d: 2 });
     if (i % 3 === 0) crates(env.chunks.at('detail', s.x, s.z).builder, s.mx + Math.cos(s.yaw) * 1.2, GROUND, s.mz - Math.sin(s.yaw) * 1.2, env.rnd, 2);
     const cx = s.x + Math.sin(s.yaw) * 1.3, cz = s.z + Math.cos(s.yaw) * 1.3;
     nav.poi(cx, cz, NavTag.stall | NavTag.lower, s.yaw + Math.PI);
@@ -593,6 +600,7 @@ function dressLower(site: DistrictSite, houses: PlacedHouse[], lanes: Lane[]): v
     if (env.excl.pointBlocked(p.x, p.z, 0)) continue;
     const b = env.chunks.at('props', p.x, p.z).builder;
     marketStall(b, p.x, GROUND, p.z, yaw, k % 2 ? 'cloth_red' : 'cloth_yellow', rnd, 2.8, 1.6);
+    site.stalls.push({ x: p.x, z: p.z, yaw, w: 2.8, d: 1.6 });
     b.cylinder('iron', { x: p.x + Math.cos(yaw) * 0.8, y: GROUND + 0.95, z: p.z - Math.sin(yaw) * 0.8, r: 0.32, h: 0.4, segments: 10 });
     site.smoke.push({ x: p.x + Math.cos(yaw) * 0.8, y: GROUND + 1.5, z: p.z - Math.sin(yaw) * 0.8, rate: 0.5, steam: true });
     nav.poi(p.x + Math.sin(yaw) * 1.6, p.z + Math.cos(yaw) * 1.6, NavTag.stall | NavTag.lower, yaw + Math.PI);
