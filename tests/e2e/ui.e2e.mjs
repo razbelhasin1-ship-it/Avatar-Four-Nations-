@@ -382,7 +382,8 @@ try {
       const p1 = (await h.state()).player;
       const moved = Math.hypot(p1.x - p0.x, p1.z - p0.z);
       assert.ok(moved > 50, `player should travel (moved ${moved.toFixed(1)} m)`);
-      assert.ok(Math.hypot(p1.x - -60, p1.z - -1680) < 30, `arrived near the harbour: ${p1.x},${p1.z}`);
+      // Harbor Quays landmark (-267, -1834): travel arrives 6 m off it, on the west quay.
+      assert.ok(Math.hypot(p1.x - -261, p1.z - -1828) < 30, `arrived near the harbour: ${p1.x},${p1.z}`);
       const r = await h.eval((g) => g.debug.ui.travel('omashu_city'));
       assert.equal(r.ok, false, 'undiscovered destinations are refused');
     });
