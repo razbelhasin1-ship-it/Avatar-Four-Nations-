@@ -194,6 +194,7 @@ try {
       g.teleport(-140, -1600);
     });
     await h.step(5);
+    await audio((g) => g.debug.water.setReserve(0)); // empty hands, whatever earlier checks gathered
     await clearLog();
     const near = await audio((g) => g.waterNearby(16));
     const r = await audio((g) => g.cast('water_whip', null));
@@ -201,9 +202,11 @@ try {
     ids = await logIds();
     if (!r.ok && r.reason === 'water') assert.ok(ids.includes('fail.nowater'), 'no dry fizz: ' + ids.join(','));
     else assert.ok(near.length > 0, 'expected failure without water: ' + JSON.stringify(r));
+    await h.step(45); // Agna Qel'a lies under packed snow: let a gather from it finish
     // Next to a canal with empty hands: the press gathers real water (draw sound, no dry fizz), the next one bends it.
     await audio((g) => g.teleport(-246, -1720));
     await h.step(6);
+    await audio((g) => g.debug.water.setReserve(0));
     await clearLog();
     const gather = await audio((g) => g.cast('water_whip', null));
     assert.equal(gather.reason, 'gather', JSON.stringify(gather));
