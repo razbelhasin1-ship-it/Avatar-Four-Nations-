@@ -70,7 +70,8 @@ export function buildOasis(k: NwtKit, det: Detail): void {
   };
   shell(I.pond, true);
   shell(I.r, false);
-  for (const [r0, r1] of [[I.r - 1, I.r], [I.pond, I.pond + 1]]) {
+  // Grass rims cover the stepped edge of the 1 m lawn raster (cells within 0.75 m of the water are left out).
+  for (const [r0, r1] of [[I.r - 1.5, I.r], [I.pond, I.pond + 1.5]]) {
     const g = flatRing(r0, r1, 64);
     cb.mesh(wtMat('grass'), g, { x: I.x, y: L4 + 0.025, z: I.z }, { castShadow: false });
     g.dispose();
@@ -85,8 +86,8 @@ export function buildOasis(k: NwtKit, det: Detail): void {
   cb.collider({ shape: 'cylinder', x: I.x, y: (L4 + 3) / 2, z: I.z, r: I.r, hy: (L4 - 3) / 2, walkable: true, solid: true, surface: 'grass' });
   const N = 28;
   for (let i = 0; i < N; i++) {
-    const a = ((i + 0.5) / N) * Math.PI * 2, rr = I.pond + 0.5;
-    cb.collider({ shape: 'box', x: I.x + Math.cos(a) * rr, y: (L4 + 3) / 2, z: I.z + Math.sin(a) * rr, hx: 0.5, hy: (L4 - 3) / 2, hz: (Math.PI * 2 * rr) / (2 * N) + 0.2, yaw: -a, walkable: true, solid: true, surface: 'grass' });
+    const a = ((i + 0.5) / N) * Math.PI * 2, rr = I.pond + 0.75;
+    cb.collider({ shape: 'box', x: I.x + Math.cos(a) * rr, y: (L4 + 3) / 2, z: I.z + Math.sin(a) * rr, hx: 0.75, hy: (L4 - 3) / 2, hz: (Math.PI * 2 * rr) / (2 * N) + 0.2, yaw: -a, walkable: true, solid: true, surface: 'grass' });
   }
   k.water({ id: 'nwt:spirit_oasis', type: 'pond', label: 'Spirit Oasis Pond', x: I.x, y: WATER_Y, z: I.z, r: I.pond, capacity: 300, regen: 15, size: 'medium' });
 
@@ -251,6 +252,9 @@ export function buildOasis(k: NwtKit, det: Detail): void {
     [ox0 + 6, oz0 + 15, 7.5, 'leaf'], [ox0 + 6, oz1 - 9, 8, blossom], [ox0 + 19, oz1 - 6, 6.5, 'leaf'], [ox0 + 14, oz0 + 24, 6, maple],
     [ox1 - 8, oz1 - 9, 8.5, 'leaf'], [ox1 - 15, oz0 + 8, 7, blossom], [ox1 - 6, oz0 + 22, 6.5, maple], [ox1 - 22, oz1 - 5, 6, 'leaf'],
     [I.x + 4.2, I.z - 3.6, 4.8, blossom],
+    // A second, lower ring of trees closes the garden in.
+    [ox1 - 30, oz0 + 5, 5.5, blossom], [ox1 - 38, oz0 + 4.5, 6, 'leaf'], [ox0 + 26, oz0 + 5, 5, maple], [ox1 - 12, oz0 + 16, 6, 'leaf'],
+    [ox1 - 18, oz1 - 14, 5.5, blossom], [ox0 + 30, oz1 - 4.5, 5, blossom], [ox1 - 26, oz1 - 5, 5.5, 'leaf'], [ox0 + 5, oz0 + 30, 5.5, maple],
   ];
   trees.forEach(([x, z, h, foliage], i) => {
     const [trunk, crown] = roundTree(900 + i, h);
@@ -284,9 +288,11 @@ export function buildOasis(k: NwtKit, det: Detail): void {
   bed(MOON_GATE.x + 6, MOON_GATE.z + 4, 30, 2.2);
   bed(I.x + 3, I.z - 15, 34, 2.4);
   bed(I.x - 3, I.z + 2.8, 18, 1.4);
-  for (let i = 0; i < 16; i++) {
+  const onPath = path.getSpacedPoints(24);
+  for (let i = 0; i < 34; i++) {
     const x = rnd.range(ox0 + 4, ox1 - 4), z = rnd.range(oz0 + 4, oz1 - 4);
     if (wet(x, z) || Math.hypot(x - I.x, z - I.z) < I.pond + 2.5 || wallDist(x, z) < 3) continue;
+    if (onPath.some((p) => Math.hypot(p.x - x, p.z - z) < 1.8)) continue;
     const s = rnd.range(0.6, 1.1);
     const g = new THREE.IcosahedronGeometry(s, 1);
     g.scale(1.25, 0.8, 1.1);

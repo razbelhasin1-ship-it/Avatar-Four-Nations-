@@ -131,6 +131,8 @@ void main() {
   vec3 shallow = mix(uShallow, vec3(0.2, 0.42, 0.48), polar * (1.0 - uMarsh));
   float dk = 1.0 - exp(-depth * uAbsorb);
   vec3 body = mix(shallow, deep, dk);
+  // Without the sun the water body darkens to deep navy; it only mirrors the night sky.
+  body *= 0.28 + 0.72 * uDaylight;
   // Sub-surface glow through wave crests facing the sun.
   float sss = pow(max(dot(-V, uSunDir), 0.0), 3.0) * vCrest * 0.35;
   body += shallow * sss * uDaylight;

@@ -766,7 +766,11 @@ export function animateWaterMaterials(ctx: GameContext): void {
   if (foamMat) foamMat.uniforms.uTime.value = t;
   const night = 1 - Math.max(0, Math.min(1, sky.daylight ?? 1));
   const win = cache.get('window');
-  if (win) win.emissiveIntensity = 0.55 + 1.6 * night;
+  if (win) {
+    // By day a lit window is a dim warm opening in the ice; at night it glows.
+    win.emissiveIntensity = 0.3 + 1.85 * night;
+    win.color.copy(WINDOW_DAY).lerp(WINDOW_NIGHT, night);
+  }
   const lb = cache.get('lantern_blue');
   if (lb) lb.emissiveIntensity = 1.1 + 1.4 * night;
   const lw = cache.get('lantern_warm');
@@ -774,6 +778,9 @@ export function animateWaterMaterials(ctx: GameContext): void {
   const sp = cache.get('spirit');
   if (sp) sp.emissiveIntensity = 1.6 + 1.6 * night + 0.25 * Math.sin(t * 1.7);
 }
+
+const WINDOW_DAY = new THREE.Color('#6b5236');
+const WINDOW_NIGHT = new THREE.Color('#ffd9a0');
 
 /** Take a reference on the shared Water Tribe materials (call once per region build). */
 export function acquireWaterMaterials(): void {
