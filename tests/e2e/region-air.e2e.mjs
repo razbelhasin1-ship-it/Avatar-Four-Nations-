@@ -134,6 +134,19 @@ try {
     near(await ground(1450, 1250), Y0 + 0.3, 0.05, 'labyrinth floor');
   });
 
+  await check('walk: spire terrace → stair round the drum → terrace (+13) → stair round the tower drum → great tower (+19.5)', async () => {
+    const B = { x: 1450, z: 1188 }, C = { x: 1450, z: 1187 };
+    const onB = (a, r) => [B.x + Math.cos((a * Math.PI) / 180) * r, B.z + Math.sin((a * Math.PI) / 180) * r];
+    const onC = (a, r) => [C.x + Math.cos((a * Math.PI) / 180) * r, C.z + Math.sin((a * Math.PI) / 180) * r];
+    await h.eval((g, p) => g.teleport(p[0], p[1]), onB(90, 16.7));
+    await h.step(20);
+    let r = await walkPath([onB(80, 16.7), ...[70, 50, 30, 10, -10, -28].map((a) => onB(a, 16.7)), onB(-28, 13)], { tol: 1.0 });
+    near(r.y, Y0 + 13, 0.3, 'round terrace height');
+    r = await walkPath([onC(330, 12.3), onC(300, 12.0), onC(282, 12.0), onC(280, 9.65), ...[295, 315, 335, 355, 375, 395, 415, 424].map((a) => onC(a, 9.65)), onC(66, 6.4)], { tol: 1.0 });
+    near(r.y, Y0 + 19.5, 0.3, 'great tower terrace height');
+    assert.ok(r.grounded, 'grounded at the foot of the great tower');
+  });
+
   await check('walk: training court → curved stair → walkway (+5) → sanctum (+9)', async () => {
     await h.eval((g) => g.teleport(1488, 1241));
     const c = { x: 1512, z: 1241 };
@@ -273,13 +286,17 @@ try {
 
   await check('session restart: interactions re-registered, no duplicate regions or leaks', async () => {
     const mem = () => h.eval((g) => ({ geo: g.ctx.render.renderer.info.memory.geometries, tex: g.ctx.render.renderer.info.memory.textures, regions: g.debug.air.regions().length }));
+    // Two restarts at the same place: the first may upload geometry never drawn
+    // before (monks streaming in at the spawn); a leak keeps growing on the second.
+    await h.newGame('air');
+    await h.step(10);
     const before = await mem();
     await h.newGame('air');
     await h.step(10);
     const after = await mem();
     assert.equal(after.regions, before.regions, 'region count stable');
-    assert.ok(after.geo <= before.geo + 25, `geometries grew ${before.geo} -> ${after.geo}`);
-    assert.ok(after.tex <= before.tex + 4, `textures grew ${before.tex} -> ${after.tex}`);
+    assert.ok(after.geo <= before.geo + 8, `geometries grew ${before.geo} -> ${after.geo}`);
+    assert.ok(after.tex <= before.tex + 2, `textures grew ${before.tex} -> ${after.tex}`);
     const ok = await h.eval((g) => {
       const bell = g.ctx.interactions.get('air_great_bell');
       const gong = g.ctx.interactions.get('air_gong');

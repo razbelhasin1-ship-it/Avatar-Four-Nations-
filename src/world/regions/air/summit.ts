@@ -8,6 +8,8 @@ import * as P from './parts';
 import { am, type Frame, type Kit, type P2 } from './parts';
 import { AIR_SPOTS, SUMMIT, Y0, sl, polar } from './layout';
 import { BELL_PAVILION, buildGrounds } from './grounds';
+import { buildSpires, nomadTower } from './towers';
+import { Random } from '../../../core/Random';
 
 /**
  * The Southern Air Temple summit (plateau 'air_temple', flat at y = 330 out to
@@ -64,6 +66,10 @@ export class SouthernAirTemple extends AirRegion {
       ['rim', () => this.buildRim()],
       ['quarters', () => this.buildQuarters()],
       ['grounds', () => buildGrounds((name, c, r, o) => this.zone(name, c, r, o))],
+      ['spires', () => {
+        const k = this.zone('spires', SUMMIT, 900, { far: true });
+        buildSpires(k, SUMMIT);
+      }],
     ];
   }
 
@@ -174,7 +180,7 @@ export class SouthernAirTemple extends AirRegion {
     lawnMesh.name = 'air_lawn';
     k.addMesh(lawnMesh, 'main');
     P.disc(k, c.x, c.z, Y0 + 0.15, 27, 'paving', 0.7, 64);
-    P.disc(k, c.x, c.z, Y0 + 0.3, 17, am('labyrinth'), 0.3, 72);
+    P.disc(k, c.x, c.z, Y0 + 0.3, 17, am('courtRings'), 0.3, 72);
     // Curb ring around the labyrinth.
     const curb = G.annulusSector(17, 17.5, 0, Math.PI * 2, Y0 + 0.1, Y0 + 0.33, 48);
     k.main.mesh('stone_light', curb, { x: c.x, y: 0, z: c.z });
@@ -252,44 +258,92 @@ export class SouthernAirTemple extends AirRegion {
       k.main.box('stone_white', { x: p.x, y: Y0 + 0.15 + 0.4, z: p.z, sx: 3.2, sy: 0.8, sz: 6.2 }, { collide: true, walkable: true });
       P.bisonStatue(k, p.x, Y0 + 0.95, p.z, 0, 0.62);
     }
-    // The great spire.
-    const sp = sl(0, -60);
-    P.spire(k, {
-      x: sp.x,
-      z: sp.z,
-      y: T,
-      tiers: [
-        { r: 9, h: 10, skirt: true },
-        { r: 7.6, h: 9, skirt: true },
-        { r: 6.4, h: 8.5 },
-        { r: 5.3, h: 8, skirt: true },
-        { r: 4.3, h: 7, belfry: true, skirt: true },
-        { r: 3.3, h: 6.5 },
-      ],
-      roofH: 16,
-      finial: 2.4,
-      door: 0,
-    });
-    // Secondary towers.
+    // Terraces climbing the central spire: a round terrace (B) on the spire
+    // terrace, a smaller one (C) on B, white curved stairs wrapping each, and
+    // the great tower on top.
+    const B = sl(0, -62), C = sl(0, -63);
+    const YB = Y0 + 13, YC = Y0 + 19.5, RB = 15, RC = 8.2;
+    const drum = (o: P2, r: number, y0: number, y1: number) => {
+      k.main.cylinder('stone_white', { x: o.x, z: o.z, y: y0 - 0.5, r, h: y1 - y0 + 0.5, segments: 48 }, { collide: true, walkable: true });
+      k.main.cylinder('paving', { x: o.x, z: o.z, y: y1 - 0.02, r: r - 0.15, h: 0.06, segments: 48 });
+      k.main.cylinder('stone_light', { x: o.x, z: o.z, y: y1 - 0.55, r: r + 0.35, h: 0.55, segments: 48 });
+      k.main.cylinder(am('trimOrange'), { x: o.x, z: o.z, y: y1 - 0.68, r: r + 0.22, h: 0.13, segments: 48 });
+      k.main.cylinder('stone_light', { x: o.x, z: o.z, y: y0, r: r + 0.3, h: 0.7, segments: 48 });
+      // Blind arches round the drum.
+      const n = Math.round((Math.PI * 2 * r) / 4.2);
+      for (let i = 0; i < n; i++) {
+        const a = ((i + 0.5) / n) * Math.PI * 2;
+        k.main.instance('drum_arch', () => P.archedWindowGeo(), am('shadow'), matrixFor({ x: o.x + Math.cos(a) * (r + 0.02), y: y0 + (y1 - y0) * 0.32, z: o.z + Math.sin(a) * (r + 0.02), yaw: P.faceYaw(Math.cos(a), Math.sin(a)), sx: 1.4, sy: Math.min(2.2, (y1 - y0) * 0.26), sz: 0.5 }), false);
+      }
+    };
+    drum(B, RB, T, YB);
+    drum(C, RC, YB, YC);
+    const stairCap = (o: P2, r0: number, r1: number, a: number, y: number) => {
+      const p0 = { x: o.x + Math.cos(a) * r0, z: o.z + Math.sin(a) * r0 }, p1 = { x: o.x + Math.cos(a) * r1, z: o.z + Math.sin(a) * r1 };
+      P.balustrade(k, [p0, p1], { y });
+    };
+    // Spire terrace → B: two stairs sweeping round the drum from the grand approach.
+    for (const [a0, a1] of [[105, 215], [75, -35]]) {
+      P.curvedStair(k, { cx: B.x, cz: B.z, rIn: RB + 0.15, rOut: RB + 3.2, a0: a0 * deg, a1: a1 * deg, y0: T, y1: YB, walls: { h: 0.9, t: 0.45, inner: false } });
+      stairCap(B, RB + 0.2, RB + 3.4, (a1 + (a1 > a0 ? 1.5 : -1.5)) * deg, YB);
+    }
+    // B → C: two stairs wrapping C from the back, arriving at the tower's door.
+    for (const [a0, a1] of [[250, 110], [290, 430]]) {
+      P.curvedStair(k, { cx: C.x, cz: C.z, rIn: RC + 0.2, rOut: RC + 2.7, a0: a0 * deg, a1: a1 * deg, y0: YB, y1: YC, walls: { h: 0.9, t: 0.4, inner: false } });
+      stairCap(C, RC + 0.25, RC + 2.9, (a1 + (a1 > a0 ? 1.5 : -1.5)) * deg, YC);
+    }
+    // Rails round the terrace edges, open where the stairs arrive.
+    P.arcRail(k, B.x, B.z, RB - 0.25, -21 * deg, 201 * deg, YB, { seg: 2.5 });
+    P.arcRail(k, B.x, B.z, RB - 0.25, 216 * deg, 324 * deg, YB, { seg: 2.5 });
+    P.arcRail(k, C.x, C.z, RC - 0.25, 122 * deg, 418 * deg, YC, { seg: 2 });
+    // The great tower and four lesser towers in the same style.
+    nomadTower(k, { x: C.x, z: C.z, y: YC, r: 4.3, h: 60, roofH: 15, eave: 2.5, finial: 2.2, door: 0 });
     for (const s of [-1, 1]) {
       const a = sl(s * 20, -44);
-      P.roundTower(k, { x: a.x, z: a.z, y: T, r: 3.4, h: 16, roofH: 8.6, balcony: true, door: 0 });
-      const b = sl(s * 21, -71.5);
-      P.roundTower(k, { x: b.x, z: b.z, y: T, r: 3.0, h: 11, roofH: 7.2, door: s > 0 ? Math.PI / 2 : -Math.PI / 2 });
+      nomadTower(k, { x: a.x, z: a.z, y: T, r: 3.0, h: 36, roofH: 10.5, eave: 1.7, door: 0 });
+      const b = sl(s * 21.5, -72);
+      nomadTower(k, { x: b.x, z: b.z, y: T, r: 2.6, h: 29, roofH: 9, eave: 1.5, door: s > 0 ? Math.PI / 2 : -Math.PI / 2 });
     }
-    // Lanterns and a pair of pines on the terrace.
-    for (const [x, z] of [[-7, -40], [7, -40], [-12, -50], [12, -50]] as Array<[number, number]>) {
+    // Lanterns, pines and greenery on the terraces; rock of the spire breaking through at the back.
+    for (const [x, z] of [[-7, -40], [7, -40]] as Array<[number, number]>) {
       const p = sl(x, z);
       P.lanternPost(k, p.x, T, p.z, 'warm');
     }
-    for (const [x, z, v] of [[-16, -58, 0], [16, -58, 1], [-14, -76, 2], [14, -76, 0]] as Array<[number, number, number]>) {
+    for (const a of [40, 140]) {
+      const p = { x: B.x + Math.cos(a * deg) * 12.8, z: B.z + Math.sin(a * deg) * 12.8 };
+      P.pine(k, p.x, YB, p.z, a % 3, 0.95, a * deg);
+    }
+    for (const a of [20, 160, 232, 308]) {
+      const p = { x: B.x + Math.cos(a * deg) * 13.6, z: B.z + Math.sin(a * deg) * 13.6 };
+      P.lanternPost(k, p.x, YB, p.z, 'warm');
+    }
+    for (const [x, z, v] of [[-25, -56, 0], [25, -56, 1], [-25, -78, 2], [25, -78, 0]] as Array<[number, number, number]>) {
       const p = sl(x, z);
       P.pine(k, p.x, T, p.z, v, 1.0, x * 0.1);
     }
-    // Prayer flags between the front towers and the spire.
-    const fa = sl(-20, -44), fb = sl(20, -44), top = sl(0, -51);
-    P.prayerFlags(k, new THREE.Vector3(fa.x, T + 13, fa.z), new THREE.Vector3(top.x, T + 19, top.z), 1.2);
-    P.prayerFlags(k, new THREE.Vector3(top.x, T + 19, top.z), new THREE.Vector3(fb.x, T + 13, fb.z), 1.2);
+    const rnd = new Random(1777);
+    for (let i = 0; i < 9; i++) {
+      const a = (228 + i * 11.5) * deg, rr = RB + rnd.range(0.4, 2.2);
+      const s2 = rnd.range(1.6, 3.2);
+      const rock = new THREE.DodecahedronGeometry(1, 1);
+      k.main.mesh(am('rockSpire'), rock, { x: B.x + Math.cos(a) * rr, y: T + s2 * 0.35, z: B.z + Math.sin(a) * rr, sx: s2, sy: s2 * rnd.range(1.1, 1.8), sz: s2 * 0.9, yaw: rnd.range(0, 6) });
+      rock.dispose();
+      const bush = new THREE.IcosahedronGeometry(1, 1);
+      k.main.mesh(am('foliage'), bush, { x: B.x + Math.cos(a + 0.05) * (rr + 1.2), y: T + 0.5, z: B.z + Math.sin(a + 0.05) * (rr + 1.2), sx: 1.3, sy: 0.75, sz: 1.1 });
+      bush.dispose();
+    }
+    for (let i = 0; i < 6; i++) {
+      const a = (257 + i * 6) * deg, rr = RC + rnd.range(0.5, 1.6);
+      const s2 = rnd.range(1.0, 1.9);
+      const rock = new THREE.DodecahedronGeometry(1, 1);
+      k.main.mesh(am('rockSpire'), rock, { x: C.x + Math.cos(a) * rr, y: YB + s2 * 0.4, z: C.z + Math.sin(a) * rr, sx: s2, sy: s2 * 1.4, sz: s2, yaw: rnd.range(0, 6) });
+      rock.dispose();
+    }
+    // Prayer flags from the front towers' galleries to the great tower.
+    for (const s of [-1, 1]) {
+      const fa = sl(s * 20, -44);
+      P.prayerFlags(k, new THREE.Vector3(fa.x, T + 33.5, fa.z), new THREE.Vector3(C.x + s * 4.6, YC + 56.5, C.z + 1.2), 2.4);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -600,7 +654,7 @@ export class SouthernAirTemple extends AirRegion {
       P.banner(k, w.x + Math.cos(F.yaw) * s * 0.02, fl + 4.6, w.z - Math.sin(F.yaw) * s * 0.02, F.yaw + (s * Math.PI) / 2, 1.5, 3.6, 'banner');
     }
     // Roof with a walkable collider so gliders can land on it.
-    k.main.roof(am('roof'), { x: o.x, y: fl + 9.9, z: o.z, w: 39, d: 19, height: 5.6, yaw: F.yaw, style: 'hip', overhang: 0.8, curve: 0.3, ridge: am('roofTrim') });
+    k.main.roof(am('roofSlate'), { x: o.x, y: fl + 9.9, z: o.z, w: 39, d: 19, height: 5.6, yaw: F.yaw, style: 'pagoda', overhang: 0.8, curve: 0.55, ridge: am('roofTrim') });
     k.main.collider({ shape: 'box', x: o.x, y: fl + 9.9 + 1.4, z: o.z, hx: 19, hy: 1.4, hz: 9, yaw: F.yaw, walkable: true, solid: true });
     // Stall partitions, hay, a drinking basin and the feeding ring.
     for (const u of [-6, 6]) {
@@ -725,7 +779,7 @@ export class SouthernAirTemple extends AirRegion {
     const ar = at(0, 5.3);
     k.main.box('stone_white', { x: ar.x, y: fl + 7.2, z: ar.z, sx: 26.4, sy: 1.0, sz: 1.1, yaw: F.yaw });
     k.main.box(am('paintTeal'), { x: ar.x + Math.sin(F.yaw) * 0.57, y: fl + 7.2, z: ar.z + Math.cos(F.yaw) * 0.57, sx: 25, sy: 0.45, sz: 0.04, yaw: F.yaw });
-    k.main.roof(am('roof'), { x: o.x, y: fl + 7.7, z: o.z, w: 28.6, d: 14.6, height: 5.2, yaw: F.yaw, style: 'hip', overhang: 0.6, curve: 0.3, ridge: am('roofTrim') });
+    k.main.roof(am('roofSlate'), { x: o.x, y: fl + 7.7, z: o.z, w: 28.6, d: 14.6, height: 5.2, yaw: F.yaw, style: 'pagoda', overhang: 0.6, curve: 0.55, ridge: am('roofTrim') });
     k.main.collider({ shape: 'box', x: o.x, y: fl + 7.7 + 1.3, z: o.z, hx: 13.5, hy: 1.3, hz: 6.8, yaw: F.yaw, walkable: true, solid: true });
     // Statues of past Avatars on plinths, banners between them.
     for (let i = 0; i < 6; i++) {
@@ -849,6 +903,21 @@ export class SouthernAirTemple extends AirRegion {
         const mid = (cuts[i] + cuts[i + 1]) / 2;
         const k = Math.sin(mid * deg) < 0 ? kN : kS;
         P.arcRail(k, c.x, c.z, RIM, cuts[i] * deg, cuts[i + 1] * deg, Y0, { seg: 4 });
+      }
+    }
+    // Greenery along the cliff edge, inside the rail.
+    for (const [s0, s1] of spans) {
+      const n = Math.max(1, Math.round(((s1 - s0) * deg * (RIM - 1.5)) / 6.5));
+      for (let i = 0; i <= n; i++) {
+        const a = (s0 + ((s1 - s0) * i) / n) * deg;
+        const k = Math.sin(a) < 0 ? kN : kS;
+        const sc = 0.75 + (i % 3) * 0.22;
+        P.repeatProp(k.props, 'rim_shrub', () => {
+          const g = new THREE.IcosahedronGeometry(1, 1);
+          g.scale(1.15, 0.62, 0.95);
+          g.translate(0, 0.38, 0);
+          return g;
+        }, am('foliage'), { x: c.x + Math.cos(a) * (RIM - 1.5), y: heightAt(c.x + Math.cos(a) * (RIM - 1.5), c.z + Math.sin(a) * (RIM - 1.5)), z: c.z + Math.sin(a) * (RIM - 1.5), yaw: a * 3, sx: sc, sy: sc, sz: sc }, true);
       }
     }
     // Decorative towers clinging to the cliffs below the rim.

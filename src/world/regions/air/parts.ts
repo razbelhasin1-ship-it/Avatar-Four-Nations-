@@ -1083,7 +1083,25 @@ export function pavilion(k: Kit, o: { x: number; z: number; y: number; r: number
   }
   const roofH = o.roofH ?? o.r * 1.15;
   const roof = G.polyRoof(o.r + 0.1, roofH, sides, 0.9, 0);
-  k.main.mesh(am('roof'), roof, { x: o.x, y: floor + o.h + 0.82, z: o.z });
+  k.main.mesh(am('roofTeal'), roof, { x: o.x, y: floor + o.h + 0.82, z: o.z });
+  // Vines twining up every column, with leaf clusters.
+  for (const p of cols) {
+    inst(k.props, `pav_vine_${o.h.toFixed(1)}`, () => {
+      const turns = 2.6, pts: THREE.Vector3[] = [];
+      for (let i = 0; i <= 48; i++) {
+        const t = i / 48, a = t * turns * Math.PI * 2;
+        pts.push(new THREE.Vector3(Math.cos(a) * 0.24, 0.15 + t * (o.h - 0.25), Math.sin(a) * 0.24));
+      }
+      const parts: THREE.BufferGeometry[] = [new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 64, 0.045, 5, false)];
+      for (let i = 2; i < 46; i += 5) {
+        const leaf = new THREE.IcosahedronGeometry(0.16 + (i % 3) * 0.03, 0);
+        leaf.scale(1, 0.6, 1);
+        leaf.translate(pts[i].x * 1.25, pts[i].y, pts[i].z * 1.25);
+        parts.push(leaf);
+      }
+      return G.mergeAll(parts);
+    }, am('vine'), { x: p.x, y: floor, z: p.z, yaw: (p.x * 7 + p.z * 3) % 6.28 }, false);
+  }
   roof.dispose();
   const f = G.finialGeometry(o.finial ?? 0.7);
   k.main.mesh('gold', f, { x: o.x, y: floor + o.h + 0.82 + roofH * 0.965, z: o.z });
@@ -1211,7 +1229,8 @@ export function quarters(k: Kit, o: { x: number; z: number; y: number; w: number
   for (let f = 1; f < floors; f++) {
     const fy = base + f * fh;
     b.box('stone_light', { x: o.x, y: fy, z: o.z, sx: o.w + 0.3, sy: 0.3, sz: o.d + 0.3, yaw });
-    b.roof(am('roof'), { x: o.x, y: fy + 0.12, z: o.z, w: o.w, d: o.d, height: 0.7, yaw, overhang: 0.85, style: 'hip', curve: 0.4, ridge: null });
+    b.roof(am('roofSlate'), { x: o.x, y: fy + 0.12, z: o.z, w: o.w, d: o.d, height: 0.7, yaw, overhang: 0.85, style: 'pagoda', curve: 0.45, ridge: null });
+    b.box(am('trimOrange'), { x: o.x, y: fy - 0.2, z: o.z, sx: o.w + 0.1, sy: 0.18, sz: o.d + 0.1, yaw });
   }
   // Corner pilasters.
   for (const s1 of [-1, 1]) {
@@ -1233,11 +1252,35 @@ export function quarters(k: Kit, o: { x: number; z: number; y: number; w: number
     }
   }
   portal(k, o.x + fx * (o.d / 2), base, o.z + fz * (o.d / 2), yaw, 1.8, 2.5);
-  b.roof(am('roof'), { x: o.x, y: base + h, z: o.z, w: o.w, d: o.d, height: roofH, yaw, style: 'hip', overhang: 0.8, curve: 0.35, ridge: am('roofTrim') });
+  // Warm painted trim under the eaves.
+  b.box(am('trimOrange'), { x: o.x, y: base + h - 0.3, z: o.z, sx: o.w + 0.16, sy: 0.32, sz: o.d + 0.16, yaw });
+  // Wooden balcony on the upper storey of the front.
+  if (floors >= 2) {
+    const by = base + fh + 0.05, bw = Math.min(o.w - 1.6, 6);
+    const bx = o.x + fx * (o.d / 2 + 0.6), bz = o.z + fz * (o.d / 2 + 0.6);
+    b.box('wood', { x: bx, y: by, z: bz, sx: bw, sy: 0.18, sz: 1.2, yaw });
+    b.box('wood_dark', { x: bx + fx * 0.55, y: by + 0.5, z: bz + fz * 0.55, sx: bw, sy: 0.08, sz: 0.1, yaw });
+    for (let i = 0; i <= Math.round(bw / 0.6); i++) {
+      const u = -bw / 2 + (i * bw) / Math.round(bw / 0.6);
+      inst(k.props, 'q_bal_post', () => new THREE.BoxGeometry(0.07, 0.5, 0.07).translate(0, 0.25, 0), 'wood_dark', { x: bx + cx * u + fx * 0.55, y: by + 0.09, z: bz + sz * u + fz * 0.55, yaw }, false);
+    }
+  }
+  // Tiered blue-grey pagoda roof with upturned corners: a lower tier, a clerestory, an upper tier.
+  const lowH = roofH * 0.55, cw = o.w * 0.58, cd = o.d * 0.55, ch = Math.max(1.0, roofH * 0.42);
+  b.roof(am('roofSlate'), { x: o.x, y: base + h, z: o.z, w: o.w, d: o.d, height: lowH, yaw, style: 'pagoda', overhang: 0.95, curve: 0.55, ridge: null });
+  b.block(o.wall ?? 'plaster_cream', { x: o.x, y: base + h + lowH * 0.45, z: o.z, sx: cw, sy: ch + lowH * 0.55, sz: cd, yaw });
+  b.box(am('trimOrange'), { x: o.x, y: base + h + lowH + ch - 0.18, z: o.z, sx: cw + 0.12, sy: 0.22, sz: cd + 0.12, yaw });
+  for (const s of [-1, 1]) {
+    const off = s * (cd / 2 + 0.02);
+    inst(k.props, 'q_oculus', () => new THREE.CylinderGeometry(0.42, 0.42, 0.12, 14).rotateX(Math.PI / 2), am('shadow'), { x: o.x + fx * off, y: base + h + lowH + ch * 0.45, z: o.z + fz * off, yaw }, false);
+  }
+  const topY = base + h + lowH + ch;
+  const upH = roofH * 0.7;
+  b.roof(am('roofSlate'), { x: o.x, y: topY, z: o.z, w: cw, d: cd, height: upH, yaw, style: 'pagoda', overhang: 0.8, curve: 0.5, ridge: am('roofTrim') });
   const fin = G.finialGeometry(0.35);
   for (const s of [-1, 1]) {
-    const ridge = Math.max(0.5, (o.w - o.d) / 2 + 0.5);
-    b.mesh('gold', fin, { x: o.x + cx * s * ridge, y: base + h + roofH + 0.1, z: o.z + sz * s * ridge });
+    const ridge = Math.max(0.4, (cw - cd) / 2 + 0.3);
+    b.mesh('gold', fin, { x: o.x + cx * s * ridge, y: topY + upH + 0.05, z: o.z + sz * s * ridge });
   }
   fin.dispose();
 }

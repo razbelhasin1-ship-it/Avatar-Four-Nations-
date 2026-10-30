@@ -12,9 +12,15 @@ import { createWaterMaterial } from '../../Water';
  */
 
 export type AirMaterialName =
-  | 'roof'
+  | 'roof' // deep blue tiles: tower cones, portals
   | 'roofTrim'
+  | 'roofSlate' // blue-grey tiles: tiered hall roofs
+  | 'roofTeal' // teal tiles: the garden pavilion
+  | 'trimOrange' // warm orange-yellow painted trim
+  | 'vine'
+  | 'rockSpire' // weathered grey-brown rock of the spires
   | 'labyrinth'
+  | 'courtRings' // courtyard paving in concentric rings
   | 'straw'
   | 'strawBand'
   | 'grass'
@@ -78,13 +84,43 @@ function canvasTex(w: number, h: number, draw: (g: CanvasRenderingContext2D) => 
 function create(name: AirMaterialName): THREE.Material {
   switch (name) {
     case 'roof':
-      return new THREE.MeshStandardMaterial({ color: '#ffffff', map: roofTiles('#2b9fb6', 147), roughness: 0.5, metalness: 0.05, side: THREE.DoubleSide });
+      return new THREE.MeshStandardMaterial({ color: '#ffffff', map: roofTiles('#2f63a8', 147), roughness: 0.5, metalness: 0.05, side: THREE.DoubleSide });
     case 'roofTrim':
-      return new THREE.MeshStandardMaterial({ color: '#1d7487', roughness: 0.5, metalness: 0.1 });
+      return new THREE.MeshStandardMaterial({ color: '#21477a', roughness: 0.5, metalness: 0.1 });
+    case 'roofSlate':
+      return new THREE.MeshStandardMaterial({ color: '#ffffff', map: roofTiles('#5f7891', 148), roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide });
+    case 'roofTeal':
+      return new THREE.MeshStandardMaterial({ color: '#ffffff', map: roofTiles('#2b9fb6', 149), roughness: 0.5, metalness: 0.05, side: THREE.DoubleSide });
+    case 'trimOrange':
+      return new THREE.MeshStandardMaterial({ color: '#e39a35', roughness: 0.6 });
+    case 'vine':
+      return new THREE.MeshStandardMaterial({ color: '#4a7a36', roughness: 0.9, flatShading: true });
+    case 'rockSpire': {
+      const t = canvasTex(256, 256, (g) => {
+        const r = new Random(919);
+        g.fillStyle = '#8a8378';
+        g.fillRect(0, 0, 256, 256);
+        // vertical weathering streaks and horizontal bedding
+        for (let i = 0; i < 70; i++) {
+          g.fillStyle = r.pick(['#6f695f', '#9a9284', '#7d766b', '#a59d8e', '#5f5a52']);
+          g.globalAlpha = r.range(0.25, 0.6);
+          g.fillRect(r.range(0, 256), 0, r.range(2, 9), 256);
+        }
+        for (let i = 0; i < 14; i++) {
+          g.fillStyle = r.pick(['#5c574f', '#b0a898']);
+          g.globalAlpha = r.range(0.15, 0.35);
+          g.fillRect(0, r.range(0, 256), 256, r.range(1, 4));
+        }
+        g.globalAlpha = 1;
+      });
+      return new THREE.MeshStandardMaterial({ color: '#ffffff', map: t, roughness: 0.95 });
+    }
     case 'paintTeal':
       return new THREE.MeshStandardMaterial({ color: '#2f9fb1', roughness: 0.6 });
     case 'labyrinth':
       return new THREE.MeshStandardMaterial({ color: '#ffffff', map: labyrinthTexture(), roughness: 0.92 });
+    case 'courtRings':
+      return new THREE.MeshStandardMaterial({ color: '#ffffff', map: courtRingsTexture(), roughness: 0.9 });
     case 'mosaic':
       return new THREE.MeshStandardMaterial({ color: '#ffffff', map: mosaicTexture(), roughness: 0.85 });
     case 'straw':
@@ -126,6 +162,61 @@ function create(name: AirMaterialName): THREE.Material {
     case 'rope':
       return new THREE.MeshStandardMaterial({ color: '#7a6a52', roughness: 1 });
   }
+}
+
+/** Courtyard paving in concentric rings of cream and warm stone, an air swirl medallion at the centre. */
+function courtRingsTexture(): THREE.Texture {
+  const S = 1024;
+  return canvasTex(S, S, (g) => {
+    const r = new Random(2024);
+    const c = S / 2;
+    g.fillStyle = '#d9c9a3';
+    g.fillRect(0, 0, S, S);
+    const rings = 9;
+    for (let i = rings; i >= 1; i--) {
+      const R = (c * i) / rings;
+      g.beginPath();
+      g.arc(c, c, R, 0, Math.PI * 2);
+      g.fillStyle = i % 2 ? '#e8dcbf' : '#c9b083';
+      g.fill();
+      // slabs: radial joints
+      const n = 8 + i * 6;
+      g.strokeStyle = 'rgba(80,60,35,0.35)';
+      g.lineWidth = 2;
+      for (let j = 0; j < n; j++) {
+        const a = (j / n) * Math.PI * 2 + r.range(-0.02, 0.02);
+        const r0 = (c * (i - 1)) / rings;
+        g.beginPath();
+        g.moveTo(c + Math.cos(a) * r0, c + Math.sin(a) * r0);
+        g.lineTo(c + Math.cos(a) * R, c + Math.sin(a) * R);
+        g.stroke();
+      }
+      g.beginPath();
+      g.arc(c, c, R, 0, Math.PI * 2);
+      g.strokeStyle = 'rgba(70,50,30,0.6)';
+      g.lineWidth = 4;
+      g.stroke();
+    }
+    // Centre medallion: the air nomad swirl in warm orange on cream.
+    g.beginPath();
+    g.arc(c, c, c / rings - 6, 0, Math.PI * 2);
+    g.fillStyle = '#f2e7cc';
+    g.fill();
+    g.strokeStyle = '#d88a2e';
+    g.lineWidth = 10;
+    g.lineCap = 'round';
+    for (let k = 0; k < 3; k++) {
+      const a0 = (k / 3) * Math.PI * 2;
+      g.beginPath();
+      for (let t = 0; t <= 1.0001; t += 0.05) {
+        const a = a0 + t * Math.PI * 1.6, rr = 6 + t * (c / rings - 22);
+        const x = c + Math.cos(a) * rr, y = c + Math.sin(a) * rr;
+        if (t === 0) g.moveTo(x, y);
+        else g.lineTo(x, y);
+      }
+      g.stroke();
+    }
+  });
 }
 
 /** Round labyrinth paving: concentric circuits with turns, an ornamental border and an air emblem at the centre. */
