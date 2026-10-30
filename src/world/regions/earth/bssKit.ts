@@ -441,8 +441,14 @@ export function slabGeometry(aw: number, spring: number, thick: number): THREE.B
 // Ornament
 // ---------------------------------------------------------------------------
 
-/** Round emblem medallion facing local +Z of `yaw`. */
-export function medallion(b: ContentBuilder, m: BssMats, x: number, y: number, z: number, yaw: number, r: number, depth = 0.35): void {
+/** Round emblem medallion facing local +Z of `yaw` (`cheap`: a flat disc, for the hundreds on viaducts). */
+export function medallion(b: ContentBuilder, m: BssMats, x: number, y: number, z: number, yaw: number, r: number, depth = 0.35, cheap = false): void {
+  if (cheap) {
+    const d = new THREE.CircleGeometry(r, 14);
+    b.mesh(m.emblem, d, { x: x + Math.sin(yaw) * 0.04, y, z: z + Math.cos(yaw) * 0.04, yaw }, { castShadow: false });
+    d.dispose();
+    return;
+  }
   const g = new THREE.CylinderGeometry(r, r, depth, 28, 1);
   g.rotateX(Math.PI / 2);
   b.mesh(m.emblem, g, { x, y, z, yaw }, { castShadow: false });

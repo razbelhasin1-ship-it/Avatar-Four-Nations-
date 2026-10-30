@@ -276,12 +276,13 @@ export function buildRingWall(site: WallSite, which: 'middle' | 'upper'): void {
   const base = GROUND - 1;
   const lowTop = GROUND + RAIL.deck - 1.7;
   const gates = gatesOf(which);
-  const gateW = 24;
+  // Main (west) gates also carry the Central Line notch beside the road tunnel.
+  const gw = (g: GateDef) => (g.main ? 38 : 24);
   const crossings = railCrossings(r);
   // Crossings that pass through a gate get a notch; the others lower a stretch of wall.
-  const inGate = (c: { p: P2 }) => gates.some((g) => Math.abs(lateral(ringFrame(g.theta, g.r), c.p)) < gateW / 2 && Math.hypot(c.p.x - polar(g.theta, r).x, c.p.z - polar(g.theta, r).z) < gateW);
+  const inGate = (c: { p: P2 }) => gates.some((g) => Math.abs(lateral(ringFrame(g.theta, g.r), c.p)) < gw(g) / 2 - 4 && Math.hypot(c.p.x - polar(g.theta, r).x, c.p.z - polar(g.theta, r).z) < gw(g));
   const open = crossings.filter((c) => !inGate(c));
-  const gaps: Array<[number, number]> = gates.map((g) => gateHalf(g, gateW, r));
+  const gaps: Array<[number, number]> = gates.map((g) => gateHalf(g, gw(g), r));
   for (const c of open) gaps.push([c.theta, c.along / 2 + 1.5]);
   const key = `ring_${which}`;
   for (const [t0, t1] of ringSections(r, gaps)) {
@@ -315,6 +316,7 @@ export function buildRingWall(site: WallSite, which: 'middle' | 'upper'): void {
   for (const g of gates) {
     const f = ringFrame(g.theta, g.r);
     const b = env.chunks.named('major', `${key}_gate:${g.id}`).builder;
+    const gateW = gw(g);
     const thru = crossings.find((c) => !open.includes(c) && Math.abs(lateral(f, c.p)) < gateW / 2);
     const D = W.base + 3;
     gateBlock(b, {

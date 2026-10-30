@@ -9,12 +9,12 @@ import type { P2 } from '../../WorldLayout';
  * θ = atan2(dz, dx): 0 = east (+X), 90° = south (+Z), 180° = west, 270° = north.
  *
  *   r (m)     % of R   zone
- *   0-40      0-10     Royal Palace inside its own wall (axis N-S, South Gate at θ=90°)
- *   40-86     10-21    Upper Ring (inner loop viaduct at r=47)
- *   86        21       ring wall + 上環 gates (Middle | Upper)
- *   86-156    21-38    Middle Ring
- *   156       38       ring wall + 中環 gates (Lower | Middle)
- *   156-246   38-60    Lower Ring (outer loop viaduct at r=228)
+ *   0-44      0-11     Royal Palace inside the arcaded wall ring (the palace loop viaduct runs on it)
+ *   44-102    11-25    Upper Ring (radial lines end on curved stubs at r=58)
+ *   102       25       ring wall + 上環 gates (Middle | Upper)
+ *   102-170   25-41    Middle Ring
+ *   170       41       ring wall + 中環 gates (Lower | Middle)
+ *   170-246   41-60    Lower Ring (outer loop viaduct at r=228)
  *   246       60       Inner Wall + main gate
  *   246-410   60-100   Agrarian Zone (Lake Laogai, the zoo, hills)
  *   410       100      Outer Wall + main gate + arrival station
@@ -33,7 +33,7 @@ export const SEED = 4417;
 /** Outer Wall centre-line radius (100 %). */
 export const R_OUTER = 410;
 /** Ring boundaries as a fraction of R_OUTER (palace wall, Middle|Upper, Lower|Middle, Inner Wall). */
-export const RING_FRAC = { palace: 0.098, upper: 0.21, middle: 0.38, inner: 0.6 };
+export const RING_FRAC = { palace: 0.1073, upper: 0.2488, middle: 0.4146, inner: 0.6 };
 /** Wall heights and battered thickness (base → top). */
 export const WALL = {
   outer: { h: 180, base: 40, top: 16 },
@@ -46,7 +46,7 @@ export const STREET = { avenue: 12, ring: 7, lane: 3.6, alley: 2.6 };
 /** Monorail: deck heights above GROUND, deck width, track offsets, arcade module. */
 export const RAIL = {
   deck: 28,
-  loopDeck: 34,
+  loopDeck: 36,
   deckW: 8.6,
   track: 2.15,
   arch: 8,
@@ -57,7 +57,7 @@ export const RAIL = {
   platformW: 3.6,
 };
 /** Trains per line (each line keeps a 60-90 s headway), cars per train, speeds and stops. */
-export const TRAINS = { radial: 2, outerLoop: 2, innerLoop: 1, carsMin: 3, carsMax: 5, cruise: 13, accel: 1.6, dwell: 17, terminalDwell: 18 };
+export const TRAINS = { radial: 2, outerLoop: 2, innerLoop: 1, carsMin: 3, carsMax: 5, cruise: 18, accel: 2.6, dwell: 15, terminalDwell: 16 };
 /** Crowd budget (simulated agents) per zone; scaled by the graphics preset at runtime. */
 export const CROWD = { lower: 190, middle: 92, upper: 26, farm: 34, laogai: 8, guards: 36 };
 
@@ -236,19 +236,19 @@ export interface Avenue {
 
 /** Radial avenues inside the Inner Wall (stop at the palace wall / Upper Ring street). */
 export const AVENUES: Avenue[] = [
-  { id: 'west', theta: THETA_MAIN, r0: R.upper - 18, r1: R.inner, width: STREET.avenue },
-  { id: 'south', theta: 90 * DEG, r0: R.palace + 2, r1: R.inner, width: STREET.avenue },
-  { id: 'east', theta: 0, r0: R.upper - 18, r1: R.inner, width: 10 },
-  { id: 'north', theta: 270 * DEG, r0: R.upper - 18, r1: R.inner, width: 10 },
+  { id: 'west', theta: THETA_MAIN, r0: 66, r1: R.inner, width: STREET.avenue },
+  { id: 'south', theta: 90 * DEG, r0: R.palace + 4, r1: R.inner, width: STREET.avenue },
+  { id: 'east', theta: 0, r0: 66, r1: R.inner, width: 10 },
+  { id: 'north', theta: 270 * DEG, r0: 66, r1: R.inner, width: 10 },
 ];
 
 /** Ring streets (circles around C): Upper Ring promenade, Middle and Lower Ring ring roads. */
 export const RING_STREETS = {
-  upper: { r: 67, width: 9 },
-  middleIn: { r: 99, width: 8 },
-  middleOut: { r: 143, width: 8 },
-  lowerIn: { r: 168, width: 7 },
-  lowerMid: { r: 202, width: 6 },
+  upper: { r: 70, width: 8 },
+  middleIn: { r: 116, width: 8 },
+  middleOut: { r: 156, width: 8 },
+  lowerIn: { r: 182, width: 7 },
+  lowerMid: { r: 212, width: 6 },
 };
 
 /** Agrarian avenues: outer gate → inner gate (paved, 12 m). */
@@ -267,8 +267,10 @@ export interface StationDef {
   name: string;
   /** Platform centre (deck centre line). */
   at: P2;
-  /** Ground stair tower side: +1 = +normal of the line, −1 = −normal. */
-  stairs: 1 | -1;
+  /** CJK station name for the signboards. */
+  cjk: string;
+  /** Lift tower side: +1 = +normal of the line, −1 = −normal, 0 = none (reached across a neighbouring platform). */
+  stairs: 1 | -1 | 0;
 }
 
 export interface RailLineDef {
@@ -285,9 +287,10 @@ export interface RailLineDef {
 
 const ARRIVAL_R = 368;
 const Y_R = 228;
-const MID_STATION_R = 121;
-const TERM_R = 60;
-const SIDE = 15;
+const MID_R = 136;
+const TERM_R = 58;
+/** Trunk lateral offsets from the west avenue axis (+ = north). The avenue runs between C and S. */
+export const TRUNK = { north: 26.5, central: 10.5, south: -10.5 };
 
 function circlePts(r: number, n: number, t0 = 0): P2[] {
   const out: P2[] = [];
@@ -295,18 +298,28 @@ function circlePts(r: number, n: number, t0 = 0): P2[] {
   return out;
 }
 
+const tm = THETA_MAIN;
+
 export const RAIL_LINES: RailLineDef[] = [
   {
     id: 'central',
     name: 'Central Line',
     kind: 'shuttle',
     deck: RAIL.deck,
-    pts: [polar(THETA_MAIN, ARRIVAL_R), polar(THETA_MAIN, Y_R), polar(THETA_MAIN, MID_STATION_R), polar(THETA_MAIN, TERM_R)],
+    pts: [
+      polarOff(tm, ARRIVAL_R, TRUNK.central),
+      polarOff(tm, Y_R, TRUNK.central),
+      polarOff(tm, MID_R, TRUNK.central),
+      polarOff(tm, 94, TRUNK.central),
+      polar(tm + 14 * DEG, 68),
+      polar(tm + 28 * DEG, TERM_R),
+      polar(tm + 44 * DEG, TERM_R),
+    ],
     stations: [
-      { id: 'arrival_c', name: 'Outer Wall Arrival Station', at: polar(THETA_MAIN, ARRIVAL_R - 4), stairs: 1 },
-      { id: 'y_c', name: 'Lower Ring Junction', at: polar(THETA_MAIN, Y_R), stairs: 1 },
-      { id: 'mid_c', name: 'Middle Ring West', at: polar(THETA_MAIN, MID_STATION_R), stairs: -1 },
-      { id: 'up_c', name: 'Upper Ring West', at: polar(THETA_MAIN, TERM_R + 4), stairs: -1 },
+      { id: 'arrival_c', name: 'Outer Wall Arrival Station', cjk: '外城站', at: polarOff(tm, ARRIVAL_R, TRUNK.central), stairs: 0 },
+      { id: 'y_c', name: 'Lower Ring Junction', cjk: '下環站', at: polarOff(tm, Y_R, TRUNK.central), stairs: 0 },
+      { id: 'mid_c', name: 'Middle Ring West', cjk: '中環站', at: polarOff(tm, MID_R, TRUNK.central), stairs: 1 },
+      { id: 'up_c', name: 'Upper Ring West', cjk: '上環站', at: polar(tm + 44 * DEG, TERM_R), stairs: 1 },
     ],
     trains: TRAINS.radial,
   },
@@ -316,21 +329,23 @@ export const RAIL_LINES: RailLineDef[] = [
     kind: 'shuttle',
     deck: RAIL.deck,
     pts: [
-      polarOff(THETA_MAIN, ARRIVAL_R, SIDE),
-      polarOff(THETA_MAIN, Y_R + 6, SIDE),
-      polarOff(THETA_MAIN, Y_R - 14, SIDE),
-      polar(214 * DEG, 186),
-      polar(229 * DEG, 152),
-      polar(242 * DEG, MID_STATION_R),
-      polar(255 * DEG, 92),
-      polar(266 * DEG, 70),
-      polar(270 * DEG, TERM_R),
+      polarOff(tm, ARRIVAL_R, TRUNK.north),
+      polarOff(tm, Y_R + 6, TRUNK.north),
+      polarOff(tm, Y_R - 14, TRUNK.north),
+      polar(213 * DEG, 196),
+      polar(226 * DEG, 166),
+      polar(240 * DEG, MID_R),
+      polar(252 * DEG, 108),
+      polar(262 * DEG, 80),
+      polar(272 * DEG, 63),
+      polar(284 * DEG, TERM_R),
+      polar(298 * DEG, TERM_R),
     ],
     stations: [
-      { id: 'arrival_n', name: 'Outer Wall Arrival Station', at: polarOff(THETA_MAIN, ARRIVAL_R - 4, SIDE), stairs: 1 },
-      { id: 'y_n', name: 'Lower Ring Junction', at: polarOff(THETA_MAIN, Y_R, SIDE), stairs: 1 },
-      { id: 'mid_n', name: 'Middle Ring North', at: polar(242 * DEG, MID_STATION_R), stairs: 1 },
-      { id: 'up_n', name: 'Upper Ring North', at: polar(270 * DEG, TERM_R + 4), stairs: 1 },
+      { id: 'arrival_n', name: 'Outer Wall Arrival Station', cjk: '外城站', at: polarOff(tm, ARRIVAL_R, TRUNK.north), stairs: 1 },
+      { id: 'y_n', name: 'Lower Ring Junction', cjk: '下環站', at: polarOff(tm, Y_R, TRUNK.north), stairs: 1 },
+      { id: 'mid_n', name: 'Middle Ring North', cjk: '中環站', at: polar(240 * DEG, MID_R), stairs: 1 },
+      { id: 'up_n', name: 'Upper Ring North', cjk: '上環站', at: polar(298 * DEG, TERM_R), stairs: 1 },
     ],
     trains: TRAINS.radial,
   },
@@ -340,21 +355,23 @@ export const RAIL_LINES: RailLineDef[] = [
     kind: 'shuttle',
     deck: RAIL.deck,
     pts: [
-      polarOff(THETA_MAIN, ARRIVAL_R, -SIDE),
-      polarOff(THETA_MAIN, Y_R + 6, -SIDE),
-      polarOff(THETA_MAIN, Y_R - 14, -SIDE),
-      polar(178 * DEG, 186),
-      polar(163 * DEG, 152),
-      polar(146 * DEG, MID_STATION_R),
-      polar(124 * DEG, 94),
-      polar(102 * DEG, 72),
-      polar(90 * DEG, TERM_R),
+      polarOff(tm, ARRIVAL_R, TRUNK.south),
+      polarOff(tm, Y_R + 6, TRUNK.south),
+      polarOff(tm, Y_R - 14, TRUNK.south),
+      polar(184 * DEG, 196),
+      polar(172 * DEG, 166),
+      polar(154 * DEG, MID_R),
+      polar(136 * DEG, 110),
+      polar(118 * DEG, 80),
+      polar(104 * DEG, 63),
+      polar(92 * DEG, TERM_R),
+      polar(70 * DEG, TERM_R),
     ],
     stations: [
-      { id: 'arrival_s', name: 'Outer Wall Arrival Station', at: polarOff(THETA_MAIN, ARRIVAL_R - 4, -SIDE), stairs: -1 },
-      { id: 'y_s', name: 'Lower Ring Junction', at: polarOff(THETA_MAIN, Y_R, -SIDE), stairs: -1 },
-      { id: 'mid_s', name: 'Middle Ring South', at: polar(146 * DEG, MID_STATION_R), stairs: -1 },
-      { id: 'up_s', name: 'Palace South Gate', at: polar(90 * DEG, TERM_R + 4), stairs: -1 },
+      { id: 'arrival_s', name: 'Outer Wall Arrival Station', cjk: '外城站', at: polarOff(tm, ARRIVAL_R, TRUNK.south), stairs: -1 },
+      { id: 'y_s', name: 'Lower Ring Junction', cjk: '下環站', at: polarOff(tm, Y_R, TRUNK.south), stairs: -1 },
+      { id: 'mid_s', name: 'Middle Ring South', cjk: '中環站', at: polar(154 * DEG, MID_R), stairs: -1 },
+      { id: 'up_s', name: 'Palace South Gate', cjk: '王宮南門', at: polar(70 * DEG, TERM_R), stairs: 1 },
     ],
     trains: TRAINS.radial,
   },
@@ -365,9 +382,9 @@ export const RAIL_LINES: RailLineDef[] = [
     deck: RAIL.loopDeck,
     pts: circlePts(Y_R, 96),
     stations: [
-      { id: 'loop_y', name: 'Lower Ring Junction', at: polar(THETA_MAIN, Y_R), stairs: -1 },
-      { id: 'loop_ne', name: 'Lower Ring Northeast', at: polar(316 * DEG, Y_R), stairs: -1 },
-      { id: 'loop_se', name: 'Lower Ring Southeast', at: polar(76 * DEG, Y_R), stairs: -1 },
+      { id: 'loop_y', name: 'Lower Ring Junction', cjk: '下環站', at: polar(tm, Y_R), stairs: 1 },
+      { id: 'loop_ne', name: 'Lower Ring Northeast', cjk: '下環站', at: polar(316 * DEG, Y_R), stairs: -1 },
+      { id: 'loop_se', name: 'Lower Ring Southeast', cjk: '下環站', at: polar(76 * DEG, Y_R), stairs: -1 },
     ],
     trains: TRAINS.outerLoop,
   },
@@ -376,11 +393,11 @@ export const RAIL_LINES: RailLineDef[] = [
     name: 'Palace Loop',
     kind: 'loop',
     deck: RAIL.deck,
-    pts: circlePts(47, 48),
+    pts: circlePts(R.palace, 56),
     stations: [
-      { id: 'pal_w', name: 'Upper Ring West', at: polar(THETA_MAIN, 47), stairs: 1 },
-      { id: 'pal_n', name: 'Upper Ring North', at: polar(270 * DEG, 47), stairs: 1 },
-      { id: 'pal_s', name: 'Palace South Gate', at: polar(90 * DEG, 47), stairs: 1 },
+      { id: 'pal_w', name: 'Upper Ring West', cjk: '上環站', at: polar(tm + 36 * DEG, R.palace), stairs: 1 },
+      { id: 'pal_n', name: 'Upper Ring North', cjk: '上環站', at: polar(291 * DEG, R.palace), stairs: 1 },
+      { id: 'pal_s', name: 'Palace South Gate', cjk: '王宮南門', at: polar(80 * DEG, R.palace), stairs: 1 },
     ],
     trains: TRAINS.innerLoop,
   },
@@ -390,7 +407,7 @@ export const RAIL_LINES: RailLineDef[] = [
 // Districts and landmarks (shared by builders and published spots)
 // ---------------------------------------------------------------------------
 
-const sq = polar(178 * DEG, 199);
+const sq = polar(174 * DEG, 204);
 
 /** Hand-placed features (world metres). */
 export const BSS = {
@@ -401,24 +418,24 @@ export const BSS = {
   elder: { x: sq.x - 9, z: sq.z + 12 },
   kingStatue: { x: sq.x + 2, z: sq.z - 15 },
   /** Pao Family Tea House (Lower Ring, north side of the square). */
-  paoTea: { ...polarOff(181 * DEG, 199, 31), yaw: 0 },
+  paoTea: { ...polarOff(177 * DEG, 204, 30), yaw: 0 },
   /** Lower Ring market street: from the square south-east along the ring street. */
-  market: { a: polar(170 * DEG, 202), b: polar(152 * DEG, 202), width: 8 },
-  factory: polar(204 * DEG, 205),
+  market: { a: polar(170 * DEG, 212), b: polar(150 * DEG, 212), width: 8 },
+  factory: polar(186 * DEG, 220),
   /** Stone Fist Dojo (Middle Ring). */
   dojo: { c: polar(214 * DEG, 126), hw: 14, hd: 13 },
   university: polar(160 * DEG, 125),
   townHall: polar(122 * DEG, 118),
   marketPlaza: { c: polar(178 * DEG, 125), r: 18 },
   financial: polar(300 * DEG, 125),
-  gardenW: { ...polar(232 * DEG, 108), r: 11 },
+  gardenW: { ...polar(230 * DEG, 128), r: 11 },
   /** Upper Ring landmarks. */
-  jasmineDragon: polar(150 * DEG, 68),
-  avatarHouse: polar(230 * DEG, 70),
-  irohApartment: polar(160 * DEG, 76),
-  daySpa: polar(36 * DEG, 70),
-  warRoom: polar(320 * DEG, 68),
-  upperFountains: [polar(120 * DEG, 67), polar(60 * DEG, 67)],
+  jasmineDragon: polar(150 * DEG, 84),
+  avatarHouse: polar(244 * DEG, 85),
+  irohApartment: polar(167 * DEG, 87),
+  daySpa: polar(36 * DEG, 84),
+  warRoom: polar(322 * DEG, 84),
+  upperFountains: [polar(120 * DEG, 82), polar(60 * DEG, 82)],
   /** Palace: South Gate on the palace wall; throne hall platform north of C. */
   palace: { gateZ: C.z + R.palace, hallZ: C.z - 6, innerZ: C.z - 26 },
   /** Lake Laogai (global lake at (1060, 170) r=48). */

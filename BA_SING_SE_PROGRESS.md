@@ -27,7 +27,7 @@ Wiki (avatar.fandom.com) is blocked by the session network policy: built from th
 ## Phases
 - [x] 0 explore + plan (this file)
 - [x] 1 layout blockout: walls + gates (commit)
-- [ ] 2 monorail + trains (commit)
+- [x] 2 monorail + trains (commit)
 - [ ] 3 Lower Ring (commit)
 - [ ] 4 Middle Ring (commit)
 - [ ] 5 Upper Ring + palace (commit)
@@ -46,3 +46,9 @@ data/npcs.ts (bss_elder coords), spots.ts, tests/e2e/region-earth.e2e.mjs (BSS c
   GateRuntime slabs). Old bssLower/bssRings/bssOuter removed. Shots: scratchpad/lead/bss_shots.mjs JSON poses
   (camera y is ABSOLUTE; ground = 26).
 - TODO later: Lower Ring mud ground material (groundLower looks like paving).
+- Phase 2 layout change: palace arcade r=44 (inner loop on it), 上環 wall r=102, 中環 wall r=170; trunk lateral
+  offsets N +26.5 / C +10.5 / S -10.5 (west avenue runs between C and S); outer loop deck 36; terminal stubs at r=58.
+  Trains: cruise 18 m/s, accel 2.6, dwell 15/16 s → headways 73-89 s (tests/unit/bss_rail.test.ts).
+  Files: bssRail.ts (viaducts, stations, lifts), bssTrains.ts (schedules, cars, benders, passengers, riding),
+  bssFigures.ts (instanced people, poses, accessories), bssAudio.ts. Debug: __game.debug.bss.
+  Check script: scratchpad/lead/bss_ride.mjs (lift, trains move, board, alight, gate).
