@@ -53,7 +53,24 @@ const audit = (sel = 'button, .btn, .tbtn') =>
     const off = els.filter((e) => { const r = e.getBoundingClientRect(); return (r.left < -1 || r.right > W + 1 || r.top < -1 || r.bottom > H + 1) && !scrollable(e); }).map((e) => (e.dataset.action || e.dataset.touch || e.textContent.trim()).slice(0, 24));
     const small = els.filter((e) => e.matches('.tbtn, .menu-btn, [data-action="confirm-journey"], .ps-btn')).filter((e) => { const r = e.getBoundingClientRect(); return r.height < 43.5 || r.width < 43.5; }).map((e) => e.dataset.touch || e.dataset.action || e.textContent.trim().slice(0, 20));
     const clipped = [...document.querySelectorAll('.tbtn .tc, .menu-btn-label')].filter(vis).filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent);
-    return { overflowX: document.documentElement.scrollWidth - W, off, small, clipped };
+    // Buttons of the open screen that another element covers, so a tap lands on that element instead
+    // (the inventory's category chips once ran under the item detail pane). Judged at the centre of the
+    // part of the button its scrolling ancestors can show; passing toasts do not count.
+    const frame = [...document.querySelectorAll('.gs-frame')].pop();
+    const covered = !frame ? [] : [...frame.querySelectorAll('button, .btn')].filter(vis).filter((e) => {
+      const r = e.getBoundingClientRect();
+      let L = Math.max(r.left, 0), R = Math.min(r.right, W), T = Math.max(r.top, 0), B = Math.min(r.bottom, H);
+      for (let p = e.parentElement; p && p !== document.body; p = p.parentElement) {
+        const s = getComputedStyle(p);
+        if (s.overflowX === 'visible' && s.overflowY === 'visible') continue;
+        const q = p.getBoundingClientRect();
+        L = Math.max(L, q.left); R = Math.min(R, q.right); T = Math.max(T, q.top); B = Math.min(B, q.bottom);
+      }
+      if (R - L < 4 || B - T < 4) return false;
+      const hit = document.elementFromPoint((L + R) / 2, (T + B) / 2);
+      return !hit || (hit !== e && !e.contains(hit) && !hit.closest('.toasts'));
+    }).map((e) => (e.dataset.cat || e.dataset.tab || e.dataset.action || e.textContent.trim()).slice(0, 24));
+    return { overflowX: document.documentElement.scrollWidth - W, off, small, clipped, covered };
   }, sel);
 
 /** Visible touch buttons + HUD bars, and every pairwise overlap. */
@@ -431,6 +448,7 @@ try {
         report[`${vp.width}x${vp.height}:${id}`] = a;
         assert.ok(a.overflowX <= 0, `${id} overflows horizontally at ${vp.width}x${vp.height}`);
         assert.deepEqual(a.off, [], `${id}: buttons out of reach at ${vp.width}x${vp.height}: ${JSON.stringify(a.off)}`);
+        assert.deepEqual(a.covered, [], `${id}: buttons covered by other elements at ${vp.width}x${vp.height}`);
         await h.eval((g, id) => g.ctx.ui.close(id), id);
         await h.step(1);
       }

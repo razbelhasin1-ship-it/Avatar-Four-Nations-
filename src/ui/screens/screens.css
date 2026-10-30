@@ -1330,6 +1330,14 @@
   justify-content: space-between;
 }
 
+/* Item categories fit their pane and wrap, so every one stays in reach (on phones the strip ran
+   past the pane, under the item detail, where taps could not get to Collectibles or Materials). */
+.iv-top .gs-chips {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
 .iv-purse {
   display: inline-flex;
   align-items: center;
