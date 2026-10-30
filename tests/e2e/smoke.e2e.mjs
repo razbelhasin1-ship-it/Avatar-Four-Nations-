@@ -30,6 +30,9 @@ try {
   });
   await check('water: snow and ice melt into water (the press gathers them); no source at all → refused with water reason', async () => {
     await h.newGame('water');
+    // Deterministic from here on: only h.step() advances (and renders) the game. Real-time frames of
+    // the city under software rendering otherwise pile up between calls and can stall the page.
+    await h.eval((g) => g.game.stop());
     await h.eval((g) => g.teleport(-140, -1600));
     const near = await h.eval((g) => g.waterNearby(16));
     const r = await h.eval((g) => g.cast('water_whip', null));
