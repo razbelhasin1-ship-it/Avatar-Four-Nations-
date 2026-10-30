@@ -271,7 +271,7 @@ describe('WaterSourceSystem', () => {
     const tundra = makeCaster(0, { x: -230, z: -1820 });
     expect(ws.findAll(tundra.position, 16, { allowSnow: true }).some((h) => h.type === 'snow')).toBe(true);
     // Standing in the Glacier Melt Stream: the river is the source, not "snow" on its bed.
-    const inRiver = makeCaster(0, { x: -336, z: -1505 });
+    const inRiver = makeCaster(0, { x: -491.5, z: -1470 });
     const here = ws.findAll(inRiver.position, 16, { allowSnow: true, allowIce: true });
     expect(here.some((h) => h.id.startsWith('river:'))).toBe(true);
     expect(here.some((h) => h.type === 'snow')).toBe(false);

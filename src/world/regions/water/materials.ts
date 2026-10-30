@@ -22,6 +22,7 @@ import { createWaterMaterial } from '../../Water';
 export type WTMaterialName =
   | 'ice_wall' // carved ice blocks (buildings)
   | 'ice_massive' // big-block ice (city walls, cliffs)
+  | 'ice_cliff' // colossal glacier cliffs: horizontal strata and cracks
   | 'ice_trim' // deeper blue ice (bands, pillars, canal coping)
   | 'ice_clear' // glassy translucent-looking ice (crystals, ice patches)
   | 'paving' // snow-dusted ice flagstones (streets, plazas)
@@ -48,6 +49,7 @@ export type WTMaterialName =
   | 'banner_moon'
   | 'spirit' // glowing spirit lantern
   | 'lantern_blue'
+  | 'lantern_warm' // warm paper/ice lantern glow (streets, doors, alleys)
   | 'fire'
   | 'koi_white'
   | 'koi_black'
@@ -140,6 +142,67 @@ function massiveIceTexture(): THREE.Texture {
       x += r.range(-22, 22);
       y += r.range(-22, 22);
       g.lineTo(x, y);
+    }
+    g.stroke();
+  }
+  return toTexture(c);
+}
+
+/** Glacier cliff: horizontal strata of white, pale blue and cobalt ice, thin dark seams and vertical cracks. */
+function cliffTexture(): THREE.Texture {
+  const N = 512;
+  const [c, g] = canvas(N, N);
+  const r = new Random(91);
+  // Broad, softly wavy strata (each a few metres tall), lighter at the top of each band.
+  let y = 0;
+  const bands: Array<{ y: number; h: number; col: string; ph: number; amp: number }> = [];
+  while (y < N) {
+    const h = r.range(26, 96);
+    const t = r.next();
+    const col = t < 0.5 ? shade('#e2eef8', r.range(0.97, 1.03)) : t < 0.85 ? shade('#c7ddef', r.range(0.97, 1.03)) : shade('#a9c8e2', r.range(0.97, 1.03));
+    bands.push({ y, h, col, ph: r.range(0, 6.28), amp: r.range(2, 7) });
+    y += h;
+  }
+  for (const bd of bands) {
+    const grd = g.createLinearGradient(0, bd.y, 0, bd.y + bd.h);
+    grd.addColorStop(0, shade(bd.col, 1.05));
+    grd.addColorStop(1, shade(bd.col, 0.95));
+    g.fillStyle = grd;
+    g.beginPath();
+    g.moveTo(0, bd.y + Math.sin(bd.ph) * bd.amp);
+    for (let x = 0; x <= N; x += 16) g.lineTo(x, bd.y + Math.sin(bd.ph + (x / N) * Math.PI * 2) * bd.amp);
+    g.lineTo(N, N + 8);
+    g.lineTo(0, N + 8);
+    g.closePath();
+    g.fill();
+    // a faint darker seam along the top of the band
+    g.strokeStyle = 'rgba(40,80,130,0.16)';
+    g.lineWidth = 1.5;
+    g.beginPath();
+    for (let x = 0; x <= N; x += 16) g.lineTo(x, bd.y + Math.sin(bd.ph + (x / N) * Math.PI * 2) * bd.amp);
+    g.stroke();
+  }
+  // Vertical meltwater streaks (soft, tiling horizontally) and a few long cracks.
+  for (let i = 0; i < 40; i++) {
+    const x = r.range(0, N), w = r.range(3, 14);
+    const grd = g.createLinearGradient(x - w, 0, x + w, 0);
+    const light = r.chance(0.5);
+    grd.addColorStop(0, 'rgba(0,0,0,0)');
+    grd.addColorStop(0.5, light ? 'rgba(255,255,255,0.16)' : 'rgba(50,95,150,0.12)');
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grd;
+    g.fillRect(x - w, 0, 2 * w, N);
+  }
+  for (let i = 0; i < 12; i++) {
+    let x = r.range(0, N);
+    const len = r.range(80, 360), y0 = r.range(0, N);
+    g.strokeStyle = 'rgba(35,75,125,0.28)';
+    g.lineWidth = r.range(0.8, 1.6);
+    g.beginPath();
+    g.moveTo(x, y0);
+    for (let k = 1; k <= 10; k++) {
+      x += r.range(-6, 6);
+      g.lineTo(x, y0 + (len * k) / 10);
     }
     g.stroke();
   }
@@ -404,6 +467,7 @@ function moonBanner(): THREE.Texture {
 const DEFS: Record<WTMaterialName, Def> = {
   ice_wall: { kind: 'tri', color: '#ffffff', tex: () => iceTexture('#d8ebf7', 151), tile: 4.5, rough: 0.35, emissive: '#16324a', emissiveIntensity: 0.22, snow: 0.85 },
   ice_massive: { kind: 'tri', color: '#ffffff', tex: massiveIceTexture, ownTex: true, tile: 9, rough: 0.4, emissive: '#122c44', emissiveIntensity: 0.2, snow: 0.9 },
+  ice_cliff: { kind: 'tri', color: '#ffffff', tex: cliffTexture, ownTex: true, tile: 64, rough: 0.4, emissive: '#10304e', emissiveIntensity: 0.22, snow: 0.7 },
   ice_trim: { kind: 'tri', color: '#ffffff', tex: () => iceTexture('#a9d0ea', 152), tile: 3.5, rough: 0.25, emissive: '#10304c', emissiveIntensity: 0.28, snow: 0.5 },
   ice_clear: { kind: 'tri', color: '#cfeeff', tex: () => iceTexture('#bfe4f8', 153), tile: 3, rough: 0.08, metal: 0.05, emissive: '#2a6c96', emissiveIntensity: 0.35, snow: 0.15 },
   paving: { kind: 'tri', color: '#ffffff', tex: pavingTexture, ownTex: true, tile: 6, rough: 0.6, emissive: '#0e2236', emissiveIntensity: 0.12, snow: 0.0 },
@@ -430,6 +494,7 @@ const DEFS: Record<WTMaterialName, Def> = {
   banner_moon: { kind: 'uv', color: '#ffffff', tex: moonBanner, ownTex: true, rough: 0.95, side: THREE.DoubleSide },
   spirit: { kind: 'emissive', color: '#d8f4ff', emissive: '#8fe0ff', emissiveIntensity: 2.2, rough: 0.4 },
   lantern_blue: { kind: 'emissive', color: '#bfe6ff', emissive: '#7fcfff', emissiveIntensity: 1.5, rough: 0.5 },
+  lantern_warm: { kind: 'emissive', color: '#ffe2b0', emissive: '#ffa648', emissiveIntensity: 1.6, rough: 0.6 },
   fire: { kind: 'emissive', color: '#ffb060', emissive: '#ff7a24', emissiveIntensity: 3, rough: 1 },
   koi_white: { kind: 'uv', color: '#ffffff', tex: () => koiTexture('#f4f1ea', '#e8e2d8'), ownTex: true, rough: 0.4 },
   koi_black: { kind: 'uv', color: '#ffffff', tex: () => koiTexture('#1c1c22', '#2a2a32'), ownTex: true, rough: 0.4 },
@@ -702,6 +767,8 @@ export function animateWaterMaterials(ctx: GameContext): void {
   if (win) win.emissiveIntensity = 0.55 + 1.6 * night;
   const lb = cache.get('lantern_blue');
   if (lb) lb.emissiveIntensity = 1.1 + 1.4 * night;
+  const lw = cache.get('lantern_warm');
+  if (lw) lw.emissiveIntensity = 1.1 + 2.2 * night;
   const sp = cache.get('spirit');
   if (sp) sp.emissiveIntensity = 1.6 + 1.6 * night + 0.25 * Math.sin(t * 1.7);
 }

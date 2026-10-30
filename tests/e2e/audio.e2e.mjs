@@ -147,7 +147,7 @@ try {
   await h.step(30);
 
   await check('bindings: footsteps per surface, dodge per element, element switch', async () => {
-    await audio((g) => g.teleport(-250, -1560));
+    await audio((g) => g.teleport(-236, -1606));
     await h.step(10);
     await clearLog();
     await audio((g) => g.move(0, 1));
@@ -176,7 +176,7 @@ try {
   });
 
   await check('bindings: element hits replace the generic hit; dry fizz; water draw', async () => {
-    await audio((g) => g.teleport(-260, -1580));
+    await audio((g) => g.teleport(-236, -1600));
     await h.step(5);
     const d = await audio((g) => g.spawnDummy(5, 0));
     await clearLog();
@@ -191,7 +191,7 @@ try {
     // Waterbending far from any water: the dry fizz.
     await audio((g) => {
       g.setElement('water');
-      g.teleport(-120, -1600);
+      g.teleport(-140, -1600);
     });
     await h.step(5);
     await clearLog();
@@ -201,8 +201,8 @@ try {
     ids = await logIds();
     if (!r.ok && r.reason === 'water') assert.ok(ids.includes('fail.nowater'), 'no dry fizz: ' + ids.join(','));
     else assert.ok(near.length > 0, 'expected failure without water: ' + JSON.stringify(r));
-    // Next to the river with empty hands: the press gathers real water (draw sound, no dry fizz), the next one bends it.
-    await audio((g) => g.teleport(-336, -1505));
+    // Next to a canal with empty hands: the press gathers real water (draw sound, no dry fizz), the next one bends it.
+    await audio((g) => g.teleport(-246, -1720));
     await h.step(6);
     await clearLog();
     const gather = await audio((g) => g.cast('water_whip', null));
@@ -222,7 +222,7 @@ try {
     assert.ok(ids.includes('ui.notify.warning'), ids.join(','));
     assert.ok(!ids.includes('notify'), 'legacy notify doubled');
     // Dialogue with a real NPC: open chime + a babble line in the NPC's voice.
-    await audio((g) => g.teleport(-250, -1560));
+    await audio((g) => g.teleport(-240, -1596));
     await h.step(30);
     await clearLog();
     const talked = await audio((g) => {

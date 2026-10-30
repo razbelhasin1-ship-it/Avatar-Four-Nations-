@@ -253,9 +253,9 @@ export const RIVERS: RiverDef[] = [
     name: 'Glacier Melt Stream',
     points: [
       { x: -470, z: -1210 },
-      { x: -420, z: -1380 },
-      { x: -330, z: -1520 },
-      { x: -270, z: -1660 },
+      { x: -478, z: -1380 },
+      { x: -505, z: -1560 },
+      { x: -545, z: -1740 },
     ],
     width: [7, 14],
     depth: 2,
@@ -329,8 +329,9 @@ export const ROADS: RoadDef[] = [
   {
     id: 'northern_road',
     points: [
-      { x: -200, z: -1460 },
-      { x: -180, z: -1300 },
+      { x: -111, z: -1334 },
+      { x: -124, z: -1270 },
+      { x: -130, z: -1200 },
       { x: -120, z: -1050 },
       { x: -60, z: -800 },
       { x: 60, z: -560 },
@@ -635,13 +636,13 @@ export function waterTribeAt(x: number, z: number): boolean {
 
 export const LANDMARKS: LandmarkDef[] = [
   // Northern Water Tribe
-  { id: 'nwt_gate', name: 'Great Ice Gate', regionId: 'northern_water_tribe', x: -220, z: -1735, kind: 'landmark', discoverRadius: 60, fastTravel: false },
-  { id: 'nwt_plaza', name: 'Tribal Plaza', regionId: 'northern_water_tribe', x: -220, z: -1590, kind: 'capital', discoverRadius: 80, fastTravel: true },
-  { id: 'nwt_palace', name: "Chief's Palace", regionId: 'northern_water_tribe', x: -220, z: -1470, kind: 'landmark', discoverRadius: 50, fastTravel: false },
-  { id: 'nwt_training', name: 'Waterbending Courtyard', regionId: 'northern_water_tribe', x: -330, z: -1560, kind: 'training', discoverRadius: 40, fastTravel: false },
-  { id: 'spirit_oasis', name: 'Spirit Oasis', regionId: 'northern_water_tribe', x: -120, z: -1450, kind: 'shrine', discoverRadius: 30, fastTravel: false, hidden: true },
+  { id: 'nwt_gate', name: 'Great Ice Gate', regionId: 'northern_water_tribe', x: -220, z: -1900, kind: 'landmark', discoverRadius: 60, fastTravel: false },
+  { id: 'nwt_plaza', name: 'Tribal Plaza', regionId: 'northern_water_tribe', x: -220, z: -1614, kind: 'capital', discoverRadius: 80, fastTravel: true },
+  { id: 'nwt_palace', name: "Chief's Palace", regionId: 'northern_water_tribe', x: -220, z: -1474, kind: 'landmark', discoverRadius: 50, fastTravel: false },
+  { id: 'nwt_training', name: 'Waterbending Courtyard', regionId: 'northern_water_tribe', x: -359, z: -1615, kind: 'training', discoverRadius: 40, fastTravel: false },
+  { id: 'spirit_oasis', name: 'Spirit Oasis', regionId: 'northern_water_tribe', x: -220, z: -1372, kind: 'shrine', discoverRadius: 30, fastTravel: false, hidden: true },
   { id: 'ice_caves', name: 'Glacier Caves', regionId: 'northern_water_tribe', x: -520, z: -1340, kind: 'cave', discoverRadius: 40, fastTravel: false, hidden: true },
-  { id: 'nwt_harbor', name: 'Harbor Canals', regionId: 'northern_water_tribe', x: -60, z: -1680, kind: 'dock', discoverRadius: 50, fastTravel: true },
+  { id: 'nwt_harbor', name: 'Harbor Quays', regionId: 'northern_water_tribe', x: -267, z: -1834, kind: 'dock', discoverRadius: 50, fastTravel: true },
   { id: 'tundra_outpost', name: 'Tundra Watchtower', regionId: 'frozen_tundra', x: 300, z: -1050, kind: 'camp', discoverRadius: 50, fastTravel: true },
   { id: 'bear_dog_den', name: 'Snowdrift Den', regionId: 'frozen_tundra', x: 520, z: -1260, kind: 'habitat', discoverRadius: 45, fastTravel: false, hidden: true },
   // Earth Kingdom
@@ -682,8 +683,8 @@ export const STARTS: Record<Element, StartDef> = {
     element: 'water',
     regionId: 'northern_water_tribe',
     landmarkId: 'nwt_plaza',
-    spawn: { x: -250, z: -1560 },
-    yaw: Math.PI,
+    spawn: { x: -236, z: -1606 },
+    yaw: 0,
     title: 'Begin your journey in the Northern Water Tribe',
     subtitle: 'Flowing attacks, redirection, water whips and ice.',
   },
