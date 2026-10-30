@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import type { EventBus } from '../core/EventBus';
 import type { SettingsManager } from '../core/Settings';
+import { detectDevice } from '../core/Device';
 import type { Vec3Like } from '../core/types';
 import { createReverb, makeResources, type AudioResources, type Reverb, type ReverbParams } from './dsp';
 import { MusicDirector } from './music/MusicDirector';
@@ -99,6 +100,10 @@ interface LoopRecord {
   gain: GainNode;
   stopped: boolean;
   generation: number;
+  /** A position that arrived inside the update interval (applied by update()). */
+  pending: Vec3Like | null;
+  applyPos: ((p: Vec3Like) => void) | null;
+  posTime: number;
 }
 
 interface Suppression {
@@ -114,6 +119,16 @@ const NOOP_LOOP: LoopHandle = { setVolume() {}, setPosition() {}, setPitch() {},
 const fin = (v: unknown, d: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 const finite3 = (p: Vec3Like | undefined): p is Vec3Like => !!p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z);
 const nowMs = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+/**
+ * Moving 3D audio. Any running automation on the AudioListener (a setTargetAtTime curve never
+ * ends) puts every PannerNode on Chrome's per-sample path: in a benchmark, 24 panners cost ~16x
+ * the audio-thread time, which crackled on phones in busy scenes while moving and bending. So the
+ * listener and moving loops are written as plain values, at most this often (s), and only when
+ * they changed enough to hear; between writes the panners stay on the cheap per-block path.
+ */
+const SPATIAL_INTERVAL = 0.05;
+/** A bigger output buffer on phones and tablets: more headroom under load, ~20-40 ms more latency. */
+const latencyHint = (): AudioContextLatencyCategory => (detectDevice().mobile ? 'balanced' : 'interactive');
 
 export class AudioEngine {
   ac: AudioContext | null = null;
@@ -151,6 +166,8 @@ export class AudioEngine {
   private guardT = 0;
   /** Graph rebuilds forced by the watchdog (capped; after that it stays muted). */
   rebuilds = 0;
+  /** Listener pose last written to the AudioListener (audio time, position, forward). */
+  private readonly sentListener = { t: -1, x: 0, y: 0, z: 0, fx: 0, fy: 0, fz: -1 };
 
   constructor(private readonly settings: SettingsManager, events: EventBus) {
     events.on('settings:changed', () => this.applyVolumes());
@@ -173,7 +190,7 @@ export class AudioEngine {
       if (!this.ac) {
         const AC: typeof AudioContext | undefined = (window as any).AudioContext || (window as any).webkitAudioContext;
         if (!AC) return;
-        this.build(new AC({ latencyHint: 'interactive' }));
+        this.build(new AC({ latencyHint: latencyHint() }));
       }
       const st = this.ac!.state as string;
       if (st === 'suspended' || st === 'interrupted') void this.ac!.resume().catch(() => {});
@@ -186,6 +203,7 @@ export class AudioEngine {
   private build(ac: AudioContext): void {
     this.ac = ac;
     this.generation++;
+    this.sentListener.t = -1;
     this.res = makeResources(ac);
     const limiter = ac.createDynamicsCompressor();
     limiter.threshold.value = -1.5;
@@ -297,19 +315,35 @@ export class AudioEngine {
       this.listenerFwd.z = -e[10];
     }
     const ac = this.ac;
-    if (!ac) return;
+    if (!ac || !Number.isFinite(e[4]) || !Number.isFinite(e[8])) return;
+    // Plain value writes, throttled (see SPATIAL_INTERVAL): ~0.15 m or ~2 degrees is below hearing.
+    const s = this.sentListener, t = ac.currentTime;
+    const fx = -e[8], fy = -e[9], fz = -e[10];
+    const moved = (p.x - s.x) ** 2 + (p.y - s.y) ** 2 + (p.z - s.z) ** 2 > 0.15 * 0.15;
+    const turned = (fx - s.fx) ** 2 + (fy - s.fy) ** 2 + (fz - s.fz) ** 2 > 0.035 * 0.035;
+    if (s.t >= 0 && (t - s.t < SPATIAL_INTERVAL || (!moved && !turned))) return;
+    s.t = t;
+    s.x = p.x;
+    s.y = p.y;
+    s.z = p.z;
+    s.fx = fx;
+    s.fy = fy;
+    s.fz = fz;
     const l = ac.listener;
-    if (l.positionX && Number.isFinite(e[4])) {
-      const t = ac.currentTime;
-      l.positionX.setTargetAtTime(p.x, t, 0.02);
-      l.positionY.setTargetAtTime(p.y, t, 0.02);
-      l.positionZ.setTargetAtTime(p.z, t, 0.02);
-      l.forwardX.setTargetAtTime(-e[8], t, 0.02);
-      l.forwardY.setTargetAtTime(-e[9], t, 0.02);
-      l.forwardZ.setTargetAtTime(-e[10], t, 0.02);
-      l.upX.setTargetAtTime(e[4], t, 0.02);
-      l.upY.setTargetAtTime(e[5], t, 0.02);
-      l.upZ.setTargetAtTime(e[6], t, 0.02);
+    if (l.positionX) {
+      l.positionX.value = p.x;
+      l.positionY.value = p.y;
+      l.positionZ.value = p.z;
+      l.forwardX.value = fx;
+      l.forwardY.value = fy;
+      l.forwardZ.value = fz;
+      l.upX.value = e[4];
+      l.upY.value = e[5];
+      l.upZ.value = e[6];
+    } else {
+      // Older WebKit: the deprecated setters.
+      (l as any).setPosition?.(p.x, p.y, p.z);
+      (l as any).setOrientation?.(fx, fy, fz, e[4], e[5], e[6]);
     }
   }
 
@@ -564,7 +598,17 @@ export class AudioEngine {
       sendNode.disconnect();
       return NOOP_LOOP;
     }
-    const rec: LoopRecord = { id, gain: gainNode, stopped: false, generation: this.generation };
+    const rec: LoopRecord = { id, gain: gainNode, stopped: false, generation: this.generation, pending: null, applyPos: null, posTime: -1 };
+    if (panner?.positionX) {
+      const pn = panner;
+      rec.applyPos = (p) => {
+        rec.posTime = ac.currentTime;
+        rec.pending = null;
+        pn.positionX.value = p.x;
+        pn.positionY.value = p.y;
+        pn.positionZ.value = p.z;
+      };
+    }
     this.loops.add(rec);
     const live = () => !rec.stopped && this.ac === ac;
     return {
@@ -572,10 +616,10 @@ export class AudioEngine {
         if (live()) gainNode.gain.setTargetAtTime(Math.max(0, Math.min(4, fin(v, 0))) * trim, ac.currentTime, 0.1);
       },
       setPosition: (p) => {
-        if (!live() || !panner?.positionX || !finite3(p)) return;
-        panner.positionX.setTargetAtTime(p.x, ac.currentTime, 0.05);
-        panner.positionY.setTargetAtTime(p.y, ac.currentTime, 0.05);
-        panner.positionZ.setTargetAtTime(p.z, ac.currentTime, 0.05);
+        if (!live() || !rec.applyPos || !finite3(p)) return;
+        // Plain value writes, throttled like the listener; a position inside the interval waits for update().
+        if (ac.currentTime - rec.posTime < SPATIAL_INTERVAL) rec.pending = { x: p.x, y: p.y, z: p.z };
+        else rec.applyPos(p);
       },
       setPitch: (p) => {
         if (!live()) return;
@@ -673,6 +717,10 @@ export class AudioEngine {
       this.guardT = 0.5;
       this.checkRunaway();
     }
+    if (this.ac) {
+      const t = this.ac.currentTime;
+      for (const rec of this.loops) if (rec.pending && rec.applyPos && !rec.stopped && t - rec.posTime >= SPATIAL_INTERVAL) rec.applyPos(rec.pending);
+    }
     try {
       this.music.update(step);
     } catch (err) {
@@ -728,7 +776,7 @@ export class AudioEngine {
     this.voices = [];
     this.loops.clear();
     try {
-      this.build(new AC({ latencyHint: 'interactive' }));
+      this.build(new AC({ latencyHint: latencyHint() }));
       void this.ac!.resume().catch(() => {});
     } catch (err) {
       console.warn('[Audio] rebuild failed', err);

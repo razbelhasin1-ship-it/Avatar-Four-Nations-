@@ -204,6 +204,8 @@ export class CrowdSystem {
   private ctx: GameContext | null = null;
   private loops: { crowd: LoopHandle | null; hum: LoopHandle | null; rumble: LoopHandle | null } = { crowd: null, hum: null, rumble: null };
   private audioT = 0;
+  /** Audio graph generation the loops were made on (-1: made while audio was locked). */
+  private loopGen = -1;
   private nearCount = 0;
   private sfxT = 3;
   private frame = 0;
@@ -459,9 +461,16 @@ export class CrowdSystem {
         this.spawn();
       }
     });
+    this.startLoops(ctx);
+  }
+
+  /** District loops; re-made when audio unlocks after the session started or the audio graph is rebuilt. */
+  private startLoops(ctx: GameContext): void {
+    for (const l of Object.values(this.loops)) l?.stop(0.2);
     this.loops.crowd = ctx.audio.loop('bss_crowd', { volume: 0 });
     this.loops.hum = ctx.audio.loop('bss_laogai_hum', { volume: 0 });
     this.loops.rumble = ctx.audio.loop('bss_train_rumble', { volume: 0, position: new THREE.Vector3(C.x, GROUND, C.z), range: 90 });
+    this.loopGen = ctx.audio.ready ? ctx.audio.generation : -1;
   }
 
   onSessionEnd(): void {
@@ -887,6 +896,7 @@ export class CrowdSystem {
     this.audioT -= dt;
     if (this.audioT > 0) return;
     this.audioT = 0.25;
+    if (ctx.audio.ready && this.loopGen !== ctx.audio.generation) this.startLoops(ctx);
     const pl = ctx.player?.position ?? cam;
     const r = Math.hypot(pl.x - C.x, pl.z - C.z);
     const night = h < 5.5 || h > 20.5 ? 1 : 0;
