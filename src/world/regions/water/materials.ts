@@ -622,12 +622,14 @@ let waterfallMat: THREE.ShaderMaterial | null = null;
 let foamMat: THREE.ShaderMaterial | null = null;
 
 /** Canal / pond water (animated, shared with the world's water look). */
-export function wtWater(kind: 'canal' | 'pond' | 'pool' | 'spirit' = 'canal'): THREE.ShaderMaterial {
+export function wtWater(kind: 'canal' | 'flow' | 'pond' | 'pool' | 'spirit' = 'canal'): THREE.ShaderMaterial {
   let m = waterMats.get(kind);
   if (m) return m;
   const o =
     kind === 'canal'
       ? { shallow: '#3f8fb2', deep: '#0c3550', opacity: 0.9, waveAmp: 0.025 }
+      : kind === 'flow'
+        ? { shallow: '#3a8ab0', deep: '#0a2e4a', opacity: 0.92, waveAmp: 0.0, flowSpeed: 0.55, foam: 0.5, absorb: 0.85 }
       : kind === 'pool'
         ? { shallow: '#5cb6d4', deep: '#1a5a7c', opacity: 0.84, waveAmp: 0.012 }
         : kind === 'spirit'

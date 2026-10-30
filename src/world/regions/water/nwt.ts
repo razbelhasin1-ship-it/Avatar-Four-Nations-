@@ -2,6 +2,7 @@ import type { GameContext } from '../../../core/GameContext';
 import { Random } from '../../../core/Random';
 import type { NPCDef } from '../../../npc/NPCTypes';
 import { buildCity } from './agnaCity';
+import { LanternLights } from './agnaLights';
 import type { DistrictPlan } from './agnaPlan';
 import { WaterRegion } from './base';
 import { AX, CANAL_QUAY_E, CANAL_QUAY_W, COURT_C, GATE_TOP, GATE_Z, HARBOR_QUAY_E, HARBOR_QUAY_W, L1, L2, L4, PLAZA_C } from './nwtLayout';
@@ -17,6 +18,8 @@ import { WaterSheets } from './parts';
  */
 export class NorthernWaterTribe extends WaterRegion {
   private readonly ticks: Array<(t: number, dt: number) => void> = [];
+  /** Real point lights that follow the lanterns nearest the camera at night. */
+  lanternLights: LanternLights | null = null;
   /** Walk-test waypoints published on the debug hook. */
   readonly routes: Record<string, Array<[number, number]>> = {};
 
@@ -48,7 +51,8 @@ export class NorthernWaterTribe extends WaterRegion {
       onTick: (fn) => this.ticks.push(fn),
       addProp: (o) => this.props.add(o),
     };
-    const plans = buildCity(k);
+    const { plans, glow } = buildCity(k);
+    this.lanternLights = new LanternLights(this.props, new Float32Array(glow), 6);
     buildCaves(k);
     sheets.flush(wet);
     this.citizens(k, plans);
@@ -58,11 +62,23 @@ export class NorthernWaterTribe extends WaterRegion {
   protected override tick(dt: number, ctx: GameContext): void {
     const t = ctx.time.elapsed;
     for (const f of this.ticks) f(t, dt);
+    this.lanternLights?.update(dt, ctx);
+  }
+
+  override setDetail(level: 'full' | 'far' | 'hidden'): void {
+    super.setDetail(level);
+    if (level !== 'full') this.lanternLights?.off();
+  }
+
+  protected override offSession(): void {
+    this.lanternLights?.off();
   }
 
   override dispose(ctx: GameContext): void {
     super.dispose(ctx);
     this.ticks.length = 0;
+    this.lanternLights?.dispose();
+    this.lanternLights = null;
   }
 
   /** Guards, plaza life, students and townsfolk walking the district lanes. */

@@ -1,13 +1,15 @@
 import * as THREE from 'three';
-import type { SurfaceType } from '../../../core/types';
 import { heightAt } from '../../Heightfield';
 import type { ContentBuilder } from '../../kit/Builder';
-import { buildDistrict, cyl, Detail, grow, MeshAcc, prism, type RBox } from './agnaBuildings';
+import { buildDistrict, Detail } from './agnaBuildings';
+import { buildLandmarks, PLATFORM_RECT } from './agnaLandmarks';
+import { block, lampPillar, stairFlight } from './agnaParts';
 import { buildCliffs } from './agnaCliffs';
 import { cityPlans, type DistrictPlan } from './agnaPlan';
-import { bulbDome, disc, dome, emblem, flatDisc, flatRing } from './geometry';
-import { wtMat, wtWater, type WTMaterialName } from './materials';
+import { emblem, flatDisc, flatRing } from './geometry';
+import { wtMat, wtWater } from './materials';
 import {
+  AVENUE,
   AX,
   BED,
   CANALS,
@@ -17,8 +19,6 @@ import {
   DISTRICTS,
   FOOTBRIDGES_X,
   FOUNTAIN,
-  GATE_OUT,
-  GATE_TOP,
   GATE_Z,
   GRAND_STAIRS,
   HEALER_C,
@@ -29,17 +29,16 @@ import {
   L4,
   MOAT,
   MOAT_WL,
-  MOUTH,
   OASIS,
   OASIS_POND,
   OASIS_SLOT,
-  PALACE,
+  PALACE_PLAZA,
+  PALACE_POOLS,
   PALACE_STAIRS,
   PASS,
-  PLATFORM,
+  PLAZA,
   PLAZA_C,
   PLAZA_STAIRS,
-  PODIUM_BOTTOM,
   TUNE,
   TWIN_BRIDGES_Z,
   WL,
@@ -49,7 +48,7 @@ import {
   type Rect,
 } from './nwtLayout';
 import type { NwtKit } from './nwtKit';
-import { canalRect, coping, iceBridge, lanternPost, parapet, V, waterfall } from './parts';
+import { coping, iceBridge, lanternPost, parapet, V, waterfall, type WaterSheets } from './parts';
 import { rasterRects } from './raster';
 
 /**
@@ -95,8 +94,6 @@ export function stairRects(): Rect[] {
   return out;
 }
 
-const PLATFORM_RECT: Rect = [PALACE.x - PALACE.w / 2, PALACE.z - PALACE.d / 2, PALACE.x + PALACE.w / 2, PALACE.z + PALACE.d / 2];
-
 export function cityGrid(plans: DistrictPlan[]): CityGrid {
   if (gridCache) return gridCache;
   const n = NX * NZ;
@@ -135,47 +132,6 @@ function builtAt(g: CityGrid, x: number, z: number): boolean {
   const i = Math.floor(x - G.x0), j = Math.floor(z - G.z0);
   if (i < 0 || j < 0 || i >= NX || j >= NZ) return false;
   return g.built[j * NX + i] === 1;
-}
-
-// ---------------------------------------------------------------------------
-// Building blocks
-// ---------------------------------------------------------------------------
-
-/** Solid ice block from below the terrain up to `top`, a flat surface on top and a walkable collider. */
-export function block(cb: ContentBuilder, x0: number, z0: number, x1: number, z1: number, top: number, surfaceMat: WTMaterialName = 'paving', surface: SurfaceType = 'packedsnow', bottomMax = PODIUM_BOTTOM): void {
-  const w = x1 - x0, d = z1 - z0;
-  if (w < 0.05 || d < 0.05) return;
-  const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-  let low = Infinity;
-  const nx = Math.max(1, Math.ceil(w / 8)), nz = Math.max(1, Math.ceil(d / 8));
-  for (let a = 0; a <= nx; a++) for (let b = 0; b <= nz; b++) low = Math.min(low, heightAt(x0 + (w * a) / nx, z0 + (d * b) / nz));
-  const bottom = Math.min(bottomMax, low - 0.6);
-  cb.box(wtMat('ice_massive'), { x: cx, y: (top + bottom) / 2, z: cz, sx: w, sy: top - bottom, sz: d });
-  const q = new THREE.PlaneGeometry(w, d);
-  q.rotateX(-Math.PI / 2);
-  cb.mesh(wtMat(surfaceMat), q, { x: cx, y: top + 0.02, z: cz }, { castShadow: false });
-  q.dispose();
-  cb.collider({ shape: 'box', x: cx, y: (top + bottom) / 2, z: cz, hx: w / 2, hy: (top - bottom) / 2, hz: d / 2, walkable: true, solid: true, surface });
-}
-
-/**
- * Straight flight along Z from (x, y0, z0) up to (x, y1, z1) with a walkable
- * ramp collider; optional stepped cheek walls (solid, matching their visuals)
- * inside the footprint.
- */
-export function stairFlight(cb: ContentBuilder, x: number, z0: number, z1: number, y0: number, y1: number, width: number, cheeks: boolean): void {
-  cb.stairs({ from: V(x, y0, z0), to: V(x, y1, z1), width: cheeks ? width - 1.0 : width, material: wtMat('ice_trim'), stepHeight: 0.25, surface: 'ice' });
-  if (!cheeks) return;
-  const run = Math.abs(z1 - z0), rise = y1 - y0;
-  const n = Math.max(4, Math.round(run / 2.5));
-  for (const s of [-1, 1]) {
-    const cx = x + s * (width / 2 - 0.25);
-    for (let k = 0; k < n; k++) {
-      const za = z0 + ((z1 - z0) * k) / n, zb = z0 + ((z1 - z0) * (k + 1)) / n;
-      const top = y0 + (rise * (k + 1)) / n + 0.85;
-      cb.box(wtMat('ice_wall'), { x: cx, y: (y0 + top) / 2, z: (za + zb) / 2, sx: 0.5, sy: top - y0, sz: Math.abs(zb - za) + 0.02 }, { collide: true, walkable: false, surface: 'ice' });
-    }
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -295,11 +251,21 @@ const BRIDGES: Array<[number, number, number, number, number, number, boolean]> 
   [-194.5, -1707, -194.5, -1693, 4.6, 0.9, false],
 ];
 
+/** Direction the water runs in each channel: from the cliff falls toward the harbor and out through the gate. */
+const FLOW: Record<string, '+x' | '-x' | '+z' | '-z'> = { harbor: '-z', twin_w: '-z', twin_e: '-z', branch_w1: '+x', branch_w2: '+x', branch_e1: '-x', branch_e2: '-x' };
+
+/** Canal channel: dark bed, wadeable floor collider and a flowing water surface. */
+function channel(cb: ContentBuilder, sheets: WaterSheets, r: Rect, level: number, bed: number, dir: '+x' | '-x' | '+z' | '-z'): void {
+  const [x0, z0, x1, z1] = r;
+  cb.box(wtMat('canal_bed'), { x: (x0 + x1) / 2, y: bed - 0.2, z: (z0 + z1) / 2, sx: x1 - x0, sy: 0.4, sz: z1 - z0 }, { castShadow: false });
+  cb.collider({ shape: 'box', x: (x0 + x1) / 2, y: bed - 0.2, z: (z0 + z1) / 2, hx: (x1 - x0) / 2, hy: 0.2, hz: (z1 - z0) / 2, walkable: true, solid: false, surface: 'water' });
+  sheets.flow(wtWater('flow'), x0, z0, x1, z1, level, dir);
+}
+
 function water(k: NwtKit, g: CityGrid): void {
   const cb = k.core;
-  const canal = wtWater('canal');
-  for (const r of Object.values(CANALS)) canalRect(cb, k.sheets, canal, r[0], r[1], r[2], r[3], WL, BED);
-  canalRect(cb, k.sheets, canal, MOAT[0], MOAT[1], MOAT[2], MOAT[3], MOAT_WL, MOAT_WL - 0.75);
+  for (const [id, r] of Object.entries(CANALS)) channel(cb, k.sheets, r, WL, BED, FLOW[id] ?? '-z');
+  channel(cb, k.sheets, MOAT, MOAT_WL, MOAT_WL - 0.75, '+x');
   const src = (id: string, label: string, y: number, path: Array<{ x: number; z: number }>, r: number) =>
     k.water({ id: `nwt:${id}`, type: 'canal', label, x: path[0].x, y, z: path[0].z, r, path, capacity: Infinity, regen: 0, size: 'large' });
   const h = CANALS.harbor;
@@ -371,102 +337,23 @@ function plaza(k: NwtKit): void {
   waterfall(k.wet, AX, fz1 - 0.6, Math.PI, L3 - 1.3, wy, 14, 0.5);
   k.water({ id: 'nwt:plaza_fountain', type: 'fountain', label: 'Moon Fountain', x: AX, y: wy, z: (fz0 + fz1) / 2, r: 8, capacity: 400, regen: 20, size: 'large' });
   k.emitter('mist', 1.2, V(AX, L2 + 1, fz1 - 1.5), { radius: 6 }, 70, true);
-}
 
-// ---------------------------------------------------------------------------
-// Gate wall across the harbor mouth
-// ---------------------------------------------------------------------------
-
-const GATE_STAIRS_X = [MOUTH.x0 + 3.4, MOUTH.x1 - 3.4];
-
-function gate(k: NwtKit, det: Detail): void {
-  const cb = k.mainBuilder();
-  const x0 = MOUTH.x0, x1 = MOUTH.x1, top = GATE_TOP;
-  block(cb, x0, GATE_OUT, x1, GATE_Z, top, 'paving', 'ice', -12);
-  // Gatehouse on the seaward half; the wall walk passes behind it.
-  const gz0 = GATE_OUT, gz1 = GATE_OUT + 6;
-  cb.box(wtMat('ice_massive'), { x: AX, y: top + 4.5, z: (gz0 + gz1) / 2, sx: 30, sy: 9, sz: gz1 - gz0 }, { collide: true, walkable: true, surface: 'ice' });
-  det.merlons({ cx: AX, cz: (gz0 + gz1) / 2, hw: 15, hd: 3, r: 0.1 }, top + 9);
-  // The tribe's emblem facing the sea, and the water-gate arches.
-  const dsk = disc(6.6, 0.6, 40);
-  cb.mesh(wtMat('ice_trim'), dsk, { x: AX, y: top + 2, z: gz0 - 0.3, yaw: Math.PI });
-  dsk.dispose();
-  const em = emblem(5.6, 0.4, true);
-  cb.mesh(wtMat('snow'), em, { x: AX, y: top + 2, z: gz0 - 0.62, yaw: Math.PI });
-  em.dispose();
-  det.door(AX, -0.5, gz0, Math.PI, false, 5.2);
-  det.door(AX, WL - 0.6, GATE_Z, 0, false, 4.4);
-  // Wall walk: crenellated seaward parapet, inner balustrade with gaps for the stairs.
-  parapet(cb, 'ice_massive', x0 + 0.3, GATE_OUT + 0.25, AX - 15, GATE_OUT + 0.25, top, 1.0, 0.5, null);
-  parapet(cb, 'ice_massive', AX + 15, GATE_OUT + 0.25, x1 - 0.3, GATE_OUT + 0.25, top, 1.0, 0.5, null);
-  for (let x = x0 + 1.2; x < x1 - 1; x += 1.7) if (Math.abs(x - AX) > 15.5) det.merlon(x, top + 1.0, GATE_OUT + 0.25, 0);
-  let xa = x0 + 0.3;
-  for (const sx of GATE_STAIRS_X) {
-    parapet(cb, 'ice_wall', xa, GATE_Z - 0.23, sx - 2.2, GATE_Z - 0.23, top, 0.9, 0.45, 'snow');
-    xa = sx + 2.2;
+  // Cascades from the plaza terrace into the heads of the twin canals.
+  for (const id of ['twin_w', 'twin_e']) {
+    const r = CANALS[id];
+    const x = (r[0] + r[2]) / 2, z = r[3];
+    cb.box(wtMat('dark'), { x, y: L2 - 0.75, z: z - 0.04, sx: r[2] - r[0] - 1, sy: 0.6, sz: 0.08 }, { castShadow: false });
+    cb.box(wtMat('ice_trim'), { x, y: L2 - 1.2, z: z - 0.3, sx: r[2] - r[0] - 0.4, sy: 0.3, sz: 0.6 });
+    waterfall(k.wet, x, z - 0.55, Math.PI, L2 - 1.05, WL, r[2] - r[0] - 1.6, 0.45);
+    k.emitter('mist', 0.8, V(x, WL + 0.8, z - 2), { radius: 4 }, 70, true);
   }
-  parapet(cb, 'ice_wall', xa, GATE_Z - 0.23, x1 - 0.3, GATE_Z - 0.23, top, 0.9, 0.45, 'snow');
-  // Stairs up from the harbor quays, along the cliffs.
-  for (const sx of GATE_STAIRS_X) stairFlight(cb, sx, -1864, GATE_Z, L1, top, 4.2, true);
-  // Lanterns along the walk.
-  for (let x = x0 + 8; x < x1 - 4; x += 12) if (Math.abs(x - AX) > 16) det.lantern(x, top + 2.4, GATE_OUT + 0.9);
-}
-
-// ---------------------------------------------------------------------------
-// The palace: platform over the moat and seven stepped tiers
-// ---------------------------------------------------------------------------
-
-function palace(k: NwtKit, det: Detail): void {
-  const cb = k.mainBuilder();
-  const acc = new MeshAcc();
-  const [px0, pz0, px1, pz1] = PLATFORM_RECT;
-  block(cb, px0, pz0, px1, pz1, PLATFORM, 'paving', 'ice');
-  stairFlight(cb, PALACE.x, -1470, pz0, L4, PLATFORM, 12, true);
-  const cz = PALACE.z + 1.5;
-  let y = PLATFORM;
-  for (let i = 0; i < 7; i++) {
-    const hw = 19 - 2.25 * i, hd = 13 - 1.45 * i, h = 5.8 - 0.32 * i;
-    const b: RBox = { cx: PALACE.x, cz, hw, hd, r: Math.min(2.2, hd * 0.25) };
-    prism(acc, 'ice_wall', b, y, y + h - 0.4);
-    prism(acc, 'ice_trim', grow(b, 0.4), y + h - 0.4, y + h, 'snow', 'ice_trim');
-    cb.collider({ shape: 'box', x: b.cx, y: y + h / 2, z: b.cz, hx: hw + 0.3, hy: h / 2, hz: hd + 0.3, walkable: true, solid: true, surface: 'ice' });
-    // Arched windows on every tier, more of them lit higher up.
-    for (const [len, yaw, at] of [
-      [2 * hw, Math.PI, (u: number): [number, number] => [b.cx - u, cz - hd]],
-      [2 * hw, 0, (u: number): [number, number] => [b.cx + u, cz + hd]],
-      [2 * hd, -Math.PI / 2, (u: number): [number, number] => [b.cx - hw, cz - u]],
-      [2 * hd, Math.PI / 2, (u: number): [number, number] => [b.cx + hw, cz + u]],
-    ] as Array<[number, number, (u: number) => [number, number]]>) {
-      const n = Math.floor((len - 2 * b.r - 1) / 2.6);
-      for (let q = 0; q < n; q++) {
-        const u = (q - (n - 1) / 2) * 2.6;
-        if (i === 0 && yaw === Math.PI && Math.abs(u) < 4) continue; // the great doorway
-        const [x, z] = at(u);
-        det.window(x, y + 1.2, z, yaw, i >= 4, (q + i) % 3 !== 0);
-      }
-    }
-    y += h;
-  }
-  // Crown: drum, dome and spire.
-  cyl(acc, 'ice_trim', PALACE.x, cz, 4.2, y, y + 1.2, 24);
-  const dg = dome(3.9, 1.0, 24, 8);
-  dg.translate(PALACE.x, y + 1.2, cz);
-  acc.add('ice_wall', dg);
-  dg.dispose();
-  const sp = bulbDome(1.1, 5.5, 14);
-  sp.translate(PALACE.x, y + 4.8, cz);
-  acc.add('ice_trim', sp);
-  sp.dispose();
-  // Glowing doorway.
-  det.door(PALACE.x, PLATFORM, cz - 13, Math.PI, true, 2.6);
-  acc.emit(cb);
 }
 
 // ---------------------------------------------------------------------------
 // Masters' courtyards
 // ---------------------------------------------------------------------------
 
-function pool(k: NwtKit, r: Rect, level: number, open: Array<'n' | 's' | 'w' | 'e'>, id: string, label: string, fall: { x: number; yaw: number; top: number }): void {
+export function pool(k: NwtKit, r: Rect, level: number, open: Array<'n' | 's' | 'w' | 'e'>, id: string, label: string): void {
   const cb = k.core;
   const [x0, z0, x1, z1] = r;
   const wy = level + 0.42;
@@ -475,7 +362,6 @@ function pool(k: NwtKit, r: Rect, level: number, open: Array<'n' | 's' | 'w' | '
   if (open.includes('w')) parapet(cb, 'ice_trim', x0 + 0.25, z0, x0 + 0.25, z1, level, 0.65, 0.5, 'snow');
   if (open.includes('e')) parapet(cb, 'ice_trim', x1 - 0.25, z0, x1 - 0.25, z1, level, 0.65, 0.5, 'snow');
   k.sheets.rect(wtWater('pool'), x0 + 0.5, z0 + 0.5, x1 - 0.5, z1 - 0.5, wy);
-  waterfall(k.wet, fall.x, (z0 + z1) / 2, fall.yaw, fall.top, wy, Math.min(5, z1 - z0 - 2), 0.8);
   k.water({ id, type: 'fountain', label, x: (x0 + x1) / 2, y: wy, z: (z0 + z1) / 2, r: Math.min(x1 - x0, z1 - z0) / 2, capacity: 300, regen: 15, size: 'large' });
   k.emitter('mist', 0.9, V((x0 + x1) / 2, level + 1, (z0 + z1) / 2), { radius: 3 }, 60, true);
 }
@@ -493,11 +379,12 @@ function courtyards(k: NwtKit): void {
     }
   };
   floor(COURT_C);
-  pool(k, COURT_POOL, L2, ['n', 's', 'e'], 'nwt:courtyard_pool', 'Courtyard Pool', { x: COURT_POOL[0] + 0.6, yaw: Math.PI / 2, top: 46 });
+  pool(k, COURT_POOL, L2, ['n', 's', 'e'], 'nwt:courtyard_pool', 'Courtyard Pool');
   lanternPost(k.props, COURT_C.x + COURT_C.r * 0.8, L2, COURT_C.z - COURT_C.r * 0.7, 'blue');
   lanternPost(k.props, COURT_C.x + COURT_C.r * 0.8, L2, COURT_C.z + COURT_C.r * 0.7, 'blue');
   floor(HEALER_C);
-  pool(k, HEALER_POOL, L2, ['n', 's', 'w'], 'nwt:healing_pool', 'Healing Spring', { x: HEALER_POOL[2] - 0.6, yaw: -Math.PI / 2, top: 30 });
+  pool(k, HEALER_POOL, L2, ['n', 's', 'w'], 'nwt:healing_pool', 'Healing Spring');
+  PALACE_POOLS.forEach((r, i) => pool(k, r, L4, ['w', 'e'], `nwt:palace_pool_${i ? 'e' : 'w'}`, 'Palace Spring'));
   k.emitter('heal', 0.8, V(HEALER_C.x, L2 + 1.2, HEALER_C.z), { radius: 5 }, 40, true);
   lanternPost(k.props, HEALER_C.x - HEALER_C.r * 0.8, L2, HEALER_C.z - HEALER_C.r * 0.7, 'warm');
   lanternPost(k.props, HEALER_C.x - HEALER_C.r * 0.8, L2, HEALER_C.z + HEALER_C.r * 0.7, 'warm');
@@ -548,11 +435,51 @@ function glacierPass(k: NwtKit): void {
 }
 
 // ---------------------------------------------------------------------------
+// Lantern pillars along the quays, the promenade, the plazas and the avenue
+// ---------------------------------------------------------------------------
+
+function lampPillars(k: NwtKit, g: CityGrid, det: Detail): void {
+  const cb = k.core;
+  const nearBridge = (x: number, z: number) => BRIDGES.some(([ax, az, bx, bz, w]) => segDist(x, z, ax, az, bx, bz) < w / 2 + 3);
+  const clear = (x: number, z: number, level: number) => {
+    if (lvAt(g, x, z) !== level || builtAt(g, x, z) || nearBridge(x, z)) return false;
+    // keep a person's width free all round (stairs, doors, parapets)
+    for (const [dx, dz] of [[1.2, 0], [-1.2, 0], [0, 1.2], [0, -1.2]]) if (lvAt(g, x + dx, z + dz) !== level && !Number.isNaN(lvAt(g, x + dx, z + dz))) return false;
+    return true;
+  };
+  const row = (ax: number, az: number, bx: number, bz: number, level: number, step = TUNE.lampSpacing) => {
+    const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(len / step));
+    for (let i = 0; i <= n; i++) {
+      const x = ax + ((bx - ax) * i) / n, z = az + ((bz - az) * i) / n;
+      if (clear(x, z, level)) lampPillar(det, cb, x, level, z);
+    }
+  };
+  const tw = CANALS.twin_w, te = CANALS.twin_e, h = CANALS.harbor;
+  // Promenade edges and the twin-canal quays.
+  row(tw[2] + 1.2, -1794, tw[2] + 1.2, -1670, L1);
+  row(te[0] - 1.2, -1794, te[0] - 1.2, -1670, L1);
+  row(tw[0] - 1.1, -1786, tw[0] - 1.1, -1656, L1);
+  row(te[2] + 1.1, -1786, te[2] + 1.1, -1656, L1);
+  // Harbor quays and the harbor head.
+  row(h[0] - 1.4, -1856, h[0] - 1.4, -1804, L1);
+  row(h[2] + 1.4, -1856, h[2] + 1.4, -1804, L1);
+  // Ceremony plaza: the terrace edge over the canals and the sides.
+  row(PLAZA[0] + 4, PLAZA[1] + 1.6, PLAZA[2] - 4, PLAZA[1] + 1.6, L2);
+  row(PLAZA[0] + 1.6, PLAZA[1] + 8, PLAZA[0] + 1.6, PLAZA[3] - 8, L2, 16);
+  row(PLAZA[2] - 1.6, PLAZA[1] + 8, PLAZA[2] - 1.6, PLAZA[3] - 8, L2, 16);
+  // Avenue and the palace plaza approach.
+  row(AVENUE[0] + 1.4, AVENUE[1] + 6, AVENUE[0] + 1.4, AVENUE[3] - 2, L3);
+  row(AVENUE[2] - 1.4, AVENUE[1] + 6, AVENUE[2] - 1.4, AVENUE[3] - 2, L3);
+  row(AX - 12, PALACE_PLAZA[1] + 4, AX - 12, PALACE_PLAZA[3] - 6, L4, 9);
+  row(AX + 12, PALACE_PLAZA[1] + 4, AX + 12, PALACE_PLAZA[3] - 6, L4, 9);
+}
+
+// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 
-/** Build the whole city into the kit; returns the district plans (citizens walk their routes). */
-export function buildCity(k: NwtKit): DistrictPlan[] {
+/** Build the whole city into the kit; returns the district plans (citizens walk their routes) and every lantern position. */
+export function buildCity(k: NwtKit): { plans: DistrictPlan[]; glow: number[] } {
   const plans = cityPlans(DISTRICTS);
   const g = cityGrid(plans);
   const ground = k.mainBuilder();
@@ -562,15 +489,17 @@ export function buildCity(k: NwtKit): DistrictPlan[] {
   water(k, g);
   plaza(k);
   const det = new Detail(k.layer('landmarks', AX, -1660, 520));
-  gate(k, det);
-  palace(k, det);
+  buildLandmarks(k, det);
+  const lamps = new Detail(k.layer('lamps', AX, -1660, 420));
+  lampPillars(k, g, lamps);
   courtyards(k);
   oasisFloor(k);
   glacierPass(k);
   buildCliffs(k.mainBuilder());
+  const glow = [...det.glow, ...lamps.glow];
   for (const p of plans) {
     const [x0, z0, x1, z1] = p.spec.rect;
-    buildDistrict(p, { body: k.mainBuilder(), detail: k.layer(`d_${p.id}`, (x0 + x1) / 2, (z0 + z1) / 2, 230 + Math.max(x1 - x0, z1 - z0) / 2) });
+    glow.push(...buildDistrict(p, { body: k.mainBuilder(), detail: k.layer(`d_${p.id}`, (x0 + x1) / 2, (z0 + z1) / 2, 230 + Math.max(x1 - x0, z1 - z0) / 2) }));
   }
-  return plans;
+  return { plans, glow };
 }

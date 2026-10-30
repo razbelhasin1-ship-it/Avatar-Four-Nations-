@@ -299,6 +299,8 @@ export class Detail {
   private readonly Q = new THREE.Quaternion();
   private readonly P = new THREE.Vector3();
   private readonly S = new THREE.Vector3();
+  /** Glowing lantern centres (x, y, z triples) for the night light pool. */
+  readonly glow: number[] = [];
 
   constructor(readonly cb: ContentBuilder) {}
 
@@ -331,6 +333,7 @@ export class Detail {
 
   /** Lantern hanging from a point (its centre 0.62 m below it). */
   lantern(x: number, y: number, z: number, yaw = 0): void {
+    this.glow.push(x, y, z);
     this.put('agna_lantern', lanternGeo, 'lantern_warm', x, y, z, yaw);
     this.put('agna_lantern_cap', lanternCapGeo, 'dark', x, y, z, yaw);
   }
@@ -362,8 +365,8 @@ export class Detail {
   }
 }
 
-/** Build every building, passage and lantern of a district plan. */
-export function buildDistrict(plan: DistrictPlan, out: DistrictBuild): void {
+/** Build every building, passage and lantern of a district plan; returns its lantern positions. */
+export function buildDistrict(plan: DistrictPlan, out: DistrictBuild): number[] {
   const acc = new MeshAcc();
   const rnd = new Random(plan.spec.seed * 31 + 7);
   const { body } = out;
@@ -539,4 +542,5 @@ export function buildDistrict(plan: DistrictPlan, out: DistrictBuild): void {
   for (const s of plan.spans) span(s);
   for (const l of plan.lamps) lamp(l);
   acc.emit(body);
+  return det.glow;
 }

@@ -158,10 +158,11 @@ export const CANALS: Record<string, Rect> = {
   harbor: [-254, GATE_Z, -186, -1800],
   twin_w: [-243, -1800, -231, -1650],
   twin_e: [-209, -1800, -197, -1650],
-  branch_w1: [-376, -1752, -243, -1744],
-  branch_w2: [-376, -1704, -243, -1696],
-  branch_e1: [-197, -1752, -64, -1744],
-  branch_e2: [-197, -1704, -64, -1696],
+  // Branch canals start at the foot of a cliff waterfall.
+  branch_w1: [CLIFF.w + 0.5, -1752, -243, -1744],
+  branch_w2: [CLIFF.w + 0.5, -1704, -243, -1696],
+  branch_e1: [-197, -1752, CLIFF.e - 0.5, -1744],
+  branch_e2: [-197, -1704, CLIFF.e - 0.5, -1696],
 };
 
 /** Palace moat (water a little below the plaza). */
@@ -206,6 +207,29 @@ export const COURT_POOL: Rect = [-378, -1626, -371, -1604];
 export const HEALER: Rect = [-94, -1632, -62, -1598];
 export const HEALER_C = { x: -79, z: -1615, r: 12 };
 export const HEALER_POOL: Rect = [-66, -1622, -61.4, -1608];
+/** Pools against the back cliff behind the palace platform (fed by cliff falls). */
+export const PALACE_POOLS: Rect[] = [
+  [AX - 22, CLIFF.s - 6, AX - 10, CLIFF.s],
+  [AX + 10, CLIFF.s - 6, AX + 22, CLIFF.s],
+];
+
+/**
+ * Waterfalls down the cliffs, each in a carved channel: a point on the cove
+ * outline, the direction the water falls toward (yaw: the open side), the
+ * sheet width and the level it lands on.
+ */
+export const CLIFF_FALLS: Array<{ x: number; z: number; yaw: number; w: number; bottom: number }> = [
+  { x: CLIFF.w, z: -1748, yaw: Math.PI / 2, w: 6, bottom: WL },
+  { x: CLIFF.w, z: -1700, yaw: Math.PI / 2, w: 6, bottom: WL },
+  { x: CLIFF.e, z: -1748, yaw: -Math.PI / 2, w: 6, bottom: WL },
+  { x: CLIFF.e, z: -1700, yaw: -Math.PI / 2, w: 6, bottom: WL },
+  { x: CLIFF.w, z: (COURT_POOL[1] + COURT_POOL[3]) / 2, yaw: Math.PI / 2, w: 4.5, bottom: L2 + 0.42 },
+  { x: CLIFF.e, z: (HEALER_POOL[1] + HEALER_POOL[3]) / 2, yaw: -Math.PI / 2, w: 3.5, bottom: L2 + 0.42 },
+  { x: AX - 16, z: CLIFF.s, yaw: Math.PI, w: 7, bottom: L4 + 0.42 },
+  { x: AX + 16, z: CLIFF.s, yaw: Math.PI, w: 7, bottom: L4 + 0.42 },
+  { x: -305, z: JAW_TIP - 5, yaw: Math.PI, w: 9, bottom: 0 },
+  { x: -135, z: JAW_TIP - 5, yaw: Math.PI, w: 9, bottom: 0 },
+];
 /** Water start spawn (ceremony plaza, facing the fountain and the palace). */
 export const SPAWN = { x: -236, z: -1606, yaw: 0 };
 

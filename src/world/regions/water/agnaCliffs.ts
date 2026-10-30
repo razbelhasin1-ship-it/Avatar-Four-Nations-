@@ -5,7 +5,7 @@ import { boulder } from './geometry';
 import { wtMat } from './materials';
 import { Random } from '../../../core/Random';
 import { heightAt } from '../../Heightfield';
-import { COVE, GATE_Z, JAW_TIP, MOUTH, TUNE, inPoly, segDist } from './nwtLayout';
+import { CLIFF_FALLS, COVE, GATE_Z, JAW_TIP, MOUTH, OASIS_SLOT, PASS, TUNE, inPoly, segDist, type Rect } from './nwtLayout';
 import { rasterRects } from './raster';
 
 /**
@@ -49,12 +49,14 @@ type P = [number, number];
  * Face paths (massif on the right-hand side). Both run on past the Glacier
  * Pass mouth so the canyon opens between two sheer faces, not under a skirt.
  */
-const WEST_FACE: P[] = [[-330, JAW_TIP], [MOUTH.x0, JAW_TIP], ...COVE.slice(0, 15).map((p) => [p[0], p[1]] as P), [-150, -1326]];
-const EAST_FACE: P[] = [[-80, -1326], ...COVE.slice(15).map((p) => [p[0], p[1]] as P), [MOUTH.x1, JAW_TIP], [-110, JAW_TIP]];
+const WEST_JAW: P[] = [[-360, -1916], [-342, -1930], [-318, JAW_TIP - 4], [-292, JAW_TIP - 6], [-274, JAW_TIP], [MOUTH.x0 - 1, -1922]];
+const WEST_FACE: P[] = [...WEST_JAW, ...COVE.slice(0, 15).map((p) => [p[0], p[1]] as P), [-150, -1326]];
+/** The east jaw mirrors the west one across the city axis. */
+const EAST_FACE: P[] = [[-80, -1326], ...COVE.slice(15).map((p) => [p[0], p[1]] as P), ...[...WEST_JAW].reverse().map(([x, z]) => [-440 - x, z] as P)];
 
 /** Outer outlines from the end of each face path back to its start. */
-const WEST_OUTER: P[] = [[-200, -1314], [-262, -1306], [-330, -1310], [-400, -1338], [-432, -1390], [-436, -1600], [-430, -1760], [-410, -1832], [-372, -1900]];
-const EAST_OUTER: P[] = [[-70, -1900], [-30, -1832], [-10, -1760], [-4, -1600], [-8, -1390], [-40, -1338]];
+const WEST_OUTER: P[] = [[-200, -1314], [-262, -1306], [-330, -1310], [-400, -1338], [-432, -1390], [-436, -1600], [-430, -1760], [-410, -1832], [-378, -1890]];
+const EAST_OUTER: P[] = [[-62, -1890], [-30, -1832], [-10, -1760], [-4, -1600], [-8, -1390], [-40, -1338]];
 
 export const MASSIFS = [
   { face: WEST_FACE, outer: WEST_OUTER },
@@ -68,7 +70,41 @@ function bulge(s: number, y: number, seed: number): number {
   const big = 1.6 * noise.noise2(s * 0.018 + seed, y * 0.014) + 0.7 * noise.noise2(s * 0.06 + seed, y * 0.05);
   const ledge = Math.exp(-(((y - 34) / 2.2) ** 2)) * 0.7 + Math.exp(-(((y - 63) / 2.6) ** 2)) * 0.8 + Math.exp(-(((y - 86) / 2) ** 2)) * 0.5;
   const top = Math.min(1, Math.max(0, (TOP - y) / 6));
-  return Math.max(0, flute + big + 0.6 + ledge * (0.6 + 0.4 * noise.noise2(s * 0.06, seed))) * top;
+  return Math.max(0, 0.65 * flute + 0.6 * big + 0.35 + ledge * (0.6 + 0.4 * noise.noise2(s * 0.06, seed))) * top;
+}
+
+/** Narrow places where the face relief is kept shallow (crevasse, pass, gate stairs). */
+const CALM: Rect[] = [
+  [OASIS_SLOT[0] - 1, OASIS_SLOT[1] - 2, OASIS_SLOT[2] + 1, OASIS_SLOT[3] + 2],
+  [PASS[0] - 1, PASS[1] - 2, PASS[2] + 1, PASS[3] + 4],
+  [MOUTH.x0 - 1, GATE_Z - 1, MOUTH.x0 + 1, -1856],
+  [MOUTH.x1 - 1, GATE_Z - 1, MOUTH.x1 + 1, -1856],
+];
+
+function rectDist(r: Rect, x: number, z: number): number {
+  const dx = Math.max(r[0] - x, 0, x - r[2]), dz = Math.max(r[1] - z, 0, z - r[3]);
+  return Math.hypot(dx, dz);
+}
+
+/** 0..1 closeness to a cliff waterfall's channel (1 = on its centre line). */
+function fallNear(x: number, z: number, extra = 1.5): number {
+  let k = 0;
+  for (const f of CLIFF_FALLS) {
+    const half = f.w / 2 + extra;
+    const r = Math.hypot(x - f.x, z - f.z);
+    if (r < half) k = Math.max(k, 1 - (r / half) ** 2);
+  }
+  return k;
+}
+
+/** Final face offset: relief (calmed in narrow places) with a channel carved under each waterfall. */
+function faceOffset(x: number, z: number, s: number, y: number, seed: number): number {
+  let calm = 1;
+  for (const r of CALM) calm = Math.min(calm, 0.3 + 0.7 * Math.min(1, rectDist(r, x, z) / 6));
+  const d = bulge(s, y, seed) * calm;
+  const k = fallNear(x, z);
+  if (k <= 0) return d;
+  return d * (1 - k) - 1.4 * k * Math.min(1, (TOP - y) / 6);
 }
 
 /** Resample a polyline every `step` metres, keeping its corners. */
@@ -109,7 +145,7 @@ function faceMesh(path: P[], seed: number): THREE.BufferGeometry {
     const base = p.z < GATE_Z - 1 ? -9 : 1.5;
     for (let j = 0; j <= rows; j++) {
       const y = base + ((TOP - base) * j) / rows;
-      const d = bulge(p.s, y, seed);
+      const d = faceOffset(p.x, p.z, p.s, y, seed);
       P.push(p.x + fx * d, y, p.z + fz * d);
     }
     if (i > 0) {
@@ -132,8 +168,9 @@ function corniceMesh(path: P[], seed: number): THREE.BufferGeometry {
   for (let i = 0; i < pts.length; i++) {
     const p = pts[i];
     const ox = p.tz, oz = -p.tx; // over the edge, toward the open side
-    const h = 1.2 + 3.2 * Math.max(0, noise.noise2(p.s * 0.035 + seed, 1.7) * 0.5 + 0.5) ** 1.5;
-    const o = 0.6 + 1.8 * Math.max(0, noise.noise2(p.s * 0.05 + seed, 4.1) * 0.5 + 0.5);
+    const lip = 1 - fallNear(p.x, p.z, 4);
+    const h = (1.2 + 3.2 * Math.max(0, noise.noise2(p.s * 0.035 + seed, 1.7) * 0.5 + 0.5) ** 1.5) * lip + 0.15;
+    const o = (0.6 + 1.8 * Math.max(0, noise.noise2(p.s * 0.05 + seed, 4.1) * 0.5 + 0.5)) * lip;
     const ring: Array<[number, number]> = [
       [-0.2, -1.2],
       [o, h * 0.25],
@@ -262,7 +299,7 @@ export function buildCliffs(cb: ContentBuilder): void {
     faceToward(skirt, new THREE.Vector3((p1[1] - p0[1]) / sl, 0.6, -(p1[0] - p0[0]) / sl));
     cb.mesh(wtMat('ice_cliff'), skirt, { x: 0, y: 0, z: 0 });
     skirt.dispose();
-    // Colliders: a thick slab behind every face segment (front 0.8 m proud of the face line to cover the bulges).
+    // Colliders: a thick slab behind every face segment (front 1 m proud of the face line, about the mean relief).
     for (let i = 0; i < m.face.length - 1; i++) {
       const [x0, z0] = m.face[i], [x1, z1] = m.face[i + 1];
       const len = Math.hypot(x1 - x0, z1 - z0);
@@ -270,7 +307,7 @@ export function buildCliffs(cb: ContentBuilder): void {
       const tx = (x1 - x0) / len, tz = (z1 - z0) / len;
       const rx = -tz, rz = tx; // right = into the massif
       const T = 12;
-      const off = T / 2 - 0.8;
+      const off = T / 2 - 1.0;
       const base = Math.min(z0, z1) < GATE_Z - 1 ? -10 : 0;
       cb.collider({ shape: 'box', x: (x0 + x1) / 2 + rx * off, y: (TOP + base) / 2, z: (z0 + z1) / 2 + rz * off, hx: len / 2 + 0.6, hy: (TOP - base) / 2, hz: T / 2, yaw: Math.atan2(-tz, tx), walkable: true, solid: true, surface: 'ice' });
     }

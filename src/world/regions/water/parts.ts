@@ -309,6 +309,39 @@ export class WaterSheets {
     this.add(mat, g);
   }
 
+  /**
+   * Flowing water strip for the flow shader: UV u runs across (0..1), v runs
+   * downstream in metres / 8 (as world rivers), so the current visibly moves
+   * in direction `dir`.
+   */
+  flow(mat: THREE.Material, x0: number, z0: number, x1: number, z1: number, y: number, dir: '+x' | '-x' | '+z' | '-z'): void {
+    const alongX = dir === '+x' || dir === '-x';
+    const len = alongX ? x1 - x0 : z1 - z0, wid = alongX ? z1 - z0 : x1 - x0;
+    const nl = Math.max(1, Math.round(len / 6)), nw = Math.max(1, Math.round(wid / 6));
+    const P: number[] = [], N: number[] = [], U: number[] = [], I: number[] = [];
+    for (let i = 0; i <= nl; i++) {
+      for (let j = 0; j <= nw; j++) {
+        const a = i / nl, b = j / nw;
+        P.push(alongX ? x0 + (x1 - x0) * a : x0 + (x1 - x0) * b, y, alongX ? z0 + (z1 - z0) * b : z0 + (z1 - z0) * a);
+        N.push(0, 1, 0);
+        U.push(b, ((dir === '+x' || dir === '+z' ? a : 1 - a) * len) / 8);
+      }
+    }
+    for (let i = 0; i < nl; i++) {
+      for (let j = 0; j < nw; j++) {
+        const k = i * (nw + 1) + j, r = nw + 1;
+        if (alongX) I.push(k, k + 1, k + r, k + 1, k + r + 1, k + r);
+        else I.push(k, k + r, k + 1, k + 1, k + r, k + r + 1);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
+    g.setIndex(I);
+    this.add(mat, g);
+  }
+
   disc(mat: THREE.Material, x: number, z: number, r: number, y: number, segs = 32): void {
     const g = new THREE.CircleGeometry(r, segs);
     g.rotateX(-Math.PI / 2);
