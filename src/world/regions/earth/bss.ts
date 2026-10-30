@@ -6,6 +6,8 @@ import { BssMats } from './bssKit';
 import { C, SEED } from './bssLayout';
 import { buildLowerRing, type DistrictSite } from './bssLower';
 import { buildMiddleRing } from './bssMiddle';
+import { buildFarmland } from './bssFarm';
+import { LaogaiRuntime, buildLaogai, type LaogaiBuild } from './bssLaogai';
 import { buildPalace } from './bssPalace';
 import { buildUpperRing } from './bssUpper';
 import { NavGraph } from './bssNav';
@@ -31,6 +33,7 @@ export class BaSingSe extends EarthRegion {
   bm: BssMats | null = null;
   gates: GateRuntime | null = null;
   lifts: LiftRuntime | null = null;
+  laogai: LaogaiRuntime | null = null;
   trains: TrainSystem | null = null;
   figures: FigureRenderer | null = null;
   stations: StationRt[] = [];
@@ -76,10 +79,14 @@ export class BaSingSe extends EarthRegion {
     yield* buildUpperRing(site);
     buildPalace(site);
     yield;
+    yield* buildFarmland(site);
+    const laogai: LaogaiBuild = buildLaogai(site);
+    yield;
     this.smoke = smoke.map((e) => ({ ...e, acc: Math.random() }));
     this.figures = new FigureRenderer(this.group, 900);
     this.trains = new TrainSystem(this.group, rail.stations);
     this.lifts = new LiftRuntime(this.group, rail.lifts as LiftDef[], this.bm);
+    this.laogai = new LaogaiRuntime(this.group, this.bm, laogai);
     this.installBssDebug();
   }
 
@@ -96,6 +103,7 @@ export class BaSingSe extends EarthRegion {
       this.lifts?.update(dt, ctx, this.figures);
     }
     this.trains.update(dt, ctx, this.figures, this.camPos);
+    this.laogai?.update(dt, ctx, full);
     this.figures.end();
     if (full) this.updateSmoke(dt, ctx);
     this.figures.group.visible = full;
@@ -119,10 +127,11 @@ export class BaSingSe extends EarthRegion {
   override onSessionStart(ctx: GameContext): void {
     super.onSessionStart(ctx);
     if (this.building) return;
-    for (const s of [this.gates, this.lifts, this.trains]) s?.onSessionEnd();
+    for (const s of [this.gates, this.lifts, this.trains, this.laogai]) s?.onSessionEnd();
     this.gates?.onSessionStart(ctx);
     this.lifts?.onSessionStart(ctx);
     this.trains?.onSessionStart(ctx);
+    this.laogai?.onSessionStart(ctx);
   }
 
   override onSessionEnd(ctx: GameContext): void {
@@ -130,11 +139,14 @@ export class BaSingSe extends EarthRegion {
     this.trains?.onSessionEnd();
     this.lifts?.onSessionEnd();
     this.gates?.onSessionEnd();
+    this.laogai?.onSessionEnd();
   }
 
   override dispose(ctx: GameContext): void {
     super.dispose(ctx);
     this.trains?.dispose();
+    this.laogai?.dispose();
+    this.laogai = null;
     this.lifts?.dispose();
     this.gates?.dispose();
     this.figures?.dispose();
@@ -172,6 +184,10 @@ export class BaSingSe extends EarthRegion {
       gate: (id: string, open: number) => this.gates?.set(id, open) ?? false,
       lifts: () => this.lifts?.state() ?? [],
       lift: (id: string, to: number) => this.lifts?.call(id, to) ?? false,
+      laogai: () => this.laogai?.state ?? null,
+      laogaiRaise: () => this.laogai?.raise(),
+      laogaiOpen: () => this.laogai?.openDoor(),
+      laogaiSet: (rise: number, open: number) => this.laogai?.setState(rise, open),
       stations: () =>
         this.stations.map((s) => {
           const p = railPath(s.line.id).at(s.s);

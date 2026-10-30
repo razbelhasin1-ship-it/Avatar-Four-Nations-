@@ -478,8 +478,16 @@ export const BSS = {
   lake: { x: 1060, z: 170, r: 48 },
   lakeDock: { a: { x: 1004, z: 168 }, b: { x: 1022, z: 168 } },
   boathouse: { x: 996, z: 160 },
-  /** Dai Li base beneath the meadow north-east of the lake (floor/ceiling heights are absolute). */
-  daiLiBase: { x0: 1114, x1: 1178, z0: 67, z1: 123, floor: 9, ceil: 19 },
+  /** The Dai Li base, sealed inside a rock hill on the north-east shore (the terrain cannot be dug, so the
+   *  hill is the "underground"). The concealed door is in the hill's lakeside spur; stepping stones rise
+   *  from the water between the east shore and the door. */
+  laogai: {
+    hill: { x: 1142, z: 98, rx: 36, rz: 33, h: 21 },
+    door: { x: 1092.3, z: 141.6 },
+    path: { a: { x: 1108.1, z: 153.2 }, b: { x: 1092.0, z: 144.8 } },
+  },
+  /** Welcome gateway over the West road just inside the Outer Wall (radius on THETA_MAIN). */
+  arrivalGate: { r: 381 },
   zoo: polar(146 * DEG, 322),
   hills: [polar(318 * DEG, 330), polar(258 * DEG, 342), polar(122 * DEG, 352)],
   arrival: polar(THETA_MAIN, ARRIVAL_R),

@@ -172,6 +172,120 @@ function lawnTexture(): THREE.CanvasTexture {
   return t;
 }
 
+/** Agrarian Zone field surfaces (tiled every 8 m): rows run along the texture's V axis. */
+function fieldTexture(kind: 'paddy' | 'cabbage' | 'grain' | 'pasture' | 'fallow'): THREE.CanvasTexture {
+  const [c, g] = canvas(256, 256);
+  const r = rand({ paddy: 141, cabbage: 142, grain: 143, pasture: 144, fallow: 145 }[kind]);
+  const base = { paddy: '#5b7d5a', cabbage: '#5e4a35', grain: '#c9a95a', pasture: '#6e9147', fallow: '#7a5f43' }[kind];
+  g.fillStyle = base;
+  g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 60; i++) {
+    const x = r() * 256, y = r() * 256, rad = 12 + r() * 40;
+    const gr = g.createRadialGradient(x, y, 0, x, y, rad);
+    gr.addColorStop(0, r() < 0.5 ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,230,0.1)');
+    gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr;
+    g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+  }
+  if (kind === 'paddy') {
+    g.fillStyle = 'rgba(120,150,150,0.35)';
+    g.fillRect(0, 0, 256, 256);
+    for (let x = 8; x < 256; x += 16) for (let y = 6; y < 256; y += 12) {
+      g.fillStyle = r() < 0.5 ? '#7fa64e' : '#93b85a';
+      g.fillRect(x - 2 + r() * 2, y - 4, 3, 7);
+      g.fillRect(x + 1, y - 3, 2, 6);
+    }
+  } else if (kind === 'cabbage') {
+    for (let x = 8; x < 256; x += 16) {
+      g.fillStyle = 'rgba(40,30,20,0.4)';
+      g.fillRect(x - 6, 0, 3, 256);
+      for (let y = 8; y < 256; y += 14) {
+        const rr = 4 + r() * 2;
+        g.fillStyle = r() < 0.5 ? '#6f9a45' : '#86ad57';
+        g.beginPath();
+        g.arc(x + 2, y + r() * 3, rr, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = 'rgba(200,230,150,0.5)';
+        g.fillRect(x + 1, y - 1, 2, 2);
+      }
+    }
+  } else if (kind === 'grain') {
+    for (let x = 0; x < 256; x += 8) {
+      g.fillStyle = r() < 0.5 ? 'rgba(150,120,50,0.35)' : 'rgba(240,215,130,0.3)';
+      g.fillRect(x, 0, 3, 256);
+    }
+    for (let i = 0; i < 2400; i++) {
+      g.fillStyle = r() < 0.5 ? 'rgba(110,85,35,0.4)' : 'rgba(250,230,160,0.45)';
+      g.fillRect(r() * 256, r() * 256, 1, 2 + r() * 3);
+    }
+  } else if (kind === 'fallow') {
+    for (let x = 0; x < 256; x += 10) {
+      g.fillStyle = 'rgba(50,36,22,0.45)';
+      g.fillRect(x, 0, 4, 256);
+      g.fillStyle = 'rgba(160,130,95,0.25)';
+      g.fillRect(x + 5, 0, 2, 256);
+    }
+  } else {
+    for (let i = 0; i < 3000; i++) {
+      const u = r();
+      g.fillStyle = u < 0.5 ? 'rgba(40,62,26,0.4)' : u < 0.95 ? 'rgba(160,184,104,0.35)' : 'rgba(240,236,180,0.7)';
+      g.fillRect(r() * 256, r() * 256, 1 + r(), 1 + r() * 2.5);
+    }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
+/** Weathered rock: blotches, wavy strata, cracks and grit (tri-planar). */
+function rockTexture(): THREE.CanvasTexture {
+  const [c, g] = canvas(256, 256);
+  const r = rand(161);
+  g.fillStyle = '#8b8374';
+  g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 120; i++) {
+    const x = r() * 256, y = r() * 256, rad = 8 + r() * 38;
+    const gr = g.createRadialGradient(x, y, 0, x, y, rad);
+    gr.addColorStop(0, r() < 0.5 ? 'rgba(60,54,46,0.35)' : 'rgba(190,182,164,0.28)');
+    gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr;
+    g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+  }
+  for (let k = 0; k < 9; k++) {
+    g.strokeStyle = `rgba(52,46,38,${0.25 + r() * 0.25})`;
+    g.lineWidth = 1 + r() * 3;
+    const y0 = r() * 256;
+    g.beginPath();
+    g.moveTo(0, y0);
+    for (let x = 0; x <= 256; x += 32) g.lineTo(x, y0 + (r() - 0.5) * 14);
+    g.stroke();
+  }
+  g.strokeStyle = 'rgba(30,26,22,0.55)';
+  for (let k = 0; k < 14; k++) {
+    g.lineWidth = 1 + r();
+    let x = r() * 256, y = r() * 256;
+    g.beginPath();
+    g.moveTo(x, y);
+    for (let s = 0; s < 5; s++) {
+      x += (r() - 0.5) * 30;
+      y += r() * 22;
+      g.lineTo(x, y);
+    }
+    g.stroke();
+  }
+  for (let i = 0; i < 3000; i++) {
+    g.fillStyle = r() < 0.5 ? 'rgba(40,36,30,0.3)' : 'rgba(210,204,190,0.25)';
+    g.fillRect(r() * 256, r() * 256, 1 + r() * 1.5, 1 + r() * 1.5);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
 /** War Room floor map: an invented continent, an island chain to the west, polar ice, a grid and a compass. */
 function warMapTexture(): THREE.CanvasTexture {
   const [c, g] = canvas(512, 384);
@@ -295,6 +409,17 @@ export class BssMats {
   readonly lawn: THREE.MeshStandardMaterial;
   /** Painted floor map of the Council's War Room. */
   readonly warMap: THREE.MeshStandardMaterial;
+  /** Agrarian Zone fields; paddies are glossy standing water over rice shoots. */
+  readonly fields: Record<'paddy' | 'cabbage' | 'grain' | 'pasture' | 'fallow', THREE.MeshStandardMaterial>;
+  /** Open water for canals (the lake and real sources render their own surfaces). */
+  readonly canal: THREE.MeshStandardMaterial;
+  /** Invisible surface for water sources whose water is drawn as merged geometry. */
+  readonly hiddenWater: THREE.MeshBasicMaterial;
+  /** Natural rock for hills and the Laogai hill. */
+  readonly rock: THREE.MeshStandardMaterial;
+  /** Dai Li base: cold dark stone (tri-planar) and the green glow of its lamps. */
+  readonly cave: THREE.MeshStandardMaterial;
+  readonly daiGlow: THREE.MeshStandardMaterial;
   private readonly owned: THREE.Material[] = [];
   private readonly textures: THREE.Texture[] = [];
   private readonly signs = new Map<string, THREE.MeshStandardMaterial>();
@@ -328,6 +453,23 @@ export class BssMats {
     this.lawn.name = 'bss_lawn';
     this.warMap = this.own(new THREE.MeshStandardMaterial({ map: this.tex(warMapTexture()), roughness: 0.6, color: '#ffffff' }));
     this.warMap.name = 'bss_war_map';
+    const field = (k: 'paddy' | 'cabbage' | 'grain' | 'pasture' | 'fallow', rough: number, metal = 0) => {
+      const m = this.own(new THREE.MeshStandardMaterial({ map: this.tex(fieldTexture(k)), roughness: rough, metalness: metal, color: '#ffffff' }));
+      m.name = `bss_field_${k}`;
+      return m;
+    };
+    this.fields = { paddy: field('paddy', 0.25, 0.05), cabbage: field('cabbage', 0.95), grain: field('grain', 0.9), pasture: field('pasture', 0.95), fallow: field('fallow', 1) };
+    this.canal = this.own(new THREE.MeshStandardMaterial({ color: '#4d7480', roughness: 0.12, metalness: 0.1, transparent: true, opacity: 0.88 }));
+    this.canal.name = 'bss_canal';
+    this.hiddenWater = this.own(new THREE.MeshBasicMaterial({ visible: false }));
+    this.rock = this.own(new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.96, map: this.tex(rockTexture()) }));
+    applyTriplanar(this.rock, 7);
+    this.rock.name = 'bss_rock';
+    this.cave = this.own(new THREE.MeshStandardMaterial({ color: '#a9b6ad', roughness: 0.95, map: stoneBlocks('#5e6660', '#00000055', 3, 2, 37) }));
+    applyTriplanar(this.cave, 3);
+    this.cave.name = 'bss_cave';
+    this.daiGlow = this.own(new THREE.MeshStandardMaterial({ color: '#9effc4', emissive: '#3cff8a', emissiveIntensity: 1.5, roughness: 0.4 }));
+    this.daiGlow.name = 'bss_dai_glow';
   }
 
   private own<T extends THREE.Material>(m: T): T {

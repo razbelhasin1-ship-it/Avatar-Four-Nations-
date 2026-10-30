@@ -29,6 +29,9 @@ export interface WaterOpts {
   w: number;
   d: number;
   circle?: boolean;
+  yaw?: number;
+  /** Surface material (an invisible one registers water drawn elsewhere, e.g. merged canal strips). */
+  material?: THREE.Material;
   capacity?: number;
   regen?: number;
   type?: 'pond' | 'canal' | 'fountain' | 'puddle' | 'lake';

@@ -31,7 +31,7 @@ Wiki (avatar.fandom.com) is blocked by the session network policy: built from th
 - [x] 3 Lower Ring (commit)
 - [x] 4 Middle Ring (commit)
 - [x] 5 Upper Ring + palace (commit)
-- [ ] 6 Agrarian Zone, Lake Laogai, Dai Li base (commit)
+- [x] 6 Agrarian Zone, Lake Laogai, Dai Li base (commit)
 - [ ] 7 crowds, shops, vendors, audio (commit)
 - [ ] 8 polish, perf, screenshots (screenshots/ba-sing-se), 3 comparison passes, walk test, report (commit)
 
@@ -73,3 +73,15 @@ data/npcs.ts (bss_elder coords), spots.ts, tests/e2e/region-earth.e2e.mjs (BSS c
   opening 24 m; piers kept out of both palace gates. Upper band ground = lawn. Marker: viewpoint_bss_palace
   (terraceZ 15, y = tier 3). Fixed: cylinder() takes the BOTTOM centre (Middle/Lower Ring props were floating).
   Polish later: up_s lift tower stands on the promenade; lift towers look like scaffolds.
+- Phase 6: bssFarm.ts (field patchwork in 4 rings: paddies (flooded ones = real water), cabbage, grain,
+  orchards, pasture, fallow; canal ring r=316 = merged strip + hidden water sources every 12 m; dirt tracks;
+  farmsteads; 3 rock hills (bm.rock); zoo with 4 pens + primitive animals; arrival gateway 歡迎光臨永固城 +
+  passport hall 護照/入城登記 + paved plaza; guide NPC bss_guide (data/npcs.ts, dlg_bss_guide)).
+  bssLaogai.ts: shore (reeds, liftable boulders, trees, pier + boathouse), the Dai Li base sealed inside a rock
+  hill (terrain cannot be dug: no engine change), spur with the concealed door, 9 stepping stones that rise
+  (interaction bss_laogai_path), door (bss_laogai_door), rooms (ante, bison cavern, prison 8 cells, training,
+  brainwashing chamber + spinning lantern), GateRuntime sliding doors, green lamps, lights/fog dimmed while
+  inside (after Sky), flag laogai_raided on boss_dai_li_captain kill -> door rubble + stones up.
+  Debug: __game.debug.bss.laogai()/laogaiRaise()/laogaiOpen()/laogaiSet(r,o).
+  Harness note: soft particles force a depth pass; under SwiftShader frames then take >30 s (screenshot timeout).
+  Draw calls at street level: Lower ~800, Middle ~400, farm ~700-1000 (perf pass in phase 8).

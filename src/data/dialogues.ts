@@ -26,6 +26,21 @@ export const DIALOGUES: DialogueDef[] = [
     },
   },
   {
+    id: 'dlg_bss_guide',
+    start: [{ node: 'intro' }],
+    nodes: {
+      intro: {
+        text: 'Welcome, welcome, to Ba Sing Se! I am Lin Mei, and I will be your guide. Please show your papers at the passport counters — it only takes a moment.',
+        next: 'intro2',
+      },
+      intro2: {
+        text: 'The trains will carry you inward, ring by ring: the Lower Ring, the Middle Ring, and — with the proper invitation — the Upper Ring. Everyone here is so very happy. You will be too.',
+        choices: [{ text: 'What is that hill across the lake?', next: 'lake' }, { text: 'Thank you.', end: true }],
+      },
+      lake: { text: 'Lake Laogai? A lovely, quiet lake. Nothing there at all. Shall we look at the farms instead?', end: true },
+    },
+  },
+  {
     id: 'dlg_bss_elder',
     start: [{ node: 'intro', condition: { questActive: 'mq_awakening_earth' } }, { node: 'later' }],
     nodes: {
