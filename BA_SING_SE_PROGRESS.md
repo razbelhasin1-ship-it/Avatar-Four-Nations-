@@ -29,7 +29,7 @@ Wiki (avatar.fandom.com) is blocked by the session network policy: built from th
 - [x] 1 layout blockout: walls + gates (commit)
 - [x] 2 monorail + trains (commit)
 - [x] 3 Lower Ring (commit)
-- [ ] 4 Middle Ring (commit)
+- [x] 4 Middle Ring (commit)
 - [ ] 5 Upper Ring + palace (commit)
 - [ ] 6 Agrarian Zone, Lake Laogai, Dai Li base (commit)
 - [ ] 7 crowds, shops, vendors, audio (commit)
@@ -57,3 +57,10 @@ data/npcs.ts (bss_elder coords), spots.ts, tests/e2e/region-earth.e2e.mjs (BSS c
   bssNav.ts (walk graph), bssLower.ts (fillRing rows R1..R4, square + Firelight Fountain, Pao tea house, factory,
   stable (beast keeper Gong at 648.5,23.3), market (marketStalls follows the arc), dressing, smoke/steam emitters).
   ~494 houses. Shots: use steps>=15 so chunk LOD refreshes.
+- Phase 4: bssMiddle.ts. Landmark blocks (BSS.dojo/university/townHall/financial/marketPlaza/gardenW/spa/poetry,
+  ring frame via ringLocal) moved into sectors clear of the N/S viaducts (EARTH_PROBE=blocks in
+  tests/tools/earth_probe.test.ts prints free sectors). Streets planned before claiming ground: flank radials per
+  block, evenly spaced cross streets, tree-lined lane r=136 with tiled garden walls, lift access paths.
+  Ground = bm.lawn (flagstone streets read against lawns). Markers moved: master_lien / training_lien
+  (ringLocal(dojo)), bridge_bss_garden, WorldLayout bss_dojo (822,-183). ~75 Middle Ring houses.
+  Polish later: plaza pavilion roof proportions; Town Hall second eave.

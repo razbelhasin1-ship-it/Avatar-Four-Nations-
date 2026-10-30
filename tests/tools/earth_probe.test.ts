@@ -53,6 +53,41 @@ describe.skipIf(!process.env.EARTH_PROBE)('earth probe', () => {
         );
       }
     }
+    if (mode === 'blocks') {
+      // Free angular intervals for Ba Sing Se ring blocks (no viaduct / station / avenue overlap).
+      const L = await import('../../src/world/regions/earth/bssLayout');
+      const { railPath } = await import('../../src/world/regions/earth/bssWalls');
+      const r0 = Number(process.env.BSS_R0 ?? 121), r1 = Number(process.env.BSS_R1 ?? 151);
+      const pts: Array<{ x: number; z: number; cl: number }> = [];
+      for (const l of L.RAIL_LINES) {
+        const path = railPath(l.id);
+        for (let s = 0; s < path.total; s += 1) {
+          const p = path.at(s);
+          const rr = Math.hypot(p.x - L.C.x, p.z - L.C.z);
+          if (rr > r0 - 30 && rr < r1 + 30) pts.push({ x: p.x, z: p.z, cl: L.RAIL.deckW / 2 + 1.2 });
+        }
+        for (const st of l.stations) pts.push({ x: st.at.x, z: st.at.z, cl: 14 });
+      }
+      const rm = (r0 + r1) / 2, hd = (r1 - r0) / 2;
+      for (const hw of (process.env.BSS_HW ?? '8,10,13,15,22').split(',').map(Number)) {
+        const free: string[] = [];
+        let start = -1;
+        for (let d = 0; d <= 360; d += 0.5) {
+          const t = d * L.DEG;
+          const c = L.polar(t, rm);
+          const tx = -Math.sin(t), tz = Math.cos(t), rx = Math.cos(t), rz = Math.sin(t);
+          let ok = true;
+          for (const p of pts) {
+            const u = (p.x - c.x) * tx + (p.z - c.z) * tz, v = (p.x - c.x) * rx + (p.z - c.z) * rz;
+            if (Math.hypot(Math.max(Math.abs(u) - hw, 0), Math.max(Math.abs(v) - hd, 0)) < p.cl) { ok = false; break; }
+          }
+          for (const a of L.AVENUES) if (ok && Math.abs(Math.sin(t - a.theta)) * r0 < hw + a.width / 2 + 4 && Math.cos(t - a.theta) > 0) ok = false;
+          if (ok && start < 0) start = d;
+          if ((!ok || d === 360) && start >= 0) { free.push(`${start}-${d - 0.5}`); start = -1; }
+        }
+        out.push(`hw ${hw} (r ${r0}-${r1}): ${free.join(' ')}`);
+      }
+    }
     if (mode === 'layout') {
       const L = await import('../../src/world/regions/earth/bssLayout');
       const r1 = (o: unknown) => JSON.stringify(o, (_k, v) => (typeof v === 'number' ? Math.round(v * 10) / 10 : v));

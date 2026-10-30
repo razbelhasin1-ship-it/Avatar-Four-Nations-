@@ -5,6 +5,7 @@ import { FigureRenderer } from './bssFigures';
 import { BssMats } from './bssKit';
 import { C, SEED } from './bssLayout';
 import { buildLowerRing, type DistrictSite } from './bssLower';
+import { buildMiddleRing } from './bssMiddle';
 import { NavGraph } from './bssNav';
 import { LiftRuntime, buildRailways, type LiftDef, type StationRt } from './bssRail';
 import { TrainSystem } from './bssTrains';
@@ -49,6 +50,7 @@ export class BaSingSe extends EarthRegion {
       nav: this.nav,
       water: (b, o) => this.water(b, o),
       smoke,
+      lifts: [],
     };
     const wallSite: WallSite = site;
     buildGrounds(wallSite);
@@ -65,8 +67,10 @@ export class BaSingSe extends EarthRegion {
     yield;
     const rail = buildRailways(wallSite);
     this.stations = rail.stations;
+    site.lifts = rail.lifts as LiftDef[];
     yield;
     yield* buildLowerRing(site);
+    yield* buildMiddleRing(site);
     this.smoke = smoke.map((e) => ({ ...e, acc: Math.random() }));
     this.figures = new FigureRenderer(this.group, 900);
     this.trains = new TrainSystem(this.group, rail.stations);

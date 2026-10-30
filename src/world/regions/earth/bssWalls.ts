@@ -60,7 +60,7 @@ export function railPath(id: string): RailPath {
 }
 
 /** Where rail lines cross a wall of radius r: θ, lateral offset in a gate frame and the gap width along the wall. */
-function railCrossings(r: number): Array<{ theta: number; p: P2; along: number }> {
+export function railCrossings(r: number): Array<{ theta: number; p: P2; along: number }> {
   const out: Array<{ theta: number; p: P2; along: number }> = [];
   for (const l of RAIL_LINES) {
     if (l.kind !== 'shuttle') continue;
@@ -400,7 +400,7 @@ export function buildGrounds(site: WallSite): void {
     geo.dispose();
   };
   ring(site.bm.mud, FOOT.middleOut - 0.5, FOOT.innerIn + 0.5, GROUND + 0.03, 9);
-  ring(m.groundMiddle, FOOT.upperOut - 0.5, FOOT.middleIn + 0.5, GROUND + 0.03, 4);
+  ring(site.bm.lawn, FOOT.upperOut - 0.5, FOOT.middleIn + 0.5, GROUND + 0.03, 6);
   ring(m.groundUpper, FOOT.palaceOut - 0.4, FOOT.upperIn + 0.5, GROUND + 0.03, 4);
   ring('paving', 0.01, R.palace - WALL.palace.base / 2 + 0.3, GROUND + 0.03, 3, 96);
   // Ring streets.

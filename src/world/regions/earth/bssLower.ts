@@ -39,6 +39,8 @@ export interface DistrictSite extends WallSite {
   water(b: ContentBuilder, o: WaterOpts): THREE.Mesh;
   /** Chimney / stall emitters (spawned near the camera by the region). */
   smoke: Array<{ x: number; y: number; z: number; rate: number; steam?: boolean }>;
+  /** Station lift towers (filled in once the railways are built). */
+  lifts: Array<{ id: string; station: string; x: number; z: number }>;
 }
 
 // ---------------------------------------------------------------------------

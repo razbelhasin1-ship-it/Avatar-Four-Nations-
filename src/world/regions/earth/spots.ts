@@ -1,5 +1,5 @@
 import { defineSpots, type Spot } from '../../Spots';
-import { BSS, C, GROUND, RAIL, STATIONS, polar } from './bssLayout';
+import { BSS, C, GROUND, RAIL, STATIONS, polar, ringLocal } from './bssLayout';
 
 /**
  * Named places of the Earth Kingdom settlements (pure data). Builders read
@@ -39,8 +39,8 @@ const R = 'ba_sing_se';
 export const EARTH_SPOTS: Record<string, Spot> = {
   // Ba Sing Se
   giver_bss_elder: { x: BSS.elder.x, z: BSS.elder.z, y: GROUND, yaw: -Math.PI / 2, r: 3, label: 'Old Man Shoji', region: R },
-  master_lien: { x: BSS.dojo.c.x + 9.5, z: BSS.dojo.c.z, y: GROUND, yaw: -Math.PI / 2, r: 2, label: 'Master Lien, Stone Fist Dojo', region: R },
-  training_lien: { x: BSS.dojo.c.x, z: BSS.dojo.c.z, y: GROUND, r: 11, label: 'Stone Fist Dojo sparring floor', region: R },
+  master_lien: { ...ringLocal(BSS.dojo.c).at(0, -1), y: GROUND, yaw: ringLocal(BSS.dojo.c).yaw, r: 2, label: 'Master Lien, Stone Fist Dojo', region: R },
+  training_lien: { ...ringLocal(BSS.dojo.c).at(0, 5.5), y: GROUND, r: 11, label: 'Stone Fist Dojo sparring floor', region: R },
   merchant_bss_1: { x: squareStalls()[1].x + 1.9, z: squareStalls()[1].z, y: GROUND, yaw: -Math.PI / 2, r: 2, label: 'Lower Ring Square stall', region: R },
   merchant_bss_2: { x: squareStalls()[0].x + 1.9, z: squareStalls()[0].z, y: GROUND, yaw: -Math.PI / 2, r: 2, label: 'Lower Ring Square stall', region: R },
   merchant_bss_3: { x: 0, z: 0, y: GROUND, r: 2, label: 'Market Street stall', region: R },
@@ -52,7 +52,7 @@ export const EARTH_SPOTS: Record<string, Spot> = {
   station_bss_lower_west: { x: STATIONS.y_c.at.x, z: STATIONS.y_c.at.z, y: GROUND + RAIL.deck, r: 6, label: 'Monorail station', region: R },
   dock_laogai: { x: BSS.lakeDock.b.x - 1, z: BSS.lakeDock.b.z, y: 26.3, yaw: Math.PI / 2, r: 3, label: 'Lake Laogai boathouse pier', region: R },
   habitat_turtleduck_laogai: { x: 1040, z: 205, r: 14, label: 'Lake Laogai reeds', region: R },
-  bridge_bss_garden: { x: BSS.gardenW.x, z: BSS.gardenW.z, y: GROUND + 2.6, r: 2, label: 'Moon bridge', region: R },
+  bridge_bss_garden: { x: BSS.gardenW.c.x, z: BSS.gardenW.c.z, y: GROUND + 2.6, r: 2, label: 'Moon bridge', region: R },
   // Gaoling
   master_lin: { x: GAOLING.arena.x - 9, z: GAOLING.arena.z, y: GAOLING.y + 0.3, yaw: Math.PI / 2, r: 2, label: 'Lin the Blind, Earth Rumble champion', region: 'earth_heartland' },
   training_lin: { x: GAOLING.arena.x, z: GAOLING.arena.z, y: GAOLING.y + 0.3, r: 12.5, label: 'Earth Rumble ring', region: 'earth_heartland' },

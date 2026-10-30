@@ -136,6 +136,13 @@ export function frame(theta: number): { out: P2; tan: P2 } {
   return { out: { x: Math.cos(theta), z: Math.sin(theta) }, tan: { x: -Math.sin(theta), z: Math.cos(theta) } };
 }
 
+/** Block frame at p: local +Z faces the palace, local +X runs along the ring (+θ). */
+export function ringLocal(p: P2): { yaw: number; at(lx: number, lz: number): P2 } {
+  const t = Math.atan2(p.z - C.z, p.x - C.x);
+  const tx = -Math.sin(t), tz = Math.cos(t), fx = -Math.cos(t), fz = -Math.sin(t);
+  return { yaw: Math.atan2(fx, fz), at: (lx, lz) => ({ x: p.x + tx * lx + fx * lz, z: p.z + tz * lx + fz * lz }) };
+}
+
 export function dist(a: P2, b: P2): number {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
@@ -432,13 +439,17 @@ export const BSS = {
   market: { t0: 148 * DEG, t1: 166 * DEG, r: 212, width: 13 },
   factory: polar(186.5 * DEG, 204),
   stable: polar(160 * DEG, 219),
-  /** Stone Fist Dojo (Middle Ring). */
-  dojo: { c: polar(214 * DEG, 126), hw: 14, hd: 13 },
-  university: polar(160 * DEG, 125),
-  townHall: polar(122 * DEG, 118),
-  marketPlaza: { c: polar(178 * DEG, 125), r: 18 },
-  financial: polar(300 * DEG, 125),
-  gardenW: { ...polar(230 * DEG, 128), r: 11 },
+  /** Middle Ring (r 106-166) blocks between the ring streets: centre, hw along the ring, hd radial.
+   *  Kept clear of the viaducts and stations (tests/tools/earth_probe.test.ts, EARTH_PROBE=blocks). */
+  dojo: { c: polar(258 * DEG, 136), hw: 14, hd: 14.5 },
+  university: { c: polar(315 * DEG, 136), hw: 19, hd: 14.5 },
+  townHall: { c: polar(30 * DEG, 136), hw: 15, hd: 14.5 },
+  /** Counting houses fronting the inner ring street. */
+  financial: { c: polar(290 * DEG, 126.2), hw: 17, hd: 5.5 },
+  marketPlaza: { c: polar(181 * DEG, 136), r: 15 },
+  gardenW: { c: polar(212.75 * DEG, 136), r: 11 },
+  spa: { c: polar(112 * DEG, 136), hw: 10, hd: 14.5 },
+  poetry: { c: polar(62 * DEG, 136), hw: 9, hd: 14.5 },
   /** Upper Ring landmarks. */
   jasmineDragon: polar(150 * DEG, 84),
   avatarHouse: polar(244 * DEG, 85),

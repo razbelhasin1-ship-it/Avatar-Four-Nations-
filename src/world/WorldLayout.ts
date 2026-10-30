@@ -650,7 +650,7 @@ export const LANDMARKS: LandmarkDef[] = [
   { id: 'bss_lower_ring', name: 'Lower Ring', regionId: 'ba_sing_se', x: 645, z: -40, kind: 'city', discoverRadius: 90, fastTravel: true },
   { id: 'bss_middle_ring', name: 'Middle Ring', regionId: 'ba_sing_se', x: 726, z: -46, kind: 'city', discoverRadius: 70, fastTravel: true },
   { id: 'bss_upper_ring', name: 'Upper Ring Palace', regionId: 'ba_sing_se', x: 850, z: 17, kind: 'capital', discoverRadius: 70, fastTravel: true },
-  { id: 'bss_dojo', name: 'Stone Fist Dojo', regionId: 'ba_sing_se', x: 745, z: -121, kind: 'training', discoverRadius: 35, fastTravel: false },
+  { id: 'bss_dojo', name: 'Stone Fist Dojo', regionId: 'ba_sing_se', x: 822, z: -183, kind: 'training', discoverRadius: 35, fastTravel: false },
   { id: 'gaoling', name: 'Gaoling', regionId: 'earth_heartland', x: 420, z: 300, kind: 'village', discoverRadius: 70, fastTravel: true },
   { id: 'river_village', name: 'Riverbend Village', regionId: 'earth_heartland', x: 120, z: -560, kind: 'village', discoverRadius: 60, fastTravel: true },
   { id: 'omashu_city', name: 'Omashu', regionId: 'omashu', x: -450, z: -650, kind: 'city', discoverRadius: 90, fastTravel: true },

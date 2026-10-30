@@ -146,6 +146,32 @@ function mudTexture(): THREE.CanvasTexture {
   return t;
 }
 
+/** Middle / Upper Ring garden ground: clipped lawn with mottling, clover and a few fallen petals. */
+function lawnTexture(): THREE.CanvasTexture {
+  const [c, g] = canvas(256, 256);
+  const r = rand(97);
+  g.fillStyle = '#6f8b4a';
+  g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 110; i++) {
+    const x = r() * 256, y = r() * 256, rad = 10 + r() * 34;
+    const gr = g.createRadialGradient(x, y, 0, x, y, rad);
+    gr.addColorStop(0, r() < 0.5 ? 'rgba(52,78,34,0.32)' : 'rgba(150,170,92,0.26)');
+    gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr;
+    g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+  }
+  for (let i = 0; i < 2600; i++) {
+    const u = r();
+    g.fillStyle = u < 0.45 ? 'rgba(40,62,26,0.45)' : u < 0.9 ? 'rgba(160,184,104,0.35)' : u < 0.96 ? 'rgba(236,232,206,0.7)' : 'rgba(232,170,186,0.75)';
+    g.fillRect(r() * 256, r() * 256, 1 + r() * 1.6, 1 + r() * 2.4);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
 function signTexture(text: string, s: SignStyle): THREE.CanvasTexture {
   const chars = [...text];
   const vertical = s.vertical ?? chars.length <= 3;
@@ -192,6 +218,8 @@ export class BssMats {
   readonly mudTrack: THREE.MeshStandardMaterial;
   readonly puddle: THREE.MeshStandardMaterial;
   readonly glow: THREE.MeshStandardMaterial;
+  /** Garden lawn between the flagstone streets of the Middle and Upper Rings. */
+  readonly lawn: THREE.MeshStandardMaterial;
   private readonly owned: THREE.Material[] = [];
   private readonly textures: THREE.Texture[] = [];
   private readonly signs = new Map<string, THREE.MeshStandardMaterial>();
@@ -221,6 +249,8 @@ export class BssMats {
     this.puddle.name = 'bss_puddle';
     this.glow = this.own(new THREE.MeshStandardMaterial({ color: '#ffd28a', emissive: '#ffb050', emissiveIntensity: 1.6, roughness: 0.6 }));
     this.glow.name = 'bss_glow';
+    this.lawn = this.own(new THREE.MeshStandardMaterial({ map: this.tex(lawnTexture()), roughness: 0.95, color: '#ffffff' }));
+    this.lawn.name = 'bss_lawn';
   }
 
   private own<T extends THREE.Material>(m: T): T {
