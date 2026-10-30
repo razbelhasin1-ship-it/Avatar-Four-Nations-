@@ -362,6 +362,7 @@ try {
   });
 
   await check('7b. spinning lash: the third whip strike circles the bender and hits a dummy behind it once', async () => {
+    await idle(); // the jet from check 7 may still be channelling: its push would move the bender off its mark
     await prep(RIVER, null, 60);
     const front = await h.eval((g) => g.spawnDummy(4, 0, 400));
     const back = await h.eval((g) => g.spawnDummy(-3.5, 0.6, 400));
