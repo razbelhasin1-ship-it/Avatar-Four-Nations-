@@ -166,16 +166,17 @@ const SPIRES: Array<[number, number, number, number, boolean]> = [
 ];
 
 /**
- * Buttress spires hugging the temple mountain below its rim, so it reads as a
- * cluster of pinnacles: [bearing from the summit in degrees, distance, base
- * radius, top height]. Bearings keep clear of the switchback trail and the
- * bison meadow (about 185-250 degrees) and of the Shrine of the Four Winds
- * (about 25-60 degrees).
+ * Pinnacles standing free round the foot of the temple mountain, a few taller
+ * than its rim, so the temple reads as the crown of a cluster of spires:
+ * [bearing from the summit in degrees, distance, base radius, top height].
+ * Bearings keep clear of the switchback trail, the trailhead and the bison
+ * meadow (about 185-250 degrees) and of the Shrine of the Four Winds (about
+ * 20-65 degrees).
  */
 const FLANK: Array<[number, number, number, number]> = [
-  [0, 112, 17, 306], [16, 118, 14, 288], [68, 114, 16, 300], [90, 108, 20, 318],
-  [112, 116, 15, 292], [135, 110, 19, 312], [158, 118, 14, 286], [178, 112, 18, 304],
-  [262, 114, 17, 298], [285, 108, 20, 316], [310, 118, 15, 290], [335, 110, 18, 310],
+  [0, 150, 15, 300], [72, 150, 14, 318], [92, 162, 17, 345], [114, 148, 13, 286],
+  [136, 158, 16, 330], [160, 150, 13, 296], [178, 165, 15, 352], [258, 156, 14, 310],
+  [280, 148, 17, 340], [306, 160, 13, 284], [330, 150, 15, 322],
 ];
 
 /** Thin rock spires topped with grass and pines, some with a waterfall falling into the clouds. */
