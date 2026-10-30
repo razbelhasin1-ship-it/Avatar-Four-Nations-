@@ -1,5 +1,5 @@
 import { defineSpots, type Spot } from '../../Spots';
-import { BSS, C, GROUND, RAIL, STATIONS } from './bssLayout';
+import { BSS, C, GROUND, RAIL, STATIONS, polar } from './bssLayout';
 
 /**
  * Named places of the Earth Kingdom settlements (pure data). Builders read
@@ -67,20 +67,19 @@ export const EARTH_SPOTS: Record<string, Spot> = {
   bridge_riverbend: { x: (RIVERBEND.bridge.a.x + RIVERBEND.bridge.b.x) / 2, z: RIVERBEND.bridge.a.z, y: RIVERBEND.bridge.y, r: 2, label: 'Riverbend footbridge', region: 'earth_heartland' },
 };
 
-/** Market street stall positions (shared with the builder). */
+/** Lower Ring market stall positions along the curved market street (shared with the builder). */
 export function marketStalls(): Array<{ x: number; z: number; yaw: number; side: number; mx: number; mz: number }> {
-  const { a, b, width } = BSS.market;
-  const L = Math.hypot(b.x - a.x, b.z - a.z);
-  const tx = (b.x - a.x) / L, tz = (b.z - a.z) / L;
-  const nx = -tz, nz = tx;
+  const m = BSS.market;
   const out: Array<{ x: number; z: number; yaw: number; side: number; mx: number; mz: number }> = [];
-  for (let s = 6; s < L - 4; s += 7) {
+  const step = 7.2 / m.r;
+  for (let t = m.t0 + step * 0.6; t < m.t1 - step * 0.4; t += step) {
     for (const side of [-1, 1]) {
-      const off = width / 2 + 1.4;
-      const x = a.x + tx * s + nx * side * off, z = a.z + tz * s + nz * side * off;
-      // Counter faces the street centre: local +Z toward -side * n.
-      const yaw = Math.atan2(-side * nx, -side * nz);
-      out.push({ x, z, yaw, side, mx: x + nx * side * 1.9, mz: z + nz * side * 1.9 });
+      const r = m.r + side * (m.width / 2 - 1.7);
+      const p = polar(t, r);
+      // Counter faces the street centre (−side × radial); the merchant stands behind it.
+      const yaw = Math.atan2(-side * Math.cos(t), -side * Math.sin(t));
+      const mp = polar(t, r + side * 1.9);
+      out.push({ x: p.x, z: p.z, yaw, side, mx: mp.x, mz: mp.z });
     }
   }
   return out;

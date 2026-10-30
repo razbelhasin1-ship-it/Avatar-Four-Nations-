@@ -28,7 +28,7 @@ Wiki (avatar.fandom.com) is blocked by the session network policy: built from th
 - [x] 0 explore + plan (this file)
 - [x] 1 layout blockout: walls + gates (commit)
 - [x] 2 monorail + trains (commit)
-- [ ] 3 Lower Ring (commit)
+- [x] 3 Lower Ring (commit)
 - [ ] 4 Middle Ring (commit)
 - [ ] 5 Upper Ring + palace (commit)
 - [ ] 6 Agrarian Zone, Lake Laogai, Dai Li base (commit)
@@ -52,3 +52,8 @@ data/npcs.ts (bss_elder coords), spots.ts, tests/e2e/region-earth.e2e.mjs (BSS c
   Files: bssRail.ts (viaducts, stations, lifts), bssTrains.ts (schedules, cars, benders, passengers, riding),
   bssFigures.ts (instanced people, poses, accessories), bssAudio.ts. Debug: __game.debug.bss.
   Check script: scratchpad/lead/bss_ride.mjs (lift, trains move, board, alight, gate).
+- Phase 3: layout v3 — junction stations r=210, outer loop r=232 deck 40 (flat spans over other lines), pier-only
+  exclusions so houses sit under arches. Neutral roof tile 'roofN' + archetypes N1..N8 tinted per house (roofMask).
+  bssNav.ts (walk graph), bssLower.ts (fillRing rows R1..R4, square + Firelight Fountain, Pao tea house, factory,
+  stable (beast keeper Gong at 648.5,23.3), market (marketStalls follows the arc), dressing, smoke/steam emitters).
+  ~494 houses. Shots: use steps>=15 so chunk LOD refreshes.

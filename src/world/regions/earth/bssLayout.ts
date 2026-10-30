@@ -14,7 +14,7 @@ import type { P2 } from '../../WorldLayout';
  *   102       25       ring wall + 上環 gates (Middle | Upper)
  *   102-170   25-41    Middle Ring
  *   170       41       ring wall + 中環 gates (Lower | Middle)
- *   170-246   41-60    Lower Ring (outer loop viaduct at r=228)
+ *   170-246   41-60    Lower Ring (outer loop viaduct at r=232, against the Inner Wall)
  *   246       60       Inner Wall + main gate
  *   246-410   60-100   Agrarian Zone (Lake Laogai, the zoo, hills)
  *   410       100      Outer Wall + main gate + arrival station
@@ -46,7 +46,7 @@ export const STREET = { avenue: 12, ring: 7, lane: 3.6, alley: 2.6 };
 /** Monorail: deck heights above GROUND, deck width, track offsets, arcade module. */
 export const RAIL = {
   deck: 28,
-  loopDeck: 36,
+  loopDeck: 40,
   deckW: 8.6,
   track: 2.15,
   arch: 8,
@@ -251,6 +251,12 @@ export const RING_STREETS = {
   lowerMid: { r: 212, width: 6 },
 };
 
+/** Narrow muddy ring lanes of the Lower Ring (back alleys and the lane along the viaduct arcade). */
+export const LOWER_LANES = [
+  { r: 197, width: STREET.lane },
+  { r: 225, width: STREET.lane },
+];
+
 /** Agrarian avenues: outer gate → inner gate (paved, 12 m). */
 export const FARM_ROADS: Array<{ id: string; points: P2[]; width: number }> = [
   { id: 'west', points: [gateMouth(gate('outer_west'), true, 26), gateMouth(gate('inner_west'), false, 3)], width: 12 },
@@ -286,7 +292,9 @@ export interface RailLineDef {
 }
 
 const ARRIVAL_R = 368;
-const Y_R = 228;
+/** Lower Ring junction stations (platform centres) and the outer loop radius. */
+const Y_R = 210;
+export const LOOP_R = 232;
 const MID_R = 136;
 const TERM_R = 58;
 /** Trunk lateral offsets from the west avenue axis (+ = north). The avenue runs between C and S. */
@@ -330,10 +338,10 @@ export const RAIL_LINES: RailLineDef[] = [
     deck: RAIL.deck,
     pts: [
       polarOff(tm, ARRIVAL_R, TRUNK.north),
-      polarOff(tm, Y_R + 6, TRUNK.north),
-      polarOff(tm, Y_R - 14, TRUNK.north),
-      polar(213 * DEG, 196),
-      polar(226 * DEG, 166),
+      polarOff(tm, Y_R + 26, TRUNK.north),
+      polarOff(tm, Y_R - 26, TRUNK.north),
+      polar(214 * DEG, 164),
+      polar(228 * DEG, 148),
       polar(240 * DEG, MID_R),
       polar(252 * DEG, 108),
       polar(262 * DEG, 80),
@@ -356,10 +364,10 @@ export const RAIL_LINES: RailLineDef[] = [
     deck: RAIL.deck,
     pts: [
       polarOff(tm, ARRIVAL_R, TRUNK.south),
-      polarOff(tm, Y_R + 6, TRUNK.south),
-      polarOff(tm, Y_R - 14, TRUNK.south),
-      polar(184 * DEG, 196),
-      polar(172 * DEG, 166),
+      polarOff(tm, Y_R + 26, TRUNK.south),
+      polarOff(tm, Y_R - 26, TRUNK.south),
+      polar(178 * DEG, 164),
+      polar(164 * DEG, 148),
       polar(154 * DEG, MID_R),
       polar(136 * DEG, 110),
       polar(118 * DEG, 80),
@@ -380,11 +388,11 @@ export const RAIL_LINES: RailLineDef[] = [
     name: 'Outer Loop',
     kind: 'loop',
     deck: RAIL.loopDeck,
-    pts: circlePts(Y_R, 96),
+    pts: circlePts(LOOP_R, 100),
     stations: [
-      { id: 'loop_y', name: 'Lower Ring Junction', cjk: '下環站', at: polar(tm, Y_R), stairs: 1 },
-      { id: 'loop_ne', name: 'Lower Ring Northeast', cjk: '下環站', at: polar(316 * DEG, Y_R), stairs: -1 },
-      { id: 'loop_se', name: 'Lower Ring Southeast', cjk: '下環站', at: polar(76 * DEG, Y_R), stairs: -1 },
+      { id: 'loop_y', name: 'Lower Ring Junction', cjk: '下環站', at: polar(tm, LOOP_R), stairs: 1 },
+      { id: 'loop_ne', name: 'Lower Ring Northeast', cjk: '下環站', at: polar(316 * DEG, LOOP_R), stairs: 1 },
+      { id: 'loop_se', name: 'Lower Ring Southeast', cjk: '下環站', at: polar(76 * DEG, LOOP_R), stairs: 1 },
     ],
     trains: TRAINS.outerLoop,
   },
@@ -418,10 +426,12 @@ export const BSS = {
   elder: { x: sq.x - 9, z: sq.z + 12 },
   kingStatue: { x: sq.x + 2, z: sq.z - 15 },
   /** Pao Family Tea House (Lower Ring, north side of the square). */
-  paoTea: { ...polarOff(177 * DEG, 204, 30), yaw: 0 },
+  paoTea: { ...polarOff(177 * DEG, 204, 16.5), yaw: 0 },
   /** Lower Ring market street: from the square south-east along the ring street. */
-  market: { a: polar(170 * DEG, 212), b: polar(150 * DEG, 212), width: 8 },
-  factory: polar(186 * DEG, 220),
+  /** Lower Ring market: the 212 m ring street between these angles, widened for stalls on both sides. */
+  market: { t0: 148 * DEG, t1: 166 * DEG, r: 212, width: 13 },
+  factory: polar(186.5 * DEG, 204),
+  stable: polar(160 * DEG, 219),
   /** Stone Fist Dojo (Middle Ring). */
   dojo: { c: polar(214 * DEG, 126), hw: 14, hd: 13 },
   university: polar(160 * DEG, 125),

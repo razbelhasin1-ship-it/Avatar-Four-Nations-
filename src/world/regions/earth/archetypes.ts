@@ -25,6 +25,8 @@ export interface HouseArchetype {
   spanD: number;
   /** Extra depth in front (+Z) taken by porches / awnings. */
   front: number;
+  /** [additive: Ba Sing Se] 1 for roof vertices (tinted separately by ChunkSet.addHouse roofTint). */
+  roofMask?: Uint8Array;
 }
 
 interface HouseSpec {
@@ -48,6 +50,8 @@ interface HouseSpec {
   plinth?: number;
   chimney?: boolean;
   stilts?: number;
+  /** Record which vertices belong to the roof (for per-house roof tints). */
+  maskRoof?: boolean;
 }
 
 function pentRoof(g: GeoBuilder, a: HouseAtlas, w: number, d: number, y: number, depth: number, sides: boolean): void {
@@ -92,6 +96,7 @@ function buildHouse(a: HouseAtlas, s: HouseSpec): HouseArchetype {
     g.box(0, plinth / 2, extra / 2, s.w + 0.6, plinth, s.d + 0.6 + extra, { px: stone, nx: stone, pz: stone, nz: stone, py: stone });
   }
   g.box(0, y0 + s.h / 2, 0, s.w, s.h, s.d, { pz: front, nz: back, px: side, nx: side });
+  const roofStart = g.pos.length / 3;
   roofInto(g, {
     cx: 0,
     cy: y0 + s.h,
@@ -110,6 +115,7 @@ function buildHouse(a: HouseAtlas, s: HouseSpec): HouseArchetype {
     ridge: a.get('ridge'),
   });
   for (const ph of s.pents ?? []) pentRoof(g, a, s.w, s.d, y0 + ph, 0.95, !!s.pentSides);
+  const roofEnd = g.pos.length / 3;
   let frontExtra = 0;
   if (s.awning) {
     const aw = a.get(s.awning);
@@ -159,10 +165,20 @@ function buildHouse(a: HouseAtlas, s: HouseSpec): HouseArchetype {
     spanW: s.w + s.overhang * 2,
     spanD: s.d + s.overhang * 2 + frontExtra,
     front: frontExtra,
+    roofMask: s.maskRoof ? maskRange(g.pos.length / 3, roofStart, roofEnd) : undefined,
   };
 }
 
-export type ArchetypeId = 'L1' | 'L2' | 'L3' | 'L3b' | 'L4' | 'L5' | 'M1' | 'M2' | 'F1' | 'F2' | 'F3' | 'R1' | 'R1s' | 'G1';
+function maskRange(n: number, a: number, b: number): Uint8Array {
+  const m = new Uint8Array(n);
+  m.fill(1, a, b);
+  return m;
+}
+
+export type ArchetypeId = 'L1' | 'L2' | 'L3' | 'L3b' | 'L4' | 'L5' | 'M1' | 'M2' | 'F1' | 'F2' | 'F3' | 'R1' | 'R1s' | 'G1' | BssArchetypeId;
+
+/** [additive: Ba Sing Se] Neutral-roof variants whose roofs take a per-house tint (ring colour). */
+export type BssArchetypeId = 'N1' | 'N2' | 'N3' | 'N3b' | 'N4' | 'N5' | 'N6' | 'N7' | 'N8';
 
 export function buildArchetypes(a: HouseAtlas): Record<ArchetypeId, HouseArchetype> {
   const specs: HouseSpec[] = [
@@ -181,6 +197,11 @@ export function buildArchetypes(a: HouseAtlas): Record<ArchetypeId, HouseArchety
     { id: 'R1s', w: 7, d: 5.6, h: 3.4, front: 'R1f', side: 'R1s', roof: 'roofB', roofStyle: 'gable', roofH: 2.2, overhang: 0.7, curve: 0.3, stilts: 1.6 },
     { id: 'G1', w: 9, d: 7.5, h: 6.6, front: 'G1f', side: 'G1s', roof: 'roofA', roofStyle: 'hip', roofH: 2.8, overhang: 0.9, curve: 0.5, plinth: 0.5, pents: [3.4], pentSides: true },
   ];
+  const neutral: Array<[BssArchetypeId, string]> = [['N1', 'L1'], ['N2', 'L2'], ['N3', 'L3'], ['N3b', 'L3b'], ['N4', 'L4'], ['N5', 'L5'], ['N6', 'M1'], ['N7', 'M2'], ['N8', 'G1']];
+  for (const [id, from] of neutral) {
+    const base = specs.find((q) => q.id === from)!;
+    specs.push({ ...base, id, roof: 'roofN', maskRoof: true });
+  }
   const out = {} as Record<ArchetypeId, HouseArchetype>;
   for (const s of specs) out[s.id as ArchetypeId] = buildHouse(a, s);
   return out;

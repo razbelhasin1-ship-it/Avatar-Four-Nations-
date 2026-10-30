@@ -4,6 +4,8 @@ import type { P2 } from '../../WorldLayout';
 import { FigureRenderer } from './bssFigures';
 import { BssMats } from './bssKit';
 import { C, SEED } from './bssLayout';
+import { buildLowerRing, type DistrictSite } from './bssLower';
+import { NavGraph } from './bssNav';
 import { LiftRuntime, buildRailways, type LiftDef, type StationRt } from './bssRail';
 import { TrainSystem } from './bssTrains';
 import { GateRuntime, railPath, buildGrounds, buildInnerWall, buildOuterWall, buildPalaceWall, buildRingWall, type WallSite } from './bssWalls';
@@ -29,27 +31,43 @@ export class BaSingSe extends EarthRegion {
   trains: TrainSystem | null = null;
   figures: FigureRenderer | null = null;
   stations: StationRt[] = [];
+  nav: NavGraph | null = null;
+  private smoke: Array<{ x: number; y: number; z: number; rate: number; steam?: boolean; acc: number }> = [];
   private readonly camPos = new THREE.Vector3();
+  private readonly tmpV = new THREE.Vector3();
 
   protected *construct(env: BuildEnv): Generator<unknown, void, unknown> {
     this.bm = new BssMats();
     this.gates = new GateRuntime(this.group, this.bm);
-    const site: WallSite = { env, bm: this.bm, gates: this.gates, mark: (id, x, y, z) => this.mark(id, x, y, z) };
-    buildGrounds(site);
+    this.nav = new NavGraph();
+    const smoke: DistrictSite['smoke'] = [];
+    const site: DistrictSite = {
+      env,
+      bm: this.bm,
+      gates: this.gates,
+      mark: (id, x, y, z) => this.mark(id, x, y, z),
+      nav: this.nav,
+      water: (b, o) => this.water(b, o),
+      smoke,
+    };
+    const wallSite: WallSite = site;
+    buildGrounds(wallSite);
     yield;
-    buildOuterWall(site);
+    buildOuterWall(wallSite);
     yield;
-    buildInnerWall(site);
+    buildInnerWall(wallSite);
     yield;
-    buildRingWall(site, 'middle');
+    buildRingWall(wallSite, 'middle');
     yield;
-    buildRingWall(site, 'upper');
+    buildRingWall(wallSite, 'upper');
     yield;
-    buildPalaceWall(site);
+    buildPalaceWall(wallSite);
     yield;
-    const rail = buildRailways(site);
+    const rail = buildRailways(wallSite);
     this.stations = rail.stations;
     yield;
+    yield* buildLowerRing(site);
+    this.smoke = smoke.map((e) => ({ ...e, acc: Math.random() }));
     this.figures = new FigureRenderer(this.group, 900);
     this.trains = new TrainSystem(this.group, rail.stations);
     this.lifts = new LiftRuntime(this.group, rail.lifts as LiftDef[], this.bm);
@@ -70,7 +88,23 @@ export class BaSingSe extends EarthRegion {
     }
     this.trains.update(dt, ctx, this.figures, this.camPos);
     this.figures.end();
+    if (full) this.updateSmoke(dt, ctx);
     this.figures.group.visible = full;
+  }
+
+  /** Chimney smoke and stall steam near the camera. */
+  private updateSmoke(dt: number, ctx: GameContext): void {
+    const c = this.camPos;
+    for (const e of this.smoke) {
+      const d2 = (e.x - c.x) ** 2 + (e.z - c.z) ** 2;
+      if (d2 > (e.steam ? 60 * 60 : 320 * 320)) continue;
+      e.acc += dt * e.rate * 3;
+      if (e.acc < 1) continue;
+      e.acc -= 1;
+      this.tmpV.set(e.x, e.y, e.z);
+      if (e.steam) ctx.vfx.burst('steam', this.tmpV, { count: 2, radius: 0.2, size: 0.6 });
+      else ctx.vfx.burst('smoke', this.tmpV, { count: 2, radius: 0.5, size: 2.4 });
+    }
   }
 
   override onSessionStart(ctx: GameContext): void {
@@ -135,6 +169,7 @@ export class BaSingSe extends EarthRegion {
           return { id: s.id, line: s.line.id, s: +s.s.toFixed(1), top: s.top, tx: p.tx, tz: p.tz, mark: this.marks[`station_${s.id}`] ?? null, lift: this.marks[`lift_${s.id}`] ?? null };
         }),
       figures: () => this.figures?.stats,
+      nav: () => (this.nav ? { nodes: this.nav.nodes.length, components: this.nav.components().slice(0, 5) } : null),
     };
   }
 }

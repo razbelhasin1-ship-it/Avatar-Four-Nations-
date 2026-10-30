@@ -278,6 +278,8 @@ function buildViaduct(site: WallSite, line: RailLineDef, path: RailPath, station
     const b = chunk(s);
     const h = under - GROUND + 1;
     b.box(bm.ringStone, { x: p.x, y: GROUND - 1 + h / 2, z: p.z, sx: len, sy: h, sz: RAIL.deckW, yaw }, { collide: true, walkable: false });
+    // Only the piers block buildings: streets and houses run beneath the arches.
+    env.excl.box(p.x, p.z, len / 2 + 0.7, RAIL.deckW / 2 + 0.7, yaw);
     b.box('stone_tan', { x: p.x, y: GROUND + 1.0, z: p.z, sx: len + 0.7, sy: 2.0, sz: RAIL.deckW + 0.7, yaw });
     stats.piers++;
     return { p: { x: p.x, z: p.z }, yaw };
@@ -311,9 +313,12 @@ function buildViaduct(site: WallSite, line: RailLineDef, path: RailPath, station
     const pa = path.at(sa, { x: 0, z: 0, tx: 1, tz: 0 }), pb = path.at(sb, { x: 0, z: 0, tx: 1, tz: 0 });
     const span = Math.hypot(pb.x - pa.x, pb.z - pa.z);
     if (span < 0.5) continue;
-    // Semicircular arches where they fit; flatter segmental arches for long spans.
+    // Semicircular arches where they fit; flatter segmental arches for long spans,
+    // nearly flat ones where the span bridges another line (its trains pass below).
     const room = under - 1.0 - (GROUND + 3);
-    const rise = Math.min(span / 2, room);
+    const mid = path.at((sa + sb) / 2, { x: 0, z: 0, tx: 1, tz: 0 });
+    const overLine = span > 16 && others.test(mid.x, mid.z, mid.tx, mid.tz);
+    const rise = overLine ? Math.min(room, 2.5 + span * 0.025) : Math.min(span / 2, room);
     const radius = rise;
     const spring = under - 1.0 - rise;
     const height = under - spring;
@@ -360,11 +365,6 @@ function buildViaduct(site: WallSite, line: RailLineDef, path: RailPath, station
         b.collider({ shape: 'box', x: mx + nx * side * (hw - 0.22), y: deckY + 0.5, z: mz + nz * side * (hw - 0.22), hx: len / 2, hz: 0.22, hy: 0.5, yaw, walkable: false, solid: true });
       }
     }
-  }
-  // Keep houses and stalls out of the viaduct footprint.
-  for (let s = 0; s < path.total; s += 6) {
-    const p = path.at(s, tmpS);
-    env.excl.circle(p.x, p.z, hw + 1.2);
   }
 }
 

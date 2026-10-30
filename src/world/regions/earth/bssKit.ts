@@ -111,6 +111,41 @@ function earthTexture(): THREE.CanvasTexture {
   return t;
 }
 
+/** Lower Ring mud: packed brown earth, darker wet patches, cart ruts and footprints. */
+function mudTexture(): THREE.CanvasTexture {
+  const [c, g] = canvas(256, 256);
+  const r = rand(91);
+  g.fillStyle = '#7a6448';
+  g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 90; i++) {
+    const x = r() * 256, y = r() * 256, rad = 8 + r() * 40;
+    const gr = g.createRadialGradient(x, y, 0, x, y, rad);
+    const wet = r() < 0.45;
+    gr.addColorStop(0, wet ? 'rgba(62,48,34,0.45)' : 'rgba(150,128,96,0.3)');
+    gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr;
+    g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+  }
+  g.strokeStyle = 'rgba(58,44,30,0.35)';
+  for (let k = 0; k < 6; k++) {
+    g.lineWidth = 3 + r() * 3;
+    const y0 = r() * 256;
+    g.beginPath();
+    g.moveTo(0, y0);
+    g.bezierCurveTo(85, y0 + (r() - 0.5) * 30, 170, y0 + (r() - 0.5) * 30, 256, y0);
+    g.stroke();
+  }
+  for (let i = 0; i < 1400; i++) {
+    g.fillStyle = r() < 0.5 ? 'rgba(50,38,26,0.35)' : 'rgba(190,170,135,0.25)';
+    g.fillRect(r() * 256, r() * 256, 1 + r() * 2, 1 + r() * 2);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
 function signTexture(text: string, s: SignStyle): THREE.CanvasTexture {
   const chars = [...text];
   const vertical = s.vertical ?? chars.length <= 3;
@@ -152,6 +187,11 @@ export class BssMats {
   readonly emblem: THREE.MeshStandardMaterial;
   readonly slab: THREE.MeshStandardMaterial;
   readonly palaceRoof: THREE.MeshStandardMaterial;
+  readonly mud: THREE.MeshStandardMaterial;
+  /** Trodden mud for Lower Ring streets and lanes (darker, wetter). */
+  readonly mudTrack: THREE.MeshStandardMaterial;
+  readonly puddle: THREE.MeshStandardMaterial;
+  readonly glow: THREE.MeshStandardMaterial;
   private readonly owned: THREE.Material[] = [];
   private readonly textures: THREE.Texture[] = [];
   private readonly signs = new Map<string, THREE.MeshStandardMaterial>();
@@ -173,6 +213,14 @@ export class BssMats {
     applyTriplanar(this.slab, 3.5);
     this.slab.name = 'bss_slab';
     this.palaceRoof = kitMaterialTinted('roof_green', '#5d8a62');
+    this.mud = this.own(new THREE.MeshStandardMaterial({ map: this.tex(mudTexture()), roughness: 1, color: '#ffffff' }));
+    this.mud.name = 'bss_mud';
+    this.mudTrack = this.own(new THREE.MeshStandardMaterial({ map: this.mud.map, roughness: 0.82, color: '#a89580' }));
+    this.mudTrack.name = 'bss_mud_track';
+    this.puddle = this.own(new THREE.MeshStandardMaterial({ color: '#4a4034', roughness: 0.06, metalness: 0.1, transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+    this.puddle.name = 'bss_puddle';
+    this.glow = this.own(new THREE.MeshStandardMaterial({ color: '#ffd28a', emissive: '#ffb050', emissiveIntensity: 1.6, roughness: 0.6 }));
+    this.glow.name = 'bss_glow';
   }
 
   private own<T extends THREE.Material>(m: T): T {

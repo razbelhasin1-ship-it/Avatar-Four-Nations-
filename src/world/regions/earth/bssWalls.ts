@@ -14,6 +14,7 @@ import {
   FOOT,
   GATES,
   GROUND,
+  LOWER_LANES,
   R,
   RAIL,
   RAIL_LINES,
@@ -398,18 +399,18 @@ export function buildGrounds(site: WallSite): void {
     g.mesh(mat, geo, { x: 0, y: 0, z: 0 }, { castShadow: false });
     geo.dispose();
   };
-  ring(m.groundLower, FOOT.middleOut - 0.5, FOOT.innerIn + 0.5, GROUND + 0.03, 7);
+  ring(site.bm.mud, FOOT.middleOut - 0.5, FOOT.innerIn + 0.5, GROUND + 0.03, 9);
   ring(m.groundMiddle, FOOT.upperOut - 0.5, FOOT.middleIn + 0.5, GROUND + 0.03, 4);
   ring(m.groundUpper, FOOT.palaceOut - 0.4, FOOT.upperIn + 0.5, GROUND + 0.03, 4);
   ring('paving', 0.01, R.palace - WALL.palace.base / 2 + 0.3, GROUND + 0.03, 3, 96);
   // Ring streets.
   const rs = RING_STREETS;
   for (const s of [rs.upper, rs.middleIn, rs.middleOut]) ring('paving', s.r - s.width / 2, s.r + s.width / 2, GROUND + 0.05, 3);
-  for (const s of [rs.lowerIn, rs.lowerMid]) ring(m.groundDirt, s.r - s.width / 2, s.r + s.width / 2, GROUND + 0.05, 5);
+  for (const s of [rs.lowerIn, rs.lowerMid, ...LOWER_LANES]) ring(site.bm.mudTrack, s.r - s.width / 2, s.r + s.width / 2, GROUND + 0.05, 6);
   // Radial avenues (stone in the Lower Ring, flagstones further in).
   for (const a of AVENUES) {
     const segsR: Array<[number, number, THREE.Material | 'paving']> = [
-      [Math.max(a.r0, FOOT.middleOut - 1), FOOT.innerIn + 1, m.road],
+      [Math.max(a.r0, FOOT.middleOut - 1), FOOT.innerIn + 1, site.bm.mudTrack],
       [Math.max(a.r0, FOOT.upperOut - 1), FOOT.middleIn + 1, 'paving'],
       [a.r0, FOOT.upperIn + 1, 'paving'],
     ];

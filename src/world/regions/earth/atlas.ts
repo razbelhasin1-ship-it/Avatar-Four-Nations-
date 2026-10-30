@@ -717,6 +717,8 @@ export class HouseAtlas {
     this.facade('R1s', { w: 5.6, h: 3.4, wall: '#5e4028', planks: true, plankColor: '#5e4028', door: 'none', windows: [1], windowStyle: 'shutter', base: 0.25, seed: 102 });
     this.facade('G1f', { w: 9, h: 6.6, floors: 2, wall: white, frame: '#5a3020', door: 'double', windows: [2, 3], balcony: true, base: 0.5, sign: '#8a2e20', seed: 111 });
     this.facade('G1s', { w: 7.5, h: 6.6, floors: 2, wall: white, frame: '#5a3020', door: 'none', windows: [2, 2], base: 0.5, seed: 112 });
+    // [additive: Ba Sing Se] Neutral light tiles, tinted per house (black Lower Ring, green Middle, yellow Upper).
+    this.roofTiles('roofN', '#dcdad4', 12, 8);
     void mixHex;
   }
 }

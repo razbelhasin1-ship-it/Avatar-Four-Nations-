@@ -25,6 +25,8 @@ interface HouseStamp {
   arch: HouseArchetype;
   m: THREE.Matrix4;
   color: THREE.Color;
+  /** [additive: Ba Sing Se] Colour for roof vertices (archetypes with a roofMask). */
+  roof?: THREE.Color;
 }
 
 export class Chunk {
@@ -98,14 +100,14 @@ export class ChunkSet {
    * Stamp a house archetype. `y` is the ground under its centre. Registers a
    * solid, walkable-roof collider (independent of LOD/quality).
    */
-  addHouse(arch: HouseArchetype, x: number, y: number, z: number, yaw: number, opts: { scale?: number; tint?: THREE.Color; collide?: boolean } = {}): void {
+  addHouse(arch: HouseArchetype, x: number, y: number, z: number, yaw: number, opts: { scale?: number; tint?: THREE.Color; roofTint?: THREE.Color; collide?: boolean } = {}): void {
     const s = opts.scale ?? 1;
     tmpQ.setFromAxisAngle(UP, yaw);
     tmpS.set(s, s, s);
     tmpP.set(x, y, z);
     const m = new THREE.Matrix4().compose(tmpP, tmpQ, tmpS);
     const c = this.at('houses', x, z);
-    c.stamps.push({ arch, m, color: opts.tint ?? new THREE.Color(1, 1, 1) });
+    c.stamps.push({ arch, m, color: opts.tint ?? new THREE.Color(1, 1, 1), roof: opts.roofTint });
     this.houseCount++;
     if (opts.collide !== false) {
       c.builder.collider({
@@ -226,6 +228,7 @@ function mergeStamps(stamps: HouseStamp[]): THREE.BufferGeometry {
     nm.getNormalMatrix(s.m);
     const e = s.m.elements;
     const n = g.pos.length / 3;
+    const mask = s.roof ? s.arch.roofMask : undefined;
     for (let i = 0; i < n; i++) {
       const x = g.pos[i * 3], y = g.pos[i * 3 + 1], z = g.pos[i * 3 + 2];
       const o = (vo + i) * 3;
@@ -236,9 +239,10 @@ function mergeStamps(stamps: HouseStamp[]): THREE.BufferGeometry {
       nrm[o] = v.x;
       nrm[o + 1] = v.y;
       nrm[o + 2] = v.z;
-      col[o] = s.color.r;
-      col[o + 1] = s.color.g;
-      col[o + 2] = s.color.b;
+      const cc = mask && mask[i] ? s.roof! : s.color;
+      col[o] = cc.r;
+      col[o + 1] = cc.g;
+      col[o + 2] = cc.b;
       uv[(vo + i) * 2] = g.uv[i * 2];
       uv[(vo + i) * 2 + 1] = g.uv[i * 2 + 1];
     }
