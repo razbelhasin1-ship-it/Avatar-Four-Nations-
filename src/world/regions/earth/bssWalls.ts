@@ -42,7 +42,8 @@ export interface WallSite {
   mark(id: string, x: number, y: number, z: number): void;
 }
 
-const ARCS = { outer: 16, inner: 12, ring: 8 };
+// Arc chunks per wall: few and large, since draw calls (one per material per chunk) cost more than triangles.
+const ARCS = { outer: 6, inner: 6, ring: 4 };
 
 function arcChunk(env: BuildEnv, key: string, theta: number, arcs: number): ContentBuilder {
   const i = Math.floor((wrapAngle(theta) / (Math.PI * 2)) * arcs) % arcs;
@@ -158,7 +159,7 @@ export function buildOuterWall(site: WallSite): void {
     const Wg = gateW(g);
     const D = W.base + 6;
     const f = ringFrame(g.theta, g.r);
-    const b = env.chunks.named('major', `outer_gate:${g.id}`).builder;
+    const b = env.chunks.named('major', 'outer_gates').builder;
     const Ht = H + 10;
     gateBlock(b, { f, baseY: base, W: Wg, D, H: Ht, mat: bm.outerStone, trim: 'stone_light', tunnel: { aw: g.width, spring: g.height - g.width / 2 + 2 }, bands: [0.16, 0.34, 0.52, 0.7, 0.88].map((q) => (q * H) / Ht) });
     // Gate hall on top.
@@ -215,7 +216,7 @@ export function buildInnerWall(site: WallSite): void {
     const Wg = gateW(g);
     const D = W.base + 4;
     const f = ringFrame(g.theta, g.r);
-    const b = env.chunks.named('major', `inner_gate:${g.id}`).builder;
+    const b = env.chunks.named('major', 'inner_gates').builder;
     const portals: Portal[] = [];
     if (g.main) {
       for (const c of crossings) {
@@ -305,7 +306,7 @@ export function buildRingWall(site: WallSite, which: 'middle' | 'upper'): void {
   // Lowered stretches under oblique viaducts, flanked by pagoda pillar towers.
   for (const c of open) {
     const hw = c.along / 2 + 1.5;
-    const b = env.chunks.named('major', `${key}_rail:${Math.round(c.theta * 100)}`).builder;
+    const b = env.chunks.named('major', `${key}_rails`).builder;
     for (const [a, q] of ringChords(r, c.theta - hw / r, c.theta + hw / r, 10).map(([a1, c1]) => [a1, c1] as [P2, P2])) {
       batteredSegment(b, bm.ringStone, a, q, base, lowTop - base, W.base, W.top, { coping: 'stone_tan', bands: [0.09], bandMat: 'stone_tan', stack: 1, extend: 0.3 });
     }
@@ -316,7 +317,7 @@ export function buildRingWall(site: WallSite, which: 'middle' | 'upper'): void {
   }
   for (const g of gates) {
     const f = ringFrame(g.theta, g.r);
-    const b = env.chunks.named('major', `${key}_gate:${g.id}`).builder;
+    const b = env.chunks.named('major', `${key}_gates`).builder;
     const gateW = gw(g);
     const thru = crossings.find((c) => !open.includes(c) && Math.abs(lateral(f, c.p)) < gateW / 2);
     const D = W.base + 3;
@@ -534,7 +535,11 @@ export class GateRuntime {
   update(dt: number, ctx: GameContext): void {
     const p = ctx.player?.position;
     if (!p) return;
+    const cam = ctx.camera?.position ?? p;
     for (const it of this.items) {
+      // Emblems are close-up detail (two draw calls per gate).
+      const near = (cam.x - it.x) ** 2 + (cam.z - it.z) ** 2 < 150 * 150;
+      if (it.mesh.children[0].visible !== near) for (const c of it.mesh.children) c.visible = near;
       const d = Math.hypot(p.x - it.x, p.z - it.z);
       if (d < it.d.openR) it.target = 1;
       else if (d > it.d.openR + 16) it.target = 0;

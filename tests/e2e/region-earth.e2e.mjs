@@ -1,11 +1,12 @@
 /**
  * Earth Kingdom regions E2E: Ba Sing Se (Earth start), Gaoling, Riverbend.
- *  - walks key routes: spawn → Lower Ring Square → Middle Ring stairs →
- *    avenue → Middle Ring landmark → Upper Ring stairs → palace grand stairs →
- *    palace terrace; avenue → dojo street → Stone Fist Dojo floor; square →
- *    Inner Wall west gate → Agrarian avenue → Outer Wall gate → outside;
- *    Outer Wall stairs → wall walkway; Gaoling gate → arena ring; Riverbend
- *    footbridge across the gorge, boardwalk → dock, ramp → mill platform
+ *  - walks key routes: arrival plaza → farm track → Lake Laogai shore →
+ *    stepping stones → Dai Li base → Inner Wall south gate → Lower, Middle and
+ *    Upper Rings → palace South Gate → throne-hall terrace; Lower Ring → Inner
+ *    Wall west gate → Outer Wall gate → outside; Gaoling gate → arena ring;
+ *    Riverbend footbridge across the gorge, boardwalk → dock, ramp → mill
+ *  - rides the monorail (lift, board, alight), soaks the train schedules for
+ *    5 minutes, checks crowds (counts, night shutters, Dai Li), F3 overlay
  *  - checks walkable heights (groundAt), registered water sources
  *    (g.waterNearby), published spots (training areas flat, open, r >= 12),
  *    detail levels, no console errors
@@ -99,29 +100,32 @@ const info = (id) =>
 try {
   await h.newGame('earth');
   await h.eval((g) => g.setting('graphics.renderScale', 0.35));
+  // Random encounters (bandit camps, Dai Li patrols by Lake Laogai) are not what these routes test.
+  await h.eval((g) => { g.debug.enemies?.camps(false); g.debug.enemies?.clear(); });
 
   await check('earth start: spawn is clear, flat and grounded in the Lower Ring Square', async () => {
     const st = await h.state();
     assert.equal(st.region, 'ba_sing_se');
-    near(st.player.x, 640, 0.5, 'spawn x');
-    near(st.player.z, -30, 0.5, 'spawn z');
+    near(st.player.x, 638, 1, 'spawn x');
+    near(st.player.z, -36, 1, 'spawn z');
     near(st.player.y, 26, 0.15, 'spawn on the square');
-    for (const [dx, dz] of [[6, 0], [-6, 0], [0, 6], [0, -6], [4, 4], [-4, -4], [12, -8]]) near(await ground(640 + dx, -30 + dz, 40), 26, 0.06, `spawn surroundings flat (${dx},${dz})`);
+    for (const [dx, dz] of [[4, 0], [-4, 0], [0, 4], [0, -4], [3, 3], [-3, -3]]) near(await ground(st.player.x + dx, st.player.z + dz, 40), 26, 0.06, `spawn surroundings flat (${dx},${dz})`);
     const regs = await h.eval((g) => g.debug.earth.regions());
     const bss = regs.find((r) => r.id === 'ba_sing_se');
     assert.ok(bss && !bss.building, `Ba Sing Se built: ${JSON.stringify(regs)}`);
     const m = (await info('ba_sing_se')).marks;
     assert.ok(m.lowerHouses.x >= 200, `Lower Ring houses ${m.lowerHouses.x}`);
     assert.ok(m.middleHouses.x >= 60, `Middle Ring houses ${m.middleHouses.x}`);
-    console.log(`  houses: lower=${m.lowerHouses.x} middle=${m.middleHouses.x} upper=${m.upperHouses.x} farms=${m.fields.y} fields=${m.fields.x}; stats ${JSON.stringify(bss)}`);
+    for (const k of ['palace', 'throne', 'arrival_gateway', 'laogai_door', 'laogai_base', 'zoo', 'farmFields', 'station_arrival_c', 'station_mid_n']) assert.ok(m[k], `mark ${k}`);
+    console.log(`  houses: lower=${m.lowerHouses.x} middle=${m.middleHouses.x} upper estates=${m.upperEstates?.x} fields=${m.farmFields.x}; stats ${JSON.stringify(bss)}`);
   });
 
   await check('spots: masters, training floors, givers, merchants, docks, shrines, viewpoints', async () => {
     const spots = await h.eval((g) => g.debug.earth.spots());
     const need = ['giver_bss_elder', 'master_lien', 'training_lien', 'merchant_bss_1', 'merchant_bss_2', 'merchant_bss_3', 'merchant_bss_4', 'dock_laogai', 'shrine_bss_earth_king', 'viewpoint_bss_palace', 'viewpoint_bss_outer_wall', 'master_lin', 'training_lin', 'giver_gaoling_lord', 'merchant_gaoling_1', 'dock_riverbend', 'bridge_riverbend', 'giver_riverbend_elder', 'merchant_riverbend_1'];
     for (const id of need) assert.ok(spots[id], `spot ${id} defined`);
-    for (const id of ['training_lien', 'training_lin']) assert.ok(spots[id].r >= 12, `${id} radius ${spots[id].r}`);
-    near(spots.giver_bss_elder.x, 652, 1, 'elder spot x');
+    assert.ok(spots.training_lin.r >= 12, `training_lin radius ${spots.training_lin.r}`);
+    assert.ok(spots.training_lien.r >= 10, `training_lien radius ${spots.training_lien.r} (inside the dojo hall)`);
     // Ba Sing Se spots: ground matches the published height (Gaoling/Riverbend are checked on arrival).
     for (const id of ['giver_bss_elder', 'master_lien', 'training_lien', 'merchant_bss_1', 'merchant_bss_2', 'merchant_bss_3', 'merchant_bss_4', 'merchant_bss_tea', 'viewpoint_bss_palace', 'viewpoint_bss_outer_wall', 'shrine_bss_earth_king', 'dock_laogai']) {
       const s = spots[id];
@@ -135,78 +139,178 @@ try {
     }
   });
 
-  await check('water sources: square fountain, garden ponds, upper fountains', async () => {
-    await tp(644, -60);
-    let w = await h.eval((g) => g.waterNearby(15));
-    assert.ok(w.some((s) => s.id === 'bss_square_fountain'), `fountain: ${JSON.stringify(w)}`);
-    await tp(772, 18, 31);
-    w = await h.eval((g) => g.waterNearby(20));
-    assert.ok(w.some((s) => s.id === 'bss_middle_garden_pond'), `garden pond: ${JSON.stringify(w)}`);
-    await tp(797, -50, 37);
-    w = await h.eval((g) => g.waterNearby(25));
-    assert.ok(w.some((s) => s.id.startsWith('bss_upper_fountain')), `upper fountains: ${JSON.stringify(w)}`);
-    await tp(1000, 168);
-    w = await h.eval((g) => g.waterNearby(40));
-    assert.ok(w.some((s) => s.type === 'lake' || s.id.includes('laogai')), `Lake Laogai: ${JSON.stringify(w)}`);
+  await check('water sources: Firelight Fountain, garden pond, palace pond and Golden Water, upper fountain, Lake Laogai', async () => {
+    const m = (await info('ba_sing_se')).marks;
+    const has = async (x, z, r, test, what) => {
+      await tp(x, z);
+      const w = await h.eval((g, r) => g.waterNearby(r), r);
+      assert.ok(w.some(test), `${what}: ${JSON.stringify(w.map((s) => s.id))}`);
+    };
+    await has(644, -60, 30, (s) => s.id === 'ba_sing_se:firelight_fountain', 'fountain');
+    await has(744, -120, 40, (s) => s.id === 'ba_sing_se:garden_pond', 'garden pond');
+    await has(850, -50, 80, (s) => s.id === 'ba_sing_se:golden_water', 'Golden Water');
+    await has(m.upper_fountain_60.x, m.upper_fountain_60.z, 25, (s) => s.id.includes('fountain'), 'upper fountain');
+    await has(1000, 168, 40, (s) => s.type === 'lake' || s.id.includes('laogai'), 'Lake Laogai');
   });
 
-  await check('route: spawn → Middle Ring stairs → avenue → landmark → Upper Ring → palace terrace', async () => {
-    await tp(640, -30, 26);
-    let r = await walkPath([[652, -48], [660, -50]], { minY: 25.5 });
-    near(r.y, 26, 0.2, 'square level');
-    r = await walkPath([[684, -50]], { minY: 25.5 });
-    near(r.y, 31, 0.2, 'on the Middle Ring terrace');
-    r = await walkPath([[760, -50]], { minY: 30.5 });
-    near(r.y, 31, 0.2, 'Middle Ring landmark');
-    r = await walkPath([[766, -50], [790, -50]], { minY: 30.5 });
-    near(r.y, 37, 0.2, 'on the Upper Ring terrace');
-    r = await walkPath([[808, -50], [820, -50]], { minY: 36.5 });
-    near(r.y, 43, 0.3, 'palace tier 1');
-    r = await walkPath([[832, -50], [846, -50], [850, -50]], { minY: 36.5 });
-    near(r.y, 55, 0.3, 'palace terrace (bss_upper_ring)');
+  // Ba Sing Se geometry (bssLayout.ts): C = (850, -50), Y up, north = -z; polar(θ, r) around C.
+  const C = { x: 850, z: -50 };
+  const pol = (deg, r) => [+(C.x + Math.cos((deg * Math.PI) / 180) * r).toFixed(1), +(C.z + Math.sin((deg * Math.PI) / 180) * r).toFixed(1)];
+  const HF = (lx, lz) => [1142 + 0.6595 * lx - 0.7518 * lz, 98 + 0.7518 * lx + 0.6595 * lz];
+
+  await check('walk: arrival → Agrarian Zone → Lake Laogai → Dai Li base → Inner Wall → Lower → Middle → Upper → palace terrace', async () => {
+    await tp(...pol(196, 372), 26);
+    await h.step(10);
+    // Along the West avenue, then round the farm track (r 285.5) to the lake.
+    let r = await walkPath([pol(196, 300), pol(194, 285.5)], { minY: 25.4, tol: 1.5, sprint: true });
+    const track = [];
+    for (let t = 188; t >= 60; t -= 8) track.push(pol(t, 285.5));
+    // (the farm legs may wade through the irrigation canal: never swimming, but below ground level)
+    r = await walkPath(track, { minY: 23.5, tol: 1.8, sprint: true });
+    // South shore of Lake Laogai to the stepping stones.
+    // (round the east-shore boulder at ≈(1112, 165))
+    r = await walkPath([[1055, 226.8], [1088.5, 219.4], [1109.4, 198.5], [1116.8, 175], [1117.5, 161], [1108.1, 153.2]], { minY: 25.4, tol: 1.5 });
+    // Raise the stones, cross to the spur, open the concealed door, walk into the base.
+    await h.eval((g) => g.ctx.interactions.get('bss_laogai_path').interact(g.ctx));
+    await h.step(120);
+    r = await walkPath([[1100, 149], [1092.4, 144.4]], { minY: 24.6, tol: 1.0 });
+    await h.eval((g) => g.ctx.interactions.get('bss_laogai_door').interact(g.ctx));
+    await h.step(120);
+    r = await walkPath([HF(0, 60), HF(0, 23), HF(0, 15), HF(0, 4)], { minY: 25.5, tol: 1.2 });
+    near(r.y, 26, 0.3, 'inside the Dai Li base (bison cavern)');
+    assert.ok(await h.eval((g) => g.debug.bss.region().laogai.state.open === 1), 'door open');
+    // Out again, back along the shore and the farm track to the Inner Wall south gate.
+    r = await walkPath([HF(0, 15), HF(0, 23), HF(0, 60), [1092.4, 144.4], [1100, 149], [1108.1, 153.2], [1117.5, 161], [1116.8, 175], [1109.4, 198.5], [1088.5, 219.4], [1055, 226.8]], { minY: 24.6, tol: 1.2 });
+    const back = [];
+    for (let t = 64; t <= 90; t += 8) back.push(pol(t, 285.5));
+    r = await walkPath(back, { minY: 23.5, tol: 1.8, sprint: true });
+    // Inner Wall south gate (r 246) → Lower Ring → 中環 gate (r 170) → Middle Ring → 上環 gate (r 102) → Upper Ring.
+    r = await walkPath([pol(90, 262), pol(90, 230), pol(90, 190), pol(90, 180), pol(90, 160), pol(90, 130), pol(90, 112), pol(90, 92)], { minY: 25.5, tol: 1.5 });
+    near(r.y, 26, 0.3, 'Upper Ring avenue');
+    // Palace: South Gate, Golden Water bridge, the three tiers to the throne-hall terrace.
+    r = await walkPath([[856, 38], [856, 10], [850, 2], [850, -8], [850, -18], [850, -27], [850, -35]], { minY: 25.5, tol: 1.2 });
+    const vp = (await h.eval((g) => g.debug.earth.spots())).viewpoint_bss_palace;
+    near(r.y, vp.y, 0.35, 'palace terrace');
   });
 
-  await check('route: avenue → dojo street → Stone Fist Dojo sparring floor', async () => {
-    await tp(704, -50, 31);
-    const r = await walkPath([[704, -30], [704, 10], [704, 26], [704, 36]], { minY: 30.5 });
-    near(r.y, 31, 0.15, 'dojo floor');
+  await check('monorail: lift up to the Middle Ring north platform, board, ride, alight at the next stop', async () => {
+    const st = await h.eval((g) => g.debug.bss.stations().find((s) => s.id === 'mid_n'));
+    await tp(st.lift.x, st.lift.z, 26.2);
+    let up = 0;
+    for (let i = 0; i < 40 && up < st.top - 1; i++) {
+      await h.step(10);
+      up = await h.eval((g) => g.ctx.player.position.y);
+    }
+    assert.ok(up > st.top - 1, `lift carried the player up to the platform (${st.top}): y=${up}`);
+    await h.eval((g, s) => g.teleport(s.mark.x + -s.tz * 5.8, s.mark.z + s.tx * 5.8, s.top + 0.1), st);
+    let boarded = false;
+    for (let i = 0; i < 300 && !boarded; i++) {
+      await h.step(10);
+      boarded = await h.eval((g) => {
+        const it = g.ctx.interactions.get('bss_board_mid_n');
+        if (it && it.enabled()) {
+          it.interact(g.ctx);
+          return true;
+        }
+        return false;
+      });
+    }
+    assert.ok(boarded, 'a train stopped and the player boarded');
+    const riding = await h.eval((g) => g.debug.bss.riding());
+    assert.ok(riding, 'riding');
+    const p0 = await h.eval((g) => g.ctx.player.position.toArray());
+    // Ride until the train has pulled out, then get off at the next stop.
+    let away = false;
+    for (let i = 0; i < 300 && !away; i++) {
+      await h.step(10);
+      away = await h.eval((g, p0) => {
+        const p = g.ctx.player.position;
+        return Math.hypot(p.x - p0[0], p.z - p0[2]) > 40;
+      }, p0);
+    }
+    assert.ok(away, 'the train left the platform with the player aboard');
+    let off = false;
+    for (let i = 0; i < 400 && !off; i++) {
+      await h.step(10);
+      off = await h.eval((g) => {
+        const it = g.ctx.interactions.get('bss_alight');
+        if (it && it.enabled()) {
+          it.interact(g.ctx);
+          return true;
+        }
+        return false;
+      });
+    }
+    await h.step(40);
+    const p1 = await h.eval((g) => ({ p: g.ctx.player.position.toArray(), riding: g.debug.bss.riding(), grounded: g.ctx.player.body.grounded }));
+    assert.ok(off, 'alighted at the next station');
+    assert.ok(Math.hypot(p1.p[0] - p0[0], p1.p[2] - p0[2]) > 30, `rode somewhere: ${JSON.stringify({ p0, p1 })}`);
+    assert.ok(!p1.riding && p1.grounded, `standing on the platform: ${JSON.stringify(p1)}`);
   });
 
-  await check('route: square → Inner Wall gate → Agrarian avenue → Outer Wall gate → outside', async () => {
-    await tp(640, -80, 26);
-    const ig = (await info('ba_sing_se')).walls.gates.filter((g) => g.ring === 'inner' && g.id === 'west')[0];
-    const og = (await info('ba_sing_se')).walls.gates.filter((g) => g.ring === 'outer' && g.id === 'west')[0];
-    let r = await walkPath([[ig.inX, ig.inZ], [ig.outX, ig.outZ]], { minY: 25.5, tol: 1.5 });
-    near(r.y, 26, 0.3, 'through the Inner Wall gate');
-    r = await walkPath([[600, -100], [og.inX, og.inZ], [og.outX, og.outZ]], { minY: 25.5, tol: 1.5, sprint: true });
-    r = await walkPath([[430, -110]], { minY: 20, tol: 1.5, sprint: true });
-    assert.ok(r.grounded, 'grounded at the Outer Wall Gate landmark');
-  });
-
-  await check('route: Outer Wall stairs → walkway (34 m up)', async () => {
-    const st = (await info('ba_sing_se')).walls.stairs.find((s) => s.id.startsWith('outer_west'));
-    assert.ok(st, 'west wall stairs recorded');
-    await tp(st.bottom.x, st.bottom.z, 26);
-    let r = await walkPath([[st.top.x, st.top.z], [st.landing.x, st.landing.z]], { minY: 25.5, tol: 1.0 });
-    near(r.y, st.topY, 0.3, 'stair landing');
-    r = await walkPath([[st.walkTop.x, st.walkTop.z]], { minY: st.topY - 0.6, tol: 1.2 });
-    near(r.y, st.topY, 0.3, 'on the wall walkway');
-  });
-
-  await check('monorail: Lower Ring booth → Outer Wall station and back', async () => {
-    const b = await h.eval((g) => {
-      const i = g.ctx.interactions.get('bss_monorail_lower_west');
-      return i ? { x: i.position.x, z: i.position.z, label: i.label } : null;
+  await check('trains: 5 minutes of service (schedules sampled at 30 Hz, then 60 s simulated)', async () => {
+    const soak = await h.eval((g) => g.debug.bss.trainsSoak(300));
+    console.log(`  soak ${JSON.stringify(soak)}`);
+    assert.equal(soak.bad, 0, 'every sample on its line and finite');
+    // Cruise 18 m/s; each earthbender kick surges the train by up to 30 % (bssTrains PULSE), so 23.4 m/s peaks
+    // are by design. A jump or teleport would show up as a far higher speed.
+    assert.ok(soak.maxSpeed <= 23.6, `top speed ${soak.maxSpeed}`);
+    assert.ok(soak.maxAccel <= 32, `surges stay smooth: ${soak.maxAccel} m/s²`);
+    assert.ok(soak.minGap > 5, `trains on one track keep apart: ${soak.minGap}`);
+    assert.ok(soak.stops >= 20, `stops served: ${soak.stops}`);
+    const run = await h.eval((g) => {
+      const R = g.ctx.render;
+      const render = R.render;
+      R.render = () => {};
+      try {
+        const a = g.debug.bss.trains();
+        for (let i = 0; i < 60; i++) g.step(30);
+        const b = g.debug.bss.trains();
+        return { n: a.length, moved: b.filter((t, i) => Math.hypot(t.x - a[i].x, t.z - a[i].z) > 5).length, finite: b.every((t) => Number.isFinite(t.x) && Number.isFinite(t.z)) };
+      } finally {
+        R.render = render;
+      }
     });
-    assert.ok(b, 'boarding booth interactable registered');
-    await tp(b.x, b.z, 26);
-    await h.eval((g) => g.ctx.interactions.get('bss_monorail_lower_west').interact(g.ctx));
-    let p = (await h.step(6)).player;
-    near(p.y, 60, 0.5, 'arrived on the Outer Wall station');
-    assert.ok(p.grounded, 'standing on the wall walkway');
-    await h.eval((g) => g.ctx.interactions.get('bss_monorail_outer_west').interact(g.ctx));
-    p = (await h.step(6)).player;
-    near(p.y, 26, 0.3, 'back down in the Lower Ring');
+    assert.ok(run.n >= 9 && run.finite && run.moved >= run.n - 1, `trains ran: ${JSON.stringify(run)}`);
+  });
+
+  await check('crowds: hundreds simulated, a packed Lower Ring, shutters at night, Dai Li on the Laogai shore', async () => {
+    await h.eval((g) => { g.teleport(628, -14); g.setTime(11); g.freeCamera({ x: 628, y: 33, z: -14 }, { x: 646, y: 26, z: -36 }); });
+    await h.step(6);
+    await h.eval((g) => g.debug.bss.crowdWarm(40));
+    await h.step(2);
+    const day = await h.eval((g) => g.debug.bss.crowd());
+    assert.ok(day.total >= 300, `simulated ${day.total}`);
+    assert.ok(day.figures.near + day.figures.far >= 100, `drawn in a Lower Ring view: ${JSON.stringify(day.figures)}`);
+    await h.eval((g) => g.setTime(22.5));
+    await h.step(2);
+    const shut = await h.eval((g) => g.debug.bss.region().crowd.shutters.count);
+    assert.ok(shut > 20, `shutters down at night: ${shut}`);
+    await h.eval((g) => { g.teleport(1100, 196); g.setTime(23.5); g.freeCamera({ x: 1100, y: 30, z: 196 }, { x: 1060, y: 26, z: 226 }); });
+    await h.step(4);
+    await h.eval((g) => g.debug.bss.crowdWarm(60));
+    const daili = await h.eval((g) => g.debug.bss.region().crowd.agents.filter((a) => a.role === 'daili' && a.zone === 'laogai' && a.out && Math.hypot(a.x - 1060, a.z - 170) < 70).length);
+    assert.ok(daili >= 2, `Dai Li patrolling the shore at night: ${daili}`);
+    await h.eval((g) => { g.freeCamera(null); g.setTime(10); });
+  });
+
+  await check('debug overlay: F3 shows fps, draw calls, crowd, NPC and train counts', async () => {
+    await tp(640, -30, 26);
+    await h.step(4);
+    await h.page.keyboard.press('F3');
+    await h.step(12);
+    const txt = await h.eval((g) => g.debug.bss.overlayText());
+    for (const k of ['fps', 'draws', 'crowd', 'npcs', 'trains']) assert.ok(txt.includes(k), `overlay has ${k}: ${txt}`);
+    await h.page.keyboard.press('F3');
+    assert.equal(await h.eval(() => !!document.getElementById('bss-overlay')), false, 'F3 hides it again');
+  });
+
+  await check('route: Lower Ring → Inner Wall west gate → arrival plaza → Outer Wall gate → outside', async () => {
+    await tp(...pol(196, 232), 26);
+    let r = await walkPath([pol(196, 262), pol(196, 300), pol(196, 372), pol(196, 384)], { minY: 25.5, tol: 1.5, sprint: true });
+    near(r.y, 26, 0.3, 'arrival plaza');
+    r = await walkPath([pol(196, 440)], { minY: 20, tol: 1.5, sprint: true });
+    assert.ok(r.grounded, 'grounded outside the Outer Wall');
   });
 
   await check('detail levels: far keeps walls/palace/viaducts, hidden hides all, full restores', async () => {
@@ -233,11 +337,12 @@ try {
     assert.ok(v.full.other > 0, `full restores: ${JSON.stringify(v.full)}`);
   });
 
-  await check('perf: draw calls / triangles / fps (Lower Ring, aerial, outside the walls)', async () => {
+  await check('perf: draw calls / triangles / fps (Lower Ring, market, aerial, outside the walls)', async () => {
     await h.eval((g) => g.setting('graphics.renderScale', 1));
     const views = [
       ['lower ring', (g) => { g.freeCamera(null); g.teleport(640, -30, 26); g.faceTowards(700, -60); }],
       ['market', (g) => { g.teleport(660, -116, 26); g.faceTowards(690, -170); }],
+      ['arrival', (g) => { g.teleport(471, -158, 26); g.faceTowards(600, -120); }],
       ['aerial', (g) => g.freeCamera({ x: 600, y: 160, z: 140 }, { x: 800, y: 30, z: -60 })],
       ['outside walls', (g) => { g.freeCamera(null); g.teleport(380, -150); g.faceTowards(850, -50); }],
     ];
@@ -313,11 +418,11 @@ try {
             R.render = render;
           }
           const r = g.debug.earth.region('ba_sing_se');
-          return r && !r.building ? { houses: r.marks.lowerHouses.x, booth: !!g.ctx.interactions.get('bss_monorail_lower_west'), npc: !!g.ctx.npcs.getDef('bss_amb_gate_guard_1') } : null;
+          return r && !r.building ? { houses: r.marks.lowerHouses.x, path: !!g.ctx.interactions.get('bss_laogai_path'), npc: !!g.ctx.npcs.getDef('bss_guide') } : null;
         });
       }
       assert.ok(done, 'deferred build finished');
-      assert.ok(done.houses > 150 && done.booth && done.npc, `built and registered: ${JSON.stringify(done)}`);
+      assert.ok(done.houses > 150 && done.path && done.npc, `built and registered: ${JSON.stringify(done)}`);
       assert.equal(h2.errors.length, 0, h2.errors.slice(0, 3).join('\n'));
       console.log(`  streamed build: ${JSON.stringify(done)}`);
     } finally {

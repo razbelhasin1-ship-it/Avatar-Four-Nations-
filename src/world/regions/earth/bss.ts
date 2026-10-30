@@ -12,6 +12,7 @@ import { LaogaiRuntime, buildLaogai, type LaogaiBuild } from './bssLaogai';
 import { buildPalace } from './bssPalace';
 import { buildUpperRing } from './bssUpper';
 import { NavGraph } from './bssNav';
+import { BssOverlay } from './bssOverlay';
 import { LiftRuntime, buildRailways, type LiftDef, type StationRt } from './bssRail';
 import { TrainSystem } from './bssTrains';
 import { GateRuntime, railPath, buildGrounds, buildInnerWall, buildOuterWall, buildPalaceWall, buildRingWall, type WallSite } from './bssWalls';
@@ -36,6 +37,7 @@ export class BaSingSe extends EarthRegion {
   lifts: LiftRuntime | null = null;
   laogai: LaogaiRuntime | null = null;
   crowd: CrowdSystem | null = null;
+  overlay: BssOverlay | null = null;
   trains: TrainSystem | null = null;
   figures: FigureRenderer | null = null;
   stations: StationRt[] = [];
@@ -92,6 +94,7 @@ export class BaSingSe extends EarthRegion {
     this.lifts = new LiftRuntime(this.group, rail.lifts as LiftDef[], this.bm);
     this.laogai = new LaogaiRuntime(this.group, this.bm, laogai);
     this.crowd = new CrowdSystem(this.group, this.nav, this.figures, site.shops, site.stalls, () => this.trains?.summary() ?? []);
+    this.overlay = new BssOverlay(() => this.overlayLines());
     this.installBssDebug();
   }
 
@@ -118,6 +121,31 @@ export class BaSingSe extends EarthRegion {
     const h = ctx.world.sky.timeOfDay;
     const lit = h >= 19.5 || h < 5 ? 1 : h >= 17.5 ? (h - 17.5) / 2 : h < 6.5 ? 1 - (h - 5) / 1.5 : 0;
     if (this.bm) this.bm.glow.emissiveIntensity = 0.12 + 1.5 * lit;
+    this.overlay?.update(dt);
+  }
+
+  /** Debug overlay text (F3). */
+  private overlayLines(): string[] {
+    const ctx = this.ctx;
+    if (!ctx) return ['Ba Sing Se'];
+    const r = ctx.render.stats;
+    const c = this.crowd?.stats;
+    const f = this.figures?.stats;
+    let trains = 0, moving = 0, npcs = 0;
+    for (const t of this.trains?.summary() ?? []) {
+      trains++;
+      if (t.moving) moving++;
+    }
+    for (const n of ctx.npcs.liveNPCs()) if (n) npcs++;
+    return [
+      `Ba Sing Se  [F3]  ${this.detailLevel}`,
+      `fps     ${r.fps.toFixed(0)}  (${r.frameMs.toFixed(1)} ms)`,
+      `draws   ${r.drawCalls}  ·  ${(r.triangles / 1e6).toFixed(2)} M tris`,
+      `crowd   ${c?.total ?? 0} simulated · ${c?.out ?? 0} out · ${c?.local ?? 0} around (${(c?.ms ?? 0).toFixed(2)} ms)`,
+      `drawn   ${(f?.near ?? 0) + (f?.far ?? 0)} people (${f?.near ?? 0} near)`,
+      `npcs    ${npcs} named`,
+      `trains  ${trains} running · ${moving} moving${this.trains?.riding ? ' · riding' : ''}`,
+    ];
   }
 
   /** Chimney smoke and stall steam near the camera. */
@@ -162,6 +190,8 @@ export class BaSingSe extends EarthRegion {
     this.laogai = null;
     this.crowd?.dispose();
     this.crowd = null;
+    this.overlay?.dispose();
+    this.overlay = null;
     this.lifts?.dispose();
     this.gates?.dispose();
     this.figures?.dispose();
@@ -204,6 +234,10 @@ export class BaSingSe extends EarthRegion {
       laogaiOpen: () => this.laogai?.openDoor(),
       laogaiSet: (rise: number, open: number) => this.laogai?.setState(rise, open),
       crowd: () => (this.crowd ? { ...this.crowd.stats, figures: { ...this.figures?.stats } } : null),
+      /** Sample the train schedules over `seconds` from now (no rendering): speeds, gaps, stops. */
+      trainsSoak: (seconds = 300) => (this.trains && this.ctx ? this.trains.soak(this.ctx.time.elapsed + this.trains.timeOffset, seconds) : null),
+      overlay: (on?: boolean) => this.overlay?.toggle(on) ?? false,
+      overlayText: () => this.overlay?.text ?? '',
       /** Fast-forward the crowd alone (no rendering) by `seconds` of game time at 30 Hz. */
       crowdWarm: (seconds: number) => {
         const ctx = this.ctx;

@@ -249,7 +249,7 @@ function buildViaduct(site: WallSite, line: RailLineDef, path: RailPath, station
   const deckY = GROUND + line.deck;
   const under = deckY - 1.7;
   const hw = RAIL.deckW / 2;
-  const chunk = (s: number) => env.chunks.named('major', `rail:${line.id}:${Math.floor(s / 110)}`).builder;
+  const chunk = (s: number) => env.chunks.named('major', `rail:${line.id}:${Math.floor(s / 440)}`).builder;
   const loop = line.kind === 'loop';
   const mod = RAIL.arch + RAIL.pier;
   const n = Math.max(1, Math.round(path.total / mod));
@@ -404,7 +404,7 @@ function higherDeckOver(line: RailLineDef, x: number, z: number): boolean {
 
 function buildStation(site: WallSite, path: RailPath, st: StationRt, lifts: LiftDef[]): void {
   const { env, bm } = site;
-  const b = env.chunks.named('major', `station:${st.id}`).builder;
+  const b = env.chunks.named('major', 'stations').builder;
   const top = st.top;
   const pw = RAIL.platformW;
   const outer = st.inner + pw;
@@ -627,8 +627,10 @@ export class LiftRuntime {
 
   update(dt: number, ctx: GameContext, figures: FigureRenderer | null): void {
     const p = ctx.player?.position;
+    const cam = ctx.camera?.position;
     for (const it of this.items) {
       const d = it.d;
+      if (cam) it.mesh.visible = (cam.x - d.x) ** 2 + (cam.z - d.z) ** 2 < 280 * 280;
       const span = d.y1 - d.y0;
       const discY = d.y0 + span * it.pos;
       if (p) {

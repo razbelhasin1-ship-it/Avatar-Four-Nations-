@@ -235,17 +235,34 @@ function hillShell(site: DistrictSite): LaogaiBuild {
   sb.collider({ shape: 'box', x: mid.x, y: GROUND + TUN.h + 2.2, z: mid.z, hx: TUN.hw + 4.6, hy: 2.1, hz: slen / 2, yaw: HF.yaw, walkable: true, solid: true, surface: 'stone' });
   // The tunnel itself (floor, walls, ceiling, green lamps).
   const tb = env.chunks.named('major', 'laogai_tunnel').builder;
-  corridor(tb, bm, HF, 0, ROOMS.ante.z1, 0, DOOR_Z - 0.4, TUN.hw * 2, TUN.h, 'z');
+  // Bored through the outcrop: raw rock, so its mouth blends into the spur from the shore.
+  corridor(tb, bm, HF, 0, ROOMS.ante.z1, 0, DOOR_Z - 0.4, TUN.hw * 2, TUN.h, 'z', bm.rock);
   // Door frame in the spur's face, a landing in front, and the stepping stones.
   const df = frameAt(L.door.x, L.door.z, DIR.x, DIR.z);
   const land = df.at(0, 2.2);
   sb.box('stone_grey', { x: land.x, y: WATER_Y + 0.15, z: land.z, sx: 4.6, sy: 0.9, sz: 3.2, yaw: df.yaw }, { collide: true, walkable: true });
+  // Threshold slab from the landing into the tunnel floor (no gap down to the shore under the door).
+  const thr = df.at(0, 0.3);
+  sb.box('stone_grey', { x: thr.x, y: GROUND - 0.22, z: thr.z, sx: TUN.hw * 2 + 0.4, sy: 0.6, sz: 2.4, yaw: df.yaw }, { collide: true, walkable: true });
   for (const side of [-1, 1]) {
     const j = df.at(side * (TUN.hw + 0.45), 0.2);
-    sb.box(bm.cave, { x: j.x, y: GROUND + TUN.h / 2, z: j.z, sx: 0.9, sy: TUN.h + 0.4, sz: 1.2, yaw: df.yaw });
+    // Jambs and lintel in the spur's own rock: the entrance is meant to pass for part of the outcrop.
+    sb.box(bm.rock, { x: j.x, y: GROUND + TUN.h / 2, z: j.z, sx: 0.9, sy: TUN.h + 0.4, sz: 1.2, yaw: df.yaw });
   }
   const lin = df.at(0, 0.2);
-  sb.box(bm.cave, { x: lin.x, y: GROUND + TUN.h + 0.5, z: lin.z, sx: TUN.hw * 2 + 1.8, sy: 1.0, sz: 1.2, yaw: df.yaw });
+  sb.box(bm.rock, { x: lin.x, y: GROUND + TUN.h + 0.5, z: lin.z, sx: TUN.hw * 2 + 1.8, sy: 1.0, sz: 1.2, yaw: df.yaw });
+  // Rock masses close round the mouth (the tunnel runs a few metres past the spur's last boulder),
+  // so from the shore the doorway reads as a crevice in the outcrop.
+  for (const side of [-1, 1]) {
+    const m = df.at(side * (TUN.hw + 2.6), -2.0);
+    const g = rockGeo(77 + side, 2.2, 3.2, 2.8);
+    sb.mesh(bm.rock, g, { x: m.x, y: GROUND + 2.2, z: m.z, yaw: df.yaw });
+    g.dispose();
+  }
+  const cap = df.at(0, -2.0);
+  const cg = rockGeo(79, TUN.hw + 2.4, 1.6, 2.8);
+  sb.mesh(bm.rock, cg, { x: cap.x, y: GROUND + TUN.h + 2.0, z: cap.z, yaw: df.yaw });
+  cg.dispose();
   const stones: Array<{ x: number; z: number; yaw: number }> = [];
   const A = L.path.a, B = L.path.b;
   const steps = 9;
@@ -259,16 +276,18 @@ function hillShell(site: DistrictSite): LaogaiBuild {
 }
 
 /** Straight corridor in a frame along local z (axis 'z') or x (axis 'x'), from a to b. */
-function corridor(b: ContentBuilder, bm: BssMats, F: Frame, c0: number, a: number, c1: number, e: number, w: number, h: number, axis: 'z' | 'x'): void {
+function corridor(b: ContentBuilder, bm: BssMats, F: Frame, c0: number, a: number, c1: number, e: number, w: number, h: number, axis: 'z' | 'x', wall: THREE.Material = bm.cave): void {
   const len = Math.abs(e - a), mid = (a + e) / 2;
   const at = (u: number, v: number) => (axis === 'z' ? F.at(u, v) : F.at(v, u));
   const yawOff = axis === 'z' ? 0 : Math.PI / 2;
   const c = at(c0, mid);
   b.box('stone_dark', { x: c.x, y: GROUND + 0.04, z: c.z, sx: w, sy: 0.08, sz: len, yaw: F.yaw + yawOff });
-  b.box(bm.cave, { x: c.x, y: GROUND + h + 0.4, z: c.z, sx: w + 1.6, sy: 0.8, sz: len, yaw: F.yaw + yawOff });
+  // A solid floor: near the door the terrain under the hill is the lake shore, a metre and more lower.
+  b.collider({ shape: 'box', x: c.x, y: GROUND - 0.42, z: c.z, hx: w / 2 + 0.4, hy: 0.5, hz: len / 2, yaw: F.yaw + yawOff, walkable: true, solid: true, surface: 'stone' });
+  b.box(wall, { x: c.x, y: GROUND + h + 0.4, z: c.z, sx: w + 1.6, sy: 0.8, sz: len, yaw: F.yaw + yawOff });
   for (const side of [-1, 1]) {
     const s = at(c0 + side * (w / 2 + 0.4), mid);
-    b.box(bm.cave, { x: s.x, y: GROUND + h / 2, z: s.z, sx: 0.8, sy: h, sz: len, yaw: F.yaw + yawOff }, { collide: true });
+    b.box(wall, { x: s.x, y: GROUND + h / 2, z: s.z, sx: 0.8, sy: h, sz: len, yaw: F.yaw + yawOff }, { collide: true });
   }
   for (let v = Math.min(a, e) + 4; v < Math.max(a, e) - 2; v += 7) {
     const l = at(c0 + (w / 2 - 0.05), v);
@@ -462,7 +481,8 @@ export class LaogaiRuntime {
       this.group.add(m);
       this.stones.push({ mesh: m, x: s.x, z: s.z, col: 0 });
     }
-    const dg = new THREE.BoxGeometry(TUN.hw * 2 + 0.2, TUN.h + 0.1, 0.7);
+    // The concealed door is a rough boulder plugging the crevice (a flat slab read as a box from the shore).
+    const dg = rockGeo(4242, TUN.hw + 0.9, TUN.h / 2 + 0.6, 0.9, 2);
     this.geos.push(dg);
     this.door = new THREE.Mesh(dg, bm.rock);
     this.door.castShadow = true;
@@ -610,7 +630,7 @@ export class LaogaiRuntime {
   private placeDoor(): void {
     const f = this.info.doorFrame;
     const k = this.open * this.open * (3 - 2 * this.open);
-    const p = f.at(-k * (TUN.hw * 2 + 0.6), -0.05);
+    const p = f.at(-k * (TUN.hw * 2 + 1.8), -0.05);
     this.door.position.set(p.x, GROUND + TUN.h / 2 + 0.05, p.z);
     this.door.rotation.y = f.yaw;
     this.door.visible = !this.raided;
@@ -622,6 +642,8 @@ export class LaogaiRuntime {
   }
 
   update(dt: number, ctx: GameContext, full: boolean): void {
+    const cam = ctx.camera?.position;
+    if (cam) this.group.visible = (cam.x - L.hill.x) ** 2 + (cam.z - L.hill.z) ** 2 < 300 * 300;
     if (this.rise !== this.riseTarget) {
       this.rise = Math.min(1, this.rise + dt * 0.45);
       this.placeStones();

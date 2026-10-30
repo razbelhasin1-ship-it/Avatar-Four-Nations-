@@ -208,7 +208,7 @@ export function* buildFarmland(site: DistrictSite): Generator<unknown, void, unk
       }
       const mat = kind === 'orchard' ? bm.fields.pasture : bm.fields[kind];
       const g = patchGeometry(ra, rb, t0, t1, GROUND + 0.035, 8);
-      env.chunks.at('major', polar((t0 + t1) / 2, rm).x, polar((t0 + t1) / 2, rm).z).builder.mesh(mat, g, { x: 0, y: 0, z: 0 }, { castShadow: false });
+      fieldChunk(site, (t0 + t1) / 2).mesh(mat, g, { x: 0, y: 0, z: 0 }, { castShadow: false });
       g.dispose();
       if (kind === 'paddy') dikes(gb, ra, rb, t0, t1);
       dressField(site, kind, ra, rb, t0, t1, k);
@@ -292,6 +292,11 @@ function dressField(site: DistrictSite, kind: FieldKind, ra: number, rb: number,
 }
 
 /** Farmhouse, barn, granary, shed and haystacks round a mud yard. */
+/** Field and yard surfaces share four quadrant chunks (a few draw calls each instead of one per 128 m cell). */
+function fieldChunk(site: DistrictSite, theta: number): ContentBuilder {
+  return site.env.chunks.named('major', `fields:${Math.floor(wrapAngle(theta) / (Math.PI / 2)) % 4}`).builder;
+}
+
 function farmstead(site: DistrictSite, ra: number, rb: number, t0: number, t1: number, k: number): void {
   const { env, bm, nav } = site;
   const rm = (ra + rb) / 2, tm = (t0 + t1) / 2;
@@ -301,7 +306,7 @@ function farmstead(site: DistrictSite, ra: number, rb: number, t0: number, t1: n
   const F = frameAt(c.x, c.z, Math.cos(tm) * out, Math.sin(tm) * out);
   const yard = new THREE.PlaneGeometry((t1 - t0) * ra - 2, rb - ra - 2);
   yard.rotateX(-Math.PI / 2);
-  env.chunks.at('major', c.x, c.z).builder.mesh(bm.mud, yard, { x: c.x, y: GROUND + 0.03, z: c.z, yaw: F.yaw }, { castShadow: false });
+  fieldChunk(site, tm).mesh(bm.mud, yard, { x: c.x, y: GROUND + 0.03, z: c.z, yaw: F.yaw }, { castShadow: false });
   yard.dispose();
   const put = (id: 'F1' | 'F2' | 'F3', lx: number, lz: number, yaw: number, s = 1) => {
     const p = F.at(lx, lz);
@@ -572,5 +577,4 @@ function arrivalGateway(site: DistrictSite, r: number): void {
   plaza.dispose();
   site.mark('arrival_gateway', p.x, GROUND, p.z);
   site.mark('passport_hall', hc.x, GROUND, hc.z);
-  void wrapAngle;
 }

@@ -668,6 +668,50 @@ export class TrainSystem {
   }
 
   /** Debug summary. */
+  /**
+   * Debug soak: sample every train's schedule from `start` for `seconds` (steps of `dt`) and report the
+   * extremes — top speed and acceleration, the closest approach of two trains on the same track, stops made
+   * and any sample off the line or not finite.
+   */
+  soak(start: number, seconds: number, dt = 1 / 30): { samples: number; maxSpeed: number; maxAccel: number; minGap: number; stops: number; bad: number } {
+    const n = this.trains.length;
+    const pos: TrainPos[] = this.trains.map(() => ({ s: 0, dir: 1, moving: false, station: null, kick: 0, dwellT: -1, td: 0 }));
+    const prevS = new Float64Array(n), prevV = new Float64Array(n);
+    const wasAt: Array<string | null> = new Array(n).fill(null);
+    let samples = 0, maxSpeed = 0, maxAccel = 0, stops = 0, bad = 0, minGap = Infinity;
+    const steps = Math.round(seconds / dt);
+    for (let k = 0; k <= steps; k++) {
+      const time = start + k * dt;
+      for (let i = 0; i < n; i++) {
+        const t = this.trains[i], p = pos[i];
+        t.sched.at(time + t.phase, p);
+        samples++;
+        if (!Number.isFinite(p.s) || (!t.path.closed && (p.s < -0.5 || p.s > t.path.total + 0.5))) bad++;
+        if (k > 0) {
+          let ds = p.s - prevS[i];
+          if (t.path.closed) ds = ((((ds + t.path.total / 2) % t.path.total) + t.path.total) % t.path.total) - t.path.total / 2;
+          const v = Math.abs(ds) / dt;
+          maxSpeed = Math.max(maxSpeed, v);
+          if (k > 1) maxAccel = Math.max(maxAccel, Math.abs(v - prevV[i]) / dt);
+          prevV[i] = v;
+        }
+        prevS[i] = p.s;
+        const at = p.station?.id ?? null;
+        if (at && at !== wasAt[i]) stops++;
+        wasAt[i] = at;
+      }
+      // Two trains on one track (same line, same direction) never close up.
+      for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+        const a = this.trains[i], b = this.trains[j];
+        if (a.line.id !== b.line.id || pos[i].dir !== pos[j].dir) continue;
+        let d = Math.abs(pos[i].s - pos[j].s);
+        if (a.path.closed) d = Math.min(d, a.path.total - d);
+        minGap = Math.min(minGap, d - (a.len + b.len) / 2);
+      }
+    }
+    return { samples, maxSpeed: +maxSpeed.toFixed(2), maxAccel: +maxAccel.toFixed(2), minGap: +minGap.toFixed(1), stops, bad };
+  }
+
   summary(): Array<{ id: string; s: number; dir: number; moving: boolean; station: string | null; x: number; z: number; cars: number }> {
     return this.trains.map((t) => ({ id: t.id, s: +t.pos.s.toFixed(1), dir: t.pos.dir, moving: t.pos.moving, station: t.pos.station?.id ?? null, x: +t.cx[0].toFixed(1), z: +t.cz[0].toFixed(1), cars: t.cars }));
   }
