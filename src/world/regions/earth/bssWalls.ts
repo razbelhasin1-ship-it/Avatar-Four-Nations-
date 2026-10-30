@@ -336,7 +336,10 @@ export function buildRingWall(site: WallSite, which: 'middle' | 'upper'): void {
     });
     if (thru) {
       for (const sd of [-1, 1]) {
-        const p = f.at(lateral(f, thru.p) + sd * (RAIL.deckW / 2 + 4.6), 0);
+        const lat = lateral(f, thru.p) + sd * (RAIL.deckW / 2 + 4.6);
+        // Never inside the road tunnel: one stood in the main gate's passage, leaving only a sliver of it.
+        if (Math.abs(lat) < g.width / 2 + 6.4 / 2 + 1.5) continue;
+        const p = f.at(lat, 0);
         pillarTower(b, bm, p.x, p.z, GROUND, f.yaw, 6.4, 40);
       }
     } else {

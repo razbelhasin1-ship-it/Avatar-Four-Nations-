@@ -341,6 +341,33 @@ try {
     await h.eval((g) => g.freeCamera(null));
   });
 
+  await check('gate tunnels are clear: rays along every city gate passage hit no masonry, pillar or prop', async () => {
+    const blocked = await h.eval((g) => {
+      const R = g.debug.bss.region(), col = g.ctx.world.collision;
+      const depth = { outer: 46, inner: 22, middle: 11, upper: 11 };
+      const out = [];
+      let rays = 0;
+      for (const it of R.gates.items) {
+        const wall = it.d.id.split('_')[0];
+        if (!depth[wall]) continue;
+        const D = depth[wall] / 2 + 1;
+        for (const lat of [-(it.d.aw / 2 - 0.6), 0, it.d.aw / 2 - 0.6]) {
+          for (const y of [0.4, 1.0, 1.9]) {
+            const a = it.d.f.at(lat, D), b = it.d.f.at(lat, -D);
+            const o = g.ctx.camera.position.clone().set(a.x, it.d.baseY + y, a.z);
+            const dir = o.clone().set(b.x - a.x, 0, b.z - a.z).normalize();
+            rays++;
+            const hit = col.raycast(o, dir, 2 * D, (c) => !c.dynamic);
+            if (hit && out.length < 6) out.push(`${it.d.id} lat ${lat.toFixed(1)} y ${y}: hit at ${hit.distance.toFixed(1)} m`);
+          }
+        }
+      }
+      return { rays, out };
+    });
+    assert.ok(blocked.rays >= 100, `rays cast: ${blocked.rays}`);
+    assert.deepEqual(blocked.out, [], 'gate passages obstructed');
+  });
+
   await check('debug overlay: F3 shows fps, draw calls, crowd, NPC and train counts', async () => {
     await tp(640, -30, 26);
     await h.step(4);
