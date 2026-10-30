@@ -165,31 +165,58 @@ const SPIRES: Array<[number, number, number, number, boolean]> = [
   [1580, 1440, 13, 255, false],
 ];
 
+/**
+ * Buttress spires hugging the temple mountain below its rim, so it reads as a
+ * cluster of pinnacles: [bearing from the summit in degrees, distance, base
+ * radius, top height]. Bearings keep clear of the switchback trail and the
+ * bison meadow (about 185-250 degrees) and of the Shrine of the Four Winds
+ * (about 25-60 degrees).
+ */
+const FLANK: Array<[number, number, number, number]> = [
+  [0, 112, 17, 306], [16, 118, 14, 288], [68, 114, 16, 300], [90, 108, 20, 318],
+  [112, 116, 15, 292], [135, 110, 19, 312], [158, 118, 14, 286], [178, 112, 18, 304],
+  [262, 114, 17, 298], [285, 108, 20, 316], [310, 118, 15, 290], [335, 110, 18, 310],
+];
+
 /** Thin rock spires topped with grass and pines, some with a waterfall falling into the clouds. */
 export function buildSpires(k: Kit, centre: P2): void {
   const rnd = new Random(4242);
-  SPIRES.forEach(([x, z, r, topY, falls], i) => {
+  const spire = (x: number, z: number, r: number, topY: number, falls: boolean, i: number) => {
     const base = Math.min(heightAt(x, z), 110) - 12;
     const h = topY - base;
     const g = rockSpireGeometry(i * 13.7 + 3, r, h);
-    k.main.mesh(am('rockSpire'), g, { x, y: base, z, yaw: rnd.range(0, 6.28) });
+    const yaw = rnd.range(0, 6.28);
+    k.main.mesh(am('rockSpire'), g, { x, y: base, z, yaw });
     g.dispose();
+    // The spire leans along its local +X, so its top sits off the base centre.
+    const lean = 0.07 * noise.noise2(i * 13.7 + 3, 0.5) * h;
+    const lx = Math.cos(yaw) * lean, lz = -Math.sin(yaw) * lean;
+    const tx = x + lx, tz = z + lz;
     // Green cap: a low grassy mound over the flat top, a few pines.
     const rt = r * 0.5;
     const cap = new THREE.SphereGeometry(rt * 1.04, 16, 6, 0, Math.PI * 2, 0, Math.PI / 2);
     cap.scale(1, 0.22, 1);
-    k.main.mesh(am('foliage'), cap, { x: x + 0.07 * noise.noise2(i * 13.7 + 3, 0.5) * h, y: topY - 0.4, z });
+    k.main.mesh(am('foliage'), cap, { x: tx, y: topY - 0.4, z: tz });
     cap.dispose();
     for (let p = 0; p < 4; p++) {
       const a = rnd.range(0, 6.28), d = rnd.range(0, rt * 0.6);
-      pine(k, x + 0.07 * noise.noise2(i * 13.7 + 3, 0.5) * h + Math.cos(a) * d, topY + rt * 0.12, z + Math.sin(a) * d, p % 3, rnd.range(1.6, 2.6), rnd.range(0, 6), false);
+      pine(k, tx + Math.cos(a) * d, topY + rt * 0.12, tz + Math.sin(a) * d, p % 3, rnd.range(1.6, 2.6), rnd.range(0, 6), false);
     }
-    k.main.collider({ shape: 'cylinder', x, y: (base + topY) / 2, z, r: r * 0.85, hy: (topY - base) / 2, walkable: true, solid: true, surface: 'rock' });
+    // Three stacked cylinders follow the lean and the taper.
+    for (let s = 0; s < 3; s++) {
+      const t = (s + 0.5) / 3;
+      k.main.collider({ shape: 'cylinder', x: x + lx * t, y: base + h * t, z: z + lz * t, r: r * 0.85 * (1 - 0.45 * t), hy: h / 6, walkable: true, solid: true, surface: 'rock' });
+    }
     if (falls) {
-      const a = Math.atan2(centre.z - z, centre.x - x) + rnd.range(-0.5, 0.5);
+      const a = Math.atan2(centre.z - tz, centre.x - tx) + rnd.range(-0.5, 0.5);
       const fx = Math.cos(a), fz = Math.sin(a);
-      waterfall(k, { id: `air:spire_falls_${i}`, label: 'Spire falls', x: x + fx * rt * 0.78, y: topY - 1.2, z: z + fz * rt * 0.78, yaw: faceYaw(fx, fz), width: 3.5 + r * 0.08, drop: 150, out: 2.5, register: false });
+      waterfall(k, { id: `air:spire_falls_${i}`, label: 'Spire falls', x: tx + fx * rt * 0.78, y: topY - 1.2, z: tz + fz * rt * 0.78, yaw: faceYaw(fx, fz), width: 3.5 + r * 0.08, drop: 150, out: 2.5, register: false });
     }
+  };
+  SPIRES.forEach(([x, z, r, topY, falls], i) => spire(x, z, r, topY, falls, i));
+  FLANK.forEach(([deg, d, r, topY], i) => {
+    const a = (deg * Math.PI) / 180;
+    spire(centre.x + Math.cos(a) * d, centre.z + Math.sin(a) * d, r, topY, false, SPIRES.length + i);
   });
 }
 
