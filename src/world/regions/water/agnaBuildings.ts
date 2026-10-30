@@ -179,14 +179,17 @@ const WIN = { w: 0.95, h: 2.0 };
 const SMALL = { w: 0.7, h: 1.3 };
 const DOOR = { w: 1.5, h: 2.6 };
 
+/** Arch segments of instanced windows and frames (there are thousands of them). */
+const ARCH_SEGS = 5;
+
 function archPane(w: number, h: number): THREE.BufferGeometry {
-  return new THREE.ShapeGeometry(archPath(new THREE.Shape(), w, h, 0, 0, 7), 7);
+  return new THREE.ShapeGeometry(archPath(new THREE.Shape(), w, h, 0, 0, ARCH_SEGS), ARCH_SEGS);
 }
 
 function archFrame(w: number, h: number, t: number): THREE.BufferGeometry {
-  const s = archPath(new THREE.Shape(), w + 2 * t, h + t, 0, -t * 0.5, 7);
-  s.holes.push(archPath(new THREE.Path(), w, h, 0, 0, 7, true));
-  return new THREE.ShapeGeometry(s, 7);
+  const s = archPath(new THREE.Shape(), w + 2 * t, h + t, 0, -t * 0.5, ARCH_SEGS);
+  s.holes.push(archPath(new THREE.Path(), w, h, 0, 0, ARCH_SEGS, true));
+  return new THREE.ShapeGeometry(s, ARCH_SEGS);
 }
 
 function merlonGeo(): THREE.BufferGeometry {

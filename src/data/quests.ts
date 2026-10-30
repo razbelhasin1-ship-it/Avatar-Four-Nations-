@@ -16,7 +16,7 @@ export const QUESTS: QuestDef[] = [
     autoStart: { startingElement: 'water' },
     steps: [
       { id: 'meet', text: 'Speak with Elder Kanna in the Tribal Plaza.', objectives: [{ type: 'talk', npc: 'nwt_elder', text: 'Talk to Elder Kanna' }] },
-      { id: 'draw', text: 'Draw water from the canal and practice your water lash.', objectives: [{ type: 'event', event: 'water:drawn', text: 'Draw water from a source', count: 1 }, { type: 'cast', element: 'water', count: 3, text: 'Use waterbending 3 times' }] },
+      { id: 'draw', text: 'Draw water from the Moon Fountain or a canal and practice your water lash.', objectives: [{ type: 'event', event: 'water:drawn', text: 'Draw water from a source', count: 1 }, { type: 'cast', element: 'water', count: 3, text: 'Use waterbending 3 times' }] },
       { id: 'avatar', text: 'Something stirs within you. Enter the Avatar State.', objectives: [{ type: 'avatarState', text: 'Activate the Avatar State' }] },
     ],
     rewards: { xp: 120, currency: 50, items: [{ id: 'sea_prunes', count: 5 }] },

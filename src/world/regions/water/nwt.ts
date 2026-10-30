@@ -104,8 +104,9 @@ export class NorthernWaterTribe extends WaterRegion {
     const rnd = new Random(733);
     let n = 0;
     for (const p of plans) {
-      const lanes = [...p.routes].sort((a, b) => routeLen(b) - routeLen(a)).slice(0, 2);
+      const lanes = [...p.routes].sort((a, b) => routeLen(b) - routeLen(a)).slice(0, 1);
       for (const r of lanes) {
+        this.routes[`lane_${p.id}`] = r;
         const [[ax, az], [bx, bz]] = r;
         const len = Math.hypot(bx - ax, bz - az);
         const f = Math.min(1, 96 / len);

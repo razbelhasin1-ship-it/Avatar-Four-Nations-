@@ -101,13 +101,13 @@ export const LIFE_DIALOGUES: DialogueDef[] = [
   giver('dlg_qg_nwt_oasis', 'sq_spirit_oasis', {
     offer: 'The Moon and Ocean spirits circle each other in the oasis behind the palace. The Avatar should sit with them at least once. Will you go?',
     accept: 'I\'ll visit the Spirit Oasis.',
-    active: 'The oasis is warm, even here. Sit by the koi and listen.',
+    active: 'Through the west palace garden and up the lantern-lit crevasse in the cliff. The oasis is warm, even here. Sit by the koi and listen.',
     thanks: 'You felt them, did you not? Push and pull. Take this dress — wear it under the full moon.',
   }),
   giver('dlg_qg_tundra_scout', 'sq_ice_caves', {
-    offer: 'Three nights now I have seen a light deep in the glacier caves, west of the city. Hunters went in and came back talking about "voices in the ice". Will you look?',
+    offer: 'Three nights now I have seen a light deep in the glacier caves, in the mountains west of the city. Hunters went in and came back talking about "voices in the ice". Will you look?',
     accept: 'I\'ll investigate the caves.',
-    active: 'West, past the city walls, where the glacier meets the sea. Take a torch. Or be a firebender.',
+    active: 'Out through the Glacier Pass, then west along the mountain slopes behind the great ice cliffs. Take a torch. Or be a firebender.',
     thanks: 'A crystal! That is what glowed? Spirits... keep it. Better around your neck than in that cave.',
   }),
   giver('dlg_qg_misty_scholar', 'sq_buried_library', {

@@ -12,7 +12,7 @@ export const DIALOGUES: DialogueDef[] = [
         next: 'intro2',
       },
       intro2: {
-        text: 'Avatar. If it is true, your path begins here — with water. Go to the canal and call it to you. Water is never created, only guided. Remember that.',
+        text: 'Avatar. If it is true, your path begins here — with water. Go to the Moon Fountain at the head of this plaza, or down the grand stairs to the canals, and call it to you. Water is never created, only guided. Remember that.',
         choices: [
           { text: 'I will try.', end: true },
           { text: 'And if I am the Avatar?', next: 'avatar' },

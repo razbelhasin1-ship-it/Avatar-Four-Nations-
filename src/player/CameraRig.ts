@@ -114,14 +114,19 @@ export class CameraRig implements GameSystem {
     // Shoulder offset (right side).
     const dir = this.tmp.set(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch));
     const right = this.tmp2.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
-    const shoulder = mounted ? 0 : 0.55;
+    let shoulder = mounted ? 0 : 0.55;
+    // A wall right beside the player (narrow lanes) eats into the shoulder offset.
+    if (shoulder > 0) {
+      const side = this.ctx.world.raycast(this.smoothedPivot, right, shoulder + 0.35);
+      if (side) shoulder = Math.max(0, side.distance - 0.35);
+    }
     // `right` is the camera's right vector; offsetting the pivot along it gives an over-the-right-shoulder view.
     const pivot = this.smoothedPivot.clone().addScaledVector(right, shoulder);
 
-    // Collision: shorten distance if terrain/architecture is in the way.
+    // Collision: shorten distance if terrain/architecture is in the way (never closer than 0.3 m to it).
     const hit = this.ctx.world.raycast(pivot, dir, wantDist + 0.4);
     let targetDist = wantDist;
-    if (hit) targetDist = Math.max(0.8, hit.distance - 0.4);
+    if (hit) targetDist = Math.max(Math.min(0.8, hit.distance * 0.5), hit.distance - 0.4);
     // Pull in fast, ease out slowly.
     this.currentDist = targetDist < this.currentDist ? damp(this.currentDist, targetDist, 25, dt) : damp(this.currentDist, targetDist, 3, dt);
 
