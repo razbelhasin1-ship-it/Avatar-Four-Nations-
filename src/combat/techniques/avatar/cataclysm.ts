@@ -143,7 +143,7 @@ registerTechnique({
   usage: 'Elements Sphere only (slot 5). A 1.6 s gathering (you levitate; enemies are drawn in), then an 18 m blast: massive damage, knockdown, burning, a ring of rock formations. Costs 30 spirit.',
   icon: 'avatar',
   chiCost: 50,
-  cooldown: 30,
+  cooldown: 18,
   windup: GATHER,
   recovery: 0.6,
   movement: 'root',

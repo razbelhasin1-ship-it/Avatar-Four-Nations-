@@ -134,7 +134,7 @@ registerTechnique({
   usage: 'Hold Aim to charge, release to fire. Needs a good amount of real water (source or reserve).',
   icon: 'water',
   chiCost: 14,
-  cooldown: 1.4,
+  cooldown: 0.6,
   water: { amount: 12 },
   windup: 0.26,
   recovery: 0.42,

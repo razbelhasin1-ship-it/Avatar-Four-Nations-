@@ -31,7 +31,7 @@ registerTechnique({
   usage: 'Elements Sphere only. The quake rolls 14 m out in every direction: knockdown, launch and cast interruption for enemies on the ground; the raised rocks can be climbed and sink after ~5 s. Costs 15 spirit.',
   icon: 'earth',
   chiCost: 30,
-  cooldown: 14,
+  cooldown: 8,
   windup: 0.55,
   recovery: 0.6,
   movement: 'root',

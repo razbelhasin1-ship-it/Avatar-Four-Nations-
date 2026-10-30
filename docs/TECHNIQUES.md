@@ -9,6 +9,21 @@ defense · movement · passive (never cast; knowing it enables behaviour) · ult
 **Source**: `starter` = granted when the element is unlocked (set `starter: true`);
 `master` = taught by a master lesson; `sphere` = granted with the Elements Sphere.
 
+## Feel and pacing (CombatSystem)
+
+- **Cooldowns** in the technique definitions are tuned for the player; other benders' cooldowns run
+  1.8× longer (`NPC_COOLDOWN_SCALE`), so enemies keep their pace.
+- **Bending tempo:** the player's windups, recoveries and bending animations run at `PLAYER_TEMPO`
+  (1.2×); the player moves freely after the first quarter of a recovery, and a dodge cancels it.
+- **Chi:** in-combat regeneration 13/s (26/s out of combat); every landed basic strike refunds 2.5 chi.
+- **Impact:** every hit throws an element-specific burst (wind ring, splash crown, debris and dust,
+  flame and embers) sized by the blow; the striker and the struck hold their pose for a beat
+  (`Humanoid.hitFreeze`) and the camera kicks.
+- **Avatar Flow:** switching element mid-combo carries the basic combo on in the new element
+  (e.g. Air Palm → Flame Punch continues at step 2). Each extra element woven into one unbroken
+  chain adds +12% damage to its basic strikes (up to +36% with all four); the HUD shows the woven
+  elements under the combo counter (`combo:weave` event).
+
 ## Air — agile, evasive, displacement, low damage / high knockback
 
 | id | name | kind | tier | source | notes |
@@ -39,7 +54,7 @@ nearest real source). Ice techniques may use ice; snow only with `water_snow_dra
 | `water_sweep` | Water Sweep | ability | 2 | master | Ground-level wave sweeping a wide arc, knocks down |
 | `freezing_strike` | Freezing Strike | ability | 2 | master | Water lash that freezes the target in place (freeze status) |
 | `water_jet` | Water Jet | ability | 3 | master | High-pressure channeled stream, pushes and damages over time |
-| `water_spout` | Water Spout | movement | 3 | master | Toggle: ride a spinning column of water above a big source with no time limit and no cooldown; glide across the water (it leans over a shore, never leaves the water), aerial water attacks start from it; press again to sink, jump to leap off |
+| `water_spout` | Water Spout | movement | 3 | master | Toggle: ride a spinning column of water above a big source with no time limit (3 s cooldown once it falls); glide across the water (it leans over a shore, never leaves the water), aerial water attacks start from it; press again to sink, jump to leap off |
 | `water_heal` | Healing Waters | ability | 2 | master | Glowing water heals the bender over a few seconds (needs water) |
 | `water_snow_draw` | Snow Gathering | passive | 2 | master | Allows drawing usable water from snow fields |
 | `water_moisture` | Moisture Extraction | ability | 3 | master | Pulls a limited amount of water from plants/humid air into the reserve; context-sensitive (swamp, forest, rain good; desert/volcanic poor) |

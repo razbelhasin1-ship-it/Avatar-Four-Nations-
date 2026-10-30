@@ -137,7 +137,7 @@ registerTechnique({
   usage: 'Elements Sphere only. Draws 50 water from nearby sources (the Avatar may conjure what is missing). The wave rolls ~30 m forward, 15 m wide, and leaves puddles you can bend again. Costs 15 spirit.',
   icon: 'water',
   chiCost: 30,
-  cooldown: 16,
+  cooldown: 9,
   water: { amount: 50, canConjure: true },
   windup: 0.6,
   recovery: 0.5,

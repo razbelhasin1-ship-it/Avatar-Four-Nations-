@@ -28,7 +28,7 @@ registerTechnique({
   usage: 'Close-range crowd control: hits several enemies in a wide arc, sets them burning and staggers them.',
   icon: 'fire',
   chiCost: 14,
-  cooldown: 4,
+  cooldown: 1.6,
   windup: 0.2,
   recovery: 0.36,
   movement: 'root',
@@ -100,7 +100,7 @@ registerTechnique({
   usage: 'Use when surrounded, or mid-air after a jump or Fire Dash — the ring hits in every direction.',
   icon: 'fire',
   chiCost: 20,
-  cooldown: 6,
+  cooldown: 2.4,
   windup: 0.16,
   recovery: 0.3,
   movement: 'root',
@@ -232,7 +232,7 @@ registerTechnique({
   usage: 'Hold the technique key to keep the stream going (aim with the camera). Drains chi while held.',
   icon: 'fire',
   chiCost: 14,
-  cooldown: 5,
+  cooldown: 2.2,
   windup: 0.18,
   recovery: 0.3,
   movement: 'slow',
@@ -248,7 +248,7 @@ registerTechnique({
   },
   release(cast) {
     const ctx = cast.ctx;
-    const stream = new FlameStream(ctx, 0.85);
+    const stream = new FlameStream(ctx, 1.05);
     const loop = ctx.audio.loop('bend_flame_loop', { position: cast.caster.position, volume: 0.85 });
     const d: StreamData = { stream, loop, dir: cast.aimDir.clone(), tick: new Map(), envT: 0, flashT: 0 };
     cast.data.stream = d;
@@ -319,7 +319,7 @@ registerTechnique({
   usage: 'Short-range cone. Clears ice walls and frozen foes; burns everything in front of you.',
   icon: 'fire',
   chiCost: 22,
-  cooldown: 7,
+  cooldown: 3.0,
   windup: 0.44,
   recovery: 0.4,
   movement: 'root',

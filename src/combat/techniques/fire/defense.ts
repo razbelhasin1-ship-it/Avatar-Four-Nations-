@@ -120,7 +120,7 @@ registerTechnique({
   usage: 'Hold the technique key to keep the shield up (drains chi). It burns away projectiles in front of you, absorbs most of any blow and scorches attackers in reach. A hit in the first 0.3 s is a Perfect Block: no damage, and the shield bursts into a counter blast.',
   icon: 'fire',
   chiCost: 12,
-  cooldown: 5,
+  cooldown: 2.0,
   windup: 0.1,
   recovery: 0.25,
   movement: 'slow',

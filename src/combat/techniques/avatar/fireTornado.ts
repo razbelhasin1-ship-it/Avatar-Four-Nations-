@@ -102,7 +102,7 @@ registerTechnique({
   usage: 'Elements Sphere only. The tornado travels ~25 m where you aim; enemies near it are pulled in, burned every 0.4 s and blasted at the end. It lights the night, melts ice and stops against walls. Costs 15 spirit.',
   icon: 'fire',
   chiCost: 30,
-  cooldown: 16,
+  cooldown: 9,
   windup: 0.55,
   recovery: 0.45,
   movement: 'root',

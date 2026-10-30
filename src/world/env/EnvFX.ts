@@ -213,14 +213,15 @@ export class EnvFXSystem implements EnvironmentFX, WorldUpdatable {
     if (h.surface === 'water' || pos.y - h.y > 2.5) return;
     if (!this.admit(this.recent.scorch, pos.x, pos.z, radius, 0.5, 1.2)) return;
     this.counts.scorch++;
-    const r = Math.min(radius, 6) * 2;
+    // Marks stay modest and fade within a fight, so a battle does not blacken the ground.
+    const r = Math.min(radius, 4) * 1.6;
     const yaw = Math.random() * Math.PI * 2;
     if (h.surface === 'snow' || h.surface === 'packedsnow' || h.surface === 'ice') {
       // Fire melts snow and ice rather than charring it.
-      this.patches.spawn({ x: pos.x, z: pos.z, sizeX: r * 1.1, sizeZ: r * 1.1, yaw, kind: DECAL_KIND.wet, life: 40, mirror: 1, surface: 0, intensity: 1 }, this.time.value, h.fn, 0.03);
+      this.patches.spawn({ x: pos.x, z: pos.z, sizeX: r * 1.1, sizeZ: r * 1.1, yaw, kind: DECAL_KIND.wet, life: 20, mirror: 1, surface: 0, intensity: 1 }, this.time.value, h.fn, 0.03);
       return;
     }
-    this.patches.spawn({ x: pos.x, z: pos.z, sizeX: r, sizeZ: r, yaw, kind: DECAL_KIND.scorch, life: 50, mirror: 1, surface: 0, intensity: h.surface === 'grass' ? 1 : 0.85 }, this.time.value, h.fn, 0.03);
+    this.patches.spawn({ x: pos.x, z: pos.z, sizeX: r, sizeZ: r, yaw, kind: DECAL_KIND.scorch, life: 20, mirror: 1, surface: 0, intensity: h.surface === 'grass' ? 0.9 : 0.75 }, this.time.value, h.fn, 0.03);
   }
 
   wet(pos: THREE.Vector3, radius: number): void {
@@ -229,8 +230,8 @@ export class EnvFXSystem implements EnvironmentFX, WorldUpdatable {
     if (h.surface === 'water' || pos.y - h.y > 2.5) return;
     if (!this.admit(this.recent.wet, pos.x, pos.z, radius, 0.6, 0.8)) return;
     this.counts.wet++;
-    const r = Math.min(radius, 6) * 2;
-    this.patches.spawn({ x: pos.x, z: pos.z, sizeX: r, sizeZ: r, yaw: Math.random() * Math.PI * 2, kind: DECAL_KIND.wet, life: 24, mirror: 1, surface: 0, intensity: h.surface === 'snow' ? 0.5 : 1 }, this.time.value, h.fn, 0.03);
+    const r = Math.min(radius, 5) * 1.7;
+    this.patches.spawn({ x: pos.x, z: pos.z, sizeX: r, sizeZ: r, yaw: Math.random() * Math.PI * 2, kind: DECAL_KIND.wet, life: 12, mirror: 1, surface: 0, intensity: h.surface === 'snow' ? 0.5 : 0.85 }, this.time.value, h.fn, 0.03);
   }
 
   frost(pos: THREE.Vector3, radius: number): void {
@@ -249,8 +250,8 @@ export class EnvFXSystem implements EnvironmentFX, WorldUpdatable {
     if (h.surface === 'water' || pos.y - h.y > 2.5) return;
     if (!this.admit(this.recent.crack, pos.x, pos.z, radius, 0.6, 0.6)) return;
     this.counts.crack++;
-    const r = Math.min(radius, 6) * 2.2;
-    this.patches.spawn({ x: pos.x, z: pos.z, sizeX: r, sizeZ: r, yaw: yaw ?? Math.random() * Math.PI * 2, kind: DECAL_KIND.crack, life: 36, mirror: 1, surface: 0, intensity: 1 }, this.time.value, h.fn, 0.03);
+    const r = Math.min(radius, 4) * 1.6;
+    this.patches.spawn({ x: pos.x, z: pos.z, sizeX: r, sizeZ: r, yaw: yaw ?? Math.random() * Math.PI * 2, kind: DECAL_KIND.crack, life: 14, mirror: 1, surface: 0, intensity: 0.85 }, this.time.value, h.fn, 0.03);
   }
 
   // ---------------------------------------------------------------------------

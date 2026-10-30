@@ -319,9 +319,10 @@ void main() {
 #ifdef RIM
   edge *= 0.2 + pow(1.0 - vFres, 1.6) * 1.4;
 #endif
-  float a = (streak * 0.9 + uBody) * edge * uOpacity;
+  // Fuller streaks over a cool, slightly shaded body: the wind reads on bright sand and snow as well as on grass.
+  float a = clamp((streak * 1.05 + uBody * 1.7) * edge * uOpacity * 1.2, 0.0, 1.0);
   if (a < 0.003) discard;
-  vec3 col = mix(uTint, uColor, streak);
+  vec3 col = mix(uTint * 0.8, uColor, streak);
   gl_FragColor = vec4(col, a);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>

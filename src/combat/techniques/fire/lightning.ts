@@ -103,7 +103,7 @@ registerTechnique({
   usage: 'A long, interruptible wind-up — then an instant, devastating strike that chains to up to three nearby enemies. Soaked targets take extra damage and conduct further.',
   icon: 'fire',
   chiCost: 40,
-  cooldown: 14,
+  cooldown: 6,
   windup: 0.85,
   recovery: 0.6,
   movement: 'root',

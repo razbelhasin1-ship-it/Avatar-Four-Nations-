@@ -60,6 +60,8 @@ export interface GameEvents {
   };
   'entity:killed': { entityId: number; kind: EntityKind; tags: string[]; killerId?: number; position: Vec3Like };
   'combo:advanced': { element: Element; index: number };
+  /** Avatar Flow: the basic combo carried on in another element (elements in the chain so far, damage bonus). */
+  'combo:weave': { elements: Element[]; bonus: number };
   'player:blocked': { attackerId: number; perfect: boolean };
 
   // ---- water sources ----

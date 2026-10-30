@@ -177,7 +177,7 @@ registerTechnique({
   usage: 'Ability (channel ~2.4 s). Hold your aim on a target. Needs a good amount of water.',
   icon: 'water',
   chiCost: 22,
-  cooldown: 9,
+  cooldown: 3.5,
   water: { amount: 20 },
   windup: 0.3,
   recovery: 0.4,

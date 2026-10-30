@@ -62,7 +62,7 @@ registerTechnique({
     const gx = c.position.x + fwd.x * reach + right.x * side;
     const gz = c.position.z + fwd.z * reach + right.z * side;
     const ground = groundPoint(ctx, gx, gz, c.position.y);
-    const radius = (heavy ? 0.62 : kick ? 0.52 : 0.34) * (counter ? 1.3 : 1);
+    const radius = (heavy ? 0.75 : kick ? 0.6 : 0.42) * (counter ? 1.3 : 1);
     const hover = heavy ? ground.y + 1.15 : kick ? ground.y + 0.85 : c.position.y + 1.25;
     cast.data.rock = new RisingRock(ctx, ground, hover, radius, tintAt(ctx, ground), heavy ? 0.36 : kick ? 0.22 : 0.17, kick);
     ctx.audio.play('bend_earth_rise', { position: ground, volume: heavy ? 0.9 : kick ? 0.7 : 0.5, pitch: heavy ? 0.9 : kick ? 1.2 : 1.5 });
@@ -150,7 +150,7 @@ registerTechnique({
   usage: 'Hold Aim to charge (wider, stronger shockwave), release to stomp. Hits all around you.',
   icon: 'earth',
   chiCost: 16,
-  cooldown: 1.8,
+  cooldown: 0.8,
   windup: 0.28,
   recovery: 0.45,
   movement: 'root',

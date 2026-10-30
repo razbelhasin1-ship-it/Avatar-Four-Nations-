@@ -109,7 +109,7 @@ registerTechnique({
   usage: 'Ability (channel ~3 s). Heals about 33 health over time. Needs water.',
   icon: 'water',
   chiCost: 18,
-  cooldown: 14,
+  cooldown: 7,
   water: { amount: 15 },
   windup: 0.35,
   recovery: 0.3,

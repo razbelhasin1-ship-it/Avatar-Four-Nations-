@@ -25,7 +25,7 @@ registerTechnique({
   usage: 'Trips everything in a wide arc in front of you (knockdown). Open up a crowd, then follow with Air Palm.',
   icon: 'air',
   chiCost: 14,
-  cooldown: 4,
+  cooldown: 1.6,
   windup: 0.14,
   recovery: 0.3,
   movement: 'root',
@@ -90,7 +90,7 @@ registerTechnique({
   usage: 'Use when surrounded or mid-air. Hits in every direction, launches and pushes enemies away, and blows incoming projectiles aside.',
   icon: 'air',
   chiCost: 18,
-  cooldown: 5,
+  cooldown: 2.0,
   windup: 0.14,
   recovery: 0.3,
   movement: 'root',
@@ -144,7 +144,7 @@ registerTechnique({
   usage: 'The tornado travels about 20 m. Enemies near it are pulled toward the centre and lifted; when it breaks apart they are flung outward.',
   icon: 'air',
   chiCost: 26,
-  cooldown: 9,
+  cooldown: 4.0,
   windup: 0.42,
   recovery: 0.35,
   movement: 'root',
@@ -163,7 +163,7 @@ registerTechnique({
     const dir = aimFlat(cast);
     const base = c.position.clone().addScaledVector(dir, 2);
     base.y = groundY(ctx, base.x, base.z, base.y + 1);
-    const tornado = new Tornado(ctx, 4.4, 1.7);
+    const tornado = new Tornado(ctx, 6.8, 2.3);
     const loop: LoopHandle = ctx.audio.loop('bend_wind_loop', { position: base, volume: 0.9 });
     const life = 2.8;
     const speed = 7.5;
@@ -193,6 +193,8 @@ registerTechnique({
         const grow = Math.min(1, age / 0.3) * (age > life - 0.3 ? Math.max(0, (life - age) / 0.3) : 1);
         tornado.opacity = grow;
         tornado.update(dt, base, 0.4 + 0.6 * grow);
+        // Dust and grit churn round its foot.
+        if (Math.random() < dt * 16) ctx.vfx.burst('dust', base, { count: 2, radius: 1.4, swirl: 7, speed: 2.2 });
         loop.setPosition(base);
         // Pull, lift, grind.
         const now = ctx.time.elapsed;

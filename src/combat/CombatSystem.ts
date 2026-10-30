@@ -1,6 +1,7 @@
 import * as THREE from 'three';
+import type { Humanoid } from '../character/Humanoid';
 import type { GameContext, GameSystem } from '../core/GameContext';
-import type { ElementOrAvatar, TechniqueFailReason } from '../core/types';
+import type { Element, ElementOrAvatar, TechniqueFailReason } from '../core/types';
 import { areHostile } from '../entities/EntityManager';
 import type { Entity, HitInfo, HitResult } from '../entities/Entity';
 import type { AreaHitOptions, Cast, Combatant, Projectile, ProjectileSpec, TechniqueDef, WaterGrant } from './types';
@@ -26,6 +27,16 @@ export function allTechniques(): TechniqueDef[] {
   return [...TECHNIQUES.values()];
 }
 
+/** The player bends faster than anyone: windup, recovery and the bending animation run at this tempo. */
+export const PLAYER_TEMPO = 1.2;
+/** Cooldowns are tuned for the player; other benders' techniques recover this much slower. */
+const NPC_COOLDOWN_SCALE = 1.8;
+/** Chi a landed basic strike gives back to the player: attacking fuels bending. */
+const BASIC_HIT_CHI = 2.5;
+/** Avatar Flow: damage bonus per extra element woven into one unbroken basic combo. */
+const FLOW_BONUS = 0.12;
+const FLOW_COLORS: Record<Element, string> = { air: '#eef6ff', water: '#5cc8ff', earth: '#b89a62', fire: '#ff8a3a' };
+
 export interface CastRequest {
   aimDir?: THREE.Vector3;
   aimPoint?: THREE.Vector3;
@@ -48,6 +59,8 @@ interface CasterState {
   cooldowns: Map<string, number>;
   active: CastImpl | null;
   combo: { id: string; index: number; time: number };
+  /** Elements woven into the current unbroken basic combo (Avatar Flow). */
+  flow: Element[];
 }
 
 let nextCastId = 1;
@@ -55,6 +68,7 @@ let nextProjectileId = 1;
 
 const tmpV = new THREE.Vector3();
 const tmpV2 = new THREE.Vector3();
+const tmpV3 = new THREE.Vector3();
 
 class CastImpl implements Cast {
   readonly id = nextCastId++;
@@ -169,7 +183,7 @@ export class CombatSystem implements GameSystem {
   private state(c: Combatant): CasterState {
     let s = this.states.get(c);
     if (!s) {
-      s = { cooldowns: new Map(), active: null, combo: { id: '', index: -1, time: -99 } };
+      s = { cooldowns: new Map(), active: null, combo: { id: '', index: -1, time: -99 }, flow: [] };
       this.states.set(c, s);
     }
     return s;
@@ -189,7 +203,12 @@ export class CombatSystem implements GameSystem {
   }
 
   private cooldownScale(c: Combatant): number {
-    return c.isPlayer ? (this.ctx.avatar?.boosts?.cooldown ?? 1) : 1;
+    return c.isPlayer ? (this.ctx.avatar?.boosts?.cooldown ?? 1) : NPC_COOLDOWN_SCALE;
+  }
+
+  /** Put a technique on cooldown now (techniques whose cooldown starts when their effect ends). */
+  startCooldown(c: Combatant, id: string, seconds: number): void {
+    this.state(c).cooldowns.set(id, this.ctx.time.elapsed + seconds * this.cooldownScale(c));
   }
 
   /** The caster's active cast, if any. */
@@ -213,7 +232,8 @@ export class CombatSystem implements GameSystem {
   movementMode(c: Combatant): 'free' | 'slow' | 'root' {
     const a = this.state(c).active;
     if (!a || a.phase === 'done') return 'free';
-    if (a.phase === 'recovery' && a.recoveryLeft < a.def.recovery * 0.4) return 'free';
+    // The player moves freely out of most of a recovery; other benders hold their pose longer.
+    if (a.phase === 'recovery' && a.recoveryLeft < a.def.recovery * (c.isPlayer ? 0.75 : 0.4)) return 'free';
     return a.def.movement;
   }
 
@@ -294,12 +314,23 @@ export class CombatSystem implements GameSystem {
       water = grant;
     }
 
-    // Combo index
+    // Combo index. Avatar Flow: the player's basic combo carries on through an element switch, and
+    // every element woven into one unbroken chain makes its strikes hit harder.
     let comboIndex = 0;
+    let woven = false;
     if (def.comboLength && def.comboLength > 1) {
-      if (s.combo.id === id && now - s.combo.time < 1.0) comboIndex = (s.combo.index + 1) % def.comboLength;
+      const live = now - s.combo.time < 1.0;
+      const prev = live && s.combo.id !== id ? TECHNIQUES.get(s.combo.id) : undefined;
+      if (live && s.combo.id === id) comboIndex = (s.combo.index + 1) % def.comboLength;
+      else if (caster.isPlayer && def.kind === 'basic' && prev?.kind === 'basic' && prev.element !== def.element) {
+        comboIndex = (s.combo.index + 1) % def.comboLength;
+        woven = true;
+      }
+      if (!live) s.flow = [];
+      if (def.element !== 'avatar' && !s.flow.includes(def.element)) s.flow.push(def.element);
       s.combo = { id, index: comboIndex, time: now };
     }
+    const flowMul = def.kind === 'basic' && caster.isPlayer ? 1 + FLOW_BONUS * Math.max(0, s.flow.length - 1) : 1;
 
     caster.chi -= chiCost;
     if (!req.free && def.cooldown > 0) s.cooldowns.set(id, now + def.cooldown * this.cooldownScale(caster));
@@ -308,16 +339,28 @@ export class CombatSystem implements GameSystem {
       this.safeCall(() => s.active!.def.end?.(s.active!, false));
       s.active.phase = 'done';
     }
-    const power = caster.powerMultiplier() * (caster.isPlayer ? this.playerDamageDealtMul : 1);
+    const power = caster.powerMultiplier() * (caster.isPlayer ? this.playerDamageDealtMul : 1) * flowMul;
     const cast = new CastImpl(this, ctx, def, caster, origin, aimDir, aimPoint, target, Math.max(0, Math.min(1, req.charge ?? 0)), power, comboIndex, water);
     s.active = cast;
     this.casts.push(cast);
     // Face the aim direction.
     if (aimDir.x !== 0 || aimDir.z !== 0) caster.yaw = Math.atan2(aimDir.x, aimDir.z);
     this.safeCall(() => def.begin?.(cast));
+    if (woven) this.weaveFlourish(caster, def.element as Element, s.flow, flowMul);
     ctx.events.emit('technique:cast', { id, casterId: caster.id, element: def.element, isPlayer: caster.isPlayer, position: { x: origin.x, y: origin.y, z: origin.z } });
     if (def.windup <= 0) this.releaseCast(cast);
     return { ok: true, cast };
+  }
+
+  /** Avatar Flow: a ring of the new element round the hands, a shimmer, and the HUD counter. */
+  private weaveFlourish(caster: Combatant, element: Element, flow: Element[], mul: number): void {
+    const ctx = this.ctx;
+    const at = caster.castOrigin('chest', tmpV3);
+    const fwd = tmpV2.set(Math.sin(caster.yaw), 0, Math.cos(caster.yaw));
+    ctx.vfx.ring(at, FLOW_COLORS[element], 0.9 + 0.2 * flow.length, 0.35, { normal: fwd, opacity: 0.7 });
+    for (const el of flow) ctx.vfx.burst('spirit', at, { count: 4, color: FLOW_COLORS[el], speed: 1.4 });
+    ctx.audio.play('hit.avatar', { position: at, volume: 0.25 + 0.06 * flow.length, pitch: 1.1 + 0.08 * flow.length });
+    ctx.events.emit('combo:weave', { elements: [...flow], bonus: mul - 1 });
   }
 
   private releaseCast(c: CastImpl): void {
@@ -369,7 +412,11 @@ export class CombatSystem implements GameSystem {
       blocked: res.blocked,
       playerIsAttacker: isPlayerAttacker,
     });
-    this.hitFeedback(hit.element, p, res, isPlayerAttacker, target.kind === 'player');
+    this.hitFeedback(hit.element, p, res, isPlayerAttacker, target.kind === 'player', attacker, target);
+    if (isPlayerAttacker && res.damage > 0 && hit.techniqueId && TECHNIQUES.get(hit.techniqueId)?.kind === 'basic') {
+      const pc = attacker as unknown as Combatant;
+      pc.chi = Math.min(pc.maxChi, pc.chi + BASIC_HIT_CHI);
+    }
     if (target.kind === 'player') {
       ctx.events.emit('player:damaged', { amount: res.damage, sourceId: attacker?.id, element: hit.element });
     }
@@ -388,18 +435,58 @@ export class CombatSystem implements GameSystem {
     return res;
   }
 
-  private hitFeedback(element: ElementOrAvatar, p: THREE.Vector3, res: HitResult, byPlayer: boolean, onPlayer: boolean): void {
+  private hitFeedback(element: ElementOrAvatar, p: THREE.Vector3, res: HitResult, byPlayer: boolean, onPlayer: boolean, attacker: Entity | null, target: Entity): void {
     const vfx = this.ctx.vfx;
     const colors: Record<ElementOrAvatar, string> = { air: '#eef6ff', water: '#9fd8ff', earth: '#a8906a', fire: '#ffb050', avatar: '#cfefff' };
-    if (res.blocked) vfx.burst('sparks', p, { count: 8, color: '#ffffff' });
-    else {
-      vfx.burst(element === 'fire' ? 'fire' : element === 'water' ? 'splash' : element === 'earth' ? 'debris' : 'air', p, { count: 10 });
-      vfx.burst('glow', p, { color: colors[element], size: 0.6 + Math.min(1.5, res.damage / 25) });
-    }
-    this.ctx.audio.play(res.blocked ? 'rock_impact' : 'hit', { position: p, volume: 0.7, pitch: res.blocked ? 1.5 : 1 });
     const shake = this.ctx.settings.data.controls.cameraShake;
-    if (onPlayer && shake > 0) this.ctx.events.emit('camera:shake', { intensity: Math.min(0.6, 0.15 + res.damage / 60), duration: 0.25 });
-    else if (byPlayer && shake > 0 && (res.staggered || res.killed || res.damage > 18)) this.ctx.events.emit('camera:shake', { intensity: 0.15, duration: 0.15 });
+    if (res.blocked) {
+      vfx.burst('sparks', p, { count: 8, color: '#ffffff' });
+      this.ctx.audio.play('rock_impact', { position: p, volume: 0.7, pitch: 1.5 });
+      if (onPlayer && shake > 0) this.ctx.events.emit('camera:shake', { intensity: 0.15, duration: 0.15 });
+      return;
+    }
+    // Impact: each element strikes in its own way, sized by the blow.
+    const k = 0.7 + Math.min(1.6, res.damage / 18);
+    const heavy = res.damage >= 16 || res.staggered || res.killed;
+    const n = (attacker ? tmpV3.subVectors(target.position, attacker.position).setY(0) : tmpV3.set(0, 0, 1)).normalize();
+    switch (element) {
+      case 'air':
+        vfx.burst('air', p, { count: Math.round(9 * k), dir: n, spread: 0.9, speed: 1.4 });
+        vfx.burst('swirl', p, { count: Math.round(5 * k), swirl: 6, speed: 0.6 });
+        vfx.ring(p, '#f4f9ff', 0.7 * k, 0.3, { normal: n, opacity: 0.55 });
+        break;
+      case 'water':
+        vfx.burst('splash', p, { count: Math.round(14 * k), dir: n, spread: 1.1 });
+        vfx.burst('spray', p, { count: Math.round(7 * k), size: 0.8 + 0.3 * k });
+        vfx.ring(p, '#c4ecff', 0.65 * k, 0.28, { normal: n, opacity: 0.5 });
+        break;
+      case 'earth':
+        vfx.burst('debris', p, { count: Math.round(8 * k), dir: n, spread: 1.0 });
+        vfx.burst('dust', p, { count: Math.round(5 * k), size: 0.7 + 0.25 * k });
+        vfx.ring(p, '#cdb08a', 0.6 * k, 0.24, { normal: n, opacity: 0.45 });
+        break;
+      case 'fire':
+        vfx.burst('fire', p, { count: Math.round(9 * k), dir: n, spread: 1.0 });
+        vfx.burst('embers', p, { count: Math.round(8 * k), dir: n });
+        if (heavy) vfx.burst('smoke', p, { count: 2 });
+        vfx.flash(p, '#ff9a40', 2.5 + 2 * k, 0.14, 7);
+        break;
+      default:
+        vfx.burst('spirit', p, { count: Math.round(10 * k) });
+        vfx.ring(p, '#d6f2ff', 0.8 * k, 0.3, { normal: n, opacity: 0.6 });
+    }
+    vfx.burst('glow', p, { color: colors[element], size: 0.6 + Math.min(1.5, res.damage / 25) });
+    if (heavy) vfx.ring(p, colors[element], 1.2 * k, 0.4, { normal: n, opacity: 0.35 });
+    this.ctx.audio.play('hit', { position: p, volume: 0.6 + Math.min(0.4, res.damage / 50), pitch: heavy ? 0.85 : 1 });
+    // Hit-freeze: the striker and the struck hold their pose for a beat, longer for heavier blows.
+    if (byPlayer || onPlayer) {
+      const freeze = Math.min(0.11, 0.03 + res.damage * 0.0025) * (res.killed ? 1.5 : 1);
+      (target as { humanoid?: Humanoid | null }).humanoid?.hitFreeze(freeze);
+      (attacker as { humanoid?: Humanoid | null } | null)?.humanoid?.hitFreeze(freeze * 0.7);
+    }
+    if (shake <= 0) return;
+    if (onPlayer) this.ctx.events.emit('camera:shake', { intensity: Math.min(0.6, 0.15 + res.damage / 60), duration: 0.25 });
+    else if (byPlayer) this.ctx.events.emit('camera:shake', { intensity: heavy ? 0.12 + Math.min(0.2, res.damage / 120) : 0.05 + res.damage / 300, duration: heavy ? 0.18 : 0.1 });
   }
 
   areaHit(cast: CastImpl | null, o: AreaHitOptions): Entity[] {
@@ -545,7 +632,8 @@ export class CombatSystem implements GameSystem {
   update(dt: number): void {
     for (const c of this.casts) {
       if (c.phase === 'done') continue;
-      c.elapsed += dt;
+      const tempo = c.caster.isPlayer ? PLAYER_TEMPO : 1;
+      c.elapsed += dt * tempo;
       if (!c.caster.alive) {
         c.phase = 'done';
         this.safeCall(() => c.def.end?.(c, true));
@@ -569,7 +657,7 @@ export class CombatSystem implements GameSystem {
           c.recoveryLeft = c.def.recovery;
         }
       } else if (c.phase === 'recovery') {
-        c.recoveryLeft -= dt;
+        c.recoveryLeft -= dt * tempo;
         if (c.recoveryLeft <= 0) {
           c.phase = 'done';
           this.safeCall(() => c.def.end?.(c, false));
@@ -582,6 +670,9 @@ export class CombatSystem implements GameSystem {
       if (s && s.active === c) s.active = null;
     }
     this.casts = this.casts.filter((c) => c.phase !== 'done');
+    // The player's bending animation runs at the bending tempo while a technique is committed.
+    const pl = this.ctx.player;
+    if (pl?.humanoid) pl.humanoid.timeScale = this.isCommitted(pl) ? PLAYER_TEMPO : 1;
     this.updateProjectiles(dt);
   }
 

@@ -352,10 +352,10 @@ registerTechnique({
   kind: 'movement',
   tier: 3,
   description: 'Raise a spinning column of water beneath you and ride it high above the surface for as long as you like. Glide across the water on it, strike from above, sink back down or leap off. Only a large body of water can carry you.',
-  usage: 'Movement (toggle). Use in or beside a river, lake, swamp or the sea. Steer across the water (sprint to race); the column leans out over a shore but never leaves the water. Press the technique again to sink back down; jump to leap off. No time limit.',
+  usage: 'Movement (toggle). Use in or beside a river, lake, swamp or the sea. Steer across the water (sprint to race); the column leans out over a shore but never leaves the water. Press the technique again to sink back down; jump to leap off. No time limit; once the column falls it takes 3 seconds before you can raise another.',
   icon: 'water',
   chiCost: 10,
-  cooldown: 0,
+  cooldown: 3,
   water: { amount: 20, largeSource: true, maxRange: 9 },
   windup: 0.3,
   recovery: 0.2,
@@ -376,7 +376,11 @@ registerTechnique({
     const sp = cast.data.spout as SpoutEffect;
     sp.ride();
     cast.caster.humanoid?.animator.play('water_spout_ride', { fadeIn: 0.2 });
-    sp.onCollapse = () => cast.caster.humanoid?.animator.stop('water_spout_ride', 0.3);
+    sp.onCollapse = () => {
+      cast.caster.humanoid?.animator.stop('water_spout_ride', 0.3);
+      // The cooldown runs from the moment the column falls, not from when it rose.
+      ctx.combat.startCooldown(cast.caster, 'water_spout', cast.def.cooldown);
+    };
     // The eruption throws back anything around the foot of the column.
     const at = sp.base.clone().setY(sp.base.y + 1);
     cast.areaHit({ center: at, radius: 3.2, height: 2.2, damage: 8, knockback: 10, knockDir: 'radial', launch: 7, stagger: 35, status: [{ type: 'soaked', duration: 8 }] });

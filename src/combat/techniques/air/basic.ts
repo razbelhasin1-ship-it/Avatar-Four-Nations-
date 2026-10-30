@@ -73,9 +73,10 @@ registerTechnique({
     const dir = airDir(cast, hand);
     const length = fin ? 9.5 : 7.5;
     const dur = fin ? 0.3 : 0.22;
-    windBlade(ctx, hand, dir, { length, duration: dur + 0.08, r0: 0.45, r1: fin ? 3.2 : 2.3, height: fin ? 1.9 : 1.35, roll: fin ? 0 : step === 0 ? 0.3 : -0.3, layers: fin || slip ? 3 : 2, opacity: 1 });
-    // A short streaming gust behind each palm so the push reads as moving air, not a flat decal.
-    if (!fin) windCone(ctx, hand, dir, { length: 4.5 + step, radius: 1.1, duration: 0.26, opacity: slip ? 0.6 : 0.42 });
+    windBlade(ctx, hand, dir, { length, duration: dur + 0.2, r0: 0.5, r1: fin ? 3.6 : 2.8, height: fin ? 2.1 : 1.6, roll: fin ? 0 : step === 0 ? 0.3 : -0.3, layers: 3, opacity: 1 });
+    // A streaming gust behind each palm so the push reads as moving air, not a flat decal.
+    if (!fin) windCone(ctx, hand, dir, { length: 5.5 + step, radius: 1.3, duration: 0.36, opacity: slip ? 0.75 : 0.6 });
+    windRing(ctx, hand, { r0: 0.15, r1: fin ? 1.3 : 0.8, duration: 0.24, height: 0.35, axis: dir, opacity: 0.8 });
     if (fin) {
       windCone(ctx, hand, dir, { length: 8, radius: 2.4, duration: 0.36, opacity: 0.6 });
       windSpiral(ctx, c.position, { height: 2.2, r0: 0.7, r1: 1.4, duration: 0.45, turns: 1.4 });
@@ -97,7 +98,13 @@ registerTechnique({
       }),
       onHit: (e) => airPuff(ctx, e.aimPoint(tmp).clone(), dir, fin ? 1.2 : 0.8),
       onStep: (center) => {
-        if (n++ % 2 === 0) ctx.world.fx.disturb(center, 2.2, 0.6);
+        if (n++ % 2 === 0) {
+          ctx.world.fx.disturb(center, 2.2, 0.6);
+          // The gust skims the ground: a line of dust lifts beneath it.
+          const g = tmp.copy(center);
+          g.y = groundY(ctx, g.x, g.z, g.y);
+          if (center.y - g.y < 2.4) ctx.vfx.burst('dust', g, { count: fin ? 3 : 2, dir, spread: 0.5, speed: 2 });
+        }
         if (fin) deflectProjectiles(cast, center, 1.6, dir);
       },
     });
@@ -170,7 +177,7 @@ registerTechnique({
   usage: 'Hold Aim to charge (longer, wider cone; light enemies are launched), release to blast. Pushes you back; holds you aloft in the air.',
   icon: 'air',
   chiCost: 14,
-  cooldown: 1.0,
+  cooldown: 0.5,
   windup: 0.1,
   recovery: 0.35,
   movement: 'slow',
@@ -192,8 +199,8 @@ registerTechnique({
     const length = 7 + 9 * k;
     const radius = 1.4 + 2.4 * k;
     const dur = 0.26 + 0.08 * k;
-    windCone(ctx, origin, dir, { length, radius, duration: dur + 0.15 });
-    windBlade(ctx, origin, dir, { length: length * 0.9, duration: dur + 0.05, r0: 0.6, r1: radius * 1.1, height: radius * 0.9, layers: 2 });
+    windCone(ctx, origin, dir, { length, radius, duration: dur + 0.3, opacity: 0.9 });
+    windBlade(ctx, origin, dir, { length: length * 0.9, duration: dur + 0.2, r0: 0.6, r1: radius * 1.1, height: radius * 0.9, layers: 3 });
     windRing(ctx, origin, { r0: 0.2, r1: 1.2 + k, duration: 0.3, height: 0.6, axis: dir });
     let n = 0;
     sweep(cast, {

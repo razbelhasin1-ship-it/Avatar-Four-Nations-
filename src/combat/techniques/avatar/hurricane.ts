@@ -30,7 +30,7 @@ registerTechnique({
   usage: 'Elements Sphere only. Aim where the storm should rise (6–18 m). Enemies within 10 m are pulled in and spun, those near the eye lifted; it breaks after ~5 s and flings them. Costs 15 spirit.',
   icon: 'air',
   chiCost: 30,
-  cooldown: 16,
+  cooldown: 9,
   windup: 0.55,
   recovery: 0.45,
   movement: 'root',

@@ -167,6 +167,8 @@ export class Player extends Entity implements Combatant, Persistable {
       this.ctx.audio.play('whoosh', { volume: 0.4, pitch: 1.4 });
       const colors: Record<Element, string> = { air: '#f4f0e0', water: '#9fd8ff', earth: '#b9a07a', fire: '#ffa050' };
       this.ctx.vfx.burst(e === 'fire' ? 'embers' : e === 'water' ? 'splash' : e === 'earth' ? 'dust' : 'swirl', this.aimPoint(tmpA), { count: 10, color: colors[e] });
+      // A ring of the new element round the feet: the stance shifts.
+      this.ctx.vfx.ring(tmpA.copy(this.position).setY(this.position.y + 0.08), colors[e], 1.15, 0.32, { opacity: 0.55 });
     }
     return true;
   }
@@ -612,7 +614,7 @@ export class Player extends Entity implements Combatant, Persistable {
     this.invuln = Math.max(0, this.invuln - dt);
     this.sinceCombat += dt;
     // Chi regeneration (faster out of combat).
-    this.chi = Math.min(this.maxChi, this.chi + (this.sinceCombat > 4 ? 22 : 9) * dt);
+    this.chi = Math.min(this.maxChi, this.chi + (this.sinceCombat > 4 ? 26 : 13) * dt);
     // Slow health regen out of combat.
     if (this.sinceCombat > 8 && !this.defeated) h.heal(4 * dt);
 

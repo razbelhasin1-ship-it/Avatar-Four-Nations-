@@ -191,9 +191,9 @@ void main() {
     float edge = r + ( n - 0.5 ) * 0.45;
     float charred = smoothstep( 0.88, 0.3, edge );
     float ring = smoothstep( 1.05, 0.75, edge ) * ( 1.0 - charred );
-    col = mix( vec3( 0.5 ), vec3( 0.37, 0.31, 0.27 ), ring );
-    // Charred, not ink-black: the ground still reads through.
-    col = mix( col, vec3( 0.17, 0.15, 0.13 ), charred * ( 0.62 + 0.25 * n ) );
+    col = mix( vec3( 0.5 ), vec3( 0.43, 0.39, 0.35 ), ring );
+    // Singed, not ink-black: the ground still reads through.
+    col = mix( col, vec3( 0.29, 0.26, 0.23 ), charred * ( 0.5 + 0.2 * n ) );
     float fleck = step( 0.82, envHash( floor( p * 60.0 ) + seed ) ) * charred;
     col = mix( col, vec3( 0.42, 0.4, 0.38 ), fleck * 0.6 );
     // Embers die quickly; the char lingers.
@@ -204,7 +204,7 @@ void main() {
     float r = length( p ) * 2.0;
     float n = envFbm( p * 4.0 + seed * 3.0 );
     float m = smoothstep( 0.95 - dry * 0.6, 0.6 - dry * 0.6, r + ( n - 0.5 ) * 0.5 );
-    col = mix( vec3( 0.5 ), vec3( 0.31, 0.32, 0.34 ), m * vC.z );
+    col = mix( vec3( 0.5 ), vec3( 0.39, 0.4, 0.42 ), m * vC.z );
     fade = 1.0;
   } else {
     // Ground crack: jagged radial fissures and a shallow central depression.
@@ -216,14 +216,14 @@ void main() {
       float ang = fi * 0.8976 + ( envHash( vec2( seed, fi ) ) - 0.5 ) * 0.7;
       float jag = ( envNoise( vec2( r * 7.0, fi * 3.1 + seed ) ) - 0.5 ) * 0.35 * r;
       float da = abs( mod( a - ang - jag + 3.14159, 6.28318 ) - 3.14159 );
-      float width = 0.018 * ( 1.0 - r ) + 0.004;
+      float width = 0.011 * ( 1.0 - r ) + 0.003;
       float len = 0.55 + 0.45 * envHash( vec2( fi, seed + 1.7 ) );
       crack = max( crack, smoothstep( width * 2.0, width * 0.5, da * r ) * step( r, len ) );
     }
     float pit = smoothstep( 0.32, 0.05, r );
     float rim = exp( -pow( ( r - 0.34 ) / 0.07, 2.0 ) );
-    col = vec3( 0.5 - pit * 0.12 + rim * 0.06 );
-    col = mix( col, vec3( 0.12, 0.1, 0.09 ), crack );
+    col = vec3( 0.5 - pit * 0.07 + rim * 0.04 );
+    col = mix( col, vec3( 0.3, 0.27, 0.24 ), crack );
     col = mix( vec3( 0.5 ), col, vC.z * smoothstep( 1.0, 0.85, r ) );
   }
   col = mix( vec3( 0.5 ), col, fade );

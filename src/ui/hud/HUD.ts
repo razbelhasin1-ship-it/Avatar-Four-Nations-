@@ -68,6 +68,8 @@ export class HUD {
   private lockMarker: HTMLElement;
   private comboEl: HTMLElement;
   private comboN: HTMLElement;
+  /** Avatar Flow: the elements woven into the current combo. */
+  private flowEl: HTMLElement;
   private vignette: HTMLElement;
   private mountHint: HTMLElement;
   private fpsEl: HTMLElement;
@@ -150,7 +152,8 @@ export class HUD {
     this.chargeWrap.appendChild(svg);
     this.lockMarker = h('div.lock-marker.hidden', h('span.lk.a'), h('span.lk.b'), h('span.lk.c'), h('span.lk.d'));
     this.comboN = h('b', '0');
-    this.comboEl = h('div.hud-combo', this.comboN, h('span', 'Combo'));
+    this.flowEl = h('i.hud-flow');
+    this.comboEl = h('div.hud-combo', this.comboN, h('span', 'Combo'), this.flowEl);
     this.vignette = h('div.hud-vignette');
     this.fpsEl = h('div.fps.hidden');
     this.el = h('div.hud', this.vignette, vitals, this.compass, this.questEl, h('div.crosshair'), this.chargeWrap, this.waterInd, this.prompt, this.lockMarker, this.comboEl, this.mountHint, bottom, this.fpsEl);
@@ -168,6 +171,14 @@ export class HUD {
       if (!ctx.settings.data.gameplay.damageNumbers || e.damage < 0.5) return;
       if (!e.playerIsAttacker && e.targetKind !== 'player') return;
       this.spawnDamage(new THREE.Vector3(e.position.x, e.position.y + 0.4, e.position.z), Math.round(e.damage), e.targetKind === 'player' ? '#ff8a7a' : e.blocked ? '#bbb' : e.killed ? '#ffd27a' : '#fff');
+    });
+    ctx.events.on('combo:weave', (e) => {
+      const colors: Record<string, string> = { air: '#eef6ff', water: '#5cc8ff', earth: '#c9a66b', fire: '#ff8a3a' };
+      this.flowEl.replaceChildren(...e.elements.map((el) => h('u', { style: `background:${colors[el]}` })), h('em', `Avatar Flow ×${e.elements.length}`));
+      this.flowEl.classList.add('on');
+      this.comboEl.classList.add('on');
+      this.comboT = Math.max(this.comboT, 2.8);
+      this.flowEl.animate([{ transform: 'scale(1.25)' }, { transform: 'scale(1)' }], { duration: 260, easing: 'ease-out' });
     });
     ctx.events.on('player:damaged', (e) => {
       const p = ctx.player;
@@ -471,7 +482,10 @@ export class HUD {
 
     if (this.comboT > 0) {
       this.comboT -= dt;
-      if (this.comboT <= 0) this.comboEl.classList.remove('on');
+      if (this.comboT <= 0) {
+        this.comboEl.classList.remove('on');
+        this.flowEl.classList.remove('on');
+      }
     }
     this.hurt = Math.max(0, this.hurt - dt * 1.6);
     this.vignette.style.opacity = Math.min(1, this.hurt).toFixed(3);

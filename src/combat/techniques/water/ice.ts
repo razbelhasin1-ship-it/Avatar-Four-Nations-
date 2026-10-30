@@ -33,7 +33,7 @@ function crystal(): THREE.OctahedronGeometry {
 let shardMatS: THREE.MeshStandardMaterial | null = null;
 let streakGeo: THREE.ConeGeometry | null = null;
 let streakMat: THREE.MeshBasicMaterial | null = null;
-const SHARD_SCALE = new THREE.Vector3(0.15, 0.15, 0.62);
+const SHARD_SCALE = new THREE.Vector3(0.203, 0.203, 0.806);
 
 function shardMat(): THREE.MeshStandardMaterial {
   shardMatS ??= new THREE.MeshStandardMaterial({ color: '#eefcff', roughness: 0.1, metalness: 0.05, emissive: '#5fc4ff', emissiveIntensity: 0.6, flatShading: true });
@@ -50,9 +50,9 @@ function shardVisual(): THREE.Group {
     streakGeo.rotateX(-Math.PI / 2); // tip toward -Z (behind the shard)
     streakGeo.translate(0, 0, -0.5);
   }
-  streakMat ??= new THREE.MeshBasicMaterial({ color: '#bfeaff', transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false });
+  streakMat ??= new THREE.MeshBasicMaterial({ color: '#bfeaff', transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false });
   const st = new THREE.Mesh(streakGeo, streakMat);
-  st.scale.set(0.11, 0.11, 1.5);
+  st.scale.set(0.15, 0.15, 2.1);
   st.position.z = -0.35;
   g.add(st);
   for (const c of g.children) c.frustumCulled = false;
@@ -149,7 +149,7 @@ registerTechnique({
   usage: 'Ability. Fires a fan of ice projectiles toward your aim. Uses ice, water or your reserve.',
   icon: 'water',
   chiCost: 14,
-  cooldown: 4,
+  cooldown: 1.6,
   water: { amount: 8, allowIce: true, preferFrozen: true },
   windup: 0.3,
   recovery: 0.35,
@@ -407,7 +407,7 @@ registerTechnique({
   usage: 'Defensive technique. Raises a wall a few metres in front of you. Uses ice or water.',
   icon: 'water',
   chiCost: 20,
-  cooldown: 9,
+  cooldown: 4,
   water: { amount: 16, allowIce: true, preferFrozen: true },
   windup: 0.35,
   recovery: 0.45,
@@ -609,7 +609,7 @@ registerTechnique({
   usage: 'Ability. Stomp to send a line of ice spikes forward. Uses ice or water.',
   icon: 'water',
   chiCost: 26,
-  cooldown: 11,
+  cooldown: 4.5,
   water: { amount: 18, allowIce: true, preferFrozen: true },
   windup: 0.45,
   recovery: 0.5,
@@ -670,7 +670,7 @@ registerTechnique({
   usage: 'Ability. A fast lash toward your aim; freezes the first foes it touches. Uses water or ice.',
   icon: 'water',
   chiCost: 16,
-  cooldown: 6,
+  cooldown: 2.4,
   water: { amount: 6, allowIce: true },
   windup: 0.16,
   recovery: 0.32,
@@ -686,7 +686,7 @@ registerTechnique({
         hand: 'handR',
         range: 10,
         swing: 0.17,
-        radius: 0.17,
+        radius: 0.25,
         damage: 10,
         knockback: 1.5,
         stagger: 20,

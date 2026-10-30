@@ -145,7 +145,7 @@ registerTechnique({
   usage: 'Ability. A ground-level wave in a wide arc (about 120°, 9 m). Needs water.',
   icon: 'water',
   chiCost: 18,
-  cooldown: 7,
+  cooldown: 2.8,
   water: { amount: 14 },
   windup: 0.3,
   recovery: 0.5,

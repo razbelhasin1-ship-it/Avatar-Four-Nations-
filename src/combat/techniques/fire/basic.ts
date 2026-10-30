@@ -144,8 +144,8 @@ registerTechnique({
     }
     const from = kick ? anchorPos(c, 'footR') : c.castOrigin(step % 2 ? 'handL' : 'handR', new THREE.Vector3());
     const dir = aimFrom(cast, from);
-    const r = kick ? 0.5 + h * 0.03 : 0.26 + h * 0.025;
-    const vis = fireBoltVisual(ctx, r, { length: kick ? 3.6 : 1.9 + h * 0.12, palette: hot ? 'hot' : 'fire', trail: kick ? 0.24 : 0.18 });
+    const r = kick ? 0.62 + h * 0.03 : 0.34 + h * 0.025;
+    const vis = fireBoltVisual(ctx, r, { length: kick ? 4.4 : 2.6 + h * 0.14, palette: hot ? 'hot' : 'fire', trail: kick ? 0.3 : 0.24 });
     cast.projectile({
       position: from,
       velocity: dir.clone().multiplyScalar(kick ? 32 : 42),
@@ -170,7 +170,7 @@ registerTechnique({
         if (kick) detonate(p.cast, pt.clone(), { radius: 2.2, damage: 7, knockback: 6, stagger: 20, burn: 2 });
       },
     });
-    fireMuzzle(ctx, from, dir, kick ? 1.5 : 0.85 + h * 0.06);
+    fireMuzzle(ctx, from, dir, kick ? 1.7 : 1.05 + h * 0.06);
     ctx.audio.play('bend_fire_puff', { position: from, volume: kick ? 0.9 : 0.6, pitch: kick ? 0.85 : 1.05 + step * 0.06 });
     // Momentum: each strike drives the bender forward a touch.
     const b = c.body;
@@ -240,7 +240,7 @@ registerTechnique({
   usage: 'Hold Aim to charge (bigger fireball, wider blast), release to throw.',
   icon: 'fire',
   chiCost: 15,
-  cooldown: 1.0,
+  cooldown: 0.5,
   windup: 0.12,
   recovery: 0.38,
   movement: 'slow',

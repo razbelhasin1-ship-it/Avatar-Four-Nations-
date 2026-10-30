@@ -176,7 +176,7 @@ registerTechnique({
   usage: 'Defensive technique (slot). Lasts about three seconds. Needs water.',
   icon: 'water',
   chiCost: 16,
-  cooldown: 6,
+  cooldown: 2.5,
   water: { amount: 10 },
   windup: 0.22,
   recovery: 0.3,

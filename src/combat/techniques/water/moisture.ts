@@ -120,7 +120,7 @@ registerTechnique({
   usage: 'Ability (channel ~1.6 s). Adds a limited amount of water to your reserve. Long cooldown.',
   icon: 'water',
   chiCost: 15,
-  cooldown: 18,
+  cooldown: 8,
   windup: 0.4,
   recovery: 0.3,
   movement: 'root',

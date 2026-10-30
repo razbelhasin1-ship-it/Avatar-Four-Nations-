@@ -25,7 +25,7 @@ registerTechnique({
   usage: 'Dashes toward your movement input (or aim). Briefly untouchable. Your next air strike right after the dash is a Slipstream blow.',
   icon: 'air',
   chiCost: 10,
-  cooldown: 1.1,
+  cooldown: 0.6,
   windup: 0.03,
   recovery: 0.15,
   movement: 'root',
@@ -167,7 +167,7 @@ registerTechnique({
   usage: 'Press to mount; steer with movement (camera-relative). Press again, attack or dodge to hop off — Jump launches you off the ball. Drains chi slowly; the ball breaks up after ~3 s over water.',
   icon: 'air',
   chiCost: 12,
-  cooldown: 2,
+  cooldown: 1.0,
   windup: 0.12,
   recovery: 0.12,
   movement: 'root',
@@ -238,7 +238,7 @@ registerTechnique({
       c.yaw = Math.atan2(d.vel.x, d.vel.z);
       c.root.rotation.y = c.yaw;
     }
-    d.shell.update(dt, tmp.copy(pos).setY(pos.y + 0.38), 0.42 + Math.min(0.08, speed * 0.004));
+    d.shell.update(dt, tmp.copy(pos).setY(pos.y + 0.42), 0.48 + Math.min(0.08, speed * 0.004));
     d.loop.setPosition(pos);
     d.loop.setPitch(0.8 + speed / 20);
     if (!w && b.grounded && Math.random() < dt * (6 + speed * 1.5)) ctx.vfx.burst('dust', pos, { count: 1, dir: tmp.set(-d.vel.x, 0.5, -d.vel.z).normalize(), spread: 0.4, speed: 1 });

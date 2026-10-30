@@ -86,6 +86,10 @@ export class Humanoid {
   private wantLod: 0 | 1;
   private camDist = 0;
   private animAccum = 0;
+  /** Animation speed multiplier (the player's bending tempo). */
+  timeScale = 1;
+  /** Seconds left of a hit-freeze. */
+  private freezeLeft = 0;
   private eyeGlow = 0;
   private tattooGlow = 0;
   /** [additive: avatar] World-space wind acceleration for hair / cloth chains (m/s²); zero = still air. */
@@ -315,6 +319,11 @@ export class Humanoid {
   // Per-frame
   // ---------------------------------------------------------------------------
 
+  /** Hold the current pose for a beat (impact hit-stop); the simulation keeps running. */
+  hitFreeze(seconds: number): void {
+    this.freezeLeft = Math.max(this.freezeLeft, seconds);
+  }
+
   update(dt: number): void {
     if (this.disposed) return;
     // LOD by camera distance (measured during the last render).
@@ -332,9 +341,14 @@ export class Humanoid {
       }
       if (this.mesh) this.mesh.castShadow = this.castShadow && this.camDist < Humanoid.shadowDistance;
     }
-    // Animation (reduced rate when far away).
+    // Animation (reduced rate when far away), at the bending tempo; a hit-freeze holds the pose.
     const far = this.camDist > Humanoid.animLodDistance;
-    this.animAccum += dt;
+    let adt = dt * this.timeScale;
+    if (this.freezeLeft > 0) {
+      this.freezeLeft -= dt;
+      adt *= 0.06;
+    }
+    this.animAccum += adt;
     if (!far || this.animAccum >= 1 / 15) {
       this.animator.update(this.animAccum);
       this.animAccum = 0;
