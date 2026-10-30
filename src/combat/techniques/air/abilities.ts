@@ -42,7 +42,8 @@ registerTechnique({
     const dir = aimFlat(cast);
     const base = c.position.clone();
     base.y = groundY(ctx, base.x, base.z, base.y) + 0.05;
-    windArc(ctx, base, dir, { r0: 0.8, r1: 9.5, arc: 2.6, height: 0.75, duration: 0.42 });
+    windArc(ctx, base, dir, { r0: 0.8, r1: 9.5, arc: 2.6, height: 1.15, duration: 0.6, opacity: 1 });
+    windArc(ctx, base.clone().setY(base.y + 0.25), dir, { r0: 0.6, r1: 7, arc: 2.2, height: 0.7, duration: 0.5, opacity: 0.7 });
     let n = 0;
     ringSweep(cast, {
       center: base.clone().setY(base.y + 0.45),

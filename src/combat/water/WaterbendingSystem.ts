@@ -77,7 +77,11 @@ interface PuddleVisual {
   source: WaterSource;
   shown: number;
   fade: number;
+  /** Laid along the slope of the ground it sits on. */
+  tilted?: boolean;
 }
+
+const PUDDLE_UP = new THREE.Vector3(0, 1, 0);
 
 interface Encasement {
   entity: Entity;
@@ -687,6 +691,14 @@ export class WaterbendingSystem implements GameSystem, Persistable {
       v.shown += (target - v.shown) * Math.min(1, dt * 6);
       v.mesh.scale.setScalar(Math.max(0.01, v.shown));
       v.mesh.position.set(s.x, s.y + 0.03, s.z);
+      if (!v.tilted) {
+        // A flat disc on a slope would sink into the uphill side and float on the downhill one.
+        v.tilted = true;
+        const w = this.ctx.world, d = 0.6, top = s.y + 1.5;
+        const hx = w.groundAt(s.x + d, s.z, top).y - w.groundAt(s.x - d, s.z, top).y;
+        const hz = w.groundAt(s.x, s.z + d, top).y - w.groundAt(s.x, s.z - d, top).y;
+        v.mesh.quaternion.setFromUnitVectors(PUDDLE_UP, new THREE.Vector3(-hx, 2 * d, -hz).normalize());
+      }
       v.mat.uniforms.uOpacity.value = opacity;
       v.mat.uniforms.uRipple.value = 0.25 + 0.5 * Math.max(0, 1 - frac);
     }
