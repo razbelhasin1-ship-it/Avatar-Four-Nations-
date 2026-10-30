@@ -294,6 +294,53 @@ try {
     await h.eval((g) => { g.freeCamera(null); g.setTime(10); });
   });
 
+  await check('crowds keep out of the architecture: nobody inside a house, stall, pier, gate block or closed gate', async () => {
+    const spots = [
+      [{ x: 670, y: 32, z: -112 }, { x: 690, y: 27, z: -104 }],
+      [{ x: 633.5, y: 28, z: -22.5 }, { x: 641, y: 27, z: -32 }],
+      [{ x: 729, y: 31, z: -52 }, { x: 714, y: 27, z: -52 }],
+      [{ x: 856, y: 31, z: 106 }, { x: 850, y: 27, z: 120 }],
+    ];
+    let samples = 0;
+    const inside = [];
+    for (const [cam, look] of spots) {
+      await h.eval((g, cam, look) => { g.teleport(cam.x, cam.z); g.setTime(11); g.freeCamera(cam, look); }, cam, look);
+      await h.step(2);
+      await h.eval((g) => g.debug.bss.crowdWarm(20));
+      const r = await h.eval((g) => {
+        const crowd = g.debug.bss.region().crowd, col = g.ctx.world.collision, cam = g.ctx.camera.position;
+        const foot = (c, x, z) => {
+          if (c.shape !== 'box') return Math.max(0, Math.hypot(x - c.x, z - c.z) - c.r);
+          const dx = x - c.x, dz = z - c.z, lx = dx * c.c - dz * c.s, lz = dx * c.s + dz * c.c;
+          return Math.hypot(Math.max(0, Math.abs(lx) - c.hx), Math.max(0, Math.abs(lz) - c.hz));
+        };
+        let n = 0;
+        const bad = [];
+        for (let k = 0; k < 6; k++) {
+          g.debug.bss.crowdWarm(3);
+          for (const a of crowd.agents) {
+            // Stall keepers stand inside their stall's footprint, behind the counter.
+            if (!a.out || a.role === 'seller' || (a.x - cam.x) ** 2 + (a.z - cam.z) ** 2 > 90 * 90) continue;
+            n++;
+            col.query(a.x, a.z, 0.2, (c) => {
+              // Moving floors (lift platforms, stepping stones) are stood on; gate slabs and doors are not.
+              if (!c.solid || c.br < 0.5 || (c.dynamic && c.walkable)) return;
+              const top = c.shape === 'sphere' ? c.y + c.r : c.y + c.hy;
+              if (top < a.y + (c.walkable ? 0.6 : 0.3) || c.y - c.hy > a.y + 1.7 || foot(c, a.x, a.z) >= 0.2) return;
+              if (bad.length < 6) bad.push(`${a.role}/${a.state} at ${a.x.toFixed(1)},${a.z.toFixed(1)} in ${c.shape} ${c.hx.toFixed(1)}x${c.hz.toFixed(1)}${c.dynamic ? ' (gate)' : ''}`);
+            });
+          }
+        }
+        return { n, bad };
+      });
+      samples += r.n;
+      inside.push(...r.bad);
+    }
+    assert.ok(samples > 2000, `people sampled around the camera: ${samples}`);
+    assert.deepEqual(inside, [], `inside architecture (${samples} samples)`);
+    await h.eval((g) => g.freeCamera(null));
+  });
+
   await check('debug overlay: F3 shows fps, draw calls, crowd, NPC and train counts', async () => {
     await tp(640, -30, 26);
     await h.step(4);

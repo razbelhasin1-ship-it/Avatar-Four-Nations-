@@ -223,6 +223,15 @@ export function gatesOf(wall: WallId): GateDef[] {
   return GATES.filter((g) => g.wall === wall);
 }
 
+/** Depth of each wall's gate block through the wall (the length of its road tunnel). */
+export const GATE_DEPTH: Record<WallId, number> = {
+  outer: WALL.outer.base + 6,
+  inner: WALL.inner.base + 4,
+  middle: WALL.ring.base + 3,
+  upper: WALL.ring.base + 3,
+  palace: WALL.palace.base,
+};
+
 /** Point just inside (toward C) or outside a gate passage. */
 export function gateMouth(g: GateDef, inward: boolean, extra = 2): P2 {
   const half = (g.wall === 'outer' ? WALL.outer.base : g.wall === 'inner' ? WALL.inner.base : WALL.ring.base) / 2;

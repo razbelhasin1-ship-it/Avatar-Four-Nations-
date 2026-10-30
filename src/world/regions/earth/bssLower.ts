@@ -446,7 +446,8 @@ function buildPaoTeaHouse(site: DistrictSite): void {
       nav.poi(p.x + dx + Math.cos(a) * 1.15, p.z + dz + Math.sin(a) * 1.15, NavTag.tea | NavTag.bench | NavTag.lower, Math.atan2(-Math.cos(a), -Math.sin(a)));
     }
   }
-  nav.poi(p.x, p.z + 4.6, NavTag.tea | NavTag.shop | NavTag.lower, 0);
+  // Order at the counter (facing it, between the veranda posts); the queue forms toward the square.
+  nav.poi(p.x + 1.5, p.z + 3.9, NavTag.tea | NavTag.shop | NavTag.lower, Math.PI);
   site.mark('pao_tea_house', p.x, GROUND, p.z);
 }
 

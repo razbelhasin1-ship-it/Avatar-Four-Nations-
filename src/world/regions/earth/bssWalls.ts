@@ -13,6 +13,7 @@ import {
   FARM_ROADS,
   FOOT,
   GATES,
+  GATE_DEPTH,
   GROUND,
   LOWER_LANES,
   R,
@@ -157,7 +158,7 @@ export function buildOuterWall(site: WallSite): void {
   // Gate towers.
   for (const g of gates) {
     const Wg = gateW(g);
-    const D = W.base + 6;
+    const D = GATE_DEPTH.outer;
     const f = ringFrame(g.theta, g.r);
     const b = env.chunks.named('major', 'outer_gates').builder;
     const Ht = H + 10;
@@ -214,7 +215,7 @@ export function buildInnerWall(site: WallSite): void {
   const crossings = railCrossings(R.inner);
   for (const g of gates) {
     const Wg = gateW(g);
-    const D = W.base + 4;
+    const D = GATE_DEPTH.inner;
     const f = ringFrame(g.theta, g.r);
     const b = env.chunks.named('major', 'inner_gates').builder;
     const portals: Portal[] = [];
@@ -320,7 +321,7 @@ export function buildRingWall(site: WallSite, which: 'middle' | 'upper'): void {
     const b = env.chunks.named('major', `${key}_gates`).builder;
     const gateW = gw(g);
     const thru = crossings.find((c) => !open.includes(c) && Math.abs(lateral(f, c.p)) < gateW / 2);
-    const D = W.base + 3;
+    const D = GATE_DEPTH[which];
     gateBlock(b, {
       f,
       baseY: base,
@@ -530,6 +531,11 @@ export class GateRuntime {
 
   state(): Array<{ id: string; open: number }> {
     return this.items.map((it) => ({ id: it.d.id, open: +it.open.toFixed(2) }));
+  }
+
+  /** Each slab's line across its passage: the crowd never paths through a gate (only the player opens them). */
+  barriers(): Array<[P2, P2]> {
+    return this.items.map((it) => [it.d.f.at(-it.d.aw / 2 - 0.6, it.d.lz), it.d.f.at(it.d.aw / 2 + 0.6, it.d.lz)]);
   }
 
   update(dt: number, ctx: GameContext): void {

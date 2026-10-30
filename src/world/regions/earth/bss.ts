@@ -93,7 +93,7 @@ export class BaSingSe extends EarthRegion {
     this.trains = new TrainSystem(this.group, rail.stations);
     this.lifts = new LiftRuntime(this.group, rail.lifts as LiftDef[], this.bm);
     this.laogai = new LaogaiRuntime(this.group, this.bm, laogai);
-    this.crowd = new CrowdSystem(this.group, this.nav, this.figures, site.shops, site.stalls, () => this.trains?.summary() ?? []);
+    this.crowd = new CrowdSystem(this.group, this.nav, this.figures, site.shops, site.stalls, () => this.trains?.summary() ?? [], () => [...(this.gates?.barriers() ?? []), ...(this.laogai?.barriers() ?? [])]);
     this.overlay = new BssOverlay(() => this.overlayLines());
     this.installBssDebug();
   }

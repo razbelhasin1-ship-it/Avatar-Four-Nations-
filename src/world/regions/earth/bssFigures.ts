@@ -99,13 +99,13 @@ function bodyGeometry(lod: 0 | 1): THREE.BufferGeometry {
     pushBox(b, 0, 1.49, 0, 0.09, 0.08, 0.09, 1, 2);
     // Face (near LOD only): eye whites and pupils, brows in the hair colour, nose, mouth, ears.
     for (const s of [1, -1]) {
-      pushBox(b, s * 0.04, 1.612, 0.116, 0.03, 0.019, 0.012, 1, 8);
-      pushBox(b, s * 0.04, 1.611, 0.121, 0.015, 0.017, 0.008, 1, 6);
-      pushBox(b, s * 0.042, 1.638, 0.114, 0.036, 0.008, 0.012, 1, 4);
+      pushBox(b, s * 0.041, 1.612, 0.114, 0.036, 0.026, 0.012, 1, 8);
+      pushBox(b, s * 0.04, 1.61, 0.12, 0.019, 0.023, 0.008, 1, 6);
+      pushBox(b, s * 0.043, 1.641, 0.114, 0.038, 0.009, 0.012, 1, 4);
       pushBox(b, s * 0.106, 1.6, 0.0, 0.02, 0.045, 0.032, 1, 2);
     }
     pushBox(b, 0, 1.594, 0.128, 0.016, 0.03, 0.024, 1, 2);
-    pushBox(b, 0, 1.565, 0.12, 0.034, 0.007, 0.01, 1, 7);
+    pushBox(b, 0, 1.565, 0.12, 0.036, 0.008, 0.01, 1, 7);
     for (const s of [1, -1]) {
       const part = s > 0 ? 2 : 3;
       pushBox(b, s * 0.095, 0.47, 0, 0.12, 0.84, 0.14, part, 1);

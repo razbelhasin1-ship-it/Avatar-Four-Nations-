@@ -584,6 +584,19 @@ export class LaogaiRuntime {
     this.ctx = null;
   }
 
+  /** Lines the crowd never paths across: the concealed door, and the water over the sunken stepping stones. */
+  barriers(): Array<[P2, P2]> {
+    const f = this.info.doorFrame;
+    const a = L.path.a, b = L.path.b;
+    const l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    const nx = -(b.z - a.z) / l, nz = (b.x - a.x) / l;
+    const m = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+    return [
+      [f.at(-TUN.hw - 0.6, 0), f.at(TUN.hw + 0.6, 0)],
+      [{ x: m.x - nx * 4, z: m.z - nz * 4 }, { x: m.x + nx * 4, z: m.z + nz * 4 }],
+    ];
+  }
+
   /** Set the path and door directly (tests): no sound, no particles. */
   setState(rise: number, open: number): void {
     this.rise = this.riseTarget = rise;

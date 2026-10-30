@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import type { GameContext } from '../../../core/GameContext';
 import type { LoopHandle } from '../../../audio/AudioEngine';
 import { kitMaterial } from '../../kit/Materials';
-import { BSS, C, CROWD, GATES, GROUND, R, WALL, hash01 } from './bssLayout';
+import type { Collider, CollisionWorld } from '../../Collision';
+import type { P2 } from '../../WorldLayout';
+import { BSS, C, CROWD, GATES, GATE_DEPTH, GROUND, R, hash01 } from './bssLayout';
 import { Acc, Pose, type FigureRenderer } from './bssFigures';
 import { insideLaogai } from './bssLaogai';
 import { NavTag, type NavGraph } from './bssNav';
@@ -168,6 +170,29 @@ function dress(a: Agent, zone: Zone, u: (j: number) => number): void {
   a.speed = role === 'vendor' ? 0.85 : role === 'porter' ? 1.0 : role === 'daili' ? 1.25 : 1.05 + u(9) * 0.45;
 }
 
+/** Horizontal distance from (x, z) to a collider's footprint (0 inside it). */
+function footDist(c: Collider, x: number, z: number): number {
+  if (c.shape === 'box') {
+    const dx = x - c.x, dz = z - c.z;
+    const lx = dx * c.c - dz * c.s, lz = dx * c.s + dz * c.c;
+    return Math.hypot(Math.max(0, Math.abs(lx) - c.hx), Math.max(0, Math.abs(lz) - c.hz));
+  }
+  return Math.max(0, Math.hypot(x - c.x, z - c.z) - c.r);
+}
+
+/** Architecture a body standing at height y would pass through: solid, static, broader than a post, between knee and head. */
+function blocks(c: Collider, y: number): boolean {
+  if (!c.solid || c.dynamic || c.br < 0.5) return false;
+  const top = c.shape === 'sphere' ? c.y + c.r : c.y + c.hy;
+  return top >= y + (c.walkable ? 0.6 : 0.3) && c.y - c.hy <= y + 1.7;
+}
+
+/** Does segment ab cross segment cd? */
+function crosses(a: P2, b: P2, c: P2, d: P2): boolean {
+  const o = (p: P2, q: P2, r: P2) => (q.x - p.x) * (r.z - p.z) - (q.z - p.z) * (r.x - p.x);
+  return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0;
+}
+
 export interface CrowdShop {
   x: number;
   z: number;
@@ -188,6 +213,9 @@ export class CrowdSystem {
   readonly agents: Agent[] = [];
   readonly group = new THREE.Group();
   private nodeY: Float32Array | null = null;
+  /** Free width along each link (m, capped; key min·n + max): a walker's lane offset stays inside it. */
+  private readonly free = new Map<number, number>();
+  private col: CollisionWorld | null = null;
   private comp: Int32Array | null = null;
   private pools = new Map<Zone, Map<number, number[]>>();
   private zoneNodes = new Map<Zone, number[]>();
@@ -224,7 +252,7 @@ export class CrowdSystem {
   /** Recent relocation spots (x, z pairs), so newcomers do not arrive in clumps. */
   private readonly recent = new Float32Array(48);
   private recentI = 0;
-  readonly stats = { total: 0, out: 0, near: 0, local: 0, sellers: 0, moved: 0, ms: 0, paths: 0 };
+  readonly stats = { total: 0, out: 0, near: 0, local: 0, sellers: 0, moved: 0, ms: 0, paths: 0, cut: 0, relinked: 0 };
   private readonly tmpM = new THREE.Matrix4();
   private readonly tmpQ = new THREE.Quaternion();
   private readonly tmpP = new THREE.Vector3();
@@ -237,6 +265,8 @@ export class CrowdSystem {
     private readonly shops: CrowdShop[],
     private readonly stalls: CrowdStall[],
     private readonly trains: () => Array<{ moving: boolean; x: number; z: number }>,
+    /** Lines nobody in the crowd walks across (gate slabs, the concealed door of Lake Laogai). */
+    private readonly barriers: () => Array<[P2, P2]>,
   ) {
     this.group.name = 'bss_crowd_props';
     parent.add(this.group);
@@ -278,6 +308,8 @@ export class CrowdSystem {
     const N = this.nav.nodes;
     this.nodeY = new Float32Array(N.length);
     for (let i = 0; i < N.length; i++) this.nodeY[i] = ctx.world.groundAt(N[i].x, N[i].z, GROUND + 8).y;
+    this.col = ctx.world.collision;
+    this.sanitize();
     // Connected components; each zone walks in the component holding most of its nodes.
     this.comp = new Int32Array(N.length).fill(-1);
     let c = 0;
@@ -333,6 +365,101 @@ export class CrowdSystem {
       }
       this.pools.set(z, tags);
     }
+  }
+
+  /**
+   * Keep the walking graph out of the architecture: links across a gate slab or through solid
+   * buildings, stalls and counters are dropped, a spot left stranded joins the nearest street it can
+   * reach in a straight line, and each link's free width is measured for the lane offsets.
+   */
+  private sanitize(): void {
+    const N = this.nav.nodes;
+    const bars = this.barriers();
+    for (let i = 0; i < N.length; i++) {
+      for (let k = N[i].edges.length - 1; k >= 0; k--) {
+        const j = N[i].edges[k];
+        if (j < i) continue;
+        if (bars.some(([c, d]) => crosses(N[i], N[j], c, d)) || !this.clearLine(i, j)) {
+          this.nav.unlink(i, j);
+          this.stats.cut++;
+        }
+      }
+    }
+    for (let i = 0; i < N.length; i++) {
+      const n = N[i];
+      if (n.edges.length || n.tags & NavTag.street) continue;
+      for (const s of this.nav.around(n.x, n.z, 16, NavTag.street)) {
+        if (!bars.some(([c, d]) => crosses(n, N[s], c, d)) && this.clearLine(i, s)) {
+          this.nav.link(i, s);
+          this.stats.relinked++;
+          break;
+        }
+      }
+    }
+    const Y = this.nodeY!;
+    this.free.clear();
+    for (let i = 0; i < N.length; i++) {
+      for (const j of N[i].edges) {
+        if (j < i) continue;
+        const a = N[i], b = N[j];
+        const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 1.5));
+        let c = 3.5;
+        for (let k = 0; k <= n; k++) c = Math.min(c, this.freeAt(a.x + ((b.x - a.x) * k) / n, Y[i] + ((Y[j] - Y[i]) * k) / n, a.z + ((b.z - a.z) * k) / n));
+        this.free.set(i * N.length + j, c);
+      }
+    }
+  }
+
+  /** Free width along the link between two nodes (0 if unknown). */
+  private freeOf(i: number, j: number): number {
+    const n = this.nav.nodes.length;
+    return this.free.get(i < j ? i * n + j : j * n + i) ?? 0;
+  }
+
+  /** The nearest spot to (x, z) where a person stands clear of the architecture (on whatever floor is there). */
+  private standAt(x: number, z: number): { x: number; y: number; z: number } {
+    const floor = (px: number, pz: number) => this.ctx?.world.groundAt(px, pz, GROUND + 8).y ?? GROUND;
+    for (let r = 0; r <= 4; r += 0.5) {
+      for (let k = 0; k < (r ? 8 : 1); k++) {
+        const px = x + Math.cos((k * Math.PI) / 4) * r, pz = z + Math.sin((k * Math.PI) / 4) * r;
+        const py = floor(px, pz);
+        if (!this.solidAt(px, py, pz, 0.35)) return { x: px, y: py, z: pz };
+      }
+    }
+    return { x, y: floor(x, z), z };
+  }
+
+  /** A straight walk between two nodes stays out of the architecture (spots may stand against a counter or door). */
+  private clearLine(i: number, j: number): boolean {
+    const N = this.nav.nodes, Y = this.nodeY!;
+    const a = N[i], b = N[j];
+    const L = Math.hypot(b.x - a.x, b.z - a.z);
+    const n = Math.max(1, Math.ceil(L / 0.5));
+    const ea = a.tags & NavTag.street ? 0 : 0.7, eb = b.tags & NavTag.street ? 0 : 0.7;
+    for (let k = 0; k <= n; k++) {
+      const t = k / n;
+      if (t * L < ea || (1 - t) * L < eb) continue;
+      if (this.solidAt(a.x + (b.x - a.x) * t, Y[i] + (Y[j] - Y[i]) * t, a.z + (b.z - a.z) * t, 0.2)) return false;
+    }
+    return true;
+  }
+
+  /** Is there architecture within `pad` of a body standing at (x, y, z)? */
+  private solidAt(x: number, y: number, z: number, pad: number): boolean {
+    let hit = false;
+    this.col?.query(x, z, pad, (c) => {
+      if (!hit && blocks(c, y) && footDist(c, x, z) < pad) hit = true;
+    });
+    return hit;
+  }
+
+  /** Distance from (x, y, z) to the nearest architecture, capped at 3.5 m. */
+  private freeAt(x: number, y: number, z: number): number {
+    let d = 3.5;
+    this.col?.query(x, z, 3.5, (c) => {
+      if (blocks(c, y)) d = Math.min(d, footDist(c, x, z));
+    });
+    return d;
   }
 
   private spawn(): void {
@@ -406,11 +533,12 @@ export class CrowdSystem {
 
   /** Royal Earthbender Guards at the ring and palace gates, wall soldiers at the Outer and Inner Walls. */
   private posts(): void {
-    const half: Record<string, number> = { outer: WALL.outer.base / 2, inner: WALL.inner.base / 2, middle: WALL.ring.base / 2, upper: WALL.ring.base / 2 };
     let k = 0;
     const put = (x: number, z: number, yaw: number, soldier: boolean) => {
       k++;
-      const a = person(x, GROUND, z, yaw);
+      // On the floor that is there (the palace stair guards stand on the top tier), clear of piers.
+      const p = this.standAt(x, z);
+      const a = person(p.x, p.y, p.z, yaw);
       a.role = soldier ? 'soldier' : 'guard';
       a.robe = soldier ? (k % 2 ? 0x1e1e1e : 0xc9a227) : GUARD.robe;
       a.pants = soldier ? 0x1a1a1a : GUARD.pants;
@@ -425,13 +553,14 @@ export class CrowdSystem {
     };
     for (const g of GATES) {
       const soldier = g.wall === 'outer' || g.wall === 'inner';
-      const rIn = g.r - half[g.wall] - 1.6;
+      // In front of the gate block's faces (its trim stands 0.4 m proud), not inside the masonry.
+      const off = GATE_DEPTH[g.wall] / 2 + 1.2;
       const ox = Math.cos(g.theta), oz = Math.sin(g.theta), tx = -Math.sin(g.theta), tz = Math.cos(g.theta);
       const yaw = Math.atan2(ox, oz);
       for (const side of [-1, 1]) {
         const lat = side * (g.width / 2 + 0.9);
-        put(C.x + ox * rIn + tx * lat, C.z + oz * rIn + tz * lat, yaw, soldier);
-        if (g.main) put(C.x + ox * (g.r + half[g.wall] + 1.6) + tx * lat, C.z + oz * (g.r + half[g.wall] + 1.6) + tz * lat, yaw + Math.PI, soldier);
+        put(C.x + ox * (g.r - off) + tx * lat, C.z + oz * (g.r - off) + tz * lat, yaw, soldier);
+        if (g.main) put(C.x + ox * (g.r + off) + tx * lat, C.z + oz * (g.r + off) + tz * lat, yaw + Math.PI, soldier);
       }
     }
     // Guards at the top of the throne hall stairs.
@@ -698,8 +827,15 @@ export class CrowdSystem {
       this.occ.set(a.node, q + 1);
       a.held = a.node;
       if (q > 0 && T & (NavTag.shop | NavTag.stall | NavTag.station)) {
-        a.x -= Math.sin(n.yaw) * 1.05 * q;
-        a.z -= Math.cos(n.yaw) * 1.05 * q;
+        // Behind whoever holds the spot or, with a wall or counter there, beside them.
+        const sx = Math.sin(n.yaw), sz = Math.cos(n.yaw), d = 1.05 * q;
+        for (let o = 0; o < 3; o++) {
+          const ox = (o === 0 ? -sx : o === 1 ? sz : -sz) * d, oz = (o === 0 ? -sz : o === 1 ? -sx : sx) * d;
+          if (this.solidAt(n.x + ox, a.y, n.z + oz, 0.25)) continue;
+          a.x = n.x + ox;
+          a.z = n.z + oz;
+          break;
+        }
       }
     }
     if (a.role === 'sweeper' && T & NavTag.shop) {
@@ -801,7 +937,10 @@ export class CrowdSystem {
         const sl = Math.hypot(sx, sz) || 1;
         sx /= sl;
         sz /= sl;
-        const lane = last ? 0 : a.lane + a.dodge;
+        // The lane stays inside the street (a body's width clear of the buildings either side),
+        // narrowing ahead of a pinch on the next link.
+        const room = Math.max(0, Math.min(this.freeOf(a.path[a.pi - 1], next), last ? 3.5 : this.freeOf(next, a.path[a.pi + 1])) - 0.45);
+        const lane = last ? 0 : Math.max(-room, Math.min(room, a.lane + a.dodge));
         const tx = n.x - sz * lane, tz = n.z + sx * lane;
         let dx = tx - a.x, dz = tz - a.z;
         const d = Math.hypot(dx, dz);

@@ -710,10 +710,28 @@ export function gateBlock(b: ContentBuilder, o: GateBlockOpts): void {
   }
   for (const fy of o.bands ?? []) {
     const p = f.at(0, 0);
-    b.box(o.trim, { x: p.x, y: o.baseY + H * fy, z: p.z, sx: W + 0.8, sy: 0.9, sz: D + 0.8, yaw });
+    // A band below the tunnel crown stops at the opening (it used to run across the road at head height).
+    const gap = o.tunnel ? archHalfWidth(o.tunnel.aw, o.tunnel.spring, H * fy - 0.45) : 0;
+    if (gap <= 0) {
+      b.box(o.trim, { x: p.x, y: o.baseY + H * fy, z: p.z, sx: W + 0.8, sy: 0.9, sz: D + 0.8, yaw });
+      continue;
+    }
+    const len = W / 2 + 0.4 - gap;
+    for (const side of [-1, 1]) {
+      const q = f.at(side * (gap + len / 2), 0);
+      b.box(o.trim, { x: q.x, y: o.baseY + H * fy, z: q.z, sx: len, sy: 0.9, sz: D + 0.8, yaw });
+    }
   }
   const top = f.at(0, 0);
   if (!o.notch) b.box(o.trim, { x: top.x, y: o.baseY + H - 0.4, z: top.z, sx: W + 0.6, sy: 0.8, sz: D + 0.6, yaw });
+}
+
+/** Half-width of an arched opening `y` metres above its floor, a hair wide (0 above the crown). */
+function archHalfWidth(aw: number, spring: number, y: number): number {
+  const r = aw / 2;
+  if (y <= spring) return r + 0.02;
+  const k = y - spring;
+  return k >= r ? 0 : Math.sqrt(r * r - k * k) + 0.02;
 }
 
 /** Arched slab that closes a tunnel (local: width along X, height along Y from 0, thickness along Z). */

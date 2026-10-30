@@ -93,6 +93,33 @@ export class NavGraph {
     if (!this.nodes[b].edges.includes(a)) this.nodes[b].edges.push(a);
   }
 
+  unlink(a: number, b: number): void {
+    const ea = this.nodes[a].edges, eb = this.nodes[b].edges;
+    const i = ea.indexOf(b), j = eb.indexOf(a);
+    if (i >= 0) ea.splice(i, 1);
+    if (j >= 0) eb.splice(j, 1);
+  }
+
+  /** Nodes within `r` metres (with any of `mask`), nearest first. */
+  around(x: number, z: number, r: number, mask = 0): number[] {
+    const found: Array<[number, number]> = [];
+    const c0 = Math.floor((x - r) / CELL), c1 = Math.floor((x + r) / CELL);
+    const d0 = Math.floor((z - r) / CELL), d1 = Math.floor((z + r) / CELL);
+    for (let i = c0; i <= c1; i++) {
+      for (let j = d0; j <= d1; j++) {
+        const l = this.grid.get((i + 512) * 4096 + (j + 512));
+        if (!l) continue;
+        for (const k of l) {
+          const n = this.nodes[k];
+          if (mask && !(n.tags & mask)) continue;
+          const d = (n.x - x) ** 2 + (n.z - z) ** 2;
+          if (d < r * r) found.push([d, k]);
+        }
+      }
+    }
+    return found.sort((p, q) => p[0] - q[0]).map((p) => p[1]);
+  }
+
   /** Street along a polyline: nodes every ≤ `step` m; ends and joints snap to nodes within `snap` m. */
   street(points: P2[], tags = NavTag.street, step = 10, snap = 4): number[] {
     const ids: number[] = [];
