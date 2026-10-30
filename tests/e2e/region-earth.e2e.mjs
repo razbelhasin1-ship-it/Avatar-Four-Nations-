@@ -303,42 +303,45 @@ try {
     ];
     let samples = 0;
     const inside = [];
-    for (const [cam, look] of spots) {
-      await h.eval((g, cam, look) => { g.teleport(cam.x, cam.z); g.setTime(11); g.freeCamera(cam, look); }, cam, look);
-      await h.step(2);
-      await h.eval((g) => g.debug.bss.crowdWarm(20));
-      const r = await h.eval((g) => {
-        const crowd = g.debug.bss.region().crowd, col = g.ctx.world.collision, cam = g.ctx.camera.position;
-        const foot = (c, x, z) => {
-          if (c.shape !== 'box') return Math.max(0, Math.hypot(x - c.x, z - c.z) - c.r);
-          const dx = x - c.x, dz = z - c.z, lx = dx * c.c - dz * c.s, lz = dx * c.s + dz * c.c;
-          return Math.hypot(Math.max(0, Math.abs(lx) - c.hx), Math.max(0, Math.abs(lz) - c.hz));
-        };
-        let n = 0;
-        const bad = [];
-        for (let k = 0; k < 6; k++) {
-          g.debug.bss.crowdWarm(3);
-          for (const a of crowd.agents) {
-            // Stall keepers stand inside their stall's footprint, behind the counter.
-            if (!a.out || a.role === 'seller' || (a.x - cam.x) ** 2 + (a.z - cam.z) ** 2 > 90 * 90) continue;
-            n++;
-            col.query(a.x, a.z, 0.2, (c) => {
-              // Moving floors (lift platforms, stepping stones) are stood on; gate slabs and doors are not.
-              if (!c.solid || c.br < 0.5 || (c.dynamic && c.walkable)) return;
-              const top = c.shape === 'sphere' ? c.y + c.r : c.y + c.hy;
-              if (top < a.y + (c.walkable ? 0.6 : 0.3) || c.y - c.hy > a.y + 1.7 || foot(c, a.x, a.z) >= 0.2) return;
-              if (bad.length < 6) bad.push(`${a.role}/${a.state} at ${a.x.toFixed(1)},${a.z.toFixed(1)} in ${c.shape} ${c.hx.toFixed(1)}x${c.hz.toFixed(1)}${c.dynamic ? ' (gate)' : ''}`);
-            });
+    try {
+      for (const [cam, look] of spots) {
+        await h.eval((g, cam, look) => { g.teleport(cam.x, cam.z); g.setTime(11); g.freeCamera(cam, look); }, cam, look);
+        await h.step(2);
+        await h.eval((g) => g.debug.bss.crowdWarm(20));
+        const r = await h.eval((g) => {
+          const crowd = g.debug.bss.region().crowd, col = g.ctx.world.collision, cam = g.ctx.camera.position;
+          const foot = (c, x, z) => {
+            if (c.shape !== 'box') return Math.max(0, Math.hypot(x - c.x, z - c.z) - c.r);
+            const dx = x - c.x, dz = z - c.z, lx = dx * c.c - dz * c.s, lz = dx * c.s + dz * c.c;
+            return Math.hypot(Math.max(0, Math.abs(lx) - c.hx), Math.max(0, Math.abs(lz) - c.hz));
+          };
+          let n = 0;
+          const bad = [];
+          for (let k = 0; k < 6; k++) {
+            g.debug.bss.crowdWarm(3);
+            for (const a of crowd.agents) {
+              // Stall keepers stand inside their stall's footprint, behind the counter.
+              if (!a.out || a.role === 'seller' || (a.x - cam.x) ** 2 + (a.z - cam.z) ** 2 > 90 * 90) continue;
+              n++;
+              col.query(a.x, a.z, 0.2, (c) => {
+                // Moving floors (lift platforms, stepping stones) are stood on; gate slabs and doors are not.
+                if (!c.solid || c.br < 0.5 || (c.dynamic && c.walkable)) return;
+                const top = c.shape === 'sphere' ? c.y + c.r : c.y + c.hy;
+                if (top < a.y + (c.walkable ? 0.6 : 0.3) || c.y - c.hy > a.y + 1.7 || foot(c, a.x, a.z) >= 0.2) return;
+                if (bad.length < 6) bad.push(`${a.role}/${a.state} at ${a.x.toFixed(1)},${a.z.toFixed(1)} in ${c.shape} ${c.hx.toFixed(1)}x${c.hz.toFixed(1)}${c.dynamic ? ' (gate)' : ''}`);
+              });
+            }
           }
-        }
-        return { n, bad };
-      });
-      samples += r.n;
-      inside.push(...r.bad);
+          return { n, bad };
+        });
+        samples += r.n;
+        inside.push(...r.bad);
+      }
+    } finally {
+      await h.eval((g) => g.freeCamera(null));
     }
     assert.ok(samples > 2000, `people sampled around the camera: ${samples}`);
     assert.deepEqual(inside, [], `inside architecture (${samples} samples)`);
-    await h.eval((g) => g.freeCamera(null));
   });
 
   await check('gate tunnels are clear: rays along every city gate passage hit no masonry, pillar or prop', async () => {

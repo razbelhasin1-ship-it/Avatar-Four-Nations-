@@ -402,7 +402,7 @@ export class CrowdSystem {
       for (const j of N[i].edges) {
         if (j < i) continue;
         const a = N[i], b = N[j];
-        const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 1.5));
+        const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.75));
         let c = 3.5;
         for (let k = 0; k <= n; k++) c = Math.min(c, this.freeAt(a.x + ((b.x - a.x) * k) / n, Y[i] + ((Y[j] - Y[i]) * k) / n, a.z + ((b.z - a.z) * k) / n));
         this.free.set(i * N.length + j, c);
@@ -439,7 +439,8 @@ export class CrowdSystem {
     for (let k = 0; k <= n; k++) {
       const t = k / n;
       if (t * L < ea || (1 - t) * L < eb) continue;
-      if (this.solidAt(a.x + (b.x - a.x) * t, Y[i] + (Y[j] - Y[i]) * t, a.z + (b.z - a.z) * t, 0.2)) return false;
+      // 0.4 m at 0.5 m steps: the line itself never passes closer than ~0.3 m to a corner between samples.
+      if (this.solidAt(a.x + (b.x - a.x) * t, Y[i] + (Y[j] - Y[i]) * t, a.z + (b.z - a.z) * t, 0.4)) return false;
     }
     return true;
   }
@@ -937,9 +938,9 @@ export class CrowdSystem {
         const sl = Math.hypot(sx, sz) || 1;
         sx /= sl;
         sz /= sl;
-        // The lane stays inside the street (a body's width clear of the buildings either side),
-        // narrowing ahead of a pinch on the next link.
-        const room = Math.max(0, Math.min(this.freeOf(a.path[a.pi - 1], next), last ? 3.5 : this.freeOf(next, a.path[a.pi + 1])) - 0.45);
+        // The lane stays inside the street (a body's width clear of the buildings either side, with
+        // slack for the 0.75 m sampling), narrowing ahead of a pinch on the next link.
+        const room = Math.max(0, Math.min(this.freeOf(a.path[a.pi - 1], next), last ? 3.5 : this.freeOf(next, a.path[a.pi + 1])) - 0.6);
         const lane = last ? 0 : Math.max(-room, Math.min(room, a.lane + a.dodge));
         const tx = n.x - sz * lane, tz = n.z + sx * lane;
         let dx = tx - a.x, dz = tz - a.z;
@@ -954,7 +955,8 @@ export class CrowdSystem {
             speed *= 0.55;
           } else a.dodge *= Math.max(0, 1 - step * 0.8);
         }
-        if (d < 0.45) {
+        // Reach each waypoint (turning early cut corners into statues and piers); stop short at the end.
+        if (d < (last ? 0.45 : 0.12)) {
           a.node = next;
           a.pi++;
           if (a.pi >= a.path.length) this.arrive(a, h);
