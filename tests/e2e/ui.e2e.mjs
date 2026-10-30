@@ -392,8 +392,14 @@ try {
       await h.eval((g) => g.ctx.ui.showDialogue({ speaker: 'Test', text: 'Hello', choices: [{ text: 'Bye', onSelect: () => g.ctx.ui.hideDialogue() }] }));
       await h.step(2);
       assert.ok(await h.page.evaluate(() => document.querySelector('.hud').classList.contains('in-dialogue')), 'HUD marked in-dialogue');
-      // Opacity transitions run on the browser clock: poll instead of a fixed wait.
-      await h.page.waitForFunction(() => getComputedStyle(document.querySelector('.hud .hud-bottom')).opacity === '0', null, { timeout: 15000, polling: 200 });
+      // Opacity transitions run on the browser clock: poll instead of a fixed wait, with the
+      // real-time loop paused (software WebGL frames over the harbor would starve the fade).
+      await h.eval((g) => g.game.stop());
+      try {
+        await h.page.waitForFunction(() => getComputedStyle(document.querySelector('.hud .hud-bottom')).opacity === '0', null, { timeout: 15000, polling: 200 });
+      } finally {
+        await h.eval((g) => g.game.start());
+      }
       await h.eval((g) => g.ctx.ui.hideDialogue());
       await h.step(2);
     });
