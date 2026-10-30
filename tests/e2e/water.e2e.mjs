@@ -43,7 +43,7 @@ const check = async (name, fn) => {
   }
 };
 
-const RIVER = { x: -491.5, z: -1470 }; // Glacier Melt Stream (NWT), west of the ice cliffs
+const RIVER = { x: -535, z: -1695 }; // Glacier Melt Stream (NWT) west of the ice cliffs, where it runs wide
 // Open coast west of Agna Qel'a's cliffs, far from the harbor and canals inside the cove.
 const OCEAN = { x: -440, z: -1822, seaZ: -1852 };
 const FROZEN = { x: 330, z: -1330 }; // Moonlit Frozen Lake
