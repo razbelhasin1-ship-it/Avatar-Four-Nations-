@@ -1,8 +1,8 @@
-import * as THREE from 'three';
 import { heightAt } from '../../Heightfield';
 import type { ContentBuilder } from '../../kit/Builder';
 import { buildDistrict, Detail } from './agnaBuildings';
 import { buildLandmarks, PLATFORM_RECT } from './agnaLandmarks';
+import { buildOasis } from './agnaOasis';
 import { block, lampPillar, stairFlight } from './agnaParts';
 import { buildCliffs } from './agnaCliffs';
 import { cityPlans, type DistrictPlan } from './agnaPlan';
@@ -29,9 +29,6 @@ import {
   L4,
   MOAT,
   MOAT_WL,
-  OASIS,
-  OASIS_POND,
-  OASIS_SLOT,
   PALACE_PLAZA,
   PALACE_POOLS,
   PALACE_STAIRS,
@@ -391,27 +388,8 @@ function courtyards(k: NwtKit): void {
 }
 
 // ---------------------------------------------------------------------------
-// Spirit Oasis floor (phase 3 builds the garden) and the Glacier Pass
+// The Glacier Pass
 // ---------------------------------------------------------------------------
-
-function oasisFloor(k: NwtKit): void {
-  const cb = k.core;
-  block(cb, OASIS_SLOT[0], OASIS_SLOT[1], OASIS_SLOT[2], OASIS_SLOT[3], L4, 'paving', 'ice');
-  const P = OASIS_POND;
-  const solid = (x: number, z: number) => Math.hypot(x - P.x, z - P.z) > P.r + 0.3;
-  for (const r of rasterRects(OASIS[0], OASIS[1], OASIS[2], OASIS[3], 1, solid)) block(cb, r.x0, r.z0, r.x1, r.z1, L4, 'grass', 'grass');
-  const bedY = L4 - 1.1, wy = L4 - 0.3;
-  const wall = new THREE.CylinderGeometry(P.r + 0.35, P.r + 0.35, L4 - bedY + 0.02, 40, 1, true);
-  wall.scale(-1, 1, 1);
-  cb.mesh(wtMat('rock'), wall, { x: P.x, y: (L4 + bedY) / 2, z: P.z }, { castShadow: false });
-  wall.dispose();
-  const bed = flatDisc(P.r + 0.4, 32);
-  cb.mesh(wtMat('canal_bed'), bed, { x: P.x, y: bedY, z: P.z }, { castShadow: false });
-  bed.dispose();
-  k.sheets.disc(wtWater('spirit'), P.x, P.z, P.r + 0.36, wy, 40);
-  cb.collider({ shape: 'cylinder', x: P.x, y: bedY - 0.3, z: P.z, r: P.r + 0.4, hy: 0.3, walkable: true, solid: false, surface: 'water' });
-  k.water({ id: 'nwt:spirit_oasis', type: 'pond', label: 'Spirit Oasis Pond', x: P.x, y: wy, z: P.z, r: P.r, capacity: 300, regen: 15, size: 'medium' });
-}
 
 function glacierPass(k: NwtKit): void {
   const cb = k.core;
@@ -493,7 +471,7 @@ export function buildCity(k: NwtKit): { plans: DistrictPlan[]; glow: number[] } 
   const lamps = new Detail(k.layer('lamps', AX, -1660, 420));
   lampPillars(k, g, lamps);
   courtyards(k);
-  oasisFloor(k);
+  buildOasis(k, det);
   glacierPass(k);
   buildCliffs(k.mainBuilder());
   const glow = [...det.glow, ...lamps.glow];

@@ -173,12 +173,20 @@ try {
     assert.ok(r.grounded, 'grounded on the platform');
   });
 
-  await check('NWT walk: palace plaza → west garden → crevasse → Spirit Oasis', async () => {
+  await check('NWT walk: palace plaza → west garden → lamp-lit crevasse → moon gate → moon bridge → koi island', async () => {
     await teleport(-220, -1480, 20);
-    const r = await walkPath([[-259.5, -1478], [-259.5, -1440], [-259.5, -1412], [-259.5, -1396], [-250, -1386], [-232, -1370]], { minY: L4 - 0.4 });
-    near(r.y, L4, 0.4, 'oasis floor level');
+    const r = await walkPath([[-259.5, -1478], [-259.5, -1440], [-259.5, -1412], [-259.5, -1396], [-259.5, -1386], [-256.5, -1381.5], [-245, -1374], [-238.5, -1368], [-229, -1368], [-222, -1372]], { minY: L4 - 0.4 });
+    near(r.y, L4, 0.4, 'island level');
+    const spots = await h.eval((g) => g.debug.waterRegions.spots());
+    assert.ok(Math.hypot(r.x - spots.shrine_spirit_oasis.x, r.z - spots.shrine_spirit_oasis.z) < 2, 'reached the shrine spot on the island');
     const src = await sources(20);
     assert.ok(src.some((s) => s.id === 'nwt:spirit_oasis' && !s.frozen), 'spirit oasis pond source: ' + JSON.stringify(src));
+    const koi = await h.eval((g) => {
+      const out = {};
+      g.ctx.render.scene.traverse((o) => { if (o.name === 'koi_la' || o.name === 'koi_tui') out[o.name] = [o.position.x, o.position.z]; });
+      return out;
+    });
+    assert.ok(koi.koi_la && koi.koi_tui, 'La and Tui swim in the koi pond: ' + JSON.stringify(koi));
   });
 
   await check('NWT walk: harbor quay → harbor-head bridge → promenade → grand stairs → plaza', async () => {

@@ -82,8 +82,16 @@ export const CLIFF = { w: -380, e: -60, s: -1408 };
 /** Spirit Oasis: a notch of the back cliff behind the palace, and the crevasse passage into it. */
 export const OASIS: Rect = [-262, -1392, -184, -1344];
 export const OASIS_SLOT: Rect = [-262, -1408, -257, -1392];
-/** The koi pond in the oasis. */
-export const OASIS_POND = { x: AX, z: -1376, r: 4.6 };
+/**
+ * Spirit Oasis garden: a pond ringing a grassy island (island and pond radii),
+ * the koi pond on the island, the waterfall's pool at the back cliff and the
+ * stream from it, and the round moon gate at the end of the crevasse.
+ */
+export const OASIS_ISLAND = { x: AX - 2, z: -1368, r: 7, pond: 12 };
+export const OASIS_POND = { x: AX - 2, z: -1366.5, r: 2.2 };
+export const OASIS_FALL_POOL: Rect = [AX - 6, -1350, AX + 2, -1344];
+export const OASIS_STREAM: Rect = [AX - 3, -1356, AX - 1, -1350];
+export const MOON_GATE = { x: (OASIS_SLOT[0] + OASIS_SLOT[2]) / 2, z: OASIS_SLOT[3] + 2.5, r: 1.75 };
 /** Glacier Pass: a canyon through the back cliff to the northern road. */
 export const PASS: Rect = [-118, -1408, -104, -1336];
 
@@ -227,6 +235,7 @@ export const CLIFF_FALLS: Array<{ x: number; z: number; yaw: number; w: number; 
   { x: CLIFF.e, z: (HEALER_POOL[1] + HEALER_POOL[3]) / 2, yaw: -Math.PI / 2, w: 3.5, bottom: L2 + 0.42 },
   { x: AX - 16, z: CLIFF.s, yaw: Math.PI, w: 7, bottom: L4 + 0.42 },
   { x: AX + 16, z: CLIFF.s, yaw: Math.PI, w: 7, bottom: L4 + 0.42 },
+  { x: OASIS_ISLAND.x, z: OASIS[3], yaw: Math.PI, w: 3.5, bottom: L4 - 0.32 },
   { x: -305, z: JAW_TIP - 5, yaw: Math.PI, w: 9, bottom: 0 },
   { x: -135, z: JAW_TIP - 5, yaw: Math.PI, w: 9, bottom: 0 },
 ];
@@ -331,7 +340,7 @@ defineSpots({
   dock_nwt_grand_canal: { x: AX, z: -1796, y: L1, yaw: Math.PI, r: 4, label: 'Promenade Landing', region: R },
   dock_nwt_sea_gate: { x: MOUTH.x0 + 7.8, z: GATE_Z + 8, y: L1, yaw: Math.PI, r: 2, label: 'Sea Gate', region: R },
   bridge_nwt_gate: { x: AX, z: GATE_Z - 3, y: GATE_TOP, r: 5, label: 'Great Ice Gate', region: R },
-  shrine_spirit_oasis: { x: AX, z: -1370, y: L4, r: 4, label: 'Spirit Oasis', region: R },
+  shrine_spirit_oasis: { x: OASIS_ISLAND.x, z: OASIS_ISLAND.z - 5, y: L4, r: 2, label: 'Spirit Oasis', region: R },
   viewpoint_nwt_wall: { x: AX + 24, z: GATE_Z - 3, y: GATE_TOP, yaw: 0, r: 2.5, label: 'Gate Wall Lookout', region: R },
   viewpoint_nwt_palace: { x: AX, z: -1486, y: L4, yaw: Math.PI, r: 5, label: 'Palace Plaza', region: R },
   viewpoint_nwt_glacier: { x: -520, z: -1352, r: 4, label: 'Glacier Caves', region: R },
