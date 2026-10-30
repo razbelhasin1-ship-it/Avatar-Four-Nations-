@@ -366,7 +366,7 @@ export function buildRingWall(site: WallSite, which: 'middle' | 'upper'): void {
 // ---------------------------------------------------------------------------
 
 export const PALACE_GATES: Array<{ id: string; theta: number; w: number }> = [
-  { id: 'palace_south', theta: 90 * DEG, w: 30 },
+  { id: 'palace_south', theta: 90 * DEG, w: 24 },
   { id: 'palace_north', theta: 270 * DEG, w: 12 },
 ];
 
@@ -401,7 +401,7 @@ export function buildGrounds(site: WallSite): void {
   };
   ring(site.bm.mud, FOOT.middleOut - 0.5, FOOT.innerIn + 0.5, GROUND + 0.03, 9);
   ring(site.bm.lawn, FOOT.upperOut - 0.5, FOOT.middleIn + 0.5, GROUND + 0.03, 6);
-  ring(m.groundUpper, FOOT.palaceOut - 0.4, FOOT.upperIn + 0.5, GROUND + 0.03, 4);
+  ring(site.bm.lawn, FOOT.palaceOut - 0.4, FOOT.upperIn + 0.5, GROUND + 0.03, 6);
   ring('paving', 0.01, R.palace - WALL.palace.base / 2 + 0.3, GROUND + 0.03, 3, 96);
   // Ring streets.
   const rs = RING_STREETS;

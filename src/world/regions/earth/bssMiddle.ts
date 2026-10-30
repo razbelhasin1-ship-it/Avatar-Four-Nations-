@@ -362,6 +362,9 @@ function buildMarketPlaza(site: DistrictSite): void {
   const P = BSS.marketPlaza;
   const F = ringLocal(P.c);
   const b = env.chunks.named('props', 'mid_plaza').builder;
+  // Paths across the plaza join the lane (along the ring) and both ring roads.
+  nav.street([F.at(-P.r - 4.8, 0), F.at(P.r + 4.8, 0)], NavTag.middle | NavTag.square, 8, 5);
+  nav.street([F.at(0, P.r + 5), F.at(0, -P.r - 5)], NavTag.middle | NavTag.square, 8, 5);
   const floor = new THREE.CircleGeometry(P.r, 40);
   floor.rotateX(-Math.PI / 2);
   env.chunks.named('major', 'mid_plaza_floor').builder.mesh('paving', floor, { x: P.c.x, y: GROUND + 0.07, z: P.c.z }, { castShadow: false });
@@ -372,23 +375,24 @@ function buildMarketPlaza(site: DistrictSite): void {
   kerb.dispose();
   // Octagonal pavilion: plinth, 8 red columns, double green roof with a gold finial.
   const R0 = 5.2;
-  b.cylinder('stone_light', { x: P.c.x, y: GROUND + 0.3, z: P.c.z, r: R0 + 0.8, h: 0.6, segments: 8 }, { collide: true, walkable: true });
+  b.cylinder('stone_light', { x: P.c.x, y: GROUND, z: P.c.z, r: R0 + 0.8, h: 0.6, segments: 8 }, { collide: true, walkable: true });
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
     const x = P.c.x + Math.cos(a) * R0, z = P.c.z + Math.sin(a) * R0;
-    b.cylinder('wood_red', { x, y: GROUND + 2.6, z, r: 0.24, h: 4.0, segments: 8 }, { collide: true });
+    b.cylinder('wood_red', { x, y: GROUND + 0.6, z, r: 0.24, h: 4.0, segments: 8 }, { collide: true });
     b.lantern(new THREE.Vector3(x * 0.85 + P.c.x * 0.15, GROUND + 3.9, z * 0.85 + P.c.z * 0.15), { color: 'warm', hanging: true });
   }
-  b.cylinder('wood_dark', { x: P.c.x, y: GROUND + 4.7, z: P.c.z, r: R0 + 0.4, h: 0.35, segments: 8 });
-  b.roof('roof_green', { x: P.c.x, y: GROUND + 4.85, z: P.c.z, w: R0 * 2 + 1.5, d: R0 * 2 + 1.5, height: 2.0, overhang: 1.1, curve: 0.9, style: 'pagoda', ridge: null });
-  b.cylinder('plaster_cream', { x: P.c.x, y: GROUND + 7.2, z: P.c.z, r: 2.3, h: 1.6, segments: 8 });
-  b.roof('roof_green', { x: P.c.x, y: GROUND + 8.0, z: P.c.z, w: 6.4, d: 6.4, height: 2.2, overhang: 0.8, curve: 0.9, style: 'pagoda', ridge: null });
-  b.box('gold', { x: P.c.x, y: GROUND + 10.6, z: P.c.z, sx: 0.25, sy: 1.0, sz: 0.25 });
+  b.cylinder('wood_dark', { x: P.c.x, y: GROUND + 4.5, z: P.c.z, r: R0 + 0.4, h: 0.4, segments: 8 });
+  b.roof('roof_green', { x: P.c.x, y: GROUND + 4.85, z: P.c.z, w: R0 * 2 + 0.6, d: R0 * 2 + 0.6, height: 2.0, overhang: 0.9, curve: 0.9, style: 'pagoda', ridge: null });
+  b.cylinder('plaster_cream', { x: P.c.x, y: GROUND + 6.2, z: P.c.z, r: 2.3, h: 1.4, segments: 8 });
+  b.cylinder('wood_red', { x: P.c.x, y: GROUND + 7.45, z: P.c.z, r: 2.45, h: 0.2, segments: 8 });
+  b.roof('roof_green', { x: P.c.x, y: GROUND + 7.6, z: P.c.z, w: 6.0, d: 6.0, height: 2.2, overhang: 0.8, curve: 0.9, style: 'pagoda', ridge: null });
+  b.box('gold', { x: P.c.x, y: GROUND + 10.2, z: P.c.z, sx: 0.25, sy: 1.0, sz: 0.25 });
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * Math.PI * 2;
     const x = P.c.x + Math.cos(a) * 2.4, z = P.c.z + Math.sin(a) * 2.4;
     b.cylinder('wood', { x, y: GROUND + 1.35, z, r: 0.65, h: 0.08, segments: 10 });
-    b.cylinder('wood_dark', { x, y: GROUND + 0.95, z, r: 0.1, h: 0.7, segments: 6 });
+    b.cylinder('wood_dark', { x, y: GROUND + 0.6, z, r: 0.1, h: 0.75, segments: 6 });
     nav.poi(x + Math.cos(a) * 1.1, z + Math.sin(a) * 1.1, NavTag.tea | NavTag.bench | NavTag.middle, a + Math.PI);
   }
   // Eight awning stalls around the rim, entrances on the four axes; string lamps to poles behind them.
@@ -402,7 +406,7 @@ function buildMarketPlaza(site: DistrictSite): void {
     const q = F.at(Math.cos(a) * (rr - 2.1), Math.sin(a) * (rr - 2.1));
     nav.poi(q.x, q.z, NavTag.stall | NavTag.middle, yaw + Math.PI);
     const pole = F.at(Math.cos(a) * (P.r - 0.5), Math.sin(a) * (P.r - 0.5));
-    b.cylinder('wood_dark', { x: pole.x, y: GROUND + 2.6, z: pole.z, r: 0.12, h: 5.2, segments: 6 }, { collide: true });
+    b.cylinder('wood_dark', { x: pole.x, y: GROUND, z: pole.z, r: 0.12, h: 5.2, segments: 6 }, { collide: true });
     const top = F.at(Math.cos(a) * (R0 + 1.1), Math.sin(a) * (R0 + 1.1));
     lanternString(b, env.mats, new THREE.Vector3(top.x, GROUND + 5.3, top.z), new THREE.Vector3(pole.x, GROUND + 5.0, pole.z), 0.7, 6, 'warm');
   }
@@ -411,9 +415,6 @@ function buildMarketPlaza(site: DistrictSite): void {
     const p = F.at(Math.cos(a) * 9.4, Math.sin(a) * 9.4);
     planter(b, env.mats, p.x, GROUND, p.z, 0.9);
   }
-  // Paths across the plaza join the lane (along the ring) and both ring roads.
-  nav.street([F.at(-P.r - 4.8, 0), F.at(P.r + 4.8, 0)], NavTag.middle | NavTag.square, 8, 5);
-  nav.street([F.at(0, P.r + 5), F.at(0, -P.r - 5)], NavTag.middle | NavTag.square, 8, 5);
   site.mark('middle_plaza', P.c.x, GROUND, P.c.z);
 }
 
@@ -439,7 +440,7 @@ function buildDojo(site: DistrictSite): void {
   for (const side of [-1, 1]) {
     for (const lz of [-0.5, 4.5, 9.5]) {
       const p = F.at(side * (D.hw - 2.2), lz);
-      b.cylinder('wood', { x: p.x, y: GROUND + 0.9, z: p.z, r: 0.22, h: 1.8, segments: 8 }, { collide: true });
+      b.cylinder('wood', { x: p.x, y: GROUND, z: p.z, r: 0.22, h: 1.8, segments: 8 }, { collide: true });
     }
     const r = F.at(side * (D.hw - 0.75), -2.5);
     b.box('wood_dark', { x: r.x, y: GROUND + 1.0, z: r.z, sx: 0.3, sy: 2.0, sz: 3, yaw: F.yaw }, { collide: true });
@@ -459,6 +460,7 @@ function buildUniversity(site: DistrictSite): void {
   const U = BSS.university;
   const F = ringLocal(U.c);
   const b = env.chunks.named('props', 'mid_university').builder;
+  nav.street([F.at(0, U.hd + 3), F.at(0, 9.5), F.at(-1.6, 4), F.at(0, -1)], NavTag.middle | NavTag.street | NavTag.school, 8, 5);
   blockFloor(site, 'mid_univ_floor', F, U.c, U.hw * 2 - 1, U.hd * 2 - 1, 'paving');
   compoundWall(b, F, U.hw, U.hd, 2.6, 10);
   const g = F.at(0, U.hd);
@@ -486,9 +488,8 @@ function buildUniversity(site: DistrictSite): void {
     nav.poi(t.x, t.z, NavTag.bench | NavTag.middle | NavTag.school, F.yaw - (side * Math.PI) / 2);
   }
   const urn = F.at(0, 4);
-  b.cylinder('bronze', { x: urn.x, y: GROUND + 0.75, z: urn.z, r: 0.55, rTop: 0.7, h: 0.7, segments: 10 }, { collide: true });
-  b.cylinder('stone_grey', { x: urn.x, y: GROUND + 0.2, z: urn.z, r: 0.9, h: 0.4, segments: 8 }, { collide: true, walkable: true });
-  nav.street([F.at(0, U.hd + 3), F.at(0, 9.5), F.at(-1.6, 4), F.at(0, -1)], NavTag.middle | NavTag.street | NavTag.school, 8, 5);
+  b.cylinder('bronze', { x: urn.x, y: GROUND + 0.4, z: urn.z, r: 0.55, rTop: 0.7, h: 0.7, segments: 10 }, { collide: true });
+  b.cylinder('stone_grey', { x: urn.x, y: GROUND, z: urn.z, r: 0.9, h: 0.4, segments: 8 }, { collide: true, walkable: true });
   site.mark('university', U.c.x, GROUND, U.c.z);
 }
 
@@ -521,7 +522,7 @@ function buildTownHall(site: DistrictSite): void {
     const l = F.at(side * 9.5, 8.5);
     lanternPost(b, l.x, GROUND, l.z, 'warm');
     const f = F.at(side * 12.2, 3);
-    b.cylinder('wood_dark', { x: f.x, y: GROUND + 4, z: f.z, r: 0.1, h: 8, segments: 6 }, { collide: true });
+    b.cylinder('wood_dark', { x: f.x, y: GROUND, z: f.z, r: 0.1, h: 8, segments: 6 }, { collide: true });
     const ban = F.at(side * 12.2 + side * 0.05, 3);
     b.box('cloth_green', { x: ban.x, y: GROUND + 6.0, z: ban.z, sx: 0.05, sy: 3.2, sz: 1.1, yaw: F.yaw });
   }
@@ -756,7 +757,7 @@ function dressMiddle(site: DistrictSite, houses: PlacedHouse[], radials: number[
       for (const s of [-1, 1]) db.lantern(new THREE.Vector3(h.door.x + fx * 0.4 + lx * s * 2.2, GROUND + 3.2, h.door.z + fz * 0.4 + lz * s * 2.2), { color: 'warm', hanging: true });
       const tx = h.door.x + fx * 1.6, tz = h.door.z + fz * 1.6;
       db.cylinder('wood', { x: tx, y: GROUND + 0.72, z: tz, r: 0.6, h: 0.08, segments: 10 });
-      db.cylinder('wood_dark', { x: tx, y: GROUND + 0.36, z: tz, r: 0.1, h: 0.72, segments: 6 });
+      db.cylinder('wood_dark', { x: tx, y: GROUND, z: tz, r: 0.1, h: 0.72, segments: 6 });
       sign(db, bm, u < 0.18 ? '茶館' : '酒樓', h.door.x - lx * 2.9 - fx * 0.5, GROUND + 2.4, h.door.z - lz * 2.9 - fz * 0.5, h.yaw, 1.4, { vertical: true });
       nav.poi(tx + lx * 1.1, tz + lz * 1.1, NavTag.tea | NavTag.bench | NavTag.middle, h.yaw - Math.PI / 2);
     } else if (u < 0.3) {

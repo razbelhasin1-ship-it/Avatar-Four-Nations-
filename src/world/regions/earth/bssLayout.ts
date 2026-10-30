@@ -410,9 +410,9 @@ export const RAIL_LINES: RailLineDef[] = [
     deck: RAIL.deck,
     pts: circlePts(R.palace, 56),
     stations: [
-      { id: 'pal_w', name: 'Upper Ring West', cjk: '上環站', at: polar(tm + 36 * DEG, R.palace), stairs: 1 },
-      { id: 'pal_n', name: 'Upper Ring North', cjk: '上環站', at: polar(291 * DEG, R.palace), stairs: 1 },
-      { id: 'pal_s', name: 'Palace South Gate', cjk: '王宮南門', at: polar(80 * DEG, R.palace), stairs: 1 },
+      { id: 'pal_w', name: 'Upper Ring West', cjk: '上環站', at: polar(tm + 36 * DEG, R.palace), stairs: -1 },
+      { id: 'pal_n', name: 'Upper Ring North', cjk: '上環站', at: polar(291 * DEG, R.palace), stairs: -1 },
+      { id: 'pal_s', name: 'Upper Ring East', cjk: '上環站', at: polar(40 * DEG, R.palace), stairs: -1 },
     ],
     trains: TRAINS.innerLoop,
   },
@@ -450,15 +450,30 @@ export const BSS = {
   gardenW: { c: polar(212.75 * DEG, 136), r: 11 },
   spa: { c: polar(112 * DEG, 136), hw: 10, hd: 14.5 },
   poetry: { c: polar(62 * DEG, 136), hw: 9, hd: 14.5 },
-  /** Upper Ring landmarks. */
-  jasmineDragon: polar(150 * DEG, 84),
-  avatarHouse: polar(244 * DEG, 85),
-  irohApartment: polar(167 * DEG, 87),
-  daySpa: polar(36 * DEG, 84),
-  warRoom: polar(322 * DEG, 84),
-  upperFountains: [polar(120 * DEG, 82), polar(60 * DEG, 82)],
-  /** Palace: South Gate on the palace wall; throne hall platform north of C. */
-  palace: { gateZ: C.z + R.palace, hallZ: C.z - 6, innerZ: C.z - 26 },
+  /** Upper Ring landmark blocks in the outer row (r 76-96.5): centre angle and half-width along the ring.
+   *  Sectors clear of the viaducts (EARTH_PROBE=blocks BSS_R0=74.5 BSS_R1=97). */
+  upper: {
+    warRoom: { t: 322 * DEG, hw: 12 },
+    fancyLady: { t: 36 * DEG, hw: 11 },
+    jasmineDragon: { t: 150 * DEG, hw: 12 },
+    irohApartment: { t: 171 * DEG, hw: 7.5 },
+    avatarHouse: { t: 232 * DEG, hw: 11 },
+    fountains: [{ t: 60 * DEG, hw: 7 }, { t: 300 * DEG, hw: 7 }],
+  },
+  /** Palace (offsets from C; +z = south, the axis runs from the South Gate north to the throne hall).
+   *  Three-tier platform (tops 2/4/6 m), throne hall on the top tier, Golden Water canal inside the gate. */
+  palace: {
+    tiers: [
+      { hw: 24, z0: -20, z1: 28, h: 2 },
+      { hw: 21, z0: -17, z1: 25, h: 4 },
+      { hw: 18, z0: -14, z1: 22, h: 6 },
+    ],
+    hall: { hw: 15, z0: -11, z1: 3 },
+    terraceZ: 15,
+    canalZ: 34,
+    gate: { hw: 12, z0: 39.5, z1: 48.5, h: 9 },
+    innerWallZ: -24,
+  },
   /** Lake Laogai (global lake at (1060, 170) r=48). */
   lake: { x: 1060, z: 170, r: 48 },
   lakeDock: { a: { x: 1004, z: 168 }, b: { x: 1022, z: 168 } },

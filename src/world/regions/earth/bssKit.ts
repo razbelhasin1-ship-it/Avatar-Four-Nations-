@@ -172,6 +172,79 @@ function lawnTexture(): THREE.CanvasTexture {
   return t;
 }
 
+/** War Room floor map: an invented continent, an island chain to the west, polar ice, a grid and a compass. */
+function warMapTexture(): THREE.CanvasTexture {
+  const [c, g] = canvas(512, 384);
+  const r = rand(131);
+  g.fillStyle = '#3f6479';
+  g.fillRect(0, 0, 512, 384);
+  const blobs = (n: number, cx: number, cy: number, rx: number, ry: number, r0: number, r1: number, fill: string) => {
+    g.fillStyle = fill;
+    for (let i = 0; i < n; i++) {
+      const a = r() * Math.PI * 2, d = Math.sqrt(r());
+      g.beginPath();
+      g.arc(cx + Math.cos(a) * rx * d, cy + Math.sin(a) * ry * d, r0 + r() * (r1 - r0), 0, Math.PI * 2);
+      g.fill();
+    }
+  };
+  blobs(90, 318, 196, 150, 112, 16, 44, '#7e9a5c');
+  blobs(26, 100, 218, 46, 96, 5, 15, '#9b5a3c');
+  blobs(10, 92, 108, 30, 24, 4, 10, '#9b5a3c');
+  g.fillStyle = '#e6eef0';
+  for (const [y0, dir] of [[0, 1], [384, -1]] as const) {
+    g.beginPath();
+    g.moveTo(0, y0);
+    for (let x = 0; x <= 512; x += 16) g.lineTo(x, y0 + dir * (14 + r() * 12));
+    g.lineTo(512, y0);
+    g.fill();
+  }
+  g.strokeStyle = 'rgba(70,52,30,0.75)';
+  g.lineWidth = 2;
+  for (let i = 0; i < 26; i++) {
+    const x = 240 + r() * 170, y = 120 + r() * 150;
+    g.beginPath();
+    g.moveTo(x - 6, y + 4);
+    g.lineTo(x, y - 5);
+    g.lineTo(x + 6, y + 4);
+    g.stroke();
+  }
+  g.strokeStyle = '#c9a24e';
+  for (const rr of [9, 6, 3]) {
+    g.beginPath();
+    g.arc(392, 186, rr, 0, Math.PI * 2);
+    g.stroke();
+  }
+  g.strokeStyle = 'rgba(232,200,106,0.28)';
+  g.lineWidth = 1;
+  for (let x = 32; x < 512; x += 32) {
+    g.beginPath();
+    g.moveTo(x, 0);
+    g.lineTo(x, 384);
+    g.stroke();
+  }
+  for (let y = 32; y < 384; y += 32) {
+    g.beginPath();
+    g.moveTo(0, y);
+    g.lineTo(512, y);
+    g.stroke();
+  }
+  g.strokeStyle = '#e8c86a';
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(470, 300);
+  g.lineTo(470, 350);
+  g.moveTo(445, 325);
+  g.lineTo(495, 325);
+  g.stroke();
+  g.lineWidth = 8;
+  g.strokeStyle = '#6b4a24';
+  g.strokeRect(4, 4, 504, 376);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
 function signTexture(text: string, s: SignStyle): THREE.CanvasTexture {
   const chars = [...text];
   const vertical = s.vertical ?? chars.length <= 3;
@@ -220,6 +293,8 @@ export class BssMats {
   readonly glow: THREE.MeshStandardMaterial;
   /** Garden lawn between the flagstone streets of the Middle and Upper Rings. */
   readonly lawn: THREE.MeshStandardMaterial;
+  /** Painted floor map of the Council's War Room. */
+  readonly warMap: THREE.MeshStandardMaterial;
   private readonly owned: THREE.Material[] = [];
   private readonly textures: THREE.Texture[] = [];
   private readonly signs = new Map<string, THREE.MeshStandardMaterial>();
@@ -240,7 +315,7 @@ export class BssMats {
     this.slab = this.own(new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.96, map: stoneBlocks('#8f8a7e', '#00000050', 4, 3, 35) }));
     applyTriplanar(this.slab, 3.5);
     this.slab.name = 'bss_slab';
-    this.palaceRoof = kitMaterialTinted('roof_green', '#5d8a62');
+    this.palaceRoof = kitMaterialTinted('roof_green', '#6c9c72');
     this.mud = this.own(new THREE.MeshStandardMaterial({ map: this.tex(mudTexture()), roughness: 1, color: '#ffffff' }));
     this.mud.name = 'bss_mud';
     this.mudTrack = this.own(new THREE.MeshStandardMaterial({ map: this.mud.map, roughness: 0.82, color: '#a89580' }));
@@ -251,6 +326,8 @@ export class BssMats {
     this.glow.name = 'bss_glow';
     this.lawn = this.own(new THREE.MeshStandardMaterial({ map: this.tex(lawnTexture()), roughness: 0.95, color: '#ffffff' }));
     this.lawn.name = 'bss_lawn';
+    this.warMap = this.own(new THREE.MeshStandardMaterial({ map: this.tex(warMapTexture()), roughness: 0.6, color: '#ffffff' }));
+    this.warMap.name = 'bss_war_map';
   }
 
   private own<T extends THREE.Material>(m: T): T {

@@ -30,7 +30,7 @@ Wiki (avatar.fandom.com) is blocked by the session network policy: built from th
 - [x] 2 monorail + trains (commit)
 - [x] 3 Lower Ring (commit)
 - [x] 4 Middle Ring (commit)
-- [ ] 5 Upper Ring + palace (commit)
+- [x] 5 Upper Ring + palace (commit)
 - [ ] 6 Agrarian Zone, Lake Laogai, Dai Li base (commit)
 - [ ] 7 crowds, shops, vendors, audio (commit)
 - [ ] 8 polish, perf, screenshots (screenshots/ba-sing-se), 3 comparison passes, walk test, report (commit)
@@ -64,3 +64,12 @@ data/npcs.ts (bss_elder coords), spots.ts, tests/e2e/region-earth.e2e.mjs (BSS c
   Ground = bm.lawn (flagstone streets read against lawns). Markers moved: master_lien / training_lien
   (ringLocal(dojo)), bridge_bss_garden, WorldLayout bss_dojo (822,-183). ~75 Middle Ring houses.
   Polish later: plaza pavilion roof proportions; Town Hall second eave.
+- Phase 5: bssUpper.ts (walled estates with yellow roofs fitted between viaducts/lifts/avenues; landmarks
+  BSS.upper: War Room (floor map bm.warMap + tokens), Fancy Lady Day Spa, Jasmine Dragon, Iroh/Zuko apartment,
+  Team Avatar house, 2 fountain plazas; promenade trees/lamps; 4 pagoda pillar towers on the axis; park trees).
+  bssPalace.ts (South Gate block + pavilion, Golden Water canal + 5 bridges, 3-tier platform BSS.palace.tiers,
+  throne hall with interior/throne, bell/drum pavilions, inner court: wall, pond, quarters, kitchens, menagerie).
+  Inner-loop lifts now outside the palace (stairs -1); pal_s moved to 40 deg ("Upper Ring East"); palace gate
+  opening 24 m; piers kept out of both palace gates. Upper band ground = lawn. Marker: viewpoint_bss_palace
+  (terraceZ 15, y = tier 3). Fixed: cylinder() takes the BOTTOM centre (Middle/Lower Ring props were floating).
+  Polish later: up_s lift tower stands on the promenade; lift towers look like scaffolds.

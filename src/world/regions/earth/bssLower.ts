@@ -301,18 +301,18 @@ function buildSquare(site: DistrictSite): void {
   b.cylinder('stone_grey', { x: f.x, y: fy + 0.05, z: f.z, r: f.r - 0.2, h: 0.1, segments: 24 });
   site.water(b, { id: 'ba_sing_se:firelight_fountain', label: 'Firelight Fountain', x: f.x, z: f.z, y: fy + 0.5, w: (f.r - 0.35) * 2, d: (f.r - 0.35) * 2, circle: true, capacity: 120, regen: 8, type: 'fountain' });
   // Central structure: plinth, column, a ring of lower lamps, the crowning lamp.
-  b.cylinder('stone_light', { x: f.x, y: fy + 0.7, z: f.z, r: 1.6, h: 1.4, segments: 8 }, { collide: true, walkable: true });
-  b.cylinder('stone_tan', { x: f.x, y: fy + 2.6, z: f.z, r: 0.7, h: 2.6, segments: 8 }, { collide: true });
-  b.cylinder('stone_light', { x: f.x, y: fy + 3.95, z: f.z, r: 1.25, h: 0.25, segments: 8 });
+  b.cylinder('stone_light', { x: f.x, y: fy, z: f.z, r: 1.6, h: 1.4, segments: 8 }, { collide: true, walkable: true });
+  b.cylinder('stone_tan', { x: f.x, y: fy + 1.3, z: f.z, r: 0.7, h: 2.6, segments: 8 }, { collide: true });
+  b.cylinder('stone_light', { x: f.x, y: fy + 3.825, z: f.z, r: 1.25, h: 0.25, segments: 8 });
   for (let i = 0; i < 4; i++) {
     const a = i * (Math.PI / 2) + Math.PI / 4;
     const lx = f.x + Math.cos(a) * 1.1, lz = f.z + Math.sin(a) * 1.1;
     b.box(bm.glow, { x: lx, y: fy + 4.35, z: lz, sx: 0.4, sy: 0.5, sz: 0.4 });
     b.box('wood_dark', { x: lx, y: fy + 4.65, z: lz, sx: 0.55, sy: 0.08, sz: 0.55 });
   }
-  b.cylinder('stone_tan', { x: f.x, y: fy + 5.0, z: f.z, r: 0.35, h: 1.8, segments: 8 });
-  b.cylinder('wood_red', { x: f.x, y: fy + 6.15, z: f.z, r: 0.62, h: 0.18, segments: 8 });
-  b.cylinder(bm.glow, { x: f.x, y: fy + 6.75, z: f.z, r: 0.5, h: 1.0, segments: 8 });
+  b.cylinder('stone_tan', { x: f.x, y: fy + 4.1, z: f.z, r: 0.35, h: 1.8, segments: 8 });
+  b.cylinder('wood_red', { x: f.x, y: fy + 6.06, z: f.z, r: 0.62, h: 0.18, segments: 8 });
+  b.cylinder(bm.glow, { x: f.x, y: fy + 6.25, z: f.z, r: 0.5, h: 1.0, segments: 8 });
   b.roof('roof_dark', { x: f.x, y: fy + 7.25, z: f.z, w: 1.5, d: 1.5, height: 0.8, overhang: 0.25, curve: 0.8, style: 'pagoda', ridge: null });
   b.box('gold', { x: f.x, y: fy + 8.2, z: f.z, sx: 0.12, sy: 0.6, sz: 0.12 });
   b.lantern(new THREE.Vector3(f.x, fy + 6.75, f.z), { color: 'warm' });
@@ -429,11 +429,11 @@ function buildPaoTeaHouse(site: DistrictSite): void {
   // Tables and stools on the square side.
   for (const [dx, dz] of [[-4.5, 7.2], [0, 7.6], [4.5, 7.2]]) {
     b.cylinder('wood', { x: p.x + dx, y: GROUND + 0.75, z: p.z + dz, r: 0.75, h: 0.08, segments: 12 });
-    b.cylinder('wood_dark', { x: p.x + dx, y: GROUND + 0.37, z: p.z + dz, r: 0.12, h: 0.74, segments: 6 }, { collide: true });
+    b.cylinder('wood_dark', { x: p.x + dx, y: GROUND, z: p.z + dz, r: 0.12, h: 0.74, segments: 6 }, { collide: true });
     b.box('plaster_white', { x: p.x + dx, y: GROUND + 0.86, z: p.z + dz, sx: 0.22, sy: 0.16, sz: 0.22 });
     for (let k = 0; k < 3; k++) {
       const a = (k / 3) * Math.PI * 2;
-      b.cylinder('wood_dark', { x: p.x + dx + Math.cos(a) * 1.15, y: GROUND + 0.23, z: p.z + dz + Math.sin(a) * 1.15, r: 0.22, h: 0.46, segments: 8 });
+      b.cylinder('wood_dark', { x: p.x + dx + Math.cos(a) * 1.15, y: GROUND, z: p.z + dz + Math.sin(a) * 1.15, r: 0.22, h: 0.46, segments: 8 });
       nav.poi(p.x + dx + Math.cos(a) * 1.15, p.z + dz + Math.sin(a) * 1.15, NavTag.tea | NavTag.bench | NavTag.lower, Math.atan2(-Math.cos(a), -Math.sin(a)));
     }
   }
@@ -457,8 +457,8 @@ function buildFactory(site: DistrictSite): void {
   // Sawtooth roof lights and three brick chimneys at the back.
   for (const k of [-8.5, 0, 8.5]) {
     const x = f.x + tx * k - nx * 2.6, z = f.z + tz * k - nz * 2.6;
-    b.cylinder('stone_red', { x, y: GROUND + 14, z, r: 0.85, rTop: 0.65, h: 20, segments: 10 }, { collide: true });
-    b.cylinder('stone_dark', { x, y: GROUND + 24.2, z, r: 0.8, h: 0.5, segments: 10 });
+    b.cylinder('stone_red', { x, y: GROUND + 4, z, r: 0.85, rTop: 0.65, h: 20, segments: 10 }, { collide: true });
+    b.cylinder('stone_dark', { x, y: GROUND + 23.95, z, r: 0.8, h: 0.5, segments: 10 });
     site.smoke.push({ x, y: GROUND + 24.6, z, rate: 0.28 });
   }
   // Yard with crates and coal.
@@ -538,7 +538,7 @@ function dressLower(site: DistrictSite, houses: PlacedHouse[], lanes: Lane[]): v
       teas++;
       for (const k of [-1, 1]) db.lantern(new THREE.Vector3(front.x + lx * k * 1.6 + fx * 0.3, GROUND + 2.8, front.z + lz * k * 1.6 + fz * 0.3), { color: 'red', hanging: true });
       db.cylinder('wood', { x: front.x + fx * 1.4, y: GROUND + 0.72, z: front.z + fz * 1.4, r: 0.6, h: 0.08, segments: 10 });
-      db.cylinder('wood_dark', { x: front.x + fx * 1.4, y: GROUND + 0.36, z: front.z + fz * 1.4, r: 0.1, h: 0.72, segments: 6 });
+      db.cylinder('wood_dark', { x: front.x + fx * 1.4, y: GROUND, z: front.z + fz * 1.4, r: 0.1, h: 0.72, segments: 6 });
       nav.poi(front.x + fx * 1.4 + lx, front.z + fz * 1.4 + lz, NavTag.tea | NavTag.bench | NavTag.lower, h.yaw - Math.PI / 2);
     } else if (u < 0.22) {
       crates(db, front.x + lx * (u < 0.11 ? 2 : -2) + fx * 0.6, GROUND, front.z + lz * (u < 0.11 ? 2 : -2) + fz * 0.6, rnd, 1 + Math.floor(u * 10) % 3);
@@ -590,7 +590,7 @@ function dressLower(site: DistrictSite, houses: PlacedHouse[], lanes: Lane[]): v
     if (env.excl.pointBlocked(p.x, p.z, 0)) continue;
     const b = env.chunks.at('props', p.x, p.z).builder;
     marketStall(b, p.x, GROUND, p.z, yaw, k % 2 ? 'cloth_red' : 'cloth_yellow', rnd, 2.8, 1.6);
-    b.cylinder('iron', { x: p.x + Math.cos(yaw) * 0.8, y: GROUND + 1.15, z: p.z - Math.sin(yaw) * 0.8, r: 0.32, h: 0.4, segments: 10 });
+    b.cylinder('iron', { x: p.x + Math.cos(yaw) * 0.8, y: GROUND + 0.95, z: p.z - Math.sin(yaw) * 0.8, r: 0.32, h: 0.4, segments: 10 });
     site.smoke.push({ x: p.x + Math.cos(yaw) * 0.8, y: GROUND + 1.5, z: p.z - Math.sin(yaw) * 0.8, rate: 0.5, steam: true });
     nav.poi(p.x + Math.sin(yaw) * 1.6, p.z + Math.cos(yaw) * 1.6, NavTag.stall | NavTag.lower, yaw + Math.PI);
   }

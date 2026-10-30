@@ -47,7 +47,7 @@ export const EARTH_SPOTS: Record<string, Spot> = {
   merchant_bss_4: { x: 0, z: 0, y: GROUND, r: 2, label: 'Market Street stall', region: R },
   merchant_bss_tea: { x: BSS.paoTea.x, z: BSS.paoTea.z + 5.2, y: GROUND, yaw: 0, r: 2, label: 'Pao Family Tea House counter', region: R },
   shrine_bss_earth_king: { x: BSS.kingStatue.x, z: BSS.kingStatue.z + 4, y: GROUND, yaw: Math.PI, r: 4, label: 'Statue of the Earth King', region: R },
-  viewpoint_bss_palace: { x: C.x, z: C.z + 22, y: GROUND + 6, r: 6, label: 'Palace terrace', region: R },
+  viewpoint_bss_palace: { x: C.x, z: C.z + BSS.palace.terraceZ, y: GROUND + BSS.palace.tiers[2].h, r: 6, label: 'Palace terrace', region: R },
   viewpoint_bss_outer_wall: { x: STATIONS.arrival_c.at.x, z: STATIONS.arrival_c.at.z, y: GROUND + RAIL.deck, r: 4, label: 'Arrival station platform', region: R },
   station_bss_lower_west: { x: STATIONS.y_c.at.x, z: STATIONS.y_c.at.z, y: GROUND + RAIL.deck, r: 6, label: 'Monorail station', region: R },
   dock_laogai: { x: BSS.lakeDock.b.x - 1, z: BSS.lakeDock.b.z, y: 26.3, yaw: Math.PI / 2, r: 3, label: 'Lake Laogai boathouse pier', region: R },

@@ -6,6 +6,8 @@ import { BssMats } from './bssKit';
 import { C, SEED } from './bssLayout';
 import { buildLowerRing, type DistrictSite } from './bssLower';
 import { buildMiddleRing } from './bssMiddle';
+import { buildPalace } from './bssPalace';
+import { buildUpperRing } from './bssUpper';
 import { NavGraph } from './bssNav';
 import { LiftRuntime, buildRailways, type LiftDef, type StationRt } from './bssRail';
 import { TrainSystem } from './bssTrains';
@@ -71,6 +73,9 @@ export class BaSingSe extends EarthRegion {
     yield;
     yield* buildLowerRing(site);
     yield* buildMiddleRing(site);
+    yield* buildUpperRing(site);
+    buildPalace(site);
+    yield;
     this.smoke = smoke.map((e) => ({ ...e, acc: Math.random() }));
     this.figures = new FigureRenderer(this.group, 900);
     this.trains = new TrainSystem(this.group, rail.stations);

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { GameContext } from '../../../core/GameContext';
 import type { ContentBuilder } from '../../kit/Builder';
-import { AVENUES, GROUND, R, RAIL, RAIL_LINES, RING_STREETS, WALL, hash01, radiusOf, thetaOf, type RailLineDef } from './bssLayout';
+import { AVENUES, BSS, C, GROUND, R, RAIL, RAIL_LINES, RING_STREETS, WALL, hash01, radiusOf, thetaOf, type RailLineDef } from './bssLayout';
 import { medallion, sign, type BssMats, type MatKey, type PathSample, type RailPath } from './bssKit';
 import { FigureRenderer, Pose } from './bssFigures';
 import { railPath, type WallSite } from './bssWalls';
@@ -194,6 +194,13 @@ function roadObstacle(): Obstacle {
         const mx = -Math.sin(a.theta), mz = Math.cos(a.theta);
         const e = (RAIL.pier / 2) * Math.abs(tx * mx + tz * mz) + (RAIL.deckW / 2) * Math.abs(nx * mx + nz * mz);
         if (d < a.width / 2 + e + 0.4) return true;
+      }
+      // Palace gates: the South Gate block fills its opening; the North Gate keeps a clear passage.
+      {
+        const g = BSS.palace.gate;
+        const lx = x - C.x, lz = z - C.z;
+        if (Math.abs(lx) < g.hw + RAIL.pier / 2 + 1 && lz > g.z0 - 1 && lz < g.z1 + 1) return true;
+        if (Math.abs(lx) < 6 + RAIL.pier / 2 + 1 && lz < -g.z0 + 1 && lz > -g.z1 - 1) return true;
       }
       // Ring streets.
       const ux = Math.cos(th), uz = Math.sin(th);
