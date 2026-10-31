@@ -321,6 +321,7 @@ export class SkySystem {
     u.uCloudTint.value.copy(this.mood.cloudTint);
 
     const p = this.pipeline;
+    p.daylight = this.daylight;
     p.sun.color.copy(this.sunColor);
     p.sun.intensity = this.sampleNum(hour, 'sunI') * (1 - this.mood.cloudCover * 0.25) * (1 - overcast * 0.72);
     this.sample(hour, 'hemiSky', p.hemi.color);

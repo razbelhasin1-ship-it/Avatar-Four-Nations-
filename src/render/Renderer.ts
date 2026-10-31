@@ -7,6 +7,37 @@ import type { EventBus } from '../core/EventBus';
 import type { SettingsManager, ShadowQuality } from '../core/Settings';
 
 /**
+ * Bloom prefilter with a soft knee: only the light above the threshold blooms. three.js's stock
+ * high-pass passes a pixel's whole colour once it crosses the threshold, so a wide bright surface
+ * just over the line (sunlit snow at noon, a white wall) poured all of itself into the blur and
+ * laid a white veil over the screen. Now such a surface glows faintly, the bloom fades in instead
+ * of switching on, and fire, lightning and glowing eyes, far above the threshold, still bloom.
+ */
+const BLOOM_PREFILTER = /* glsl */ `
+uniform sampler2D tDiffuse;
+uniform float luminosityThreshold;
+uniform float smoothWidth;
+varying vec2 vUv;
+void main() {
+  vec4 texel = texture2D(tDiffuse, vUv);
+  float v = luminance(texel.rgb);
+  float knee = max(smoothWidth, 1e-4);
+  float s = clamp(v - luminosityThreshold + knee, 0.0, 2.0 * knee);
+  s = s * s / (4.0 * knee);
+  float w = max(s, v - luminosityThreshold) / max(v, 1e-4);
+  gl_FragColor = vec4(texel.rgb * w, 1.0);
+}
+`;
+const BLOOM_KNEE = 0.3;
+/**
+ * Threshold and base strength by day and by night (eased with the sky's daylight). Daylight: only
+ * light well above what a sunlit white surface reaches blooms. Night: nothing wide is bright, so a
+ * lower threshold and a little more strength keep the halos round lanterns, torches and fires.
+ */
+const BLOOM_THRESHOLD = { day: 0.9, night: 0.6 };
+const BLOOM_STRENGTH = { day: 0.62, night: 0.95 };
+
+/**
  * Runs between the scene render and bloom. A single NaN or Inf pixel (some phone GPUs produce them
  * where desktop GPUs do not: a zero vector normalised, a half-float overflow) is spread over the
  * whole screen by the bloom blur, which shows as black flashes while bending or walking. Bad pixels
@@ -225,6 +256,8 @@ export class RenderPipeline {
 
   /** Extra bloom strength requested by gameplay (Avatar State). */
   bloomBoost = 0;
+  /** 0 at night .. 1 in daylight, set by the sky each frame; eases the bloom between night and day. */
+  daylight = 1;
 
   constructor(
     readonly canvas: HTMLCanvasElement,
@@ -350,7 +383,10 @@ export class RenderPipeline {
     this.composer.addPass(this.renderPass);
     this.sanitizePass = new ShaderPass(SanitizeShader);
     this.composer.addPass(this.sanitizePass);
-    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.5, 0.86);
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(256, 256), BLOOM_STRENGTH.day, 0.5, BLOOM_THRESHOLD.day);
+    (this.bloomPass.highPassUniforms as Record<string, THREE.IUniform>).smoothWidth.value = BLOOM_KNEE;
+    this.bloomPass.materialHighPassFilter.fragmentShader = BLOOM_PREFILTER;
+    this.bloomPass.materialHighPassFilter.needsUpdate = true;
     this.composer.addPass(this.bloomPass);
     this.outputPass = new GradeOutputPass();
     this.composer.addPass(this.outputPass);
@@ -419,7 +455,9 @@ export class RenderPipeline {
     info.reset();
     if (this.composer) {
       if (this.bloomPass) {
-        this.bloomPass.strength = 0.5 + this.bloomBoost;
+        const d = THREE.MathUtils.clamp(this.daylight, 0, 1);
+        this.bloomPass.threshold = BLOOM_THRESHOLD.night + (BLOOM_THRESHOLD.day - BLOOM_THRESHOLD.night) * d;
+        this.bloomPass.strength = BLOOM_STRENGTH.night + (BLOOM_STRENGTH.day - BLOOM_STRENGTH.night) * d + this.bloomBoost;
       }
       this.composer.render(dt);
     } else {
