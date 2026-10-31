@@ -181,7 +181,8 @@ describe('surface classification matches what is rendered', () => {
     expect(terrainSurfaceAt(330, 1000)).toBe('sand');
     expect(['snow', 'packedsnow', 'ice']).toContain(terrainSurfaceAt(-600, -1650));
     expect(['ash', 'rock', 'gravel']).toContain(terrainSurfaceAt(-1660, 1150));
-    expect(['ash', 'rock', 'gravel']).toContain(terrainSurfaceAt(-1330, 1550));
+    // The capital's volcano, on its unbuilt north slope (Harbor City's paving covers the south face).
+    expect(['ash', 'rock', 'gravel']).toContain(terrainSurfaceAt(-1409, 860));
     expect(terrainSurfaceAt(-1150, -150)).toBe('water');
   });
 });

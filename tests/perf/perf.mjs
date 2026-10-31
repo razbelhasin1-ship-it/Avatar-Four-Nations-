@@ -13,7 +13,7 @@ const height = Number(process.argv[4] ?? 540);
 const SPOTS = [
   ['Northern Water Tribe plaza', 'water', -250, -1560],
   ['Ba Sing Se lower ring', 'earth', 640, -30],
-  ['Fire Nation plaza', 'fire', -1310, 1230],
+  ['Fire Nation plaza', 'fire', -1300, 1596],
   ['Air Temple summit', 'air', 1440, 1290],
   ['Earth Kingdom farmland', 'earth', 300, 150],
   ['Foggy Swamp', 'water', -1100, -120],

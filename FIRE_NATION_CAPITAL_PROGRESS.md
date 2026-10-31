@@ -60,7 +60,7 @@ Interiors: throne room (north wing), Royal Gallery (west wing), Agni Kai arena (
 - [x] 2 Royal Plaza + Harbor City
 - [x] 3 road, crater, Hari Bulkan
 - [x] 4 palace exterior + interiors
-- [ ] 5 ships, tanks, crowds, vendors, events, audio
+- [x] 5 ships, tanks, crowds, vendors, events, audio
 - [ ] 6 polish, perf, debug overlay, walk test, 3 comparison passes, screenshots/fire-nation-capital/, report
 
 ## Notes / log
@@ -88,3 +88,17 @@ Interiors: throne room (north wing), Royal Gallery (west wing), Agni Kai arena (
   (FlameField), gold dragon relief); Agni Kai arena (AY = PF+4.4, roofed, 3-side seating, stair at t 10.2).
   Interiors lit by emissive (interiorMat, portraits, relief, sconces) — no real lights (shader recompiles).
 - Walk test (scratchpad/fnc/walk.mjs): quay → plaza → passage → Royal Way → 8 hairpins → gate → square → palace gate OK.
+- P5: fnc/vessels.ts (10 moored/anchored warships with colliders, 2 scheduled movers SHIP_IN/OUT
+  through the sea gate, gate leaves swing inward, horn 'fnc_horn', boats, 4 tanks with dynamic colliders parked
+  during rallies, 3 balloons; unit test tests/unit/fnc-vessels.test.ts keeps hulls over deep water and off
+  quays); fnc/life.ts (CapitalLife: NavGraph over quays/plaza grid/passage/Royal Way/rings/spokes/road/caldera/
+  palace, 440 agents by LIFE.cast, routines, stalls covered at night, squads, drill + 2 academy formations with
+  flame bursts, sages, rally + proclamation events, foundry smoke/clangs, rumble, crowd loop); fnc/people.ts
+  (Fire Nation accessories via bssFigures EXTRA_ACC — additive; palettes); fnc/audio.ts (horn, drum, march,
+  clang, rumble). Debug: __game.debug.fnc (life, vessels, ships, skipShips, rally(on, instant), proclaim,
+  overlay, nav); F3 overlay (SatOverlay reused) while in the capital.
+- P5 extras: density bubble (people kept around the camera's focus point in Harbor City: doors in view / corners
+  out of view), landmarks fn_harbor_city + fn_hari_bulkan (kind 'city': map labels, city ambience, encounter
+  safe zones), fn_elder (Sage Hira) re-placed on the plaza, turtle-ducks + 'fn_feed_turtleducks' restored
+  (fnc/ducks.ts). Probe: 440 people, 101-140 drawn in Harbor City views, rally 320, proclamation 24, 0 errors.
+  tests: region-fire e2e rewritten (not yet run), perf/audio/enemies coords, env.vegetation volcanic sample moved.

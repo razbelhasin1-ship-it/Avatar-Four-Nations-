@@ -112,6 +112,7 @@ function* houses(cap: Cap): Generator<unknown, void, unknown> {
   const C = FNC.city;
 
   const smallIds: ArchetypeId[] = ['N1', 'N5', 'N1', 'N2'];
+  shopFronts.length = 0;
   /**
    * Place one house whose front lines a street: `edgeR` is the street edge radius, `side` +1 when
    * the house stands outside it (facing inward), -1 inside it (facing outward). Returns its width.
@@ -143,6 +144,10 @@ function* houses(cap: Cap): Generator<unknown, void, unknown> {
     const tint = new THREE.Color(WALL_TINTS[Math.floor(rnd() * WALL_TINTS.length)]);
     const roofTint = new THREE.Color(ROOF_TINTS[Math.floor(rnd() * ROOF_TINTS.length)]);
     env.chunks.addHouse(arch, p.x, y, p.z, yaw, { tint, roofTint });
+    if (kind === 'shop') {
+      const f = arch.spanD / 2 + 1.1;
+      shopFronts.push({ x: p.x + Math.sin(yaw) * f, z: p.z + Math.cos(yaw) * f, yaw: yaw + Math.PI, w: arch.spanW });
+    }
     if (span.max - span.min > 0.35) {
       // Stone foundation down to the low side of the slope.
       const fb = env.chunks.at('houses', p.x, p.z).builder;
@@ -202,10 +207,13 @@ function* market(cap: Cap): Generator<unknown, void, unknown> {
   const b = env.chunks.named('props', 'fnc_market').builder;
   const M = DISTRICTS.market;
   let seed = 31;
+  marketStalls.length = 0;
   for (let s = M.s0 + 4; s < M.s1 - 2; s += 6.5) {
     for (const side of [-1, 1]) {
       const p = atAxis(side * (CONFIG.wayW / 2 + 2.2), s);
-      stall(b, { x: p.x, y: heightAt(p.x, p.z), z: p.z, yaw: side < 0 ? Math.PI / 2 : -Math.PI / 2, w: 4.2, seed: seed++ });
+      const yaw = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+      stall(b, { x: p.x, y: heightAt(p.x, p.z), z: p.z, yaw, w: 4.2, seed: seed++ });
+      marketStalls.push({ x: p.x, y: heightAt(p.x, p.z), z: p.z, yaw, w: 4.2, d: 2.6 });
     }
   }
   for (let s = M.s0; s <= M.s1; s += 23) {
@@ -268,6 +276,10 @@ function* foundries(cap: Cap): Generator<unknown, void, unknown> {
 
 /** Smokestack tops (smoke columns in phase 5). */
 export const foundryStacks: Array<{ x: number; y: number; z: number }> = [];
+/** Shop fronts along the streets (a spot on the street before the door, facing it) for the crowds. */
+export const shopFronts: Array<{ x: number; z: number; yaw: number; w: number }> = [];
+/** Market stalls on the Royal Way (centre, facing the way) for sellers and the night covers. */
+export const marketStalls: Array<{ x: number; y: number; z: number; yaw: number; w: number; d: number }> = [];
 
 /** Zoryu Park: lawns, trees, ponds and pavilions in the west. */
 function* park(cap: Cap): Generator<unknown, void, unknown> {

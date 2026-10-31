@@ -273,7 +273,7 @@ try {
   await check('ambience follows place and altitude (budgeted, crossfaded)', async () => {
     const places = [
       ['air temple summit', 1440, 1290, ['amb.wind.high', 'amb.temple'], 'temple'],
-      ['fire capital', -1310, 1230, ['amb.city', 'amb.volcanic'], 'city'],
+      ['fire capital', -1300, 1596, ['amb.city', 'amb.volcanic'], 'city'],
       ['si wong desert', 300, 1000, ['amb.desert'], null],
       ['foggy swamp', -1150, -60, ['amb.swamp'], null],
       ['kyoshi coast', 1840, -330, ['amb.surf'], null],
@@ -324,7 +324,7 @@ try {
   });
 
   await check('music: region themes, combat layer rises and decays, stingers', async () => {
-    await audio((g) => g.teleport(-1310, 1230));
+    await audio((g) => g.teleport(-1300, 1596));
     await h.step(1);
     await tick(45);
     let m = await audio((g) => g.debug.audio.music.state());

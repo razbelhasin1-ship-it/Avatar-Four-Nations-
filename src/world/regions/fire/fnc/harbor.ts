@@ -38,6 +38,7 @@ export function* buildHarbor(cap: Cap): Generator<unknown, void, unknown> {
   const major = env.chunks.named('major', 'fnc_harbor');
   const b = major.builder;
   const rnd = rng(0x4a7b);
+  harborRefs.leaves.length = 0;
   const wet = 'stone_dark' as const;
   const cut = 'stone_tan' as const;
 

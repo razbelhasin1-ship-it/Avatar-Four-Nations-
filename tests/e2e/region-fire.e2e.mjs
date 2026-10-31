@@ -1,15 +1,14 @@
 /**
- * Fire Nation region E2E: the capital in the caldera, the rim gate, the
- * Capital Harbor, the Western Causeway, the Sun Warrior Ruins and Ember Island.
- *  - walks key routes (spawn → plaza → grand stair → Gate of Agni → palace
- *    landmark; forecourt → garden moon gate → turtle-duck pond; plaza → arena
- *    dais; plaza → temple court; caldera floor → terrace stair → terrace L1;
- *    boulevard → rim gate → causeway road → harbour overlook; road start →
- *    quay ramp → pier head; the whole causeway bridge; ruins approach stair →
- *    plaza → pyramid summit; Ember promenade → tea-house terrace → pier)
- *  - checks walkable heights (groundAt), registered water sources
- *    (g.waterNearby), published spots, detail levels, no console errors
- *  - reports draw calls / triangles / fps at the capital centre and the harbour
+ * Fire Nation region E2E: the rebuilt capital — First Lord's Harbor and the sea gate, the Royal
+ * Plaza, the tower passage, Harbor City and its market, Sozin's road, Hari Bulkan and the Royal
+ * Palace — with its people and harbour traffic; then the Western Causeway, the Sun Warrior Ruins
+ * and Ember Island.
+ *  - walks the spine: harbour quay → plaza → passage → Royal Way → the eight hairpins → crater gate
+ *    → Hari Bulkan Square → palace gate → courtyard → central hall → throne room, and back down
+ *  - checks the spawn, spots and flat training grounds, water sources (plaza pools, the falls),
+ *    people (counts, drawn in a Harbor City view, a rally, a proclamation), ships (the schedule
+ *    opens the sea gate, hulls over water), tanks, balloons, the turtle-duck interaction,
+ *    detail levels, perf numbers, session restart, a time-sliced build on arrival, no errors
  * Run: node tests/e2e/region-fire.e2e.mjs [--preset medium]
  */
 import assert from 'node:assert/strict';
@@ -96,16 +95,22 @@ const region = (id) => h.eval((g, id) => {
 try {
   await h.newGame('fire');
   await h.eval((g) => g.setting('graphics.renderScale', 0.35));
+  await h.eval((g) => { g.setTime(9); g.freezeTime?.(true); g.debug.enemies?.clear?.(); });
+  const V = { x: -1300, z: 990 };
+  const ax = (t, s) => [V.x + t, V.z + s];
+  const marks = await h.eval((g) => JSON.parse(JSON.stringify(g.debug.fnc.marks())));
 
-  await check('fire start: spawn is clear, flat and grounded in the Royal Plaza', async () => {
+  await check('fire start: spawn on the Royal Plaza, flat and grounded; the capital is built', async () => {
     const st = await h.state();
     assert.equal(st.region, 'fire_nation_capital');
-    near(st.player.x, -1310, 0.5, 'spawn x');
-    near(st.player.z, 1230, 0.5, 'spawn z');
-    near(st.player.y, 43.2, 0.3, 'spawn on the plaza');
-    for (const [dx, dz] of [[6, 0], [-6, 0], [0, 6], [0, -6], [4, 4], [-4, -4]]) near(await ground(-1310 + dx, 1230 + dz, 60), 43.2, 0.05, `spawn surroundings flat (${dx},${dz})`);
-    const regs = await h.eval((g) => g.debug.fire.regions().map((r) => r.id));
-    for (const id of ['fire_capital']) assert.ok(regs.includes(id), `${id} built (${regs})`);
+    near(st.player.x, V.x, 0.5, 'spawn x');
+    near(st.player.z, V.z + 606, 0.5, 'spawn z');
+    near(st.player.y, 3.2, 0.35, 'spawn on the plaza');
+    const y0 = await ground(V.x, V.z + 606, 8);
+    for (const [dx, dz] of [[6, 0], [-6, 0], [0, 6], [0, -6], [4, 4], [-4, -4]]) near(await ground(V.x + dx, V.z + 606 + dz, 8), y0, 0.08, `spawn surroundings flat (${dx},${dz})`);
+    const regs = await h.eval((g) => g.debug.earth.regions().map((r) => r.id));
+    assert.ok(regs.includes('fire_capital'), `capital built (${regs})`);
+    for (const id of ['seaGate', 'plazaSpawn', 'balcony', 'passageTop', 'market', 'craterGate', 'square', 'palaceGate', 'courtyard', 'throneRoom', 'throne', 'agniKai', 'gallery', 'gardenPond', 'temple', 'academy']) assert.ok(marks[id], `mark ${id}`);
   });
 
   await check('spots: masters, training grounds, givers, merchants, docks, habitats, shrines', async () => {
@@ -117,74 +122,99 @@ try {
     // Training grounds in the capital are flat and walkable over their radius.
     for (const id of ['training_jeong', 'training_hira']) {
       const s = spots[id];
+      const c = await ground(s.x, s.z, s.y + 3);
       for (let k = 0; k < 8; k++) {
         const a = (k / 8) * Math.PI * 2;
         const y = await ground(s.x + Math.cos(a) * (s.r - 1), s.z + Math.sin(a) * (s.r - 1), s.y + 3);
-        near(y, s.y, 0.12, `${id} flat at r-1 (k=${k})`);
+        near(y, c, 0.15, `${id} flat at r-1 (k=${k})`);
       }
     }
   });
 
-  await check('walk: spawn → plaza → grand stair → Gate of Agni → palace landmark (+6.8 m)', async () => {
-    await h.eval((g) => g.teleport(-1310, 1230));
-    const r = await walkPath([[-1330, 1200], [-1330, 1166], [-1330, 1146], [-1330, 1128], [-1330, 1110]]);
-    near(r.y, 50, 0.3, 'palace forecourt height');
-  });
+  const hair = [];
+  for (let k = 0; k < 8; k++) hair.push(ax((k % 2 === 0 ? 1 : -1) * 46 * 0.92, 292 - ((292 - 122) * k) / 8));
+  const up = [ax(-53, 670), ax(-46, 659), ax(-12, 650), ax(0, 600), ax(0, 559), ax(0, 505), ax(0, 440), ax(0, 300), ...hair, ax(0, 127), ax(0, 116), ax(0, 96), ax(0, 60), ax(0, 41), ax(0, 33), ax(0, 27), ax(0, 17), ax(0, 11), ax(0, 6), ax(0, 0), ax(0, -6), ax(0, -11), ax(0, -18.5)];
 
-  await check('walk: forecourt → garden moon gate → turtle-duck pond (water source)', async () => {
-    const r = await walkPath([[-1350, 1112], [-1362, 1100], [-1372, 1100], [-1385, 1095], [-1390, 1090]]);
-    near(r.y, 50, 0.3, 'garden lawn height');
-    const w = await h.eval((g) => g.waterNearby(25));
-    assert.ok(w.some((s) => s.id === 'fire_capital:turtleduck_pond'), `pond source nearby: ${JSON.stringify(w)}`);
-  });
-
-  await check('walk: plaza → Agni Kai Arena dais; plaza canal is a water source', async () => {
-    await h.eval((g) => g.teleport(-1300, 1236));
-    const w = await h.eval((g) => g.waterNearby(20));
-    assert.ok(w.some((s) => s.id.startsWith('fire_capital:canal')), `canal source: ${JSON.stringify(w)}`);
-    // Over the canal bridge, through the east gallery passage and down its steps.
-    const r = await walkPath([[-1290, 1236], [-1276, 1236], [-1263, 1236], [-1259, 1200], [-1248, 1180], [-1235, 1180]]);
-    near(r.y, 43.6, 0.3, 'arena dais height');
-  });
-
-  await check("walk: plaza → Fire Sages' temple court", async () => {
-    await h.eval((g) => g.teleport(-1380, 1180));
-    const r = await walkPath([[-1398, 1172], [-1405, 1210], [-1412, 1233]]);
-    near(r.y, 42.3, 0.3, 'temple court height');
-  });
-
-  await check('walk: caldera floor → terrace stair → city terrace L1', async () => {
-    const cap = await region('fire_capital');
-    assert.ok(cap.ringStairs.length >= 4, `ring stairs: ${cap.ringStairs.length}`);
-    // Try stairs until one works (all should); report the climbed height.
-    let ok = 0;
-    for (const st of cap.ringStairs.slice(0, 3)) {
-      // Start 3 m before the foot, in line with the flight, then climb to the landing and step onto L1.
-      const dx = st.landing.x - st.foot.x, dz = st.landing.z - st.foot.z, dl = Math.hypot(dx, dz);
-      await h.eval((g, x, z) => g.teleport(x, z), st.foot.x - (dx / dl) * 3, st.foot.z - (dz / dl) * 3);
-      const r = await walkPath([[st.foot.x, st.foot.z], [st.landing.x, st.landing.z], [st.walk.x, st.walk.z]], { tol: 1.0 });
-      near(r.y, st.walk.y, 0.35, 'standing on terrace L1');
-      ok++;
+  await check('walk: sea-gate quay → harbour → plaza → passage → Royal Way → road → crater → palace → throne room', async () => {
+    await h.eval((g, p) => g.teleport(p[0], p[1], 2.7), ax(-73.7, 700));
+    await h.step(6);
+    let r = null;
+    for (const [x, z] of up) {
+      r = await walkTo(x, z, { tol: 1.4, sprint: true });
+      assert.ok(r.dist < 2.2, `stuck before (${(x - V.x).toFixed(1)}, ${(z - V.z).toFixed(1)}): ${JSON.stringify(r)}`);
+      assert.ok(!r.swimming, `swimming near (${(x - V.x).toFixed(1)}, ${(z - V.z).toFixed(1)})`);
     }
-    assert.ok(ok >= 3);
+    near(r.y, marks.throneRoom.y, 0.35, 'standing on the throne room floor');
   });
 
-  await check('walk: boulevard → rim gate → causeway road → harbour overlook landmark', async () => {
-    await h.eval((g) => g.teleport(-1249, 1138));
-    let r = await walkPath([[-1200, 1112], [-1170, 1100], [-1110, 1075], [-1071, 1059], [-1040, 1043], [-1010, 1018]], { tol: 2.5 });
-    assert.ok(r.y > 40, `on the causeway road outside the rim: ${JSON.stringify(r)}`);
-    const hb = await region('fire_harbor');
-    assert.ok(hb && hb.overlookStair, 'harbour region built with an overlook stair');
-    r = await walkPath([[hb.overlookStair.x, hb.overlookStair.z], [-1006, 988], [-1010, 980]], { tol: 1.5 });
-    near(r.y, hb.overlookY, 0.35, 'on the overlook terrace (fn_harbor landmark)');
+  await check('walk: throne room → courtyard → palace gate → road → plaza (and back to the quay)', async () => {
+    const down = [...up].reverse().slice(1);
+    let r = null;
+    for (const [x, z] of [...down, ax(-73.7, 700)]) {
+      r = await walkTo(x, z, { tol: 1.4, sprint: true });
+      assert.ok(r.dist < 2.2, `stuck before (${(x - V.x).toFixed(1)}, ${(z - V.z).toFixed(1)}): ${JSON.stringify(r)}`);
+      assert.ok(!r.swimming, `swimming near (${(x - V.x).toFixed(1)}, ${(z - V.z).toFixed(1)})`);
+    }
+    near(r.y, 2.6, 0.4, 'back on the quay apron');
   });
 
-  await check('walk: causeway road start → quay ramp → north quay → pier head (dock_fn_harbor)', async () => {
-    const hb = await region('fire_harbor');
-    await h.eval((g, x, z) => g.teleport(x, z), hb.rampTop.x - 2, hb.rampTop.z);
-    const r = await walkPath([[hb.rampTop.x + 4, hb.rampTop.z + 0.5], [-905, 971.5], [-897, 972], [-897, 985.5], [-875, 985.5], [-852, 985.5]], { tol: 1.5, minY: 3 });
-    near(r.y, 5.2, 0.3, 'pier deck height');
-    assert.ok(!r.swimming, 'not swimming');
+  await check('water: plaza pools, the harbour basin and the royal falls are real sources', async () => {
+    await h.eval((g, p) => g.teleport(p[0], p[1]), ax(0, 610));
+    await h.step(4);
+    let w = await h.eval((g) => g.waterNearby(20));
+    assert.ok(w.some((s) => s.id.startsWith('fire_capital:plaza_pool')), `plaza pool: ${JSON.stringify(w.map((s) => s.id))}`);
+    await h.eval((g, p) => g.teleport(p[0], p[1], 2.7), ax(-73.7, 700));
+    await h.step(4);
+    w = await h.eval((g) => g.waterNearby(25));
+    assert.ok(w.length > 0, 'harbour water within reach of the quay');
+    await h.eval((g, m) => g.teleport(m.x + 6, m.z + 6), marks.waterfall);
+    await h.step(4);
+    w = await h.eval((g) => g.waterNearby(40));
+    assert.ok(w.some((s) => s.id === 'fire_capital:royal_falls' || /lake/.test(s.id)), `falls / lake: ${JSON.stringify(w.map((s) => s.id))}`);
+  });
+
+  await check('people: hundreds simulated, a Harbor City view full of them, rally and proclamation', async () => {
+    await h.eval((g, p) => g.teleport(p[0], p[1]), ax(0, 470));
+    await h.step(10);
+    await h.eval((g, p) => g.freeCamera({ x: p[0] + 20, y: 62, z: p[1] + 70 }, { x: p[0], y: 34, z: p[1] - 40 }), ax(0, 470));
+    await h.step(90);
+    const l = await h.eval((g) => g.debug.fnc.life());
+    console.log(`  people: ${JSON.stringify(l)}`);
+    assert.ok(l.total >= 400, `simulated ${l.total}`);
+    assert.ok(l.visible >= 100, `drawn in the Harbor City view: ${l.visible}`);
+    assert.ok(l.squads >= 3, 'marching squads');
+    await h.eval((g, p) => { g.teleport(p[0], p[1]); g.freeCamera({ x: p[0], y: 30, z: p[1] + 100 }, { x: p[0], y: 8, z: p[1] - 30 }); g.debug.fnc.rally(true, true); }, ax(0, 600));
+    await h.step(30);
+    const r = await h.eval((g) => g.debug.fnc.life());
+    assert.ok(r.rally >= 300, `rally crowd ${r.rally}`);
+    await h.eval((g) => g.debug.fnc.rally(null));
+    await h.eval((g, p) => { g.teleport(p[0], p[1]); g.setTime(15.1); g.debug.fnc.proclaim(true); }, ax(0, 70));
+    await h.step(200);
+    const p = await h.eval((g) => g.debug.fnc.life());
+    assert.ok(p.proclaim >= 20, `proclamation crowd ${p.proclaim}`);
+    await h.eval((g) => { g.debug.fnc.proclaim(null); g.setTime(9); g.freeCamera(null); });
+  });
+
+  await check('ships, tanks, balloons: the schedule opens the sea gate, hulls stay on the water', async () => {
+    const v = await h.eval((g) => g.debug.fnc.vessels());
+    assert.equal(v.warships, 12);
+    assert.ok(v.tanks >= 4 && v.balloons >= 3 && v.boats >= 10, JSON.stringify(v));
+    await h.eval((g, p) => g.teleport(p[0], p[1], 2.7), ax(-73.7, 700));
+    let open = 0, minWater = Infinity;
+    for (let i = 0; i < 30; i++) {
+      await h.eval((g) => g.debug.fnc.skipShips(10));
+      await h.step(6);
+      const st = await h.eval((g) => ({ v: g.debug.fnc.vessels(), ships: g.debug.fnc.ships().filter((s) => s.visible).map((s) => g.ctx.world.groundAt(s.x, s.z, 0).y) }));
+      open = Math.max(open, st.v.gate);
+      for (const y of st.ships) minWater = Math.min(minWater, -y);
+    }
+    assert.ok(open > 0.5, `sea gate opened for a ship (max ${open})`);
+    assert.ok(minWater > 2.5, `hulls over deep water (min depth ${minWater})`);
+  });
+
+  await check('palace garden: the turtle-duck feeding interaction is registered', async () => {
+    const ok = await h.eval((g) => !!g.ctx.interactions.get('fn_feed_turtleducks'));
+    assert.ok(ok, 'fn_feed_turtleducks');
   });
 
   await check('walk: the Western Causeway end to end over the strait (no falling)', async () => {
@@ -244,86 +274,86 @@ try {
     near(r2.y, em.pierEnd.y, 0.35, 'pier deck');
   });
 
-  await check('detail levels: far keeps the silhouette, hidden hides all, full restores', async () => {
+  await check('detail levels: far hides the people, hidden hides all, full restores', async () => {
     const res = await h.eval((g) => {
-      const r = g.debug.fire.region('fire_capital');
+      const r = g.debug.earth.region('fire_capital');
       r.setDetail('far');
-      const far = r.layerStats();
+      r.update(0.016, g.ctx);
+      const far = { group: r.group.visible, life: r.life.group.visible };
       r.setDetail('hidden');
       const hidden = r.group.visible;
       r.setDetail('full');
-      const full = r.layerStats();
-      return { farVisible: far.filter((l) => l.visible).length, farTotal: far.length, hidden, fullVisible: full.filter((l) => l.visible).length };
+      r.update(0.016, g.ctx);
+      return { far, hidden, full: r.life.group.visible };
     });
-    assert.ok(res.farVisible > 4 && res.farVisible < res.farTotal, `far: ${JSON.stringify(res)}`);
+    assert.ok(res.far.group && !res.far.life, `far: ${JSON.stringify(res)}`);
     assert.equal(res.hidden, false);
-    assert.ok(res.fullVisible >= res.farVisible);
+    assert.ok(res.full, 'people back at full detail');
   });
 
-  await check('perf: draw calls / triangles / fps at the capital centre and the harbour', async () => {
+  await check('perf: draw calls / triangles / fps on the plaza, from the air and at the harbour', async () => {
     await h.eval((g) => g.setting('graphics.renderScale', 1));
-    await h.eval((g) => g.teleport(-1310, 1230));
-    await h.eval((g) => g.faceTowards(-1330, 1100));
+    await h.eval((g, p) => g.teleport(p[0], p[1]), ax(0, 606));
+    await h.eval((g, p) => g.faceTowards(p[0], p[1]), ax(0, 540));
     await h.step(30);
     await h.wait(2000);
     const a = (await h.state()).render;
-    await h.eval((g) => g.freeCamera({ x: -1330, y: 150, z: 1335 }, { x: -1330, y: 50, z: 1100 }));
+    await h.eval((g) => g.freeCamera({ x: -1300, y: 260, z: 1500 }, { x: -1300, y: 60, z: 1150 }));
     await h.step(5);
     await h.wait(2000);
     const b = (await h.state()).render;
     await h.eval((g) => g.freeCamera(null));
-    await h.eval((g) => g.teleport(-890, 1020));
+    await h.eval((g, p) => g.teleport(p[0], p[1], 2.7), ax(-73.7, 700));
     await h.step(30);
     await h.wait(2000);
     const c = (await h.state()).render;
-    const regs = await h.eval((g) => g.debug.fire.regions().map((r) => ({ id: r.id, buildMs: r.buildMs, colliders: r.colliders, flames: r.flames, tris: r.layers.reduce((s, l) => s + l.tris, 0) })));
+    const cap = await h.eval((g) => g.debug.earth.region('fire_capital').stats());
     console.log(`  [${preset}] plaza view: calls=${a.drawCalls} tris=${a.triangles} fps=${a.fps?.toFixed?.(1)}`);
     console.log(`  [${preset}] aerial view: calls=${b.drawCalls} tris=${b.triangles} fps=${b.fps?.toFixed?.(1)}`);
     console.log(`  [${preset}] harbour view: calls=${c.drawCalls} tris=${c.triangles} fps=${c.fps?.toFixed?.(1)}`);
-    console.log('  regions: ' + JSON.stringify(regs));
-    assert.ok(b.drawCalls < 600, `aerial draw calls ${b.drawCalls}`);
+    console.log('  capital: ' + JSON.stringify(cap));
+    assert.ok(b.drawCalls < 900, `aerial draw calls ${b.drawCalls}`);
   });
 
   await check('session restart: regions persist without duplicates, interactions re-registered', async () => {
     await h.eval((g) => g.exitToMenu(false));
     await h.newGame('water');
     await h.eval((g) => g.setting('graphics.renderScale', 0.35));
-    await h.eval((g) => g.teleport(-1010, 980));
+    await h.eval((g) => g.teleport(-1300, 1500));
     await h.step(4);
-    const regs = await h.eval((g) => g.debug.fire.regions().map((r) => r.id));
-    assert.equal(new Set(regs).size, regs.length, `no duplicate fire regions: ${regs}`);
+    const regs = await h.eval((g) => [...g.debug.fire.regions().map((r) => r.id), ...g.debug.earth.regions().map((r) => r.id)]);
+    assert.equal(new Set(regs).size, regs.length, `no duplicate regions: ${regs}`);
+    for (let i = 0; i < 60; i++) {
+      if (await h.eval((g) => { const r = g.debug.earth.region('fire_capital'); return !!r && !r.building; })) break;
+      await h.step(10);
+    }
     const inter = await h.eval((g) => ['fn_feed_turtleducks'].filter((id) => g.ctx.interactions.get(id)).length);
     assert.equal(inter, 1, 'capital interactions registered in the new session');
   });
 
-  await check('fresh page, arriving from afar: the capital ring builds time-sliced', async () => {
+  await check('fresh page, arriving from afar: the capital builds time-sliced', async () => {
     const h2 = await launch({ width: 640, height: 360, preset });
     try {
       await h2.newGame('water');
       await h2.eval((g) => g.setting('graphics.renderScale', 0.35));
-      // ≈350 m from the caldera centre: the capital starts building with its terraced ring deferred.
-      await h2.eval((g) => g.teleport(-1010, 980));
+      // Just inside the load radius, beyond the immediate-build distance: construction is deferred.
+      await h2.eval((g) => g.teleport(-1300, 1350 + 600));
       await h2.step(2);
       const first = await h2.eval((g) => {
-        const r = g.debug.fire.region('fire_capital');
-        return r ? { building: r.building, stairs: r.ringStairs.length, buildMs: +r.buildMs.toFixed(0) } : null;
+        const r = g.debug.earth.region('fire_capital');
+        return r ? { building: r.building, buildMs: +r.buildMs.toFixed(0) } : null;
       });
-      assert.ok(first && first.building, `ring construction deferred on arrival: ${JSON.stringify(first)}`);
-      // Arriving before the harbour streamed in must not leave the player inside the overlook
-      // terrace (or shove them off it): they end up standing on top.
-      const arr = await h2.eval((g) => ({ y: g.state().player.y, top: g.debug.fire.region('fire_harbor')?.overlookY ?? null }));
-      assert.ok(arr.top !== null, 'harbour built');
-      near(arr.y, arr.top, 0.4, 'player lifted onto the overlook terrace after it streamed in');
+      assert.ok(first && first.building, `construction deferred on arrival: ${JSON.stringify(first)}`);
       let done = null;
-      for (let i = 0; i < 80 && !done; i++) {
+      for (let i = 0; i < 160 && !done; i++) {
         await h2.step(10);
         done = await h2.eval((g) => {
-          const r = g.debug.fire.region('fire_capital');
-          return r && !r.building ? { stairs: r.ringStairs.length, visibleLayers: r.layerStats().filter((l) => l.visible).length } : null;
+          const r = g.debug.earth.region('fire_capital');
+          return r && !r.building ? { people: r.life?.agents.length ?? 0, ships: r.vessels?.counts().warships ?? 0 } : null;
         });
       }
-      assert.ok(done, 'deferred ring finished');
-      assert.ok(done.stairs >= 4, `ring stairs after deferred build: ${JSON.stringify(done)}`);
+      assert.ok(done, 'deferred build finished');
+      assert.ok(done.ships === 12, `ships after deferred build: ${JSON.stringify(done)}`);
       assert.equal(h2.errors.length, 0, h2.errors.slice(0, 3).join('\n'));
       console.log(`  arrival: ${JSON.stringify(first)} → done: ${JSON.stringify(done)}`);
     } finally {

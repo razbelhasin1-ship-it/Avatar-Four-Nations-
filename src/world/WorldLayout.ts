@@ -672,6 +672,8 @@ export const LANDMARKS: LandmarkDef[] = [
   // Fire Nation
   { id: 'fn_harbor', name: "First Lord's Harbor", regionId: 'fire_nation_capital', x: -1373.7, z: 1690, kind: 'dock', discoverRadius: 80, fastTravel: true },
   { id: 'fn_plaza', name: 'Royal Plaza', regionId: 'fire_nation_capital', x: FNC.V.x, z: FNC.V.z + 600, kind: 'capital', discoverRadius: 80, fastTravel: true },
+  { id: 'fn_harbor_city', name: 'Harbor City', regionId: 'fire_nation_capital', x: FNC.V.x, z: FNC.V.z + 400, kind: 'city', discoverRadius: 160, fastTravel: false },
+  { id: 'fn_hari_bulkan', name: 'Hari Bulkan', regionId: 'fire_nation_capital', x: FNC.V.x, z: FNC.V.z + 62, kind: 'city', discoverRadius: 95, fastTravel: false },
   { id: 'fn_palace', name: "Fire Lord's Palace", regionId: 'fire_nation_capital', x: FNC.V.x, z: FNC.V.z + FNC.ringR + 6, kind: 'landmark', discoverRadius: 60, fastTravel: false },
   { id: 'fn_arena', name: 'Agni Kai Arena', regionId: 'fire_nation_capital', x: FNC.V.x + 22, z: FNC.V.z - 4, kind: 'training', discoverRadius: 30, fastTravel: false },
   { id: 'fn_turtleduck_pond', name: 'Turtle-Duck Pond', regionId: 'fire_nation_capital', x: -1347.9, z: 1045.1, kind: 'landmark', discoverRadius: 25, fastTravel: false },

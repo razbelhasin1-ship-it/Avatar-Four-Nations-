@@ -158,7 +158,7 @@ try {
         bosses: camps.filter((c) => c.kind === 'boss').map((c) => c.id),
         unsafe: camps.filter((c) => e.isSafe(c.x, c.z)).map((c) => c.id),
         tutorialSafe: e.isSafe(-1800, -1775),
-        fireStartSafe: e.isSafe(-1310, 1230),
+        fireStartSafe: e.isSafe(-1300, 1596),
         bssSafe: e.isSafe(650, -40),
       };
     });

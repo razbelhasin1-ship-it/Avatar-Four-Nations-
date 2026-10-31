@@ -221,6 +221,12 @@ vFigColor = aTint < 0.5 ? iRobe : aTint < 1.5 ? iPants : aTint < 2.5 ? iSkin : a
 // Accessories
 // ---------------------------------------------------------------------------
 
+/**
+ * Accessories registered by other cities' crowds (ids from 32 up, clear of `Acc`): a geometry
+ * factory per id. A geometry with a 'color' attribute is drawn with its vertex colours.
+ */
+export const EXTRA_ACC = new Map<number, () => { geo: THREE.BufferGeometry; color: THREE.ColorRepresentation }>();
+
 function accGeometry(a: AccId): { geo: THREE.BufferGeometry; color: string } | null {
   switch (a) {
     case Acc.daiLiHat: {
@@ -421,9 +427,10 @@ export class FigureRenderer {
   private acc(id: number): { mesh: THREE.InstancedMesh; n: number } | null {
     let a = this.accs.get(id);
     if (a) return a;
-    const def = accGeometry(id as AccId);
+    const def = accGeometry(id as AccId) ?? EXTRA_ACC.get(id)?.() ?? null;
     if (!def) return null;
-    const mat = new THREE.MeshLambertMaterial({ color: def.color, side: THREE.DoubleSide });
+    const vc = !!def.geo.getAttribute('color');
+    const mat = new THREE.MeshLambertMaterial({ color: vc ? '#ffffff' : def.color, side: THREE.DoubleSide, vertexColors: vc });
     this.geos.push(def.geo);
     this.mats.push(mat);
     const mesh = new THREE.InstancedMesh(def.geo, mat, this.capacity);
