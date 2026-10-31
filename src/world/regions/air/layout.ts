@@ -49,9 +49,11 @@ const medR = (th: number): number => Math.min(46.2, rOutAt(terrace('halls'), th)
 export const AIR_SPOTS: Record<string, Spot> = {
   // --- Masters & training grounds (docs/TECHNIQUES.md) ---------------------
   master_tenzo: at('moonGateCourt', { dth: 3, dr: 4, yaw: inward(227), r: 2, label: 'Monk Tenzo — moon-gate courtyard' }),
-  training_tenzo: at('moonGateCourt', { dr: 5, r: 7, label: 'Moon-gate training courtyard' }),
-  master_iio: at('airball', { dth: -7, dr: -2, yaw: inward(111) + Math.PI, r: 2, label: 'Brother Iio — airball court' }),
-  training_iio: at('airball', { r: 11, label: 'Airball court' }),
+  training_tenzo: at('moonGateCourt', { dr: 5, r: 8, label: 'Moon-gate training courtyard' }),
+  // Iio teaches on the open lawn of the quarters terrace in front of the airball court (the
+  // court itself is a forest of poles): the lesson runs along the terrace, away from him.
+  master_iio: pol(101.5, 64.5, 3, { yaw: face(polar(101.5, 64.5).x, polar(101.5, 64.5).z, polar(113.5, 64.5).x, polar(113.5, 64.5).z), r: 2, label: 'Brother Iio — by the airball court' }),
+  training_iio: pol(113.5, 64.5, 3, { r: 11, label: 'Lawn before the airball court' }),
   master_pasang: pol(60, 14, 6, { yaw: inward(60) + Math.PI, r: 2, label: 'Abbot Pasang — summit' }),
   training_pasang: pol(40, 17, 6, { r: 8, label: 'Summit plaza' }),
   master_hermit: { x: 1575.6, z: 1347.1, y: WIND_SHRINE.y, yaw: face(1575.6, 1347.1, WIND_SHRINE.x, WIND_SHRINE.z), r: 2, label: 'Hermit of the Four Winds', region: R },

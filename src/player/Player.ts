@@ -692,7 +692,7 @@ export class Player extends Entity implements Combatant, Persistable {
       this.safePoint.set(data.pos.x, data.pos.y, data.pos.z);
     } else {
       const s = STARTS[start];
-      this.safePoint.set(s.spawn.x, 0, s.spawn.z);
+      this.safePoint.set(s.spawn.x, s.spawn.y ?? 0, s.spawn.z);
     }
     if (typeof data.yaw === 'number') this.yaw = data.yaw;
     if (typeof data.playTime === 'number') this.playTime = data.playTime;

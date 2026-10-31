@@ -633,7 +633,7 @@ export class Game {
     p.element = cfg.element;
     p.waterReserve = 0;
     const s = STARTS[cfg.element];
-    const spawn = new THREE.Vector3(s.spawn.x, 0, s.spawn.z);
+    const spawn = new THREE.Vector3(s.spawn.x, s.spawn.y ?? 0, s.spawn.z);
     p.safePoint.copy(spawn);
     await this.beginSession('campaign', spawn, s.yaw, true, cfg.slot);
   }
@@ -648,7 +648,7 @@ export class Game {
     let spawn = p.safePoint.clone();
     if (!this.validSpawn(spawn)) {
       const s = STARTS[this.progression.startingElement];
-      spawn = new THREE.Vector3(s.spawn.x, 0, s.spawn.z);
+      spawn = new THREE.Vector3(s.spawn.x, s.spawn.y ?? 0, s.spawn.z);
       p.safePoint.copy(spawn);
     }
     await this.beginSession('campaign', spawn, p.yaw, false, slot);

@@ -1,12 +1,14 @@
 /**
- * Air region E2E: the Southern Air Temple summit, the switchback trail with its
- * gorge stair-bridge, and the Shrine of the Four Winds.
- *  - walks key routes (spawn → labyrinth → grand stair → spire terrace;
- *    training court → curved stair → walkway → sanctum; moon gate → cliff
- *    balcony; trailhead gate → bridge → switchbacks → summit gate)
- *  - checks walkable heights (groundAt), solid rim railings, registered water
- *    sources (g.waterNearby), published spots, no console errors
- *  - reports draw calls / triangles / fps at the region centre
+ * Air region E2E: the Southern Air Temple (terraces L0–L6 round one rock pinnacle, joined by the
+ * switchback road; the Avatar sanctuary under the summit), the mountain trail with its gorge
+ * stair-bridge, and the Shrine of the Four Winds.
+ *  - spawn on the main landing ledge; published spots; the masters' training fields are flat and open
+ *  - walks the whole road from the gate plaza to the summit, the trail's last leg up its stair
+ *    trench onto the gate plaza, and into the sanctuary (the shut door blocks, an air cast at it
+ *    opens it, down the tunnel to the statue chamber and back out)
+ *  - balustrades stop a runner at terrace edges; fountains, ponds, springs and falls are real
+ *    water sources; monks, sky bison and lemurs are alive; a whistle brings a temple bison down
+ *  - detail levels, session restart, draw calls, no console errors
  * Run: node tests/e2e/region-air.e2e.mjs [--preset medium]
  */
 import assert from 'node:assert/strict';
@@ -26,8 +28,15 @@ const check = async (name, fn) => {
   console.log(results[results.length - 1].join(' | '));
 };
 
-const Y0 = 330;
+// Temple frame (src/world/regions/air/sat/layout.ts): centre, base height, level heights.
+const C = { x: 1450, z: 1250 };
+const BASE = 330;
+const LEVEL_Y = [0, 18, 36, 52, 68, 90, 108];
+const floorY = (l) => BASE + LEVEL_Y[l] + 0.2;
+const pol = (th, r) => [C.x + Math.cos((th * Math.PI) / 180) * r, C.z + Math.sin((th * Math.PI) / 180) * r];
 const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg}: got ${a}, expected ${b} ± ${tol}`);
+// Life on each preset (sat/herd.ts, sat/lemurs.ts, sat/monks.ts).
+const LIFE = { low: { monks: 110, bison: 29, lemurs: 18 }, medium: { monks: 150, bison: 42, lemurs: 30 }, high: { monks: 170, bison: 50, lemurs: 34 }, ultra: { monks: 170, bison: 50, lemurs: 34 } }[preset] ?? { monks: 110, bison: 29, lemurs: 18 };
 
 /** Walk toward (x, z) (re-aiming every few frames). Returns the final player state. */
 async function walkTo(x, z, o = {}) {
@@ -79,145 +88,132 @@ async function walkPath(points, o = {}) {
   let r = null;
   for (const [x, z] of points) {
     r = await walkTo(x, z, o);
-    assert.ok(r.dist < (o.tol ?? 1.2) + 0.6, `stuck before (${x}, ${z}): ${JSON.stringify(r)}`);
+    assert.ok(r.dist < (o.tol ?? 1.2) + 0.6, `stuck before (${x.toFixed(1)}, ${z.toFixed(1)}): ${JSON.stringify(r)}`);
   }
   return r;
 }
 
 const ground = (x, z, maxY = Infinity) => h.eval((g, x, z, m) => g.ctx.world.groundAt(x, z, m).y, x, z, maxY);
+/** Evaluate fn(temple, g, ...args) in the page (temple = the Southern Air Temple region). */
+// eslint-disable-next-line no-new-func
+const temple = (fn, ...args) => h.eval((g, src, a) => new Function('return (' + src + ')')()(g.debug.air.region('air_temple_summit'), g, ...a), fn.toString(), args);
+const teleport = async (x, z, y) => {
+  await h.eval((g, x, z, y) => g.teleport(x, z, y), x, z, y);
+  await h.step(6);
+};
 
 try {
-  await check('air start: spawn is clear, flat and grounded on the plaza', async () => {
+  await check('air start: spawn grounded on the main landing ledge (bison terrace, L1)', async () => {
     await h.newGame('air');
     // Walking checks render every simulated frame: keep the software renderer cheap.
     await h.eval((g) => g.setting('graphics.renderScale', 0.35));
+    await h.eval((g) => {
+      g.debug.enemies?.camps(false);
+      g.debug.enemies?.clear();
+    });
     await h.step(10);
-    const p = (await h.state()).player;
-    near(p.x, 1440, 0.5, 'spawn x');
-    near(p.z, 1290, 0.5, 'spawn z');
-    near(p.y, Y0 + 0.15, 0.1, 'spawn on plaza paving');
-    assert.ok(p.grounded, 'grounded at spawn');
-    assert.equal((await h.state()).region, 'southern_air_temple');
+    const s = await h.state();
+    near(s.player.x, 1465.8, 0.6, 'spawn x');
+    near(s.player.z, 1162.4, 0.6, 'spawn z');
+    near(s.player.y, floorY(1), 0.25, 'spawn on the ledge paving');
+    assert.ok(s.player.grounded, 'grounded at spawn');
+    assert.equal(s.region, 'southern_air_temple');
     const regs = await h.eval((g) => g.debug.air.regions().map((r) => r.id));
     for (const id of ['air_temple_summit', 'air_temple_trail']) assert.ok(regs.includes(id), `region ${id} built: ${regs}`);
   });
 
-  await check('spots: masters, training grounds, givers, habitats, updrafts, viewpoints', async () => {
+  await check('spots: masters, training grounds, givers, habitats, shrines, updrafts, viewpoints', async () => {
     const spots = await h.eval((g) => g.debug.air.spots());
-    for (const id of ['master_tenzo', 'master_iio', 'master_pasang', 'master_hermit', 'giver_air_elder', 'habitat_bison_stable', 'habitat_sky_bison_1', 'merchant_air_temple_1', 'shrine_wind', 'viewpoint_air_sanctum', 'glide_launch_east', 'updraft_1', 'viewpoint_air_trail_1', 'bridge_air_gorge', 'shrine_air_chortens', 'shrine_air_bell']) {
+    for (const id of ['master_tenzo', 'master_iio', 'master_pasang', 'master_hermit', 'giver_air_elder', 'merchant_air_temple_1', 'habitat_bison_stable', 'habitat_sky_bison_1', 'shrine_wind', 'shrine_air_sanctum', 'shrine_air_bell', 'shrine_air_pavilion', 'viewpoint_air_sanctum', 'viewpoint_air_meditation_1', 'glide_launch_east', 'updraft_1', 'viewpoint_air_trail_1', 'bridge_air_gorge']) {
       assert.ok(spots[id], `spot ${id} missing`);
-    }
-    for (const t of ['training_tenzo', 'training_iio', 'training_pasang', 'training_hermit']) {
-      assert.ok(spots[t] && spots[t].r >= 12, `${t} radius >= 12`);
-    }
-    // Training grounds are flat and open: ground height constant over the circle.
-    for (const t of ['training_tenzo', 'training_iio', 'training_pasang', 'training_hermit']) {
-      const s = spots[t];
-      const hs = [];
-      for (let i = 0; i < 12; i++) {
-        const a = (i / 12) * Math.PI * 2;
-        for (const r of [0, 6, 11.5]) hs.push(await ground(s.x + Math.cos(a) * r, s.z + Math.sin(a) * r, s.y + 1.5));
-      }
-      const spread = Math.max(...hs) - Math.min(...hs);
-      assert.ok(spread < 0.2, `${t} not flat (spread ${spread.toFixed(2)}): ${hs.map((v) => v.toFixed(2)).join(',')}`);
-      near(hs[0], s.y, 0.12, `${t} floor height`);
     }
     const n = Object.keys(spots).filter((k) => k.startsWith('updraft_')).length;
     assert.ok(n >= 5, `updraft spots: ${n}`);
   });
 
-  await check('walk: spawn → labyrinth → grand stair → spire terrace (+6 m)', async () => {
-    await h.eval((g) => g.teleport(1440, 1290));
-    const r = await walkPath([[1449, 1262], [1450, 1250], [1450, 1230], [1450, 1219], [1450, 1206]], { tol: 1.3, sprint: true });
-    near(r.y, Y0 + 6, 0.2, 'terrace height');
-    assert.ok(r.grounded, 'grounded on terrace');
-    near(await ground(1450, 1250), Y0 + 0.3, 0.05, 'labyrinth floor');
+  await check('training fields: the ground each master leads a lesson onto is flat and open', async () => {
+    // The training system (src/training/TrainingSystem.ts) clamps the radius to 8–14 m, starts the
+    // player r·0.55 behind the centre (on the master's side) and lays the course out up to ~15 m
+    // ahead and ~6 m to either side.
+    const r = await h.eval((g) => {
+      const V = g.ctx.player.root.position.constructor;
+      const spots = g.debug.air.spots();
+      const col = g.ctx.world.collision;
+      const out = {};
+      for (const m of ['tenzo', 'iio', 'pasang', 'hermit']) {
+        const ms = spots['master_' + m], ts = spots['training_' + m];
+        const L = Math.hypot(ts.x - ms.x, ts.z - ms.z);
+        const fx = (ts.x - ms.x) / L, fz = (ts.z - ms.z) / L;
+        const r = Math.max(8, Math.min(14, ts.r));
+        const sx = ts.x - fx * r * 0.55, sz = ts.z - fz * r * 0.55;
+        let bad = 0, n = 0;
+        const what = [];
+        for (let a = 0; a <= 14; a++) {
+          for (let s = -6; s <= 6; s++) {
+            const x = sx + fx * a - fz * s, z = sz + fz * a + fx * s;
+            const gr = col.groundAt(x, z, ts.y + 2.5);
+            const gy = gr ? gr.y : -1e9;
+            n++;
+            if (Math.abs(gy - ts.y) > 0.5) {
+              bad++;
+              what.push(`step@${a},${s}`);
+              continue;
+            }
+            const c = col.overlapSphere(new V(x, gy + 1.0, z), 0.4);
+            if (c && !c.walkable) {
+              bad++;
+              what.push(`${c.shape}@${a},${s}`);
+            }
+          }
+        }
+        out[m] = { bad, n, centre: col.groundAt(ts.x, ts.z, ts.y + 2.5)?.y ?? null, y: ts.y, what: what.slice(0, 8) };
+      }
+      return out;
+    });
+    for (const [m, v] of Object.entries(r)) {
+      assert.ok(v.bad / v.n <= 0.05, `${m}: ${v.bad}/${v.n} cells of the field blocked or off-level: ${v.what.join(' ')}`);
+      near(v.centre, v.y, 0.15, `${m}: training centre floor`);
+    }
   });
 
-  await check('walk: spire terrace → stair round the drum → terrace (+13) → stair round the tower drum → great tower (+19.5)', async () => {
-    const B = { x: 1450, z: 1188 }, C = { x: 1450, z: 1187 };
-    const onB = (a, r) => [B.x + Math.cos((a * Math.PI) / 180) * r, B.z + Math.sin((a * Math.PI) / 180) * r];
-    const onC = (a, r) => [C.x + Math.cos((a * Math.PI) / 180) * r, C.z + Math.sin((a * Math.PI) / 180) * r];
-    await h.eval((g, p) => g.teleport(p[0], p[1]), onB(90, 16.7));
-    await h.step(20);
-    let r = await walkPath([onB(80, 16.7), ...[70, 50, 30, 10, -10, -28].map((a) => onB(a, 16.7)), onB(-28, 13)], { tol: 1.0 });
-    near(r.y, Y0 + 13, 0.3, 'round terrace height');
-    r = await walkPath([onC(330, 12.3), onC(300, 12.0), onC(282, 12.0), onC(280, 9.65), ...[295, 315, 335, 355, 375, 395, 415, 424].map((a) => onC(a, 9.65)), onC(66, 6.4)], { tol: 1.0 });
-    near(r.y, Y0 + 19.5, 0.3, 'great tower terrace height');
-    assert.ok(r.grounded, 'grounded at the foot of the great tower');
+  await check('walk: the switchback road from the gate plaza (L0) to the summit (L6)', async () => {
+    const pts = await temple((t) => t.roadPath(5));
+    assert.ok(pts.length > 100, `road samples: ${pts.length}`);
+    await teleport(pts[0].x, pts[0].z, pts[0].y + 0.5);
+    let off = 0;
+    const log = [];
+    for (let i = 1; i < pts.length; i++) {
+      const p = pts[i];
+      const r = await walkTo(p.x, p.z, { tol: 1.6 });
+      if (r.dist > 2.2 || Math.abs(r.y - p.y) > 1.6) {
+        off++;
+        log.push(`#${i} want (${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}) got (${r.x.toFixed(1)}, ${r.y.toFixed(1)}, ${r.z.toFixed(1)})`);
+        if (off > 3) break;
+        await teleport(p.x, p.z, p.y + 0.5);
+      }
+    }
+    assert.equal(off, 0, `left the road or stuck: ${log.join('; ')}`);
+    const end = (await h.state()).player;
+    near(end.y, floorY(6), 0.3, 'standing on the summit');
   });
 
-  await check('walk: training court → curved stair → walkway (+5) → sanctum (+9)', async () => {
-    await h.eval((g) => g.teleport(1488, 1241));
-    const c = { x: 1512, z: 1241 };
-    const arc = [205, 214, 226, 238, 250, 259].map((a) => [c.x + Math.cos((a * Math.PI) / 180) * 9.5, c.z + Math.sin((a * Math.PI) / 180) * 9.5]);
-    let r = await walkPath([[1500, 1238.5], ...arc, [1511.4, 1231.6], [1513.5, 1229]], { tol: 0.9 });
-    near(r.y, Y0 + 5, 0.25, 'walkway height');
-    r = await walkPath([[1513.5, 1223], [1511.4, 1218.5], [1509, 1214.5], [1504, 1208]], { tol: 1.0 });
-    near(r.y, Y0 + 9, 0.25, 'sanctum height');
-    // Spire terrace ↔ sanctum bridge stair.
-    r = await walkPath([[1490, 1202], [1478, 1202], [1470, 1202]]);
-    near(r.y, Y0 + 6, 0.25, 'back on the spire terrace');
+  await check('walk: the trail tops out through its stair trench onto the gate plaza (L0)', async () => {
+    const t = await h.eval((g) => ({ length: g.debug.air.trail.length }));
+    const a = await h.eval((g, s) => g.debug.air.trail.at(s), t.length - 36);
+    await teleport(a.x, a.z, a.y + 0.5);
+    const pts = [];
+    for (const s of [t.length - 26, t.length - 16, t.length - 8, t.length]) {
+      const p = await h.eval((g, s) => g.debug.air.trail.at(s), s);
+      pts.push([p.x, p.z]);
+    }
+    let r = await walkPath(pts, { tol: 1.4 });
+    // Through the temple gate (astride the trench) onto the plaza.
+    r = await walkPath([pol(204.5, 84.5), pol(204.5, 80), pol(204.5, 76)], { tol: 1.3 });
+    near(r.y, floorY(0), 0.3, 'on the gate plaza');
+    assert.ok(r.grounded, 'grounded on the plaza');
   });
 
-  await check('walk: through the moon gate onto the east cliff balcony', async () => {
-    await h.eval((g) => g.teleport(1490, 1241));
-    const r = await walkPath([[1505, 1241], [1513.5, 1241], [1522, 1241], [1528, 1238]]);
-    near(r.y, Y0 + 0.15, 0.2, 'balcony height');
-  });
-
-  await check('walk: plaza → stables walk → into the bison stables; plaza → library walk', async () => {
-    await h.eval((g) => g.teleport(1450 - 25, 1250 + 34));
-    let r = await walkPath([[1450 - 56, 1250 + 37.6], [1450 - 57.8, 1250 + 34.4], [1450 - 65.2, 1250 + 39.5]], { tol: 1.2 });
-    near(r.y, Y0 + 0.3, 0.2, 'stables floor');
-    await h.eval((g) => g.teleport(1450 + 20, 1250 + 55));
-    r = await walkPath([[1450 + 29, 1250 + 58.6], [1450 + 42.5, 1250 + 59.5]], { tol: 1.2 });
-    near(r.y, Y0 + 0.12, 0.2, 'library walk');
-  });
-
-  await check('rim: balustrade stops a runner at the cliff (r < 92.5)', async () => {
-    await h.eval((g) => g.teleport(1450, 1330 - 12));
-    const r = await walkTo(1450, 1250 + 120, { max: 240, tol: 0.5 });
-    const rr = Math.hypot(r.x - 1450, r.z - 1250);
-    assert.ok(rr < 92.5 && r.y > Y0 - 0.5, `went past the rim rail: r=${rr.toFixed(1)} y=${r.y}`);
-    // West side (garden lawn) too.
-    await h.eval((g) => g.teleport(1450 - 70, 1250 + 20));
-    const r2 = await walkTo(1450 - 130, 1250 + 35, { max: 240, tol: 0.5 });
-    const rr2 = Math.hypot(r2.x - 1450, r2.z - 1250);
-    assert.ok(rr2 < 92.5 && r2.y > Y0 - 0.5, `went past the west rim rail: r=${rr2.toFixed(1)} y=${r2.y}`);
-  });
-
-  await check('water: fountain, pond, canal, spring, falls and stable basin are real sources', async () => {
-    const ids = await h.eval((g) => g.debug.air.regions().flatMap((r) => r.water));
-    for (const id of ['air_plaza_fountain', 'air_garden_pond', 'air_garden_canal', 'air_west_falls', 'air_east_spring', 'air_east_falls', 'air_stable_trough']) assert.ok(ids.includes(id), `water ${id} registered`);
-    await h.eval((g) => g.teleport(1460, 1290));
-    let w = await h.eval((g) => g.waterNearby(15));
-    assert.ok(w.some((s) => s.id === 'air_plaza_fountain'), 'fountain near plaza: ' + JSON.stringify(w));
-    await h.eval((g) => g.teleport(1392, 1252));
-    w = await h.eval((g) => g.waterNearby(18));
-    assert.ok(w.some((s) => s.id === 'air_garden_pond'), 'garden pond: ' + JSON.stringify(w));
-    await h.eval((g) => g.setElement('water'));
-    const drawn = await h.eval((g) => g.drawWater(20));
-    assert.ok(drawn && drawn.reserve > 0, 'drew water from the pond: ' + JSON.stringify(drawn));
-    await h.eval((g) => g.setElement('air'));
-  });
-
-  await check('trail: trailhead gate → gorge stair-bridge → foot of the switchbacks', async () => {
-    await h.eval((g) => g.teleportTo('air_trailhead'));
-    await h.step(5);
-    const tr = await h.eval((g) => g.debug.air.trail && { top: g.debug.air.trail.bridgeTop, foot: g.debug.air.trail.at(0) });
-    assert.ok(tr, 'trail debug hook');
-    let r = await walkPath([[tr.top.x, tr.top.z]], { tol: 1.0 });
-    const y0 = r.y;
-    // Down the bridge in three legs.
-    const pts = [0.3, 0.65, 1].map((t) => [tr.top.x + (tr.foot.x - tr.top.x) * t, tr.top.z + (tr.foot.z - tr.top.z) * t]);
-    r = await walkPath(pts, { tol: 1.5, sprint: true });
-    assert.ok(r.minY > tr.foot.y - 1.5, `fell off the bridge (minY ${r.minY})`);
-    near(r.y, tr.foot.y, 0.6, 'arrived at the foot of the switchbacks');
-    assert.ok(y0 - r.y > 20, `descended the bridge (${y0} → ${r.y})`);
-  });
-
-  await check('trail: switchback stairs climb past every turn to the summit gate', async () => {
+  await check('trail: switchback stairs climb past every turn', async () => {
     const t = await h.eval((g) => ({ cum: g.debug.air.trail.cum, length: g.debug.air.trail.length }));
     for (let i = 1; i < t.cum.length - 1; i++) {
       const a = await h.eval((g, s) => g.debug.air.trail.at(s), t.cum[i] - 14);
@@ -232,12 +228,20 @@ try {
       near(r.y, b.y + 0.14, 1.4, `turn ${i}: height after the turn`);
       assert.ok(r.grounded, `turn ${i}: grounded`);
     }
-    // Last stretch through the summit gate.
-    const a = await h.eval((g, s) => g.debug.air.trail.at(s), t.length - 16);
-    await h.eval((g, a) => g.teleport(a.x, a.z), a);
-    await h.step(4);
-    const r = await walkPath([[1373.8, 1214.6], [1386, 1222], [1400, 1229]], { tol: 1.3 });
-    near(r.y, Y0 + 0.12, 0.4, 'inside the summit gate');
+  });
+
+  await check('trail: gorge stair-bridge from the trailhead down to the foot of the switchbacks', async () => {
+    await h.eval((g) => g.teleportTo('air_trailhead'));
+    await h.step(5);
+    const tr = await h.eval((g) => g.debug.air.trail && { top: g.debug.air.trail.bridgeTop, foot: g.debug.air.trail.at(0) });
+    assert.ok(tr, 'trail debug hook');
+    let r = await walkPath([[tr.top.x, tr.top.z]], { tol: 1.0 });
+    const y0 = r.y;
+    const pts = [0.3, 0.65, 1].map((t) => [tr.top.x + (tr.foot.x - tr.top.x) * t, tr.top.z + (tr.foot.z - tr.top.z) * t]);
+    r = await walkPath(pts, { tol: 1.5, sprint: true });
+    assert.ok(r.minY > tr.foot.y - 1.5, `fell off the bridge (minY ${r.minY})`);
+    near(r.y, tr.foot.y, 0.6, 'arrived at the foot of the switchbacks');
+    assert.ok(y0 - r.y > 20, `descended the bridge (${y0} → ${r.y})`);
   });
 
   await check('trail: resting landings are flat and walkable', async () => {
@@ -247,6 +251,144 @@ try {
       const g1 = await ground(l.x + 2, l.z + 2);
       near(g0, g1, 0.05, 'landing flat');
     }
+  });
+
+  await check('sanctuary: the shut door blocks; an air blast opens it; down to the statues and back', async () => {
+    const at = (u, v) => {
+      const a = (258 * Math.PI) / 180;
+      return [C.x + Math.cos(a) * v + Math.sin(a) * u, C.z + Math.sin(a) * v - Math.cos(a) * u];
+    };
+    let st = await temple((t) => t.sanctuary.state);
+    assert.equal(st.open, 0, 'a new game starts with the sanctuary shut');
+    await teleport(...pol(258, 40), floorY(4) + 0.5);
+    const shut = await walkTo(...at(0, 24), { max: 300 });
+    assert.ok(shut.dist > 3, `walked through the shut door: ${JSON.stringify(shut)}`);
+    await teleport(...pol(258, 35.5), floorY(4) + 0.5);
+    const door = await temple((t) => t.sanctuary.door);
+    await h.eval((g, d) => g.faceTowards(d.x, d.z), door);
+    await h.eval((g) => g.setElement('air'));
+    const cast = await h.eval((g) => {
+      for (const id of ['air_palm', 'air_blast', 'air_gust', 'air_push']) {
+        const r = g.cast(id);
+        if (r && r.ok) return id;
+      }
+      return null;
+    });
+    assert.ok(cast, 'cast an airbending technique at the door');
+    await h.step(240);
+    st = await temple((t) => t.sanctuary.state);
+    assert.equal(st.open, 1, `the door opened for airbending: ${JSON.stringify(st)}`);
+    assert.ok(await h.eval((g) => g.ctx.quests.hasFlag('air_sanctuary_open')), 'opening is remembered (flag)');
+    const route = [at(0, 27), at(0, 23), at(0, 21.4), at(0, 16), at(0, 13.4), at(0, 10.5), at(4.2, 7), [C.x + 1.5, C.z + 3]];
+    let r = await walkPath(route, { tol: 1.2 });
+    st = await temple((t) => t.sanctuary.state);
+    assert.ok(st.built, 'statue chamber built on approach');
+    assert.ok(st.statues >= 150, `statues: ${st.statues}`);
+    near(r.y, BASE + 63.2, 0.6, 'standing on the chamber floor');
+    r = await walkPath([at(4.2, 7), at(0, 10.5), at(0, 13.6), at(0, 18), at(0, 22.5), at(0, 27), pol(258, 38)], { tol: 1.2 });
+    near(r.y, floorY(4), 0.3, 'back out on the labyrinth court');
+    // The statues' eyes glow in the Avatar State.
+    await teleport(C.x + 1.5, C.z + 3, BASE + 64);
+    assert.ok(await h.eval((g) => g.ctx.avatar.activate()), 'entered the Avatar State');
+    await h.step(300);
+    st = await temple((t) => t.sanctuary.state);
+    await h.eval((g) => g.ctx.avatar.deactivate());
+    assert.ok(st.glow > 0.5, `eyes glow in the Avatar State: ${JSON.stringify(st)}`);
+  });
+
+  await check('rim: balustrades stop a runner at the terrace edges', async () => {
+    // Rail points with a clear run-up (free cells of the monks' walk grid of that level), on
+    // several levels; sprint through each one outward.
+    const runs = await temple((t) => {
+      const LY = [0, 18, 36, 52, 68, 90, 108];
+      const out = [];
+      const seen = new Set();
+      for (const p of t.railPoints(9)) {
+        const lv = LY.findIndex((y) => Math.abs(330 + y + 0.2 + 1.05 - p.y) < 0.3);
+        const grid = t.monks.grids.get(lv);
+        if (!grid || seen.has(lv)) continue;
+        const r = Math.hypot(p.x - 1450, p.z - 1250);
+        const a = (p.th * Math.PI) / 180;
+        let ok = true;
+        for (let d = 7; d >= 1.2 && ok; d -= 0.5) ok = grid.isFree(1450 + Math.cos(a) * (r - d), 1250 + Math.sin(a) * (r - d));
+        if (!ok) continue;
+        seen.add(lv);
+        out.push({ lv, th: p.th, r });
+      }
+      return out;
+    });
+    assert.ok(runs.length >= 4, `rail points with a clear run-up on ${runs.length} levels`);
+    for (const { lv, th, r } of runs) {
+      await teleport(...pol(th, r - 7), floorY(lv) + 0.5);
+      const res = await walkTo(...pol(th, r + 30), { max: 300, tol: 0.5, sprint: true });
+      const rr = Math.hypot(res.x - C.x, res.z - C.z);
+      assert.ok(res.minY > floorY(lv) - 0.5, `L${lv} θ${th.toFixed(0)}: went over the edge (minY ${res.minY.toFixed(2)})`);
+      assert.ok(rr > r - 2.5 && rr < r + 0.6, `L${lv} θ${th.toFixed(0)}: stopped at r ${rr.toFixed(1)}, rail at ${r.toFixed(1)}`);
+    }
+  });
+
+  await check('water: fountain, ponds, springs, falls and troughs are real sources', async () => {
+    const ids = await h.eval((g) => g.debug.air.regions().flatMap((r) => r.water));
+    for (const id of ['air:sat_entrance_fountain', 'air:sat_bison_pond', 'air:sat_koi_1', 'air:sat_koi_2', 'air:sat_quarters_spring', 'air:sat_quarters_falls', 'air:sat_hall_spring', 'air:sat_hall_falls', 'air:sat_orchard_pool']) assert.ok(ids.includes(id), `water ${id} registered`);
+    assert.ok(ids.filter((id) => /trough/.test(id)).length >= 2, 'bison troughs registered');
+    await teleport(...pol(196, 47), floorY(4) + 0.5);
+    let w = await h.eval((g) => g.waterNearby(15));
+    assert.ok(w.some((s) => s.id === 'air:sat_entrance_fountain'), 'fountain in the entrance court: ' + JSON.stringify(w));
+    await h.eval((g) => g.setElement('water'));
+    const drawn = await h.eval((g) => g.drawWater(20));
+    assert.ok(drawn && drawn.reserve > 0, 'drew water from the fountain: ' + JSON.stringify(drawn));
+    await h.eval((g) => g.setElement('air'));
+    w = await h.eval((g) => g.waterNearby(400));
+    assert.ok(!w.some((s) => /sat_rim_falls|sat_spire_falls/.test(s.id)), 'unreachable falls are not offered as sources');
+  });
+
+  await check('life: monks, sky bison and lemurs at work; a whistle brings a temple bison down', async () => {
+    await h.eval((g) => g.setTime(10.5));
+    await teleport(...pol(196, 50), floorY(4) + 0.5);
+    await h.eval((g) => {
+      const R = g.ctx.render, render = R.render;
+      R.render = () => {};
+      try {
+        g.step(600);
+      } finally {
+        R.render = render;
+      }
+    });
+    await h.step(4);
+    const s = await temple((t) => ({ monks: { ...t.monks.stats }, herd: t.herd.state, lemurs: t.lemurs.count, perched: t.lemurs.perched }));
+    console.log('  life: ' + JSON.stringify(s));
+    assert.ok(s.monks.total >= LIFE.monks, `monks simulated: ${s.monks.total}`);
+    assert.ok(s.monks.visible >= 15, `monks visible round the entrance court: ${s.monks.visible}`);
+    assert.ok(s.monks.walking + s.monks.acting > 0, 'monks busy');
+    assert.ok(s.herd.total >= LIFE.bison, `sky bison: ${s.herd.total}`);
+    assert.ok(s.herd.flying > 0 && s.herd.grounded > 0, `bison flying and grounded: ${JSON.stringify(s.herd)}`);
+    assert.ok(s.lemurs >= LIFE.lemurs, `lemurs: ${s.lemurs}`);
+    // Whistle on the main landing ledge.
+    await teleport(1465.8, 1162.4, floorY(1) + 0.5);
+    const called = await h.eval((g) => {
+      const w = g.ctx.interactions.get('air_whistle_0');
+      if (!w) return false;
+      w.interact();
+      return true;
+    });
+    assert.ok(called, 'whistle interaction registered');
+    const waited = await h.eval((g) => {
+      const t = g.debug.air.region('air_temple_summit');
+      const R = g.ctx.render, render = R.render;
+      R.render = () => {};
+      try {
+        for (let i = 0; i < 60; i++) {
+          if (t.herd.waitingAt(0)) return i * 60;
+          g.step(60);
+        }
+        return -1;
+      } finally {
+        R.render = render;
+      }
+    });
+    assert.ok(waited >= 0, 'a temple bison landed at the ledge within a minute');
+    const ride = await h.eval((g) => g.ctx.interactions.get('air_bison_ride_0')?.enabled?.() ?? false);
+    assert.ok(ride, 'the ride interaction is offered beside the waiting bison');
   });
 
   await check('wind shrine: hidden ledge is flat, walkable and railed', async () => {
@@ -286,8 +428,8 @@ try {
 
   await check('session restart: interactions re-registered, no duplicate regions or leaks', async () => {
     const mem = () => h.eval((g) => ({ geo: g.ctx.render.renderer.info.memory.geometries, tex: g.ctx.render.renderer.info.memory.textures, regions: g.debug.air.regions().length }));
-    // Two restarts at the same place: the first may upload geometry never drawn
-    // before (monks streaming in at the spawn); a leak keeps growing on the second.
+    // Two restarts at the same place: the first may upload geometry never drawn before; a leak
+    // keeps growing on the second.
     await h.newGame('air');
     await h.step(10);
     const before = await mem();
@@ -297,33 +439,30 @@ try {
     assert.equal(after.regions, before.regions, 'region count stable');
     assert.ok(after.geo <= before.geo + 8, `geometries grew ${before.geo} -> ${after.geo}`);
     assert.ok(after.tex <= before.tex + 2, `textures grew ${before.tex} -> ${after.tex}`);
-    const ok = await h.eval((g) => {
-      const bell = g.ctx.interactions.get('air_great_bell');
-      const gong = g.ctx.interactions.get('air_gong');
-      if (!bell || !gong) return false;
-      bell.interact();
-      return true;
-    });
-    assert.ok(ok, 'bell and gong interactions registered after restart');
+    const ok = await h.eval((g) => ['air_great_bell', 'air_gong', 'air_prayer_wheels', 'air_whistle_0', 'air_whistle_1', 'air_meditate_1'].filter((id) => !g.ctx.interactions.get(id)));
+    assert.deepEqual(ok, [], 'interactions registered after restart');
+    await h.eval((g) => g.ctx.interactions.get('air_great_bell').interact());
     await h.eval((g) => g.setting('graphics.renderScale', 0.35));
   });
 
-  await check('perf: draw calls / triangles / fps at the region centre', async () => {
+  await check('perf: draw calls / triangles at the landing ledge and from the air', async () => {
     await h.eval((g) => g.setting('graphics.renderScale', 1));
-    await h.eval((g) => g.teleport(1440, 1290));
-    await h.eval((g) => g.faceTowards(1450, 1200));
+    await teleport(1465.8, 1162.4, floorY(1) + 0.5);
+    await h.eval((g) => g.faceTowards(1450, 1250));
     await h.step(20);
     await h.wait(1500);
     const a = (await h.state()).render;
-    await h.eval((g) => g.freeCamera({ x: 1330, y: 420, z: 1400 }, { x: 1450, y: 335, z: 1240 }));
+    const [cx, cz] = pol(215, 330);
+    await h.eval((g, cx, cz) => g.freeCamera({ x: cx, y: 430, z: cz }, { x: 1450, y: 380, z: 1250 }), cx, cz);
     await h.step(5);
     await h.wait(1500);
     const b = (await h.state()).render;
     await h.eval((g) => g.freeCamera(null));
     const regs = await h.eval((g) => g.debug.air.regions().map((r) => ({ id: r.id, buildMs: r.buildMs, finishMs: r.finishMs, maxFinishStepMs: r.maxFinishStepMs, colliders: r.colliders, tris: r.triangles })));
-    console.log(`  [${preset}] spawn view: calls=${a.drawCalls} tris=${a.triangles} fps=${a.fps?.toFixed?.(1)}`);
+    console.log(`  [${preset}] ledge view: calls=${a.drawCalls} tris=${a.triangles} fps=${a.fps?.toFixed?.(1)}`);
     console.log(`  [${preset}] aerial view: calls=${b.drawCalls} tris=${b.triangles} fps=${b.fps?.toFixed?.(1)}`);
     console.log('  regions: ' + JSON.stringify(regs));
+    assert.ok(a.drawCalls < 700, `ledge draw calls ${a.drawCalls}`);
     assert.ok(b.drawCalls < 600, `aerial draw calls ${b.drawCalls}`);
   });
 

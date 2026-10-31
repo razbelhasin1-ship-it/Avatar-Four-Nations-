@@ -117,7 +117,7 @@ export class Lemurs {
   private readonly v = new THREE.Vector3();
 
   constructor(quality: 'low' | 'medium' | 'high') {
-    const n = quality === 'low' ? 18 : quality === 'medium' ? 28 : COUNTS.lemurs;
+    const n = quality === 'low' ? 18 : quality === 'medium' ? 30 : COUNTS.lemurs;
     this.geo = lemurGeometry();
     this.mat = lemurMaterial();
     this.flapAttr = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3);

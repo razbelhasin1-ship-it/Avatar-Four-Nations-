@@ -119,7 +119,7 @@ export class Monks {
   private gustT = 0;
 
   constructor(parent: THREE.Object3D, ctx: GameContext, quality: 'low' | 'medium' | 'high', grounds: Array<{ p: THREE.Vector3; yaw: number }>) {
-    const n = quality === 'low' ? 110 : quality === 'medium' ? 145 : COUNTS.monks;
+    const n = quality === 'low' ? 110 : quality === 'medium' ? 150 : COUNTS.monks;
     this.renderer = new MonkRenderer(parent, n + 8);
     if (quality === 'low') this.renderer.setRange(38, 140);
     this.ball.name = 'sat_airball';

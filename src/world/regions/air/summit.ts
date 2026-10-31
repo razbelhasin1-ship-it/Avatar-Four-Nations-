@@ -1,16 +1,17 @@
 import * as THREE from 'three';
 import type { GameContext } from '../../../core/GameContext';
 import { AirRegion } from './AirRegion';
-import { BASE, C, LEVEL_Y, SANCTUARY, place, polar, sanctuaryFace, shelf } from './sat/layout';
+import { BASE, C, LEVEL_Y, SANCTUARY, place, polar, radiusOf, roadSamples, rockTop, sanctuaryFace, shelf, thetaOf } from './sat/layout';
 import { SITES, buildBisonTerrace, buildCourts, buildGatePlaza, buildHalls, buildOrchards, buildQuarters, buildSummit, meditationSpots } from './sat/levels';
 import { buildMist } from './sat/mist';
-import { buildRoad, buildEdges, roadInlayMaterial } from './sat/road';
+import { buildRoad, buildEdges, railTops, roadInlayMaterial } from './sat/road';
 import { buildTerraces, floorY, pinnacleGeometry, rockMaterial } from './sat/rock';
 import './sat/audio';
 import type { LoopHandle } from '../../../audio/AudioEngine';
 import { Herd } from './sat/herd';
 import { Lemurs } from './sat/lemurs';
 import { Monks } from './sat/monks';
+import { blocksWalk } from './sat/walkgrid';
 import { SatOverlay } from './sat/overlay';
 import { Sanctuary, buildSanctuaryShell, sanctuaryMaterial } from './sat/sanctuary';
 import { buildSpireRing } from './sat/spires';
@@ -124,6 +125,16 @@ export class SouthernAirTemple extends AirRegion {
     this.overlay?.update(dt);
   }
 
+  /** The switchback road's centre line every `step` metres, in world coordinates (y = paving top), for tests. */
+  roadPath(step = 5): Array<{ x: number; y: number; z: number; climb: boolean }> {
+    return roadSamples(step).map((s) => ({ x: s.x, y: floorY(s.y), z: s.z, climb: s.climb }));
+  }
+
+  /** Points on the terrace-edge balustrades (y = rail top), for tests. */
+  railPoints(step = 9): Array<{ x: number; y: number; z: number; th: number }> {
+    return railTops(step);
+  }
+
   private overlayLines(): string[] {
     const info = this.ctx.render.renderer.info.render;
     const m = this.monks?.stats, h = this.herd?.state, s = this.sanctuary?.state;
@@ -174,6 +185,7 @@ export class SouthernAirTemple extends AirRegion {
   protected override sessionStart(ctx: GameContext): void {
     this.sessionEnd(ctx);
     this.session = ctx;
+    this.rescue(ctx);
     this.sanctuary?.sessionStart(ctx);
     this.herd?.sessionStart(ctx);
     this.monks?.sessionStart(ctx);
@@ -240,6 +252,35 @@ export class SouthernAirTemple extends AirRegion {
         ctx.events.emit('ui:notify', { text: 'You breathe with the wind. Chi fully restored.', kind: 'success', duration: 3 });
       });
     }
+  }
+
+  /**
+   * A save made before the temple was rebuilt can hold a position that is now inside the pinnacle's
+   * rock or a building: bring the player out onto the main landing ledge (and keep that as the safe point).
+   */
+  private rescue(ctx: GameContext): void {
+    const pl = ctx.player;
+    if (!pl) return;
+    const p = pl.root.position;
+    const r = radiusOf(p.x, p.z), th = thetaOf(p.x, p.z);
+    if (r > 100 || p.y < BASE - 30 || p.y > BASE + 150) return;
+    // Inside the rock: under the pinnacle's surface here and a step outward (stable caves are
+    // shallow), and not in the sanctuary chamber or its tunnel, which are carved out of it.
+    const dth = (((th - SANCTUARY.th + 540) % 360) - 180) * (Math.PI / 180);
+    const carved =
+      p.y > BASE + SANCTUARY.floor - 1.5 &&
+      p.y < BASE + SANCTUARY.ceil &&
+      (r < SANCTUARY.r + 1 || (Math.abs(r * Math.sin(dth)) < SANCTUARY.half + 0.6 && r * Math.cos(dth) < sanctuaryFace() + 1.5 && p.y < BASE + SANCTUARY.top + 3));
+    let embedded = !carved && p.y < BASE + Math.min(rockTop(th, r), rockTop(th, r + 1.2)) - 1.5;
+    // Inside a building's or a wall's collider.
+    ctx.world.collision.query(p.x, p.z, 1, (c) => {
+      if (!embedded && c.solid && blocksWalk(ctx, c, p.x, p.z, 0.1, p.y)) embedded = true;
+    });
+    if (!embedded) return;
+    const a = place('arrival');
+    const to = new THREE.Vector3(a.x, a.y + 0.05, a.z + 2);
+    pl.teleport(to, pl.yaw);
+    pl.safePoint.copy(to);
   }
 
   protected override sessionEnd(_ctx: GameContext): void {

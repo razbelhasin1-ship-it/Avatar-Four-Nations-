@@ -129,7 +129,8 @@ export interface StartDef {
   element: Element;
   regionId: string;
   landmarkId: string;
-  spawn: P2;
+  /** Where a new game begins; `y` = the floor of a raised spawn (a ledge, a deck) that the fresh-spawn ground search must reach. */
+  spawn: P2 & { y?: number };
   /** Facing yaw (radians; 0 = +Z/south, PI = north). */
   yaw: number;
   title: string;
@@ -710,7 +711,7 @@ export const STARTS: Record<Element, StartDef> = {
     element: 'air',
     regionId: 'southern_air_temple',
     landmarkId: 'air_temple',
-    spawn: { x: 1465.8, z: 1162.4 }, // the main landing ledge: arrivals come by sky bison
+    spawn: { x: 1465.8, z: 1162.4, y: 348.2 }, // the main landing ledge (L1 paving): arrivals come by sky bison
     yaw: -0.17,
     title: 'Begin your journey at the Southern Air Temple',
     subtitle: 'Agility, evasion, air currents and aerial movement.',
