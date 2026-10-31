@@ -371,6 +371,53 @@ try {
     assert.deepEqual(blocked.out, [], 'gate passages obstructed');
   });
 
+  await check('palace terraces: no two floor surfaces at the same height overlap (z-fighting flicker on phones)', async () => {
+    const r = await h.eval((g) => {
+      const R = g.debug.bss.region(), G = 26;
+      const heights = [G + 2, G + 4, G + 6];
+      const box = { x0: 824, x1: 876, z0: -72, z1: -20 };
+      const cells = new Map();
+      const v = new Array(9).fill(0);
+      const side = (ax, az, bx, bz, px, pz) => (bx - ax) * (pz - az) - (bz - az) * (px - ax);
+      R.group.updateMatrixWorld(true);
+      R.group.traverse((o) => {
+        if (!o.isMesh || o.isInstancedMesh || !o.geometry?.attributes?.position) return;
+        const pos = o.geometry.attributes.position, idx = o.geometry.index, e = o.matrixWorld.elements;
+        for (let t = 0, n = idx ? idx.count : pos.count; t < n; t += 3) {
+          for (let k = 0; k < 3; k++) {
+            const i = idx ? idx.getX(t + k) : t + k;
+            const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+            v[k * 3] = e[0] * x + e[4] * y + e[8] * z + e[12];
+            v[k * 3 + 1] = e[1] * x + e[5] * y + e[9] * z + e[13];
+            v[k * 3 + 2] = e[2] * x + e[6] * y + e[10] * z + e[14];
+          }
+          // Upward-facing, flat, at a terrace height.
+          if (Math.abs(v[4] - v[1]) > 0.003 || Math.abs(v[7] - v[1]) > 0.003) continue;
+          if ((v[3] - v[0]) * (v[8] - v[2]) - (v[5] - v[2]) * (v[6] - v[0]) >= 0) continue;
+          const H = heights.find((q) => Math.abs(q - v[1]) < 0.003);
+          if (H === undefined) continue;
+          const minx = Math.max(box.x0, Math.min(v[0], v[3], v[6])), maxx = Math.min(box.x1, Math.max(v[0], v[3], v[6]));
+          const minz = Math.max(box.z0, Math.min(v[2], v[5], v[8])), maxz = Math.min(box.z1, Math.max(v[2], v[5], v[8]));
+          // Grid points strictly inside the triangle (offset so none lie on a quad's diagonal).
+          for (let gx = Math.floor(minx * 2) / 2 + 0.2137; gx <= maxx; gx += 0.5) {
+            for (let gz = Math.floor(minz * 2) / 2 + 0.3391; gz <= maxz; gz += 0.5) {
+              if (gx < minx || gz < minz) continue;
+              const s1 = side(v[0], v[2], v[3], v[5], gx, gz), s2 = side(v[3], v[5], v[6], v[8], gx, gz), s3 = side(v[6], v[8], v[0], v[2], gx, gz);
+              if (!((s1 > 0 && s2 > 0 && s3 > 0) || (s1 < 0 && s2 < 0 && s3 < 0))) continue;
+              const key = `${H}|${gx.toFixed(3)}|${gz.toFixed(3)}`;
+              cells.set(key, (cells.get(key) ?? 0) + 1);
+            }
+          }
+        }
+      });
+      let doubled = 0;
+      for (const c of cells.values()) if (c > 1) doubled++;
+      return { covered: cells.size, doubled };
+    });
+    assert.ok(r.covered > 15000, `terrace floor sampled: ${r.covered} points`);
+    assert.equal(r.doubled, 0, `terrace floor points under two coplanar surfaces: ${r.doubled} of ${r.covered}`);
+  });
+
   await check('debug overlay: F3 shows fps, draw calls, crowd, NPC and train counts', async () => {
     await tp(640, -30, 26);
     await h.step(4);

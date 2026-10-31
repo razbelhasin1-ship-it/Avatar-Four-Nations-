@@ -169,7 +169,19 @@ function platform(site: DistrictSite, b: ContentBuilder, d: ContentBuilder): voi
     const c = at(0, (t.z0 + t.z1) / 2);
     const sz = t.z1 - t.z0, sx = t.hw * 2;
     b.box('stone_white', { x: c.x, y: GROUND + (t.h - 0.5) / 2, z: c.z, sx, sy: t.h + 0.5, sz }, { collide: true, walkable: true });
-    b.box('stone_light', { x: c.x, y: GROUND + t.h - 0.11, z: c.z, sx: sx + 0.24, sy: 0.22, sz: sz + 0.24 });
+    // Coping lip round the top edge, outside the tier and clear of the stairs. (A slab under the whole
+    // terrace had its top exactly at floor height: the two surfaces fought and the floor flickered on phones.)
+    const lip = 0.12, ly = GROUND + t.h - 0.11;
+    for (const [lz, gap] of [[t.z1 + lip / 2, stairS], [t.z0 - lip / 2, stairN]]) {
+      for (const side of [-1, 1]) {
+        const p = at((side * (gap / 2 + t.hw + lip)) / 2, lz);
+        b.box('stone_light', { x: p.x, y: ly, z: p.z, sx: t.hw + lip - gap / 2, sy: 0.22, sz: lip });
+      }
+    }
+    for (const side of [-1, 1]) {
+      const p = at(side * (t.hw + lip / 2), (t.z0 + t.z1) / 2);
+      b.box('stone_light', { x: p.x, y: ly, z: p.z, sx: lip, sy: 0.22, sz });
+    }
     if (i === 0) b.box('stone_tan', { x: c.x, y: GROUND + 0.3, z: c.z, sx: sx + 0.5, sy: 0.6, sz: sz + 0.5 });
     const y = GROUND + t.h, e = t.hw - 0.25;
     balustrade(d, -e, t.z1 - 0.25, -stairS / 2 - 0.2, t.z1 - 0.25, y);
