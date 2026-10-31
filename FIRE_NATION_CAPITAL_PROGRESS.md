@@ -59,7 +59,7 @@ Interiors: throne room (north wing), Royal Gallery (west wing), Agni Kai arena (
 - [x] 1 layout blockout: terrain, harbor, sea wall, walls, roads, markers
 - [x] 2 Royal Plaza + Harbor City
 - [x] 3 road, crater, Hari Bulkan
-- [ ] 4 palace exterior + interiors
+- [x] 4 palace exterior + interiors
 - [ ] 5 ships, tanks, crowds, vendors, events, audio
 - [ ] 6 polish, perf, debug overlay, walk test, 3 comparison passes, screenshots/fire-nation-capital/, report
 
@@ -82,4 +82,9 @@ Interiors: throne room (north wing), Royal Gallery (west wing), Agni Kai arena (
   High Temple (+court for training_hira, catacombs stairwell), two academies, octagon plaza, ~5 rings of
   mansions (pagodaTower 4-7 tiers) + noble houses in gaps, lip watchtowers + gate bunkers. Palace hill unpaved
   (TODO P4: dark basalt drape over the hill — natural material shows grass).
+- P4: palace.ts — ring wall + insignia gate, basalt drape on the hill, grand stair → courtyard (CY 147.2) → steps →
+  palace floor PF 148.2; central tower (hollow hall, triple eaves); front wings + end towers (west = Royal Gallery,
+  procedural portraits); throne wing (pillars, black floor, dais + side stair, canopied throne, wall of fire
+  (FlameField), gold dragon relief); Agni Kai arena (AY = PF+4.4, roofed, 3-side seating, stair at t 10.2).
+  Interiors lit by emissive (interiorMat, portraits, relief, sconces) — no real lights (shader recompiles).
 - Walk test (scratchpad/fnc/walk.mjs): quay → plaza → passage → Royal Way → 8 hairpins → gate → square → palace gate OK.
