@@ -126,6 +126,29 @@ export function flightAlong(k: Kit, t0: number, r0: number, y0: number, t1: numb
   }
 }
 
+/**
+ * Points on top of the terrace-edge balustrades (where they exist: not at openings, not where the
+ * rock beyond rises), about `step` metres apart — perches for lemurs.
+ */
+export function railTops(step = 9): Array<{ x: number; y: number; z: number; th: number }> {
+  const road = roadSamples(1.5);
+  const out: Array<{ x: number; y: number; z: number; th: number }> = [];
+  for (const t of TERRACES) {
+    if (t.level === 0) continue;
+    const n = Math.max(2, Math.round(((t.a1 - t.a0) * DEG * t.rOut) / step));
+    for (let i = 0; i < n; i++) {
+      const th = t.a0 + ((t.a1 - t.a0) * (i + 0.5)) / n;
+      const r = rOutAt(t, th) - 0.1;
+      const p = polar(th, r);
+      const nearRoad = road.some((s) => Math.abs(s.y - t.y) < 2.6 && (s.x - p.x) ** 2 + (s.z - p.z) ** 2 < 5.5 ** 2);
+      const nearShelf = SHELVES.some((s) => Math.abs(s.y - t.y) < 0.5 && Math.abs(((th - s.a + 540) % 360) - 180) < (s.w / 2 + 1) / s.r0 / DEG);
+      if (nearRoad || nearShelf || BASE + rockTop(th, r + 1.5) > floorY(t.y) - 1.2) continue;
+      out.push({ x: p.x, y: floorY(t.y) + 1.05, z: p.z, th });
+    }
+  }
+  return out;
+}
+
 /** Balustrades along terrace edges that drop away, open where the road, stairs and shelves meet them. */
 export function buildEdges(k: Kit): void {
   const road = roadSamples(1.5);

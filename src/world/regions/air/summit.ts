@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import type { GameContext } from '../../../core/GameContext';
 import { AirRegion } from './AirRegion';
-import { BASE, C, LEVEL_Y, place, polar } from './sat/layout';
+import { BASE, C, LEVEL_Y, place, polar, shelf } from './sat/layout';
 import { SITES, buildBisonTerrace, buildCourts, buildGatePlaza, buildHalls, buildOrchards, buildQuarters, buildSummit, meditationSpots } from './sat/levels';
 import { buildMist } from './sat/mist';
 import { buildRoad, buildEdges, roadInlayMaterial } from './sat/road';
 import { buildTerraces, floorY, pinnacleGeometry, rockMaterial } from './sat/rock';
+import { Herd } from './sat/herd';
+import { Lemurs } from './sat/lemurs';
 import { Sanctuary, buildSanctuaryShell, sanctuaryMaterial } from './sat/sanctuary';
 import { buildSpireRing } from './sat/spires';
 import type { P2 } from './parts';
@@ -43,6 +45,7 @@ export class SouthernAirTemple extends AirRegion {
       ['halls', () => buildHalls(k('halls'))],
       ['summit', () => buildSummit(k('summit'))],
       ['sanctuary', () => this.buildSanctuary()],
+      ['herd', () => this.buildLife()],
       ['spires', () => buildSpireRing(this.zone('spires', C, 700, { far: true }))],
       ['mist', () => this.buildMistSheets()],
     ];
@@ -51,6 +54,9 @@ export class SouthernAirTemple extends AirRegion {
   private rock: THREE.Material | null = null;
   /** The Avatar sanctuary (door, glow, the chamber built on approach); tests reach it through debug.air.region(). */
   sanctuary: Sanctuary | null = null;
+  /** Sky bison and winged lemurs (tests reach them through debug.air.region()). */
+  herd: Herd | null = null;
+  lemurs: Lemurs | null = null;
   private session: GameContext | null = null;
 
   private buildPinnacle(): void {
@@ -68,6 +74,16 @@ export class SouthernAirTemple extends AirRegion {
     if (this.session) this.sanctuary.sessionStart(this.session);
   }
 
+  private buildLife(): void {
+    const preset = this.ctx.settings.data.graphics.preset;
+    const q = preset === 'low' ? 'low' : preset === 'medium' ? 'medium' : 'high';
+    this.herd = new Herd(this.ctx, q);
+    this.group.add(this.herd.group);
+    this.lemurs = new Lemurs(q);
+    this.group.add(this.lemurs.group);
+    if (this.session) this.herd.sessionStart(this.session);
+  }
+
   private buildMistSheets(): void {
     const low = this.ctx.settings.data.graphics.effectsQuality === 'low';
     const holder = new THREE.Group();
@@ -79,6 +95,8 @@ export class SouthernAirTemple extends AirRegion {
 
   protected override animate(dt: number, ctx: GameContext): void {
     this.sanctuary?.update(dt, ctx);
+    this.herd?.update(dt, ctx);
+    this.lemurs?.update(dt);
   }
 
   // ---------------------------------------------------------------------------
@@ -92,6 +110,7 @@ export class SouthernAirTemple extends AirRegion {
     this.sessionEnd(ctx);
     this.session = ctx;
     this.sanctuary?.sessionStart(ctx);
+    this.herd?.sessionStart(ctx);
     const reg = (id: string, pos: P2, y: number, radius: number, label: string, cooldown: number, fn: () => void) => {
       this.unregister.push(
         ctx.interactions.register({
@@ -124,6 +143,28 @@ export class SouthernAirTemple extends AirRegion {
       ctx.player?.addStatus('regen', 20, 1);
       ctx.events.emit('ui:notify', { text: 'The prayer wheels whirl — a gentle warmth mends your wounds.', kind: 'success', duration: 4 });
     });
+    // Whistle at a landing ledge: your own bison if you have one, else a temple bison glides down.
+    for (const [i, id] of (['landing_main', 'landing_ne'] as const).entries()) {
+      const s = shelf(id);
+      const w = polar(s.a, s.r0 + 2.5);
+      reg(`air_whistle_${i}`, w, place('arrival').y + 1, 3.6, 'Whistle for a sky bison', 8, () => this.whistle(ctx, i));
+      const ride = polar(s.a, (s.r0 + s.r1) / 2);
+      this.unregister.push(
+        ctx.interactions.register({
+          id: `air_bison_ride_${i}`,
+          position: new THREE.Vector3(ride.x, place('arrival').y + 1.5, ride.z),
+          radius: 6.5,
+          label: 'Fly with the temple bison (travel)',
+          enabled: () => !!this.herd?.waitingAt(i),
+          interact: () => {
+            const b = this.herd?.waitingAt(i);
+            if (b) this.herd!.release(b);
+            ctx.events.emit('ui:notify', { text: 'The herders help you up. Choose where the bison should carry you.', kind: 'info', duration: 3 });
+            ctx.ui.open('map');
+          },
+        }),
+      );
+    }
     for (const [i, m] of meditationSpots().entries()) {
       reg(`air_meditate_${i + 1}`, m, m.y + 0.2, 2.8, 'Meditate above the clouds', 30, () => {
         const pl = ctx.player;
@@ -139,12 +180,31 @@ export class SouthernAirTemple extends AirRegion {
     this.unregister = [];
     this.cooldowns.clear();
     this.sanctuary?.sessionEnd();
+    this.herd?.sessionEnd();
     this.session = null;
+  }
+
+  /** Whistle at landing ledge i (0 main, 1 north-east). */
+  whistle(ctx: GameContext, i: number): void {
+    const own = ctx.companions.bonded.find((r) => r.speciesId === 'sky_bison');
+    if (own) {
+      ctx.companions.summon(own.id);
+      return;
+    }
+    const b = this.herd?.call(i) ?? null;
+    if (b) {
+      ctx.audio.play('creature.skybison.groan', { position: b.pos, volume: 1, range: 500 });
+      ctx.events.emit('ui:notify', { text: 'You whistle. A temple bison peels away from the herd and glides down to the ledge.', kind: 'info', duration: 3.5 });
+    } else ctx.events.emit('ui:notify', { text: 'You whistle, but every bison nearby is busy. Try again in a moment.', kind: 'info', duration: 3 });
   }
 
   override dispose(ctx: GameContext): void {
     this.sanctuary?.dispose();
     this.sanctuary = null;
+    this.herd?.dispose();
+    this.herd = null;
+    this.lemurs?.dispose();
+    this.lemurs = null;
     super.dispose(ctx);
   }
 

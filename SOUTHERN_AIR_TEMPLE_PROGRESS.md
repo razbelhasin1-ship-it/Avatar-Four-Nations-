@@ -34,7 +34,7 @@ Road: one white switchback road, ~1.6 turns, L0 θ 190 → L1 → L2 → L3 → 
 - [x] 0 explore, branch, plan (fc20391)
 - [x] 1 terrain + terrace blockout, road, mist, spires (walk test: 146 road points gate → summit, 0 stuck)
 - [x] 2 buildings + statue room (walk tests: road 145/145, trail → plaza, door shut/air-cast opens, into the chamber and back)
-- [ ] 3 sky bison + lemurs + calling
+- [x] 3 sky bison + lemurs + calling (soak: no invalid positions or bison in rock; dawn takeoff, dusk return, night roost)
 - [ ] 4 monks + routines
 - [ ] 5 atmosphere + audio
 - [ ] 6 polish, perf, quests, tests, screenshots, report
@@ -60,4 +60,10 @@ Road: one white switchback road, ~1.6 turns, L0 θ 190 → L1 → L2 → L3 → 
   (air, water, earth, fire; the last is Fire, the great bearded statue at the door); eyes glow bottom→top on
   `avatarState:changed`; door opens on a player air cast within 11 m (flag `air_sanctuary_open` keeps it open);
   chamber built within 70 m of the door, dropped beyond 130 m.
+- Sky bison (sat/herd.ts): 46 adults + 4 calves on high (38 medium, 26 low); the real bison model baked once into a
+  vertex-animation texture (fly 12 frames, walk 8, stand, graze, rest) for the 15 nearest, a light primitive bison
+  for the rest; flocks at r 136/192/300 round the pinnacle, far herds at 620/820; resting spots found against the
+  built colliders (12); one landing per ledge at a time (others circle); far herds tick every 4th frame; grounded
+  bison have colliders. Whistle at either ledge: your own sky bison if bonded, else a temple bison lands and offers
+  travel (map). Lemurs (sat/lemurs.ts): 34 on high, perch on the real balustrade tops and tower balconies.
 - Masters "Sister Iio" and "Sister Yeshe": the monastery is men and boys only → renamed Brother (ids kept).
