@@ -7,6 +7,7 @@ import { BONE_PARENT, HEAD_CY, mixHex, rigLayout, scaleHex, skinPalette } from '
 import { buildCache, buildCharacter, shapeKey, type BuildResult } from './CharacterBuild';
 import { atlasCache, atlasKey, makeAtlasTexture } from './ClothAtlas';
 import { SecondaryMotion } from './Secondary';
+import { arrowHeadCell, arrowInks, arrowShaftCell, facePaintCell, facePaintDef } from './Markings';
 import { tattooUniforms } from './Tattoo';
 import { resolveItem } from './buildUtil';
 
@@ -279,6 +280,20 @@ export class Humanoid {
     c[2].set(a.colors.accent);
     c[3].set(a.colors.trim);
     m.cu.uTatColor.value.set(a.tattooColor);
+    // Arrow design and face paint (markings atlas).
+    const b = this.build!;
+    const design = a.arrowDesign ?? 'classic';
+    m.cu.uArrowMode.value = design === 'classic' ? 0 : 1;
+    m.cu.uArrowHead.value.fromArray(arrowHeadCell(design));
+    m.cu.uArrowShaft.value.fromArray(arrowShaftCell(design));
+    const [inkA, inkB] = arrowInks(design, a.tattooColor);
+    m.cu.uArrowInk.value.copy(inkA);
+    m.cu.uArrowInk2.value.copy(inkB);
+    const paint = facePaintDef(a.facePaint);
+    m.cu.uFaceOn.value = paint.id === 'none' ? 0 : 1;
+    m.cu.uFaceCell.value.fromArray(facePaintCell(paint.id));
+    paint.colors.forEach((c, i) => m.cu.uFaceCol.value[i].set(c));
+    m.cu.uFaceRef.value.set((b.eyeL[1] + b.eyeR[1]) / 2, (b.eyeL[2] + b.eyeR[2]) / 2, Math.max(0.02, Math.abs(b.eyeL[0] - b.eyeR[0]) / 2), 0);
     const tu = tattooUniforms(a.tattoos, this.build!.tat);
     for (let i = 0; i < tu.A.length; i++) {
       m.cu.uTatA.value[i].fromArray(tu.A[i]);

@@ -1,6 +1,7 @@
 import { Random } from '../core/Random';
 import type { Element } from '../core/types';
 import { cosmeticById } from '../data/cosmetics';
+import { ARROW_DESIGNS, facePaintsFor } from './Markings';
 import {
   cloneAppearance,
   DEFAULT_APPEARANCE,
@@ -264,7 +265,11 @@ export function randomLook(nation: LookNation, rng: Random): Appearance {
   a.brows = { style: rng.int(0, 5), thickness: r2(rng.range(0.25, 0.85)), color: a.hair.color };
   a.facialHair = rng.chance(0.22) ? rng.pick(FACIAL_HAIR.slice(1)).id : 'none';
   a.scars = rng.chance(0.12) ? [rng.pick(['cheek_r', 'brow_l', 'chin'])] : [];
-  a.tattoos = nation === 'air' ? rng.pick(['arrows', 'arrows', 'arrows_head', 'arrow_partial', 'none'] as const) : rng.chance(0.08) ? 'arrows' : 'none';
+  // Markings of the nation only: arrows (in any design) for airbenders, the nation's face paints.
+  a.tattoos = nation === 'air' ? rng.pick(['arrows', 'arrows', 'arrows_head', 'arrow_partial', 'none'] as const) : 'none';
+  a.arrowDesign = nation === 'air' && rng.chance(0.45) ? rng.pick(ARROW_DESIGNS).id : 'classic';
+  const paints = facePaintsFor(nation).filter((p) => p.id !== 'none');
+  a.facePaint = paints.length && rng.chance(nation === 'water' ? 0.3 : nation === 'earth' ? 0.25 : 0.12) ? rng.pick(paints).id : 'none';
   const presets = creatorPresets(nation);
   applyPreset(a, rng.pick(presets));
   if (rng.chance(0.35)) a.colors = { ...rng.pick(NATION_PALETTES[nation]) };

@@ -1,5 +1,6 @@
 import type { Element } from '../core/types';
 import { cosmeticById, EMPTY_SLOT_IDS } from '../data/cosmetics';
+import { ARROW_DESIGNS, FACE_PAINTS, type ArrowDesign, type FacePaint } from './Markings';
 
 /**
  * Character appearance — pure data, saved verbatim. The Humanoid renderer turns
@@ -49,6 +50,10 @@ export interface Appearance {
   scars: string[];
   tattoos: TattooStyle;
   tattooColor: string;
+  /** Design the arrows are drawn in (Markings.ts); undefined = classic. */
+  arrowDesign?: ArrowDesign;
+  /** Face paint or mark (Markings.ts); undefined = none. */
+  facePaint?: FacePaint;
   outfit: OutfitSlots;
   colors: { primary: string; secondary: string; accent: string; trim: string };
 }
@@ -56,7 +61,7 @@ export interface Appearance {
 export const SKIN_TONES = ['#f6dcc4', '#efc9a6', '#e3b48d', '#d29f78', '#bf8a63', '#a87350', '#8d5d3e', '#734a31', '#5c3a26', '#45291b'];
 export const HAIR_COLORS = ['#1a1412', '#2b1d16', '#3f2a1d', '#5a3a24', '#7a5233', '#a87b4f', '#c9a36e', '#e0c79a', '#8c8c8c', '#d8d8d8', '#6a1f1a', '#2e3a5a'];
 export const EYE_COLORS = ['#3b2a1e', '#5a3d25', '#7a5a32', '#c49a3a', '#d9a520', '#5d7a3a', '#3f6fa6', '#6aa6d6', '#8aa0b0', '#4a4a4a'];
-export const TATTOO_COLORS = ['#2f7fd6', '#3aa0e8', '#1f5fb0', '#e8f4ff'];
+export const TATTOO_COLORS = ['#2f7fd6', '#3aa0e8', '#1f5fb0', '#6cc0f0', '#e8f4ff'];
 
 export const HAIRSTYLES: Array<{ id: string; name: string; nation?: Element }> = [
   { id: 'bald', name: 'Shaved (Monk)', nation: 'air' },
@@ -330,6 +335,9 @@ export function sanitizeAppearance(raw: unknown, fallback: Appearance): Appearan
   }
   a.tattoos = oneOf(r.tattoos, TATTOO_STYLES.map((t) => t.id), a.tattoos);
   a.tattooColor = color(r.tattooColor, a.tattooColor);
+  // Optional (older saves have neither): kept only when valid, else the fallback's (undefined = classic / none).
+  if (typeof r.arrowDesign === 'string' && ARROW_DESIGNS.some((d) => d.id === r.arrowDesign)) a.arrowDesign = r.arrowDesign;
+  if (typeof r.facePaint === 'string' && FACE_PAINTS.some((p) => p.id === r.facePaint)) a.facePaint = r.facePaint;
   const outfit = obj(r.outfit);
   if (outfit) {
     for (const k of Object.keys(a.outfit) as Array<keyof OutfitSlots>) {

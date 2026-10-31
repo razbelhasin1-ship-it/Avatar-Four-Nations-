@@ -66,29 +66,41 @@ async function run(width, height, tag) {
       await shot('face');
     });
 
-    await check(`${tag}: hair, markings, attire and colours update the appearance`, async () => {
+    await check(`${tag}: hair, markings, attire and colours update the appearance (the chosen nation's only)`, async () => {
+      const count = (sel) => h.page.$$eval(sel, (els) => els.length);
       await h.page.click('[data-tab="hair"]');
-      await h.page.click('[data-opt="hair:topknot_crown"]');
+      // An Air Nomad is offered Air and common styles, never another nation's traditions.
+      for (const other of ['topknot', 'topknot_crown', 'wolf_tail', 'hair_loops', 'double_buns']) assert.equal(await count(`[data-opt="hair:${other}"]`), 0, `hair ${other} offered to an Air Nomad`);
+      await h.page.click('[data-opt="hair:twin_braids"]');
       await h.page.click('[data-opt="facialHair:goatee"]');
       await h.page.click('[data-tab="marks"]');
       await h.page.click('[data-opt="tattoos:arrows_limbs"]');
+      // Arrow designs (seven) and the Air face marking; no other nation's paints.
+      assert.equal(await count('[data-opt^="arrowDesign:"]'), 7, 'arrow designs');
+      await h.page.click('[data-opt="arrowDesign:tribal"]');
+      for (const other of ['water_war_paint', 'earth_kyoshi', 'fire_third_eye']) assert.equal(await count(`[data-opt="facePaint:${other}"]`), 0, `${other} offered to an Air Nomad`);
+      await h.page.click('[data-opt="facePaint:air_painted_arrow"]');
       await h.page.click('[data-tab="attire"]');
+      for (const other of ['water_south', 'earth_kingdom', 'fire_citizen']) assert.equal(await count(`[data-preset="${other}"]`), 0, `outfit ${other} offered to an Air Nomad`);
+      assert.equal(await count('[data-item^="fire_"], [data-item^="water_"], [data-item^="earth_"]'), 0, 'another nation\'s pieces offered');
       const g0 = await creator((c) => c.geomHash());
-      await h.page.click('[data-preset="water_south"]');
+      await h.page.click('[data-preset="air_acolyte"]');
       await settle();
       const g1 = await creator((c) => c.geomHash());
       assert.notEqual(g1, g0, 'outfit preset did not change the mesh');
-      await h.page.click('[data-item="earth_straw_hat"]');
+      await h.page.click('[data-item="air_headband"]');
       await h.page.click('[data-tab="colors"]');
+      assert.equal(await count('.ngf-pal'), 3, 'only the Air Nomad palettes');
       await h.page.click('.ngf-pal');
       await settle();
       const s = await creator((c) => c.state());
       const a = s.appearance;
-      assert.equal(a.hair.style, 'topknot_crown');
+      assert.equal(a.hair.style, 'twin_braids');
       assert.equal(a.facialHair, 'goatee');
       assert.equal(a.tattoos, 'arrows_limbs');
-      assert.equal(a.outfit.top, 'water_south_parka');
-      assert.equal(a.outfit.headwear, 'earth_straw_hat');
+      assert.equal(a.arrowDesign, 'tribal');
+      assert.equal(a.facePaint, 'air_painted_arrow');
+      assert.equal(a.outfit.headwear, 'air_headband');
       assert.equal(a.colors.primary, '#e8a33a', 'first palette of the home nation (air) should apply');
       await shot('attire');
     });

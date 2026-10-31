@@ -19,6 +19,7 @@ import {
   withBodyType,
 } from '../../character/Appearance';
 import { FACE_PRESET_NAMES } from '../../character/CharShape';
+import { ARROW_DESIGNS, arrowThumb, facePaintDef, facePaintsFor, facePaintThumb } from '../../character/Markings';
 import { Humanoid } from '../../character/Humanoid';
 import { creatorPresets, isSuggestedName, NATION_NAMES, NATION_PALETTES, NAME_MAX, normalizeName, randomLook, suggestName, validateName, withPreset } from '../../character/looks';
 import { createModel } from '../../companions/models';
@@ -121,6 +122,19 @@ const SLOT_LABELS: Array<[keyof OutfitSlots, CosmeticSlot, string]> = [
   ['accessory', 'accessory', 'CARRIED'],
 ];
 const EMPTY_IDS = new Set(['none', 'none_gloves', 'none_belt', 'none_head', 'none_neck', 'none_acc']);
+/**
+ * Hairstyles offered per nation in the creator (the creator shows only the chosen nation's looks:
+ * its own traditional styles and the common ones its people wear).
+ */
+const CREATOR_HAIR: Record<Element, string[]> = {
+  air: ['bald', 'messy_short', 'short_crop', 'bun', 'high_ponytail', 'twin_braids', 'long_braid'],
+  water: ['wolf_tail', 'hair_loops', 'long_braid', 'twin_braids', 'long_loose', 'short_crop', 'messy_short'],
+  earth: ['bun', 'double_buns', 'bob', 'short_crop', 'messy_short', 'long_loose', 'high_ponytail', 'long_braid'],
+  fire: ['topknot', 'topknot_crown', 'high_ponytail', 'long_loose', 'short_crop', 'messy_short', 'spiky', 'side_shave'],
+};
+/** Section titles of the markings tab per nation. */
+const MARK_TITLES: Record<Element, string> = { air: 'FACE MARKINGS', water: 'WATER TRIBE MARKINGS', earth: 'EARTH KINGDOM MARKINGS', fire: 'FIRE NATION MARKINGS' };
+const NEUTRAL_SWATCHES = ['#e8e2d0', '#d8d0bc', '#8a7a5a', '#5a4a3a', '#5a6a7a', '#3a3a3a', '#1e1c1a'];
 /** Tabs and the camera view each one prefers. */
 const TABS: Array<{ id: string; label: string; view: 'body' | 'face' }> = [
   { id: 'body', label: 'Body', view: 'body' },
@@ -150,6 +164,10 @@ const CSS = `
 .ngf-tabs .tab { flex: 0 0 auto; }
 .ngf-scroll { flex: 1; min-height: 0; overflow-y: auto; padding-right: 6px; margin-top: 10px; overscroll-behavior: contain; }
 .ngf-group { font-family: var(--font-title); font-size: 11px; letter-spacing: 0.12em; color: var(--muted); margin: 8px 0 4px; text-transform: uppercase; }
+.ngf-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 6px; }
+.ngf-thumb { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px 5px; border-radius: 9px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.3); color: var(--text); cursor: pointer; font: inherit; font-size: 12px; line-height: 1.15; text-align: center; }
+.ngf-thumb canvas { width: 56px; height: 56px; border-radius: 7px; display: block; }
+.ngf-thumb.active { border-color: var(--gold-2); background: rgba(214, 178, 94, 0.22); color: var(--gold-2); }
 .ngf-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
 .ngf-preset { text-align: left; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.3); color: var(--text); cursor: pointer; font: inherit; }
 .ngf-preset b { display: block; font-size: 14px; font-weight: normal; }
@@ -848,10 +866,11 @@ export class NewGameFlow implements Screen {
           this.slider('BROW THICKNESS', a.brows.thickness, 0, 1, 0.05, (v) => (a.brows.thickness = v), 'browThickness'),
         ];
       case 'hair': {
-        const byNation = (n: Element | undefined) => HAIRSTYLES.filter((s) => s.nation === n);
+        // Only the chosen nation's styles: its traditional ones, then the common ones its people wear.
+        const mine = HAIRSTYLES.filter((s) => CREATOR_HAIR[this.element].includes(s.id));
         const groups: Array<[string, typeof HAIRSTYLES]> = [
-          ['Traditional', HAIRSTYLES.filter((s) => s.nation)],
-          ['Any nation', byNation(undefined)],
+          [`${NATION_NAMES[this.element]} traditions`, mine.filter((s) => s.nation === this.element)],
+          ['Common styles', mine.filter((s) => s.nation !== this.element)],
         ];
         return [
           h('div.field', h('label', 'HAIRSTYLE'), ...groups.map(([g, list]) => [h('div.ngf-group', g), this.chipRow(list, a.hair.style, (v) => (a.hair.style = v), rerender, 'hair')])),
@@ -860,11 +879,7 @@ export class NewGameFlow implements Screen {
         ].filter((x): x is HTMLElement => !!x);
       }
       case 'marks':
-        return [
-          h('div.field', h('label', 'AIR NOMAD TATTOOS'), this.chipRow(TATTOO_STYLES, a.tattoos, (v) => (a.tattoos = v), rerender, 'tattoos'), h('div.muted', { style: { fontSize: '13px' } }, TATTOO_STYLES.find((t) => t.id === a.tattoos)?.desc ?? '')),
-          h('div.field', h('label', 'TATTOO COLOUR'), this.swatchRow(TATTOO_COLORS, a.tattooColor, (c) => (a.tattooColor = c), rerender)),
-          h('div.field', h('label', 'SCARS'), h('div.chips', SCARS.map((s) => h(`button.chip${a.scars.includes(s.id) ? '.active' : ''}`, { 'data-opt': `scar:${s.id}`, onclick: () => { a.scars = a.scars.includes(s.id) ? a.scars.filter((x) => x !== s.id) : [...a.scars, s.id]; this.changed(); rerender(); } }, s.name)))),
-        ];
+        return this.marksTab(rerender);
       case 'attire':
         return this.attireTab(rerender);
       case 'colors':
@@ -873,12 +888,56 @@ export class NewGameFlow implements Screen {
     }
   }
 
+  /** Markings of the chosen nation: Air Nomad tattoos and arrow designs for airbenders, the nation's face paints and marks, scars. */
+  private marksTab(rerender: () => void): HTMLElement[] {
+    const a = this.app;
+    const out: HTMLElement[] = [];
+    const desc = (text: string) => h('div.muted', { style: { fontSize: '13px', marginTop: '4px' } }, text);
+    if (this.element === 'air') {
+      out.push(h('div.field', h('label', 'AIR NOMAD TATTOOS'), this.chipRow(TATTOO_STYLES, a.tattoos, (v) => (a.tattoos = v), rerender, 'tattoos'), desc(TATTOO_STYLES.find((t) => t.id === a.tattoos)?.desc ?? '')));
+      const arrows = a.tattoos === 'arrows' || a.tattoos === 'arrows_head' || a.tattoos === 'arrows_limbs' || a.tattoos === 'arrow_partial';
+      if (arrows) {
+        const design = a.arrowDesign ?? 'classic';
+        out.push(
+          h(
+            'div.field',
+            h('label', 'ARROW DESIGN'),
+            h(
+              'div.ngf-thumbs',
+              ARROW_DESIGNS.map((d) =>
+                h(`button.ngf-thumb${d.id === design ? '.active' : ''}`, { 'data-opt': `arrowDesign:${d.id}`, title: d.desc, onclick: () => { a.arrowDesign = d.id; this.changed(); this.setView('face'); rerender(); } }, arrowThumb(d.id, a.tattooColor, a.skinTone), d.name),
+              ),
+            ),
+            desc(ARROW_DESIGNS.find((d) => d.id === design)?.desc ?? ''),
+          ),
+        );
+      }
+      if (a.tattoos !== 'none') out.push(h('div.field', h('label', 'TATTOO COLOUR'), this.swatchRow(TATTOO_COLORS, a.tattooColor, (c) => (a.tattooColor = c), rerender)));
+    }
+    const paint = facePaintDef(a.facePaint);
+    out.push(
+      h(
+        'div.field',
+        h('label', MARK_TITLES[this.element]),
+        h(
+          'div.ngf-thumbs',
+          facePaintsFor(this.element).map((p) =>
+            h(`button.ngf-thumb${p.id === paint.id ? '.active' : ''}`, { 'data-opt': `facePaint:${p.id}`, title: p.desc, onclick: () => { a.facePaint = p.id; this.changed(); this.setView('face'); rerender(); } }, facePaintThumb(p.id, a.skinTone), p.name),
+          ),
+        ),
+        desc(paint.desc),
+      ),
+    );
+    out.push(h('div.field', h('label', 'SCARS'), h('div.chips', SCARS.map((s) => h(`button.chip${a.scars.includes(s.id) ? '.active' : ''}`, { 'data-opt': `scar:${s.id}`, onclick: () => { a.scars = a.scars.includes(s.id) ? a.scars.filter((x) => x !== s.id) : [...a.scars, s.id]; this.changed(); rerender(); } }, s.name)))));
+    return out;
+  }
+
   private attireTab(rerender: () => void): HTMLElement[] {
     const a = this.app;
     const out: HTMLElement[] = [];
-    // Complete nation outfits first (home nation first).
-    const nations: Element[] = [this.element, ...ELEMENTS.filter((e) => e !== this.element)];
-    const presetsField = h('div.field', h('label', 'NATION OUTFITS'));
+    // The chosen nation's outfits and pieces only (plus pieces any nation wears).
+    const nations: Element[] = [this.element];
+    const presetsField = h('div.field', h('label', `${NATION_NAMES[this.element].toUpperCase()} OUTFITS`));
     for (const n of nations) {
       presetsField.append(h('div.ngf-group', NATION_NAMES[n]));
       presetsField.append(
@@ -900,12 +959,12 @@ export class NewGameFlow implements Screen {
     out.push(presetsField);
     // Individual slots, items grouped by nation.
     for (const [key, slot, label] of SLOT_LABELS) {
-      const items = COSMETICS.filter((c) => c.slot === slot && c.unlock === 'start');
+      const items = COSMETICS.filter((c) => c.slot === slot && c.unlock === 'start' && (c.nation === this.element || c.nation === 'any'));
       const current = EMPTY_IDS.has(a.outfit[key]) ? items.find((c) => EMPTY_IDS.has(c.id))?.id ?? a.outfit[key] : a.outfit[key];
       const field = h('div.field', h('label', label));
       const empty = items.filter((c) => EMPTY_IDS.has(c.id));
       if (empty.length) field.append(this.itemChips(empty, current, key, rerender));
-      for (const n of NATION_ORDER) {
+      for (const n of NATION_ORDER.filter((x) => x === this.element || x === 'any')) {
         const group = items.filter((c) => c.nation === n && !EMPTY_IDS.has(c.id));
         if (!group.length) continue;
         field.append(h('div.ngf-group', n === 'any' ? 'Any nation' : NATION_NAMES[n]), this.itemChips(group, current, key, rerender));
@@ -938,8 +997,8 @@ export class NewGameFlow implements Screen {
 
   private colorsTab(rerender: () => void): HTMLElement[] {
     const a = this.app;
-    const palettes = h('div.field', h('label', 'NATION PALETTES'));
-    for (const n of [this.element, ...ELEMENTS.filter((e) => e !== this.element)]) {
+    const palettes = h('div.field', h('label', `${NATION_NAMES[this.element].toUpperCase()} PALETTES`));
+    for (const n of [this.element]) {
       palettes.append(h('div.ngf-group', NATION_NAMES[n]));
       palettes.append(
         h(
@@ -955,7 +1014,7 @@ export class NewGameFlow implements Screen {
         ),
       );
     }
-    const swatches = ['#e8a33a', '#c8642a', '#f4d48a', '#7a3a1a', '#2f5f9e', '#1e3a66', '#6aa6d6', '#e9eef5', '#4f7f3a', '#2f4f25', '#c9b27a', '#6b4a2a', '#a8241c', '#2a1a18', '#d4a43a', '#5a1410', '#e8e2d0', '#3a3a3a', '#8a7a5a', '#5a6a7a'];
+    const swatches = [...new Set([...NATION_PALETTES[this.element].flatMap((p) => [p.primary, p.secondary, p.accent, p.trim]).map((c) => c.toLowerCase()), ...NEUTRAL_SWATCHES])];
     const names: Record<string, string> = { primary: 'PRIMARY (main cloth)', secondary: 'SECONDARY (trousers, sash)', accent: 'ACCENT (patterns, linings)', trim: 'TRIM (edges, embroidery)' };
     return [
       palettes,
