@@ -11,6 +11,7 @@ import type { LoopHandle } from '../../../audio/AudioEngine';
 import { Herd } from './sat/herd';
 import { Lemurs } from './sat/lemurs';
 import { Monks } from './sat/monks';
+import { SatOverlay } from './sat/overlay';
 import { Sanctuary, buildSanctuaryShell, sanctuaryMaterial } from './sat/sanctuary';
 import { buildSpireRing } from './sat/spires';
 import type { P2 } from './parts';
@@ -61,6 +62,9 @@ export class SouthernAirTemple extends AirRegion {
   herd: Herd | null = null;
   lemurs: Lemurs | null = null;
   monks: Monks | null = null;
+  /** F3 debug overlay (frame rate, draw calls, agents). */
+  overlay: SatOverlay | null = null;
+  private fps = 60;
   private session: GameContext | null = null;
   private loops: { wind: LoopHandle | null; hum: LoopHandle | null; chant: LoopHandle | null } = { wind: null, hum: null, chant: null };
 
@@ -87,6 +91,14 @@ export class SouthernAirTemple extends AirRegion {
     this.lemurs = new Lemurs(q);
     this.group.add(this.lemurs.group);
     this.monks = new Monks(this.group, this.ctx, q, this.herd.restingPlaces());
+    this.overlay?.dispose();
+    this.overlay = new SatOverlay(
+      () => this.overlayLines(),
+      () => {
+        const p = this.ctx.player?.root.position;
+        return !!p && Math.hypot(p.x - C.x, p.z - C.z) < 650;
+      },
+    );
     if (this.session) {
       this.herd.sessionStart(this.session);
       this.monks.sessionStart(this.session);
@@ -108,6 +120,22 @@ export class SouthernAirTemple extends AirRegion {
     this.lemurs?.update(dt);
     this.monks?.update(dt, ctx);
     this.soundscape(ctx);
+    if (dt > 0) this.fps += (1 / dt - this.fps) * Math.min(1, dt * 2);
+    this.overlay?.update(dt);
+  }
+
+  private overlayLines(): string[] {
+    const info = this.ctx.render.renderer.info.render;
+    const m = this.monks?.stats, h = this.herd?.state, s = this.sanctuary?.state;
+    return [
+      'Southern Air Temple',
+      `fps ${this.fps.toFixed(0)}  draw calls ${info.calls}  triangles ${(info.triangles / 1000).toFixed(0)}k`,
+      m ? `monks ${m.total}: visible ${m.visible}, walking ${m.walking}, at work ${m.acting}, indoors ${m.inside}, gliding ${m.gliding}` : 'monks —',
+      h ? `sky bison ${h.total} (${h.calves} calves): flying ${h.flying}, grounded ${h.grounded}, near LOD ${h.near}, riders ${h.riders}` : 'sky bison —',
+      `lemurs ${this.lemurs?.count ?? 0} (perched ${this.lemurs?.perched ?? 0})`,
+      s ? `sanctuary: door ${s.open >= 1 ? 'open' : 'shut'}, chamber ${s.built ? 'built' : 'not built'}, eyes ${s.glow.toFixed(2)}` : 'sanctuary —',
+      `hour ${this.ctx.world.sky.timeOfDay.toFixed(2)}`,
+    ];
   }
 
   /** Wind stronger the higher you climb, the sanctuary's hum inside it, the monks' chant at dusk and dawn. */
@@ -249,6 +277,8 @@ export class SouthernAirTemple extends AirRegion {
     this.lemurs = null;
     this.monks?.dispose();
     this.monks = null;
+    this.overlay?.dispose();
+    this.overlay = null;
     super.dispose(ctx);
   }
 

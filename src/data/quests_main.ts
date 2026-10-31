@@ -125,7 +125,7 @@ export const MAIN_QUESTS: QuestDef[] = [
     id: 'sq_hermit',
     title: 'Where the Four Winds Meet',
     category: 'exploration',
-    summary: 'Sister Iio spoke of a hermit beyond the temple wall who left his teachings on a wind-worn tablet.',
+    summary: 'Brother Iio spoke of a hermit beyond the temple gate who left his teachings on a wind-worn tablet.',
     region: 'southern_air_temple',
     steps: [
       { id: 'tablet', text: 'Find the wind-worn tablet near the temple gate and read it.', objectives: [{ type: 'flag', flag: 'clue_hermit', text: 'Read the wind-worn tablet' }] },

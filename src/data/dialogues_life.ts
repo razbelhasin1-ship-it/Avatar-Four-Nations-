@@ -190,7 +190,7 @@ export const LIFE_DIALOGUES: DialogueDef[] = [
     { text: 'Ember Island: where the Fire Nation pretends it is on holiday.' },
   ]),
   chatter('dlg_life_air', [
-    { text: 'Sister Iio once rode an air scooter around the whole summit without touching the ground. Twice. She says the second time does not count because she was showing off.', condition: { notFlag: 'met_master_iio' } },
+    { text: 'Brother Iio once rode an air scooter around the whole summit without touching the ground. Twice. He says the second time does not count because he was showing off.', condition: { notFlag: 'met_master_iio' } },
     { text: 'The old monks say there is a hermit beyond the east wall. Nobody has seen him in years, but someone keeps leaving teacups on the ledge.', condition: { notFlag: 'clue_hermit' } },
     { text: 'The wind is gentle today. A good day for flying.' },
   ]),
