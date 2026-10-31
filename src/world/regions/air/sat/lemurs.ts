@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Random } from '../../../../core/Random';
-import { BASE, C, COUNTS, LEVEL_Y, SEED, TOWER, coneY, floorY, polar, yawOut } from './layout';
+import { BASE, C, COUNTS, LEVEL_Y, SEED, TOWER, coneY, floorY, polar, rockTop, thetaOf, yawOut } from './layout';
 import { railTops } from './road';
 
 /**
@@ -238,7 +238,8 @@ export class Lemurs {
             l.zone.z + Math.cos(t * l.f.z + i * 0.6) * 26,
           );
           const r = Math.hypot(target.x - C.x, target.z - C.z);
-          target.y = Math.max(target.y, BASE + coneY(Math.max(26, r)) + 10);
+          const th = thetaOf(target.x, target.z);
+          target.y = Math.max(target.y, BASE + Math.max(rockTop(th, r), rockTop(th, Math.max(0, r - 8))) + 14);
           if (r < 30) target.y = Math.max(target.y, floorY(LEVEL_Y[6]) + TOWER.h + 20);
           if (l.t > l.dur) {
             const p = this.freePerch(l.pos);
@@ -257,6 +258,15 @@ export class Lemurs {
         l.vel.y += ((dy / d) * speed - l.vel.y) * k;
         l.vel.z += ((dz / d) * speed - l.vel.z) * k;
         l.pos.addScaledVector(l.vel, dt);
+        const pr = Math.hypot(l.pos.x - C.x, l.pos.z - C.z);
+        if (pr < 100) {
+          const landing = l.state === 'approach' && !!l.perch && Math.hypot(l.perch.x - l.pos.x, l.perch.y - l.pos.y, l.perch.z - l.pos.z) < 5;
+          const floor = BASE + rockTop(thetaOf(l.pos.x, l.pos.z), pr) + (landing ? 0.3 : 2.5);
+          if (l.pos.y < floor) {
+            l.pos.y = floor;
+            if (l.vel.y < 1.5) l.vel.y = 1.5;
+          }
+        }
         const hv = Math.hypot(l.vel.x, l.vel.z);
         const prev = l.yaw;
         if (hv > 0.2) l.yaw = Math.atan2(l.vel.x, l.vel.z);

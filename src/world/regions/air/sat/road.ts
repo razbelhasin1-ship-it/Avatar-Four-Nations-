@@ -34,13 +34,19 @@ export function buildRoad(k: Kit, inlay: THREE.Material): void {
   }
   flush();
   // Flat stretches off the terraces (between a flight's top and a terrace edge): solid causeways.
+  // The step from a flight's top sample to the first flat one counts too, and a stretch is off the
+  // terrace when either edge of the road is (a road crossing a terrace's edge at a slant).
   for (let i = 0; i < pts.length - 1; i++) {
     const a = pts[i], b = pts[i + 1];
-    if (a.climb || b.climb || a.y !== b.y) continue;
+    if (b.climb || a.y !== b.y) continue;
     const mth = (a.th + b.th) / 2, mr = (a.r + b.r) / 2;
-    if (floorAt(mth, mr) === a.y) continue;
-    const top = floorY(a.y), m = polar(mth, mr);
     const dx = b.x - a.x, dz = b.z - a.z, run = Math.hypot(dx, dz);
+    const m = polar(mth, mr);
+    const nx = -dz / (run || 1), nz = dx / (run || 1);
+    const on = (x: number, z: number) => floorAt(thetaOf(x, z), Math.hypot(x - C.x, z - C.z)) === a.y;
+    const h = ROAD_W / 2 - 0.1;
+    if (on(m.x, m.z) && on(m.x + nx * h, m.z + nz * h) && on(m.x - nx * h, m.z - nz * h)) continue;
+    const top = floorY(a.y);
     const ground = BASE + Math.min(rockTop(mth, mr) - 0.6, a.y - 0.8);
     k.main.box('stone_white', { x: m.x, y: (top + ground) / 2, z: m.z, sx: ROAD_W, sy: top - ground, sz: run + 0.1, yaw: Math.atan2(dx, dz) }, { collide: true, walkable: true });
   }

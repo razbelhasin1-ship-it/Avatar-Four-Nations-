@@ -112,9 +112,9 @@ float rn(vec3 p) {
   // Moss and creepers hanging down the cliffs just under each terrace's edge.
   float below = 1e3;
   ${LEVEL_Y.slice(1).map((y) => `below = min(below, abs(${(BASE + y).toFixed(1)} - p.y - 3.5));`).join('\n  ')}
-  float drip = smoothstep(3.6, 0.6, below) * smoothstep(0.35, 0.72, rn(vec3(p.x * 0.45, p.y * 0.07, p.z * 0.45))) * (1.0 - up);
+  float drip = smoothstep(3.6, 0.6, below) * smoothstep(0.45, 0.78, rn(vec3(p.x * 1.1, p.y * 0.09, p.z * 1.1))) * (1.0 - up);
   drip *= nearPin;
-  col = mix(col, moss * 0.8, drip * 0.75);
+  col = mix(col, moss * 0.8, drip * 0.55);
   float mesa = smoothstep(${(BASE + 1.2).toFixed(1)}, ${(BASE + 0.4).toFixed(1)}, p.y) * up;
   col = mix(col, mix(vec3(0.38, 0.47, 0.25), vec3(0.55, 0.53, 0.42), rn(p * 0.3)), mesa);
   diffuseColor.rgb = col;

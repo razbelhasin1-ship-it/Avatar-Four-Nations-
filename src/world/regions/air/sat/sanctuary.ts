@@ -129,7 +129,7 @@ export function sanctuaryMaterial(): THREE.ShaderMaterial {
   const m = new THREE.ShaderMaterial({
     uniforms: {
       uLamp: { value: Array.from({ length: 6 }, () => new THREE.Vector3(0, -1e4, 0)) },
-      uLampCol: { value: new THREE.Color(1.0, 0.6, 0.32).multiplyScalar(0.95) },
+      uLampCol: { value: new THREE.Color(1.0, 0.62, 0.36).multiplyScalar(0.68) },
       uGlow: { value: 0 },
       uGlowAmt: { value: 0 },
       uDoor: { value: new THREE.Vector3() },

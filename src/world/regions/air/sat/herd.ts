@@ -4,7 +4,7 @@ import { Random } from '../../../../core/Random';
 import { defaultAnim } from '../../../../companions/models/CreatureModel';
 import { SkyBisonModel } from '../../../../companions/models/SkyBison';
 import type { Collider } from '../../../Collision';
-import { BASE, C, COUNTS, SEED, TOWER, floorY, polar, shelf, yawOut } from './layout';
+import { BASE, C, COUNTS, SEED, TOWER, floorY, polar, rockTop, shelf, thetaOf, yawOut } from './layout';
 import { SPIRES } from './spires';
 
 /**
@@ -955,9 +955,38 @@ export class Herd {
         if (o.top - a.pos.y < 30) v.y += k * 0.3;
       }
     }
+    // The pinnacle itself: look ahead ~2.5 s and climb over the rock and the halls standing on it,
+    // turning out where it rises too steeply (the obstacle above only steers round its silhouette).
+    if (a.state === 'cruise' || a.state === 'approach') {
+      const lx = a.pos.x + a.vel.x * 2.5, lz = a.pos.z + a.vel.z * 2.5;
+      const lr = Math.hypot(lx - C.x, lz - C.z);
+      if (lr < 100) {
+        const lt = thetaOf(lx, lz);
+        const need = BASE + Math.max(rockTop(lt, lr), rockTop(lt, Math.max(0, lr - 6))) + 12 - a.pos.y;
+        if (need > 0) {
+          v.y = Math.max(v.y, Math.min(14, need / 1.5));
+          if (need > 18) {
+            const pr = Math.hypot(a.pos.x - C.x, a.pos.z - C.z) || 1;
+            v.x += ((a.pos.x - C.x) / pr) * speed;
+            v.z += ((a.pos.z - C.z) / pr) * speed;
+          }
+        }
+      }
+    }
     const before = a.yaw;
     a.vel.lerp(v, Math.min(1, dt * 0.9));
     a.pos.addScaledVector(a.vel, dt);
+    if (a.state === 'cruise' || a.state === 'approach') {
+      // Never inside the rock, whatever the steering did.
+      const pr = Math.hypot(a.pos.x - C.x, a.pos.z - C.z);
+      if (pr < 100) {
+        const floor = BASE + rockTop(thetaOf(a.pos.x, a.pos.z), pr) + 4;
+        if (a.pos.y < floor) {
+          a.pos.y = floor;
+          if (a.vel.y < 2) a.vel.y = 2;
+        }
+      }
+    }
     const hv = Math.hypot(a.vel.x, a.vel.z);
     if (hv > 0.5) a.yaw = turnTo(a.yaw, Math.atan2(a.vel.x, a.vel.z), dt * 1.2);
     const turn = wrap(a.yaw - before) / Math.max(dt, 1e-3);
