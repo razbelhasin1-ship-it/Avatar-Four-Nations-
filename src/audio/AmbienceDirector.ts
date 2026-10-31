@@ -20,8 +20,8 @@ import type { LoopHandle } from './AudioEngine';
  * (`spotRates`). The environment reverb follows the space (cave, city, temple,
  * forest, mountains, open land).
  *
- * Runs on an engine ticker so it also plays behind the main menu (the menu
- * backdrop orbits the Air Temple) and keeps running while paused (muffled).
+ * Runs on an engine ticker so it keeps running while paused (muffled). The
+ * main menu is silent but for its music: the beds fade out behind it.
  * Debug: window.__game.debug.audio.ambience.
  */
 
@@ -434,10 +434,7 @@ export class AmbienceDirector implements GameSystem {
       const p = this.ctx.player.position;
       return { x: p.x, y: p.y, z: p.z, menu: false };
     }
-    if (g.mode === 'menu') {
-      const c = this.ctx.camera.position;
-      return { x: c.x, y: c.y, z: c.z, menu: true };
-    }
+    // The main menu plays only its music (no ambience behind it).
     return null;
   }
 

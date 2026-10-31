@@ -69,7 +69,7 @@ try {
     assert.equal(loops, 0);
   });
 
-  await check('unlock: context runs; menu theme and menu ambience start', async () => {
+  await check('unlock: context runs; the menu theme starts and the menu has no ambience', async () => {
     const st = await audio((g) => g.debug.audio.unlock());
     assert.ok(st.unlocked, JSON.stringify(st));
     await h.wait(300);
@@ -87,9 +87,8 @@ try {
     const tr = await audio((g) => g.debug.audio.music.track('menu'));
     assert.ok(tr.time > t0 + 0.5, `track not advancing: ${t0} → ${tr.time}`);
     assert.ok(tr.level > 0.3, 'track faded in: ' + tr.level);
-    // The menu backdrop orbits the Air Temple: high-altitude wind + temple chimes.
-    assert.ok(s.ambience.playing.includes('amb.wind.high'), JSON.stringify(s.ambience.playing));
-    assert.ok(s.ambience.playing.includes('amb.temple'), JSON.stringify(s.ambience.playing));
+    // The main menu plays only its music: no ambience beds behind it.
+    assert.deepEqual(s.ambience.playing, [], JSON.stringify(s.ambience.playing));
   });
 
   await check('reverb tails always die away: no runaway feedback in any space or the music hall', async () => {

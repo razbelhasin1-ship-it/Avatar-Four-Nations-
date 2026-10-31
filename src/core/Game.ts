@@ -64,7 +64,8 @@ interface MenuShot {
 }
 const MENU_SHOTS: MenuShot[] = [
   { id: 'air', name: 'Southern Air Temple', subtitle: 'Above the sea of clouds', x: 1450, z: 1250, lookY: -8, az: Math.PI / 2, sweep: 0.5, radius: 330, height: 75, duration: 16 },
-  { id: 'water', name: 'Northern Water Tribe', subtitle: 'The city of ice and canals', x: -220, z: -1550, lookY: 6, az: -2.3, sweep: 0.4, radius: 260, height: 80, duration: 15 },
+  // In over the harbour, between the cove's ice cliffs (the old arc started inside the west cliff).
+  { id: 'water', name: 'Northern Water Tribe', subtitle: 'The city of ice and canals', x: -220, z: -1550, lookY: 6, az: 2.95, sweep: 0.4, radius: 260, height: 80, duration: 15 },
   { id: 'earth', name: 'Ba Sing Se', subtitle: 'The impenetrable city', x: 850, z: -50, lookY: 12, az: -1.25, sweep: -0.3, radius: 240, height: 95, duration: 15 },
   { id: 'fire', name: 'Fire Nation Capital', subtitle: 'The caldera city', x: -1330, z: 1110, lookY: 12, az: 0.75, sweep: 0.4, radius: 150, height: 100, duration: 15 },
 ];
