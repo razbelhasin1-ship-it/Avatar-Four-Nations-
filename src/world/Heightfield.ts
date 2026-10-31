@@ -20,6 +20,7 @@
  * vegetation all agree on what the ground is.
  */
 import { SimplexNoise } from '../core/Noise';
+import { FNC, capitalPaved, fireCapitalHeight } from './landforms/fireCapital';
 import type { BiomeId, SurfaceType } from '../core/types';
 import {
   LAKES,
@@ -249,7 +250,8 @@ let initialized = false;
 const tmpS = new Float64Array(1);
 
 // Special landforms
-const VOLCANO = { x: -1330, z: 1150, rimR: 235, outerR: 470, rimH: 150, gateAngle: Math.atan2(960 - 1150, -940 + 1330), gateHalf: 0.2 };
+/** The Fire Nation capital's volcano (see landforms/fireCapital.ts): centre and the reach of its charred flanks. */
+const VOLCANO = { x: FNC.V.x, z: FNC.V.z, rimR: FNC.lipR, outerR: 340, rimH: FNC.lipY };
 const AIR_PEAK = { x: 1450, z: 1250, r: 470, h: 350 };
 const OMASHU_MESA = { x: -450, z: -650, r: 150, h: 95 };
 const DESERT = { x: 250, z: 950, r: 430 };
@@ -399,32 +401,9 @@ function rangesHeight(x: number, z: number, cell: Cell): number {
 }
 
 function specialLandforms(x: number, z: number, h: number): number {
-  // Fire Nation volcano with caldera, an eastern gate gap and radial lava gullies.
-  {
-    const dx = x - VOLCANO.x, dz = z - VOLCANO.z;
-    const d2 = dx * dx + dz * dz;
-    if (d2 < VOLCANO.outerR * VOLCANO.outerR) {
-      const d = Math.sqrt(d2);
-      const ang = Math.atan2(dz, dx);
-      let da = Math.abs(ang - VOLCANO.gateAngle);
-      if (da > Math.PI) da = 2 * Math.PI - da;
-      const gate = 1 - sstep(VOLCANO.gateHalf * 0.6, VOLCANO.gateHalf, da);
-      const rimNoise = 1 + 0.18 * noise.noise2(Math.cos(ang) * 3, Math.sin(ang) * 3);
-      let cone: number;
-      if (d > VOLCANO.rimR) {
-        const t = 1 - (d - VOLCANO.rimR) / (VOLCANO.outerR - VOLCANO.rimR);
-        cone = VOLCANO.rimH * rimNoise * Math.pow(Math.max(0, t), 1.6);
-        // Radial gullies carved by old lava flows: deepest mid-slope, fading at rim and foot.
-        const gully = Math.pow(Math.abs(noiseD.noise2(Math.cos(ang) * 9 + 3.1, Math.sin(ang) * 9 - 1.7 + d / 900)), 0.6);
-        cone -= (1 - gully) * 9 * sstep(0, 0.25, t) * sstep(1, 0.6, t);
-      } else {
-        const t = d / VOLCANO.rimR;
-        cone = mix(40, VOLCANO.rimH * rimNoise, Math.pow(t, 3.2));
-      }
-      cone = mix(cone, Math.min(cone, 44), gate * sstep(VOLCANO.outerR * 0.9, VOLCANO.rimR * 0.7, d));
-      h = Math.max(h, cone + 3 * noiseB.noise2(x / 25, z / 25));
-    }
-  }
+  // Fire Nation capital: volcano, crater (Hari Bulkan), Harbor City, plaza valley and harbour
+  // (landforms/fireCapital.ts; keeps the old volcano's flank around the Sun Warrior Ruins).
+  h = fireCapitalHeight(x, z, h);
   // Air temple peak: a steep massif with noisy, ridged flanks (not a perfect cone).
   {
     const dx = x - AIR_PEAK.x, dz = z - AIR_PEAK.z;
@@ -1219,6 +1198,11 @@ export function sampleTerrain(x: number, z: number, h: number, slope: number, ou
     out.roadLat = road.lat;
     out.roadHalf = road.half;
     out.roadType = road.type === ROAD_TYPE.dirt && b.cold > 0.5 ? ROAD_TYPE.snow : road.type;
+  } else if (capitalPaved(x, z, h)) {
+    // The Fire Nation capital's streets, plaza, quays and crater floor are paved.
+    out.roadLat = 0;
+    out.roadHalf = 60;
+    out.roadType = ROAD_TYPE.stone;
   } else {
     out.roadLat = 99;
     out.roadHalf = 0;

@@ -67,7 +67,7 @@ const MENU_SHOTS: MenuShot[] = [
   // In over the harbour, between the cove's ice cliffs (the old arc started inside the west cliff).
   { id: 'water', name: 'Northern Water Tribe', subtitle: 'The city of ice and canals', x: -220, z: -1550, lookY: 6, az: 2.95, sweep: 0.4, radius: 260, height: 80, duration: 15 },
   { id: 'earth', name: 'Ba Sing Se', subtitle: 'The impenetrable city', x: 850, z: -50, lookY: 12, az: -1.25, sweep: -0.3, radius: 240, height: 95, duration: 15 },
-  { id: 'fire', name: 'Fire Nation Capital', subtitle: 'The caldera city', x: -1330, z: 1110, lookY: 12, az: 0.75, sweep: 0.4, radius: 150, height: 100, duration: 15 },
+  { id: 'fire', name: 'Fire Nation Capital', subtitle: 'From the harbour to the palace', x: -1300, z: 1400, lookY: 40, az: 0.25, sweep: 0.35, radius: 300, height: 110, duration: 15 },
 ];
 const MENU_FOCUS = new THREE.Vector3(MENU_SHOTS[0].x, 0, MENU_SHOTS[0].z);
 /** Golden hour for the menu tour (sun low in the west). */

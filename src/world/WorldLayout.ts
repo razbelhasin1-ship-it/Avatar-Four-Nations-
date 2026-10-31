@@ -1,3 +1,4 @@
+import { FNC } from './landforms/fireCapital';
 import type { BiomeId, Element } from '../core/types';
 
 /**
@@ -292,10 +293,11 @@ export const RIVERS: RiverDef[] = [
     name: 'Ember Stream',
     // Rises on the OUTER slope of the volcano (rim crest is ~235 m from the caldera centre); a source inside the
     // rim made the river surface hang over the caldera wall as a sheet.
+    // Down the volcano's north-east flank to the north coast (clear of Harbor City).
     points: [
-      { x: -1110, z: 975 },
-      { x: -1060, z: 960 },
-      { x: -960, z: 960 },
+      { x: -1248, z: 797 },
+      { x: -1210, z: 724 },
+      { x: -1184, z: 668 },
     ],
     width: [6, 12],
     depth: 2,
@@ -323,7 +325,13 @@ export const LAKES: LakeDef[] = [
   { id: 'temple_tarn', name: 'Cloudmirror Tarn', x: 1360, z: 1110, r: 24, kind: 'tarn' },
   { id: 'spirit_pond', name: 'Spirit Pond', x: -1790, z: -1790, r: 14, kind: 'pond' },
   { id: 'kyoshi_pond', name: 'Unagi Cove Pond', x: 1840, z: -380, r: 16, kind: 'pond' },
-  { id: 'hot_spring', name: 'Ember Hot Spring', x: -1240, z: 1420, r: 14, kind: 'hotspring' },
+  { id: 'hot_spring', name: 'Ember Hot Spring', x: -1612, z: 1170, r: 14, kind: 'hotspring' }, // Zoryu Park, Fire Nation capital
+  // Hari Bulkan (the Fire Nation capital's crater): the big lake (two basins), two small lakes, the palace garden pond.
+  { id: 'hb_lake_n', name: 'Royal Lake', x: -1219.5, z: 974.4, r: 21, kind: 'lake', level: 134.7 },
+  { id: 'hb_lake_s', name: 'Royal Lake', x: -1225.8, z: 1017.0, r: 22, kind: 'lake', level: 134.7 },
+  { id: 'hb_lake_w1', name: 'Lantern Lake', x: -1377.9, z: 1021.5, r: 11, kind: 'pond', level: 134.7 },
+  { id: 'hb_lake_w2', name: 'Mirror Lake', x: -1378.2, z: 951.9, r: 10, kind: 'pond', level: 134.7 },
+  { id: 'hb_turtleduck_pond', name: 'Turtle-Duck Pond', x: -1347.9, z: 1045.1, r: 9, kind: 'pond', level: 134.7 },
 ];
 
 export const ROADS: RoadDef[] = [
@@ -376,12 +384,12 @@ export const ROADS: RoadDef[] = [
     surface: 'dirt',
   },
   {
+    // From the Western Causeway's island end through Harbor City's east gate.
     id: 'fire_causeway_road',
     points: [
       { x: -940, z: 960 },
-      { x: -1050, z: 1050 },
-      { x: -1170, z: 1100 },
-      { x: -1260, z: 1130 },
+      { x: -968, z: 968 },
+      { x: -996, z: 978 },
     ],
     width: 9,
     surface: 'stone',
@@ -423,7 +431,6 @@ export const ROADS: RoadDef[] = [
 export const PLATEAUS: PlateauDef[] = [
   { id: 'nwt_city', x: -220, z: -1600, r: 230, blend: 120, height: 4 },
   { id: 'ba_sing_se', x: 850, z: -50, r: 430, blend: 160, height: 26 },
-  { id: 'fire_caldera', x: -1330, z: 1150, r: 170, blend: 40, height: 42 },
   { id: 'air_temple', x: 1450, z: 1250, r: 95, blend: 60, height: 330 },
   { id: 'swt_village', x: 220, z: 1600, r: 90, blend: 60, height: 3 },
   { id: 'omashu', x: -450, z: -650, r: 85, blend: 40, height: 95 },
@@ -537,9 +544,9 @@ export const REGIONS: RegionDef[] = [
     id: 'fire_nation_capital',
     name: 'Fire Nation Capital',
     nation: 'fire',
-    x: -1330,
-    z: 1150,
-    r: 480,
+    x: -1300,
+    z: 1320,
+    r: 560,
     biome: 'volcanic',
     blurb: 'A royal city cradled inside a sleeping volcano, crowned by the Fire Lord’s palace.',
     theme: 'fire',
@@ -663,11 +670,11 @@ export const LANDMARKS: LandmarkDef[] = [
   { id: 'buried_library', name: 'Buried Library', regionId: 'si_wong_desert', x: 420, z: 1120, kind: 'ruin', discoverRadius: 50, fastTravel: false, hidden: true },
   { id: 'swt_village', name: 'Southern Water Tribe Village', regionId: 'southern_water_tribe', x: 220, z: 1600, kind: 'village', discoverRadius: 70, fastTravel: true },
   // Fire Nation
-  { id: 'fn_harbor', name: 'Capital Harbor', regionId: 'fire_nation_capital', x: -1010, z: 980, kind: 'dock', discoverRadius: 70, fastTravel: true },
-  { id: 'fn_plaza', name: 'Royal Plaza', regionId: 'fire_nation_capital', x: -1330, z: 1200, kind: 'capital', discoverRadius: 80, fastTravel: true },
-  { id: 'fn_palace', name: "Fire Lord's Palace", regionId: 'fire_nation_capital', x: -1330, z: 1110, kind: 'landmark', discoverRadius: 60, fastTravel: false },
-  { id: 'fn_arena', name: 'Agni Kai Arena', regionId: 'fire_nation_capital', x: -1230, z: 1180, kind: 'training', discoverRadius: 40, fastTravel: false },
-  { id: 'fn_turtleduck_pond', name: 'Turtle-Duck Pond', regionId: 'fire_nation_capital', x: -1390, z: 1090, kind: 'landmark', discoverRadius: 25, fastTravel: false },
+  { id: 'fn_harbor', name: "First Lord's Harbor", regionId: 'fire_nation_capital', x: -1373.7, z: 1690, kind: 'dock', discoverRadius: 80, fastTravel: true },
+  { id: 'fn_plaza', name: 'Royal Plaza', regionId: 'fire_nation_capital', x: FNC.V.x, z: FNC.V.z + 600, kind: 'capital', discoverRadius: 80, fastTravel: true },
+  { id: 'fn_palace', name: "Fire Lord's Palace", regionId: 'fire_nation_capital', x: FNC.V.x, z: FNC.V.z + FNC.ringR + 6, kind: 'landmark', discoverRadius: 60, fastTravel: false },
+  { id: 'fn_arena', name: 'Agni Kai Arena', regionId: 'fire_nation_capital', x: FNC.V.x + 22, z: FNC.V.z - 4, kind: 'training', discoverRadius: 30, fastTravel: false },
+  { id: 'fn_turtleduck_pond', name: 'Turtle-Duck Pond', regionId: 'fire_nation_capital', x: -1347.9, z: 1045.1, kind: 'landmark', discoverRadius: 25, fastTravel: false },
   { id: 'dragon_bone_caldera', name: 'Sun Warrior Ruins', regionId: 'fire_nation_capital', x: -1560, z: 940, kind: 'ruin', discoverRadius: 60, fastTravel: true, hidden: true },
   { id: 'ember_resort', name: 'Ember Island Resort', regionId: 'ember_island', x: -1690, z: 1760, kind: 'village', discoverRadius: 70, fastTravel: true },
   // Air
@@ -702,7 +709,7 @@ export const STARTS: Record<Element, StartDef> = {
     element: 'fire',
     regionId: 'fire_nation_capital',
     landmarkId: 'fn_plaza',
-    spawn: { x: -1310, z: 1230 },
+    spawn: { x: FNC.V.x, z: FNC.V.z + 606, y: FNC.plaza.y }, // the Royal Plaza's central avenue
     yaw: Math.PI,
     title: 'Begin your journey in the Fire Nation Capital',
     subtitle: 'Aggressive combinations, precise strikes, controlled bursts.',

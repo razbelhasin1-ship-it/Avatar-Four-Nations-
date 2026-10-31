@@ -20,7 +20,7 @@ const NATION_START: Record<Element, { landmark: string; place: string; first: st
   air: { landmark: 'air_temple', place: 'the Southern Air Temple', first: 'master_tenzo', firstName: 'Monk Tenzo', where: 'in the moon-gate training courtyard' },
   water: { landmark: 'nwt_plaza', place: 'the Northern Water Tribe', first: 'master_siku', firstName: 'Master Siku', where: 'in the Waterbending Courtyard' },
   earth: { landmark: 'bss_lower_ring', place: 'Ba Sing Se', first: 'master_lien', firstName: 'Master Lien', where: 'at the Stone Fist Dojo' },
-  fire: { landmark: 'fn_plaza', place: 'the Fire Nation Capital', first: 'master_jeong', firstName: 'Master Jeong', where: 'at the Agni Kai Arena' },
+  fire: { landmark: 'fn_plaza', place: 'the Fire Nation Capital', first: 'master_jeong', firstName: 'Master Jeong', where: 'in the Royal Plaza drill yard' },
 };
 
 /** Who the main line sends you to first for your starting element. */
@@ -28,7 +28,7 @@ const START_MASTER: Record<Element, { id: string; name: string; where: string }>
   air: { id: 'master_tenzo', name: 'Monk Tenzo', where: 'in the moon-gate training courtyard' },
   water: { id: 'master_siku', name: 'Master Siku', where: 'in the Waterbending Courtyard' },
   earth: { id: 'master_lien', name: 'Master Lien', where: 'at the Stone Fist Dojo' },
-  fire: { id: 'master_hira', name: 'Sage Hira', where: "in the Fire Sages' Temple court" },
+  fire: { id: 'master_hira', name: 'Sage Hira', where: 'in the High Temple court in Hari Bulkan' },
 };
 
 const GRAND: Record<Element, { id: string; name: string }> = {

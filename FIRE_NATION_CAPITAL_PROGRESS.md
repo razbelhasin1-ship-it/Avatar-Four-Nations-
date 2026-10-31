@@ -56,7 +56,7 @@ Interiors: throne room (north wing), Royal Gallery (west wing), Agni Kai arena (
 
 ## Phases
 - [x] 0 explore, rollback branch, design (this file)
-- [ ] 1 layout blockout: terrain, harbor, sea wall, walls, roads, markers
+- [x] 1 layout blockout: terrain, harbor, sea wall, walls, roads, markers
 - [ ] 2 Royal Plaza + Harbor City
 - [ ] 3 road, crater, Hari Bulkan
 - [ ] 4 palace exterior + interiors
@@ -64,3 +64,10 @@ Interiors: throne room (north wing), Royal Gallery (west wing), Agni Kai arena (
 - [ ] 6 polish, perf, debug overlay, walk test, 3 comparison passes, screenshots/fire-nation-capital/, report
 
 ## Notes / log
+- P1: landforms/fireCapital.ts replaces the old VOLCANO in Heightfield (old formula kept near the ruins + perch,
+  blended 46→196 m, never within 135 m of V). Plateau fire_caldera removed. City ground = paved (sampleTerrain
+  roadType stone via capitalPaved; Zoryu Park + garden stay green). Vegetation blocked by inCapitalFootprint.
+- Harbour aprons are slabs over deep bed (sea foam reads a ~4 m height texture; a terrain quay step made foam spikes).
+- Region: fnc/FireCapital.ts (EarthRegion 'fire_capital'), builders harbor/plaza/city/road/caldera/palace.
+- Lakes in WorldLayout LAKES: hb_lake_n/s, hb_lake_w1/w2, hb_turtleduck_pond (level 134.7).
+- TODO P2: corner wall where the valley walls (|t| 34) meet the harbour walls (|t| 50) at s 655; bigger main tower.

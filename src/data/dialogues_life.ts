@@ -181,7 +181,7 @@ export const LIFE_DIALOGUES: DialogueDef[] = [
     { text: 'The desert eats the careless. The scholar by the cantina keeps talking about a library under the sand. I say let it stay buried.' },
   ]),
   chatter('dlg_life_fn', [
-    { text: 'Master Jeong drills his cadets in the Agni Kai Arena every morning. You can hear the gong from the palace.', condition: { notFlag: 'met_master_jeong' } },
+    { text: 'Master Jeong drills his cadets in the Royal Plaza every morning. You can hear the gong down at the harbour.', condition: { notFlag: 'met_master_jeong' } },
     { text: 'The Sun Warriors died out centuries ago. That is what the history scrolls say, anyway.', condition: { notFlag: 'met_master_ahkon' } },
     { text: 'Long live the Fire Lord. And long live the turtle-ducks — they are much nicer.' },
   ]),

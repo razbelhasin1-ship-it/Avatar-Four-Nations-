@@ -102,7 +102,7 @@ export class RoadsideSite extends WildsSite {
       ...FARMS.map((f) => ({ x: f.x, z: f.z, r: 40 })),
       ...CAMPS.map((c) => ({ x: c.x, z: c.z, r: 25 })),
       { x: 850, z: -50, r: 440 }, // Ba Sing Se walls
-      { x: -1330, z: 1150, r: 480 }, // Fire Nation caldera
+      { x: -1300, z: 1320, r: 560 }, // Fire Nation capital (volcano, Harbor City, harbour)
     ];
     const clear = (x: number, z: number) => !avoid.some((a) => Math.hypot(x - a.x, z - a.z) < a.r) && !waterAt(x, z) && !roadAt(x, z, 0.6);
     // Mile stones every 200 m, alternating sides.

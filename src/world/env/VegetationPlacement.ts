@@ -1,3 +1,4 @@
+import { inCapitalFootprint } from '../landforms/fireCapital';
 import { SimplexNoise } from '../../core/Noise';
 import { Random } from '../../core/Random';
 import {
@@ -88,6 +89,8 @@ class InstanceSink {
 
 /** True when (x,z) lies on a city plateau or inside an extra exclusion circle. */
 export function vegetationBlockedAt(x: number, z: number, extra: readonly VegCircle[], margin = 0): boolean {
+  // The Fire Nation capital's streets, plaza, harbour and crater floor.
+  if (inCapitalFootprint(x, z)) return true;
   const plats = getPlateauRuntime();
   for (let i = 0; i < plats.length; i++) {
     const p = plats[i];
