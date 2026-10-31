@@ -697,7 +697,7 @@ export const MASTERS: MasterDef[] = [
     element: 'fire',
     nation: 'fire',
     spot: 'hira',
-    fallback: { x: -1344.5, z: 930.9, yaw: Math.PI / 2, tx: -1336.1, tz: 942.1 },
+    fallback: { x: -1346.9, z: 927.7, yaw: Math.PI / 2, tx: -1334.3, tz: 944.5 },
     region: 'fire_nation_capital',
     location: 'Fire Nation Capital — the High Temple court, Hari Bulkan',
     condition: { flag: 'hira_at_temple' },

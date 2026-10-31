@@ -16,7 +16,7 @@ const R = 'fire_nation_capital';
 const PY = PLAZA.y;
 const FY = FNC.floorY;
 const Q = FNC.harbor.quayY;
-const court = atPolar(CALDERA.temple.phi, CALDERA.temple.r - 18);
+const court = atPolar(CALDERA.temple.phi, CALDERA.temple.r - 25);
 const sage = atPolar(CALDERA.temple.phi, CALDERA.temple.r - 4);
 // Yaw facing from a point toward the volcano centre (local +Z forward).
 const faceV = (p: { x: number; z: number }) => Math.atan2(FNC.V.x - p.x, FNC.V.z - p.z);
@@ -27,7 +27,7 @@ export const FIRE_SPOTS: Record<string, Spot> = {
   master_jeong: { x: POINTS.jeong.x, z: POINTS.jeong.z, y: PY, yaw: -Math.PI / 2, r: 3, label: 'Master Jeong, Royal Plaza drill yard', region: R },
   training_jeong: { x: POINTS.drill.x, z: POINTS.drill.z, y: PY, yaw: Math.PI, r: PLAZA.drill.r, label: 'Royal Plaza drill yard', region: R },
   master_hira: { x: sage.x, z: sage.z, y: FY, yaw: faceV(sage), r: 3, label: 'Sage Hira, the High Temple', region: R },
-  training_hira: { x: court.x, z: court.z, y: FY, yaw: faceV(court) + Math.PI, r: 13, label: 'High Temple court', region: R },
+  training_hira: { x: court.x, z: court.z, y: FY, yaw: faceV(court) + Math.PI, r: 12, label: 'High Temple court', region: R },
   // --- Capital: merchants ---
   merchant_fn_1: { x: POINTS.marketW.x, z: POINTS.marketW.z, yaw: Math.PI / 2, r: 2, label: 'Royal Way market stall', region: R },
   merchant_fn_2: { x: POINTS.marketE.x, z: POINTS.marketE.z, yaw: -Math.PI / 2, r: 2, label: 'Royal Way market stall', region: R },

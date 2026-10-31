@@ -208,6 +208,8 @@ export class CapitalLife {
   readonly figures: FigureRenderer;
   readonly agents: Agent[] = [];
   private nodeY: Float32Array | null = null;
+  /** Node stands on bare terrain (streets draped over it): walkers follow the ground between nodes. */
+  private onTerrain: Uint8Array | null = null;
   private width = new Map<number, number>();
   private est = new Map<number, number>();
   private comp: Int32Array | null = null;
@@ -312,10 +314,11 @@ export class CapitalLife {
     const quayT = (s: number) => harborHalf(s) + 7.5;
     for (const side of [-1, 1]) {
       const pts: P2[] = [];
-      for (let s = Q.s0 + 2; s <= HARBOR.wallS - 7; s += 6) pts.push(ax(side * quayT(s), s));
+      // From just south of the head apron (lane offsets near the corner stay clear of the plaza's corner walls).
+      for (let s = Q.s0 + 6; s <= HARBOR.wallS - 7; s += 6) pts.push(ax(side * quayT(s), s));
       this.street(pts, T.street | T.patrol | Z.harbor, 3.4, 8);
     }
-    const head = [-quayT(Q.s0 + 2), -30, -22, -18, -10, 0, 10, 18, 22, 30, quayT(Q.s0 + 2)].map((t) => ax(t, Q.s0 + 4));
+    const head = [-quayT(Q.s0 + 6), -30, -22, -18, -10, 0, 10, 18, 22, 30, quayT(Q.s0 + 6)].map((t) => ax(t, Q.s0 + 4));
     this.street(head, T.street | T.square | Z.harbor, 2.6, 8, 4);
     for (const t of HARBOR.piers) {
       const ids = this.street([ax(t, Q.s0 + 4), ax(t, HEAD + HARBOR.pierLen - 3)], T.street | Z.harbor, 1.4, 8, 2);
@@ -339,20 +342,20 @@ export class CapitalLife {
       this.poi(f.x - 2, f.z + 1.5, T.stall | Z.harbor, Math.PI / 2, 10);
     }
 
-    // --- Royal Plaza: an open grid between the side halls, round the pools and the gatehouse.
-    const cols = [-19, -10, -5, 0, 5, 10, 19];
+    // --- Royal Plaza: an open grid between the side halls, round the pools.
+    // Outer lanes at |t| 20.1: clear of the tanks' turning sweep (≤ 19.2) and the halls (21).
+    const cols = [-20.1, -10, -5, 0, 5, 10, 20.1];
     const P = PLAZA;
     const inPool = (t: number, s: number) => Math.abs(t) > P.poolIn - 1.2 && Math.abs(t) < P.poolOut + 1.2 && s > P.poolS0 - 1.2 && s < P.poolS1 + 1.2;
-    const inGatehouse = (t: number, s: number) => Math.abs(t) < P.gatehouse.w / 2 + 1.2 && s > P.gatehouse.s - P.gatehouse.d / 2 - 1.5;
     const grid = new Map<string, number>();
     const rows: number[] = [];
     for (let s = 560; s <= 652; s += 6) rows.push(s);
     for (const s of rows) {
       for (const t of cols) {
-        if (inPool(t, s) || inGatehouse(t, s)) continue;
+        if (inPool(t, s)) continue;
         const p = ax(t, s);
         const id = nav.addNode(p.x, p.z, T.street | T.square | T.patrol | Z.plaza, 0.4);
-        this.width.set(id, 2.4);
+        this.width.set(id, Math.abs(t) > 20 ? 0.5 : 2.4);
         grid.set(`${t},${s}`, id);
       }
     }
@@ -374,7 +377,7 @@ export class CapitalLife {
     }
     // Quay steps down to the head apron.
     const lastRow = rows[rows.length - 1];
-    for (const t of [-19, -10, 10, 19]) {
+    for (const t of [-20.1, -10, 10, 20.1]) {
       const a = grid.get(`${t},${lastRow}`);
       if (a !== undefined) this.linkNear(a, 12, Z.harbor);
     }
@@ -555,12 +558,14 @@ export class CapitalLife {
     this.ctx = ctx;
     const N = this.nav.nodes;
     this.nodeY = new Float32Array(N.length);
+    this.onTerrain = new Uint8Array(N.length);
     for (let i = 0; i < N.length; i++) {
       const n = N[i];
       const zb = n.tags & ZALL;
       const e = this.est.get(i) ?? (zb === Z.harbor ? FNC.harbor.quayY : zb === Z.plaza ? PLAZA.y : zb === Z.caldera ? CALDERA.y : heightAt(n.x, n.z));
       const g = ctx.world.groundAt(n.x, n.z, e + 2.2);
       this.nodeY[i] = g.y + (g.colliderId ? 0.01 : 0.06);
+      this.onTerrain[i] = g.colliderId ? 0 : 1;
     }
     // Connected components: spawn and walk only inside the biggest one.
     this.comp = new Int32Array(N.length).fill(-1);
@@ -672,7 +677,11 @@ export class CapitalLife {
       const pat = this.agents.filter((a) => a.zone === zone && a.role === 'patrol');
       for (let k = 0; k + 3 < pat.length; k += 4) {
         const sq: Squad = { members: pat.slice(k, k + 4).map((a) => a.i), trail: new Float32Array(TRAIL * 4), head: 0, n: 0, dist: 0, lastX: pat[k].x, lastZ: pat[k].z, stepT: 0 };
-        for (const a of pat.slice(k, k + 4)) a.squad = this.squads.length;
+        for (const a of pat.slice(k, k + 4)) {
+          a.squad = this.squads.length;
+          // The squad forms up at its leader's spot.
+          if (a !== pat[k]) this.place(a, pat[k].node);
+        }
         this.squads.push(sq);
       }
       for (const a of pat.slice(Math.floor(pat.length / 4) * 4)) a.role = 'walker';
@@ -699,7 +708,7 @@ export class CapitalLife {
     ];
     out.plaza = [
       spot(-3.6, 559.5, 0, P.y), spot(3.6, 559.5, 0, P.y),
-      spot(-(P.gatehouse.w / 2 + 1.4), P.gatehouse.s + 3, 0, P.y), spot(P.gatehouse.w / 2 + 1.4, P.gatehouse.s + 3, 0, P.y),
+      spot(-6.5, 652.5, 0, P.y), spot(6.5, 652.5, 0, P.y),
       spot(-20.2, 597, Math.PI / 2, P.y), spot(20.2, 597, -Math.PI / 2, P.y),
       spot(-19.5, 655.5, Math.PI, P.y), spot(19.5, 655.5, Math.PI, P.y),
     ];
@@ -790,7 +799,7 @@ export class CapitalLife {
     const slots = this.rally.slots;
     for (const s of [576.5, 580]) for (let t = -13.5; t <= 13.51; t += 3) slots.push({ ...atAxis(t, s), y: PLAZA.y, yaw: Math.PI, troop: true });
     const civ: Array<{ t: number; s: number }> = [];
-    for (let s = 585; civ.length < LIFE.rally.crowd + 60 && s < 640; s += 1.7) {
+    for (let s = 585; civ.length < LIFE.rally.crowd + 60 && s < 642; s += 2.3) {
       for (let t = -6.25; t <= 6.26; t += 1.25) civ.push({ t, s });
       if (s < 632) for (const side of [-1, 1]) for (let k = 0; k < 6; k++) civ.push({ t: side * (13.2 + k * 1.2), s });
     }
@@ -956,6 +965,8 @@ export class CapitalLife {
     return this.figures.inView(x, y, z) && Math.abs(x - this.cam.x) + Math.abs(z - this.cam.z) < 420;
   }
   private readonly cam = new THREE.Vector3();
+  /** Moving tanks (x, z pairs), set each frame by the region from the vessels. */
+  readonly tanks: number[] = [];
   private readonly focus = new THREE.Vector3();
 
   private startEvent(kind: 'rally' | 'proclaim', instant: boolean): void {
@@ -1184,6 +1195,10 @@ export class CapitalLife {
         this.atGoal(a, step);
       } else if (a.st === 'act') {
         a.visible = true;
+        if (this.tanks.length && this.avoidTanks(a, step)) {
+          this.draw(a);
+          continue;
+        }
         a.t -= step;
         a.phase += step;
         if (a.greet > 0) a.greet -= step;
@@ -1353,6 +1368,18 @@ export class CapitalLife {
         }
       }
     }
+    // Tanks: get out of the way of one, wait for it to pass rather than walk into it.
+    if (this.avoidTanks(a, step)) return;
+    for (let i = 0; i < this.tanks.length; i += 2) {
+      const ox = this.tanks[i], oz = this.tanks[i + 1];
+      const d0 = (a.x - ox) ** 2 + (a.z - oz) ** 2;
+      if (d0 > 64) continue;
+      const nx = a.x + (dx / (d || 1)) * 0.5, nz = a.z + (dz / (d || 1)) * 0.5;
+      if ((nx - ox) ** 2 + (nz - oz) ** 2 < 4.8 * 4.8) {
+        a.pose = Pose.idle;
+        return;
+      }
+    }
     if (push) a.dodge = Math.max(-2.4, Math.min(2.4, a.dodge + push * step * 2.5));
     else a.dodge *= Math.max(0, 1 - step * 0.8);
     if (d < (last ? 0.4 : 0.15)) {
@@ -1367,11 +1394,31 @@ export class CapitalLife {
     a.x += dx * mv;
     a.z += dz * mv;
     const k = Math.max(0, Math.min(1, 1 - d / Math.max(0.1, sl)));
-    a.y = nodeY[prevId] + (nodeY[next] - nodeY[prevId]) * k;
+    const onT = this.onTerrain!;
+    a.y = onT[prevId] && onT[next] ? heightAt(a.x, a.z) + 0.06 : nodeY[prevId] + (nodeY[next] - nodeY[prevId]) * k;
     a.yaw += wrap(Math.atan2(dx, dz) - a.yaw) * Math.min(1, step * 8);
     a.phase += mv * 1.55;
     a.pose = a.acc === Acc.cart || a.acc === FAcc.foodCart ? Pose.push : a.acc === Acc.pole || a.acc === Acc.crate ? Pose.carry : Pose.walk;
     a.amt = 1;
+  }
+
+  /** Within a tank's reach (its turning circle): hurry out of it, away from the tank. */
+  private avoidTanks(a: Agent, step: number): boolean {
+    for (let i = 0; i < this.tanks.length; i += 2) {
+      const ox = this.tanks[i], oz = this.tanks[i + 1];
+      const ex = a.x - ox, ez = a.z - oz;
+      const d2 = ex * ex + ez * ez;
+      if (d2 >= 4.6 * 4.6) continue;
+      const d = Math.sqrt(d2) || 1;
+      const mv = Math.min(4.7 - d, 2.4 * step);
+      a.x += (ex / d) * mv;
+      a.z += (ez / d) * mv;
+      a.yaw = Math.atan2(ex, ez);
+      a.phase += mv * 1.55;
+      a.pose = Pose.walk;
+      return true;
+    }
+    return false;
   }
 
   /** At (or walking straight into) an event slot; cheering on cue. */
@@ -1451,12 +1498,25 @@ export class CapitalLife {
     const tx = x + Math.cos(yaw) * lat, tz = z - Math.sin(yaw) * lat;
     const dx = tx - a.x, dz = tz - a.z;
     const d = Math.hypot(dx, dz);
+    if (d > 10) {
+      // Fell far out of formation (set up, an event): rejoin at once.
+      a.x = tx;
+      a.z = tz;
+      a.y = y;
+      a.yaw = yaw;
+      a.phase = L.phase;
+      a.visible = L.visible && L.st !== 'home';
+      a.st = L.st === 'home' ? 'home' : 'act';
+      return;
+    }
     const mv = Math.min(d, (L.speed + 0.6) * step);
     if (d > 0.02) {
       a.x += (dx / d) * mv;
       a.z += (dz / d) * mv;
     }
-    a.y += (y - a.y) * Math.min(1, step * 6);
+    // The trail's height, corrected for the slope across the follower's lateral offset.
+    const slope = Math.max(-1, Math.min(1, heightAt(a.x, a.z) - heightAt(x, z)));
+    a.y += (y + slope - a.y) * Math.min(1, step * 6);
     a.yaw += wrap((L.st === 'walk' ? L.yaw : yaw) - a.yaw) * Math.min(1, step * 6);
     a.phase = L.phase;
     a.pose = L.st === 'walk' ? Pose.walk : Pose.idle;

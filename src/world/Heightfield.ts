@@ -20,7 +20,7 @@
  * vegetation all agree on what the ground is.
  */
 import { SimplexNoise } from '../core/Noise';
-import { FNC, capitalPaved, fireCapitalHeight } from './landforms/fireCapital';
+import { FNC, capitalFlank, capitalPaved, fireCapitalHeight } from './landforms/fireCapital';
 import type { BiomeId, SurfaceType } from '../core/types';
 import {
   LAKES,
@@ -1182,6 +1182,17 @@ export function sampleTerrain(x: number, z: number, h: number, slope: number, ou
   out.waterRel = rel < -30 ? -30 : rel > 30 ? 30 : rel;
   out.waterKind = lw.kind;
   materials9(x, z, h, slope, rel, out.w, out.tint, b);
+  // The Fire Nation capital's volcano: its flanks are ash and rock, not grass.
+  const flank = capitalFlank(x, z);
+  if (flank > 0) {
+    const w = out.w;
+    const moved = (w[0] + w[7] + w[1] * 0.5) * flank;
+    w[0] *= 1 - flank;
+    w[7] *= 1 - flank;
+    w[1] *= 1 - flank * 0.5;
+    w[6] += moved * 0.6;
+    w[2] += moved * 0.4;
+  }
   // Soil tint per biome.
   let sr = 1, sg = 1, sb = 1;
   sr = mix(sr, 0.78, b.volcanic); sg = mix(sg, 0.66, b.volcanic); sb = mix(sb, 0.62, b.volcanic);

@@ -32,7 +32,7 @@ function reserved(): Array<{ x: number; z: number; r: number }> {
   add(CALDERA.coronation, 24);
   add(CALDERA.garden, 23);
   add(CALDERA.temple, 25);
-  add({ phi: CALDERA.temple.phi, r: CALDERA.temple.r - 18 }, 16); // the High Temple court (Sage Hira's lessons)
+  add({ phi: CALDERA.temple.phi, r: CALDERA.temple.r - 25 }, 23); // the High Temple court (Sage Hira's lessons) and the catacombs entrance beside it
   add(CALDERA.academy, 20);
   add(ACADEMY2, 17);
   add(CALDERA.waterfall, 14);
@@ -287,10 +287,12 @@ function highTemple(cap: Cap, b: ContentBuilder): void {
     brazier(b, cap.flames, { x: q.x, y: Y, z: q.z, size: 1.3 });
   }
   // The court before the temple (Sage Hira's lessons) — paved, open.
-  const court = atPolar(CALDERA.temple.phi, CALDERA.temple.r - 18);
+  // Between the temple's steps and the palace hill: a level court for the lessons (training_hira).
+  const court = atPolar(CALDERA.temple.phi, CALDERA.temple.r - 25);
   slabRect(b, 'stone_tan', { x: court.x, z: court.z, y: Y + 0.06, w: 30, d: 26, yaw, thick: 0.3 });
   // Dragonbone Catacombs: a stairwell down into the dark at the court's side, behind a gate.
-  const cc = { x: court.x + c * 13, z: court.z - s * 13 };
+  // Beside the court, clear of the lesson ground (training_hira, r 13) that fills it.
+  const cc = { x: court.x + c * 19.5, z: court.z - s * 19.5 };
   b.block('stone_dark', { x: cc.x, y: Y, z: cc.z, sx: 4.6, sy: 0.5, sz: 6.4, yaw }, { collide: false });
   b.box(voidMat(), { x: cc.x, y: Y + 0.52, z: cc.z, sx: 3, sy: 0.04, sz: 4.6, yaw });
   for (const lx of [-1.9, 1.9]) {

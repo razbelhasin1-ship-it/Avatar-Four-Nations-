@@ -62,7 +62,7 @@ export const PLAZA = {
   drill: { t: 0, s: 572, r: 13 },
   /** Main tower at the valley head; its passage climbs to the Royal Way. */
   tower: { s0: 530, s1: 557, half: 30, passHalf: FNC.plaza.passHalf, topS: FNC.plaza.passTopS },
-  /** Gatehouse on a platform at the harbour end, gate pavilions either side. */
+  /** Former gatehouse spot at the harbour end (the axis is kept open now); gate pavilions either side. */
   gatehouse: { t: 0, s: 646, w: 12, d: 9, plat: 1.4 },
   pavilions: [-26, 26] as number[],
   pavilionS: 652,
@@ -150,7 +150,8 @@ export const CALDERA = {
   octagon: { phi: 182, r: 80, rad: 12 },
   coronation: { phi: 50, r: 74 },
   garden: { phi: 131, r: 73, pondR: 9 },
-  temple: { phi: 233, r: 78 },
+  /** High Temple (its court before it, toward the palace, holds Sage Hira's lesson ground). */
+  temple: { phi: 233, r: 82 },
   academy: { phi: 298, r: 84 },
   waterfall: { phi: -6, r: 104 },
 } as const;
@@ -191,7 +192,7 @@ export const POINTS = {
   square: ax(0, 60),
   garden: pol(CALDERA.garden.phi, CALDERA.garden.r),
   temple: pol(CALDERA.temple.phi, CALDERA.temple.r),
-  templeCourt: pol(CALDERA.temple.phi, CALDERA.temple.r - 16),
+  templeCourt: pol(CALDERA.temple.phi, CALDERA.temple.r - 25),
   coronation: pol(CALDERA.coronation.phi, CALDERA.coronation.r),
   octagon: pol(CALDERA.octagon.phi, CALDERA.octagon.r),
   academy: pol(CALDERA.academy.phi, CALDERA.academy.r),

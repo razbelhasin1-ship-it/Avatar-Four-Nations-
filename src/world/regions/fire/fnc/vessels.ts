@@ -445,6 +445,12 @@ export class Vessels {
     return { warships: this.moored.length + this.movers.length, moving: this.movers.filter((m) => m.visible).length, boats: this.boats.length, tanks: this.tanks.length, balloons: this.balloons.length, gate: Math.round(this.gateOpen * 100) / 100 };
   }
 
+  /** Tank positions as x, z pairs (reused array) for the crowd to keep clear of. */
+  tankSpots(out: number[]): void {
+    out.length = 0;
+    for (const k of this.tanks) out.push(k.g.position.x, k.g.position.z);
+  }
+
   /** Debug: jump the schedule clock (seconds). */
   skip(seconds: number): void {
     this.time += seconds;

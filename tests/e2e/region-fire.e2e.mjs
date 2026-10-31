@@ -113,24 +113,6 @@ try {
     for (const id of ['seaGate', 'plazaSpawn', 'balcony', 'passageTop', 'market', 'craterGate', 'square', 'palaceGate', 'courtyard', 'throneRoom', 'throne', 'agniKai', 'gallery', 'gardenPond', 'temple', 'academy']) assert.ok(marks[id], `mark ${id}`);
   });
 
-  await check('spots: masters, training grounds, givers, merchants, docks, habitats, shrines', async () => {
-    const spots = await h.eval((g) => g.debug.fire.spots());
-    for (const id of ['master_jeong', 'training_jeong', 'master_hira', 'training_hira', 'master_ahkon', 'training_ahkon', 'master_iro', 'training_iro', 'giver_fn_elder', 'merchant_fn_1', 'merchant_fn_2', 'merchant_fn_3', 'merchant_ember_1', 'dock_fn_harbor', 'dock_ember_island', 'habitat_dragon_1', 'habitat_turtleduck_1', 'shrine_fire_sages', 'shrine_eternal_flame', 'bridge_western_causeway', 'viewpoint_fn_harbor']) {
-      assert.ok(spots[id], `spot ${id} defined`);
-    }
-    for (const id of ['training_jeong', 'training_hira', 'training_ahkon', 'training_iro']) assert.ok(spots[id].r >= 12, `${id} radius ${spots[id].r}`);
-    // Training grounds in the capital are flat and walkable over their radius.
-    for (const id of ['training_jeong', 'training_hira']) {
-      const s = spots[id];
-      const c = await ground(s.x, s.z, s.y + 3);
-      for (let k = 0; k < 8; k++) {
-        const a = (k / 8) * Math.PI * 2;
-        const y = await ground(s.x + Math.cos(a) * (s.r - 1), s.z + Math.sin(a) * (s.r - 1), s.y + 3);
-        near(y, c, 0.15, `${id} flat at r-1 (k=${k})`);
-      }
-    }
-  });
-
   const hair = [];
   for (let k = 0; k < 8; k++) hair.push(ax((k % 2 === 0 ? 1 : -1) * 46 * 0.92, 292 - ((292 - 122) * k) / 8));
   const up = [ax(-53, 670), ax(-46, 659), ax(-12, 650), ax(0, 600), ax(0, 559), ax(0, 505), ax(0, 440), ax(0, 300), ...hair, ax(0, 127), ax(0, 116), ax(0, 96), ax(0, 60), ax(0, 41), ax(0, 33), ax(0, 27), ax(0, 17), ax(0, 11), ax(0, 6), ax(0, 0), ax(0, -6), ax(0, -11), ax(0, -18.5)];
@@ -223,6 +205,25 @@ try {
     for (let t = 0.05; t <= 1.0001; t += 0.1) pts.push([-940 + (168 * t), 960 - 269 * t]);
     const r = await walkPath(pts, { tol: 2.0, minY: 0.9, sprint: true });
     assert.ok(r.y > 0.9 && !r.swimming, `reached the mainland end dry: ${JSON.stringify(r)}`);
+  });
+
+  // (After the causeway: the Fire Nation debug hooks install with the first non-capital Fire region.)
+  await check('spots: masters, training grounds, givers, merchants, docks, habitats, shrines', async () => {
+    const spots = await h.eval((g) => g.debug.fire.spots());
+    for (const id of ['master_jeong', 'training_jeong', 'master_hira', 'training_hira', 'master_ahkon', 'training_ahkon', 'master_iro', 'training_iro', 'giver_fn_elder', 'merchant_fn_1', 'merchant_fn_2', 'merchant_fn_3', 'merchant_ember_1', 'dock_fn_harbor', 'dock_ember_island', 'habitat_dragon_1', 'habitat_turtleduck_1', 'shrine_fire_sages', 'shrine_eternal_flame', 'bridge_western_causeway', 'viewpoint_fn_harbor']) {
+      assert.ok(spots[id], `spot ${id} defined`);
+    }
+    for (const id of ['training_jeong', 'training_hira', 'training_ahkon', 'training_iro']) assert.ok(spots[id].r >= 12, `${id} radius ${spots[id].r}`);
+    // Training grounds in the capital are flat and walkable over their radius.
+    for (const id of ['training_jeong', 'training_hira']) {
+      const s = spots[id];
+      const c = await ground(s.x, s.z, s.y + 3);
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        const y = await ground(s.x + Math.cos(a) * (s.r - 1), s.z + Math.sin(a) * (s.r - 1), s.y + 3);
+        near(y, c, 0.15, `${id} flat at r-1 (k=${k})`);
+      }
+    }
   });
 
   await check('ruins: approach stair → plaza (training_ahkon) → pyramid summit; eternal flame', async () => {

@@ -69,6 +69,18 @@ export function atAxis(t: number, s: number): { x: number; z: number } {
 }
 
 /** Volcano foot radius / height by bearing (wider and higher on the south, toward the city's heart). */
+/**
+ * 0..1 on the volcano's own flanks — outside the crater lip and above Harbor City's foot: bare ash
+ * and rock there, not grass (the renderer and footstep surfaces both read it via sampleTerrain).
+ */
+export function capitalFlank(x: number, z: number): number {
+  const dx = x - FNC.V.x, dz = z - FNC.V.z;
+  const r = Math.hypot(dx, dz);
+  if (r < FNC.lipR - 2 || r > FNC.footR.s + 4) return 0;
+  const f = footR(Math.atan2(dz, dx) / DEG);
+  return sstep(FNC.lipR - 2, FNC.lipR + 6, r) * (1 - sstep(f - 12, f + 2, r));
+}
+
 export function footR(phi: number): number {
   const south = Math.max(0, Math.sin(phi * DEG));
   return mix(FNC.footR.o, FNC.footR.s, south * south);

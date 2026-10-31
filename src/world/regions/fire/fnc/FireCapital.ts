@@ -98,6 +98,7 @@ export class FireCapitalCity extends EarthRegion {
     if (full && this.vessels && this.life) {
       this.vessels.parked = this.life.rally.on;
       this.vessels.update(dt, ctx);
+      this.vessels.tankSpots(this.life.tanks);
       this.life.update(dt, ctx, true);
     }
     if (full) this.ducks?.update(dt, ctx.time.elapsed);
