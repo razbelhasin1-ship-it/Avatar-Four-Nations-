@@ -670,7 +670,7 @@ export const LANDMARKS: LandmarkDef[] = [
   { id: 'dragon_bone_caldera', name: 'Sun Warrior Ruins', regionId: 'fire_nation_capital', x: -1560, z: 940, kind: 'ruin', discoverRadius: 60, fastTravel: true, hidden: true },
   { id: 'ember_resort', name: 'Ember Island Resort', regionId: 'ember_island', x: -1690, z: 1760, kind: 'village', discoverRadius: 70, fastTravel: true },
   // Air
-  { id: 'air_temple', name: 'Southern Air Temple', regionId: 'southern_air_temple', x: 1450, z: 1250, kind: 'temple', discoverRadius: 90, fastTravel: true },
+  { id: 'air_temple', name: 'Southern Air Temple', regionId: 'southern_air_temple', x: 1465.8, z: 1160.4, kind: 'temple', discoverRadius: 95, fastTravel: true }, // the main landing ledge (bison terrace)
   { id: 'air_trailhead', name: 'Temple Trailhead', regionId: 'southern_air_temple', x: 1210, z: 980, kind: 'landmark', discoverRadius: 50, fastTravel: true },
   { id: 'bison_meadow', name: 'Sky Bison Meadow', regionId: 'southern_air_temple', x: 1340, z: 1080, kind: 'habitat', discoverRadius: 60, fastTravel: false },
   { id: 'wind_shrine', name: 'Shrine of the Four Winds', regionId: 'southern_air_temple', x: 1580, z: 1350, kind: 'shrine', discoverRadius: 35, fastTravel: false, hidden: true },
@@ -710,8 +710,8 @@ export const STARTS: Record<Element, StartDef> = {
     element: 'air',
     regionId: 'southern_air_temple',
     landmarkId: 'air_temple',
-    spawn: { x: 1440, z: 1290 },
-    yaw: Math.PI,
+    spawn: { x: 1465.8, z: 1162.4 }, // the main landing ledge: arrivals come by sky bison
+    yaw: -0.17,
     title: 'Begin your journey at the Southern Air Temple',
     subtitle: 'Agility, evasion, air currents and aerial movement.',
   },

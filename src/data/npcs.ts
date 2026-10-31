@@ -9,5 +9,5 @@ export const NPCS: NPCDef[] = [
   { id: 'bss_guide', name: 'Lin Mei', title: 'City Guide', role: 'villager', nation: 'earth', x: 484.4, z: -150.1, yaw: -1.85, behavior: { type: 'idle' }, dialogue: 'dlg_bss_guide', region: 'ba_sing_se' },
   { id: 'bss_elder', name: 'Old Man Shoji', title: 'Retired Earthbender', role: 'elder', nation: 'earth', element: 'earth', x: 642.1, z: -31.1, yaw: -Math.PI / 2, behavior: { type: 'idle' }, dialogue: 'dlg_bss_elder', region: 'ba_sing_se' },
   { id: 'fn_elder', name: 'Sage Hira', title: 'Fire Sage', role: 'elder', nation: 'fire', x: -1318, z: 1214, yaw: 0, behavior: { type: 'idle' }, dialogue: 'dlg_fn_elder', region: 'fire_nation_capital', condition: { notFlag: 'hira_at_temple' } },
-  { id: 'air_elder', name: 'Monk Tenzo', title: 'Temple Elder', role: 'monk', nation: 'air', element: 'air', x: 1452, z: 1272, yaw: 0, behavior: { type: 'idle', variant: 'meditate' }, dialogue: 'dlg_air_elder', region: 'southern_air_temple', condition: { notFlag: 'tenzo_in_courtyard' } },
+  { id: 'air_elder', name: 'Monk Tenzo', title: 'Temple Elder', role: 'monk', nation: 'air', element: 'air', x: 1467.9, z: 1178.2, yaw: 2.9, behavior: { type: 'idle', variant: 'meditate' }, dialogue: 'dlg_air_elder', region: 'southern_air_temple', condition: { notFlag: 'tenzo_in_courtyard' } },
 ];

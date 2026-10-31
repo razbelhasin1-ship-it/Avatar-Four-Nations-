@@ -31,8 +31,8 @@ Road: one white switchback road, ~1.6 turns, L0 θ 190 → L1 → L2 → L3 → 
 - `src/world/regions/air/layout.ts` — spots re-placed
 
 ## Phases
-- [ ] 0 explore, branch, plan
-- [ ] 1 terrain + terrace blockout, road, mist, spires
+- [x] 0 explore, branch, plan (fc20391)
+- [x] 1 terrain + terrace blockout, road, mist, spires (walk test: 146 road points gate → summit, 0 stuck)
 - [ ] 2 buildings + statue room
 - [ ] 3 sky bison + lemurs + calling
 - [ ] 4 monks + routines
@@ -40,7 +40,13 @@ Road: one white switchback road, ~1.6 turns, L0 θ 190 → L1 → L2 → L3 → 
 - [ ] 6 polish, perf, quests, tests, screenshots, report
 
 ## Markers moved
-(fill in as spots move)
+- Landmark `air_temple` and the Air start spawn → main landing ledge (L1, θ 280, r 91): fast travel and new Air games arrive by the bison terrace.
+- `air_elder` (Monk Tenzo, greets arrivals) → bison terrace by the landing; masters: Tenzo → moon-gate courtyard (L4), Iio → airball court (L3), Pasang → summit (L6); fallbacks updated.
+- Spots in `air/layout.ts` now come from `sat/layout.ts` PLACES (trail, trailhead, meadow, Four Winds unchanged).
+- Shop `air_beasts` fallback → bison terrace.
 
 ## Notes / open items
+- Level heights final: L0 0, L1 18, L2 36, L3 52, L4 68, L5 90, L6 108 (summit floor 438.2 world).
+- Edge noise (EDGE_AMP 4.5) calmed where the L2 stairs run alongside (CALM table); flat road off-terrace = causeways.
+- Old `grounds.ts` removed; `towers.ts` buildSpires is now unused (spires in sat/spires.ts).
 - Masters "Sister Iio" and "Sister Yeshe": the monastery is men and boys only → renamed Brother (ids kept).
