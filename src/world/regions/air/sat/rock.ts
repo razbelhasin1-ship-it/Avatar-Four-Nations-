@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { SimplexNoise } from '../../../../core/Noise';
 import { heightAt } from '../../../Heightfield';
 import type { Kit } from '../parts';
-import { BASE, C, DEG, FOOT_R, LEVEL_Y, RIM, SEED, SHELVES, SUMMIT_R, TERRACES, floorAt, floorY, polar, rOutAt, rockTop, summitRAt, yawOut, type ShelfDef, type TerraceDef } from './layout';
+import { tunnelCeil } from './sanctuary';
+import { BASE, C, DEG, FOOT_R, LEVEL_Y, RIM, SANCTUARY, SEED, SHELVES, SUMMIT_R, TERRACES, TRAIL_TOP, floorAt, floorY, inTrailTrench, polar, rOutAt, radiusOf, rockTop, sanctuaryFace, summitRAt, trailAlong, trailLateral, yawOut, type ShelfDef, type TerraceDef } from './layout';
 
 /**
  * The pinnacle: one polar height map (flat terrace tops, near-vertical cliffs
@@ -38,8 +39,17 @@ export function pinnacleGeometry(): THREE.BufferGeometry {
   const idx: number[] = [];
   const v = (j: number, i: number) => 1 + (j - 1) * SEG + (i % SEG);
   for (let i = 0; i < SEG; i++) idx.push(0, v(1, i + 1), v(1, i));
+  // The sanctuary tunnel passes through the summit cliff: its steep faces open there (the façade,
+  // the cliff skirt above it and the tunnel lining close the hole).
+  const doorCut = (j: number, i: number): boolean => {
+    const t0 = (i / SEG) * 360, t1 = ((i + 1) / SEG) * 360;
+    if (j < 18 || j > 33 || t0 < SANCTUARY.th - 4.5 || t1 > SANCTUARY.th + 4.5) return false;
+    const ys = [v(j, i), v(j, i + 1), v(j + 1, i), v(j + 1, i + 1)].map((q) => pos[q * 3 + 1]);
+    return Math.max(...ys) - Math.min(...ys) > 3;
+  };
   for (let j = 1; j < RINGS; j++) {
     for (let i = 0; i < SEG; i++) {
+      if (doorCut(j, i)) continue;
       const a = v(j, i), b = v(j, i + 1), c = v(j + 1, i), d = v(j + 1, i + 1);
       idx.push(a, b, c, b, d, c);
     }
@@ -116,20 +126,32 @@ function sectorBox(k: Kit, th: number, half: number, rIn: number, rOut: number, 
 
 /** Paving slabs, retaining walls and floor colliders of every terrace and shelf. */
 export function buildTerraces(k: Kit, rock: THREE.Material): void {
-  for (const t of TERRACES) terraceFloor(k, t);
-  for (const t of TERRACES) cliffSkirts(k, rock, (th) => rOutAt(t, th), t.a0, t.a1, t.y, t.level === 0 ? 1.2 : 4.5, t.level);
-  cliffSkirts(k, rock, (th) => summitRAt(th) + 0.4, 0, 360, LEVEL_Y[6], 4.5, 6);
+  for (const t of TERRACES) (t.level === 0 ? gateFloor : terraceFloor)(k, t);
+  // Openings in the rock skin: the trail trench through the gate plaza's edge, the sanctuary door.
+  const trench = (th: number, yy: number, r: number) => {
+    const p = polar(th, r);
+    return yy < BASE + 1 && inTrailTrench(p.x, p.z, TRAIL_TOP.wall + TRAIL_TOP.wallT);
+  };
+  const doorSpan = Math.asin((SANCTUARY.half + 0.8) / sanctuaryFace()) / DEG;
+  const door = (th: number, yy: number) => Math.abs(th - SANCTUARY.th) < doorSpan && yy < BASE + SANCTUARY.top + 0.6;
+  for (const t of TERRACES) cliffSkirts(k, rock, (th) => rOutAt(t, th), t.a0, t.a1, t.y, t.level === 0 ? 1.2 : 4.5, t.level, t.level === 0 ? trench : undefined);
+  cliffSkirts(k, rock, (th) => summitRAt(th) + 0.4, 0, 360, LEVEL_Y[6], 4.5, 6, door);
   for (const s of SHELVES) shelfFloor(k, s);
-  // Summit disc (the sanctuary chamber is cut into it later; the floor stays walkable above it).
+  // Summit disc; the sanctuary chamber is hollowed out of the rock under it.
   const top = floorY(LEVEL_Y[6]);
   const disc = bandGeometry(() => 0.01, (th) => summitRAt(th) + 0.4, 0, 360, top - 0.5, top, 160);
   k.main.mesh('paving', disc, { x: C.x, y: 0, z: C.z });
   disc.dispose();
-  k.main.collider({ shape: 'cylinder', x: C.x, y: (top + BASE - 30) / 2, z: C.z, r: SUMMIT_R - 0.5, hy: (top - BASE + 30) / 2, walkable: true, solid: true, surface: 'stone' });
-  for (let a = 0; a < 360; a += 6) sectorBox(k, a + 3, 3, SUMMIT_R - 2, summitRAt(a + 3) + 0.3, top, BASE + LEVEL_Y[4]);
+  summitCore(k, top);
   retainingWall(k, (th) => summitRAt(th) + 0.4, 0, 360, LEVEL_Y[6], 4.5);
-  // Mesa ground (L0): a thin walkable disc just above the heightfield plateau, under the rock skin.
-  k.main.collider({ shape: 'cylinder', x: C.x, y: BASE - 0.1, z: C.z, r: 90, hy: 0.3, walkable: true, solid: true, surface: 'stone' });
+  // Mesa ground (L0): a thin walkable disc just above the heightfield plateau, under the rock skin
+  // (inside the trail's top; the ring beyond it in sectors, clear of the trench).
+  k.main.collider({ shape: 'cylinder', x: C.x, y: BASE - 0.1, z: C.z, r: TRAIL_TOP.r0 - 0.3, hy: 0.3, walkable: true, solid: true, surface: 'stone' });
+  const gate = TERRACES.find((t) => t.level === 0)!;
+  for (let a = gate.a1; a < gate.a0 + 360; a += 6) {
+    const th = Math.min(a + 3, gate.a0 + 357);
+    sectorBox(k, th, 3, TRAIL_TOP.r0 - 0.5, RIM, BASE + 0.2, BASE - 0.4);
+  }
   // The cone between terraces: walkable ramps that follow the rock (radial bands, rising inward).
   const step = 6;
   for (let a = 0; a < 360; a += step) {
@@ -166,6 +188,135 @@ function terraceFloor(k: Kit, t: TerraceDef): void {
 }
 
 const EDGE_PAD = 6.5;
+
+/**
+ * Gate plaza (L0): the paved annular sector with the trail's stair trench notched out of its
+ * outer edge, trench walls with parapets, and floor colliders that keep clear of the trench.
+ */
+function gateFloor(k: Kit, t: TerraceDef): void {
+  const top = floorY(t.y);
+  const T = TRAIL_TOP;
+  const edge = T.wall + T.wallT;
+  const dx = T.b.x - T.a.x, dz = T.b.z - T.a.z, len = Math.hypot(dx, dz);
+  const ux = dx / len, uz = dz / len, nx = -uz, nz = ux;
+  // Where a line parallel to the trail (lateral offset L) enters the circle of radius r.
+  const enter = (L: number, r: number) => {
+    const ox = T.a.x + nx * L - C.x, oz = T.a.z + nz * L - C.z;
+    const b = ox * ux + oz * uz, c = ox * ox + oz * oz - r * r;
+    const s = -b - Math.sqrt(Math.max(0, b * b - c));
+    return { x: T.a.x + ux * s + nx * L, z: T.a.z + uz * s + nz * L, s };
+  };
+  const th = (p: { x: number; z: number }) => {
+    const a = Math.atan2(p.z - C.z, p.x - C.x) / DEG;
+    return a < 0 ? a + 360 : a;
+  };
+  const sides = [edge, -edge].map((L) => ({ out: enter(L, t.rOut), inn: enter(L, T.r0) })).sort((p, q) => th(q.out) - th(p.out));
+  const [hi, lo] = sides;
+  const pts: Array<{ x: number; z: number }> = [];
+  for (let a = t.a0; a <= t.a1 + 1e-6; a += 1) pts.push(polar(a, t.rIn - 0.3));
+  for (let a = t.a1; a > th(hi.out); a -= 1) pts.push(polar(a, t.rOut));
+  pts.push(hi.out, hi.inn, lo.inn, lo.out);
+  for (let a = Math.floor(th(lo.out)); a >= t.a0; a -= 1) pts.push(polar(a, t.rOut));
+  pts.push(polar(t.a0, t.rOut));
+  const shape = new THREE.Shape(pts.map((p) => new THREE.Vector2(p.x - C.x, -(p.z - C.z))));
+  const g = new THREE.ExtrudeGeometry(shape, { depth: 0.5, bevelEnabled: false, curveSegments: 1 });
+  g.rotateX(-Math.PI / 2);
+  const uv = g.getAttribute('uv') as THREE.BufferAttribute;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / 3, uv.getY(i) / 3);
+  k.main.mesh('paving', g, { x: C.x, y: top - 0.5, z: C.z });
+  g.dispose();
+  // Colliders: radial strips per 1.5°, split in 0.5 m cells so none reaches into the trench.
+  const step = 1.5, dr = 0.5;
+  for (let a = t.a0; a < t.a1 - 1e-6; a += step) {
+    const c = a + step / 2;
+    let start = -1;
+    const flush = (r1: number) => {
+      if (start >= 0 && r1 > start + 0.01) sectorBox(k, c, step / 2, start, r1, top, BASE - 30);
+      start = -1;
+    };
+    for (let r = t.rIn; r < t.rOut - 1e-6; r += dr) {
+      const hx = (r + dr) * Math.sin((step / 2) * DEG) + 0.08;
+      const yaw = yawOut(c);
+      const cx = Math.cos(yaw), cz = -Math.sin(yaw), fx = Math.sin(yaw), fz = Math.cos(yaw);
+      const m = polar(c, r + dr / 2);
+      let clear = true;
+      for (const su of [-1, 1]) for (const sv of [-1, 1]) {
+        const qx = m.x + cx * su * hx + fx * sv * (dr / 2), qz = m.z + cz * su * hx + fz * sv * (dr / 2);
+        if (radiusOf(qx, qz) > T.r0 - 0.4 && Math.abs(trailLateral(qx, qz)) < T.wall + 0.05 && trailAlong(qx, qz) > -2 && trailAlong(qx, qz) < len + 1) clear = false;
+      }
+      if (clear) {
+        if (start < 0) start = r;
+      } else flush(r);
+    }
+    flush(t.rOut);
+  }
+  // Trench walls with parapets (and walkable shoulders under the plaza paving).
+  const s0 = enter(0, T.r0 - 0.6).s, s1 = enter(0, t.rOut + 1.6).s;
+  let low = Infinity;
+  for (let s = s1; s <= s0; s += 1) low = Math.min(low, heightAt(T.a.x + ux * s, T.a.z + uz * s));
+  const bottom = low - 1.2, cap = top + 0.9;
+  const yaw = Math.atan2(ux, uz);
+  for (const side of [-1, 1]) {
+    const L = side * (T.wall + T.wallT / 2);
+    const sm = (s0 + s1) / 2, run = s0 - s1;
+    const cx = T.a.x + ux * sm + nx * L, cz = T.a.z + uz * sm + nz * L;
+    k.main.box('stone_white', { x: cx, y: (cap + bottom) / 2, z: cz, sx: T.wallT, sy: cap - bottom, sz: run, yaw });
+    k.main.box('stone_light', { x: cx, y: cap + 0.05, z: cz, sx: T.wallT + 0.12, sy: 0.12, sz: run + 0.1, yaw });
+    k.main.collider({ shape: 'box', x: cx, y: (cap + bottom) / 2, z: cz, hx: T.wallT / 2, hy: (cap - bottom) / 2, hz: run / 2, yaw, walkable: false, solid: true, surface: 'stone' });
+    const Ls = side * (T.wall + T.shoulder) / 2;
+    const sx = T.a.x + ux * sm + nx * Ls, sz = T.a.z + uz * sm + nz * Ls;
+    k.main.collider({ shape: 'box', x: sx, y: (top + bottom) / 2, z: sz, hx: (T.shoulder - T.wall) / 2, hy: (top - bottom) / 2, hz: run / 2, yaw, walkable: true, solid: true, surface: 'stone' });
+  }
+}
+
+/**
+ * Collision for the summit rock: solid below the sanctuary floor, a ring of wall sectors round the
+ * chamber up to the summit floor (open below the tunnel's ceiling where the tunnel passes), the
+ * tunnel's side walls, vestibule floor and stair ramp, the summit floor over the chamber and the
+ * rim sectors of the summit cliff.
+ */
+function summitCore(k: Kit, top: number): void {
+  const S = SANCTUARY;
+  const floor = BASE + S.floor, tunnelTop = BASE + S.top;
+  const coreR = SUMMIT_R - 0.5;
+  k.main.collider({ shape: 'cylinder', x: C.x, y: (floor + BASE - 30) / 2, z: C.z, r: coreR, hy: (floor - BASE + 30) / 2, walkable: true, solid: true, surface: 'stone' });
+  for (let i = 0; i < 36; i++) {
+    const c = S.th + i * 10;
+    const near = i === 0 || i === 1 || i === 35;
+    sectorBox(k, c, 5, S.r, coreR, top, near ? tunnelTop : floor);
+  }
+  k.main.collider({ shape: 'cylinder', x: C.x, y: BASE + (S.ceil + LEVEL_Y[6] + 0.2) / 2, z: C.z, r: S.r + 0.6, hy: (LEVEL_Y[6] + 0.2 - S.ceil) / 2, walkable: true, solid: true, surface: 'stone' });
+  for (let a = 0; a < 360; a += 6) {
+    const c = a + 3;
+    const cut = Math.abs(c - S.th) < 4;
+    sectorBox(k, c, 3, SUMMIT_R - 2, summitRAt(c) + 0.3, top, cut ? tunnelTop : BASE + LEVEL_Y[4]);
+  }
+  // Tunnel: side walls from inside the chamber's portal to the façade front, the vestibule floor
+  // at the courtyard's level and the stair down into the chamber.
+  const yaw = yawOut(S.th);
+  const ax = Math.cos(S.th * DEG), az = Math.sin(S.th * DEG);
+  const tx = -az, tz = ax;
+  const rf = sanctuaryFace() + 2.6;
+  const along = (r0: number, r1: number, lat: number) => ({ x: C.x + ax * (r0 + r1) / 2 + tx * lat, z: C.z + az * (r0 + r1) / 2 + tz * lat, h: (r1 - r0) / 2 });
+  for (const side of [-1, 1]) {
+    const w = along(S.r - 1.2, rf, side * (S.half + 1.7));
+    k.main.collider({ shape: 'box', x: w.x, y: (floor + tunnelTop) / 2, z: w.z, hx: 1.7, hy: (tunnelTop - floor) / 2 + 0.05, hz: w.h, yaw, walkable: false, solid: true, surface: 'stone' });
+  }
+  const walk = floorY(LEVEL_Y[4]);
+  const v = along(S.stairR, rf, 0);
+  k.main.collider({ shape: 'box', x: v.x, y: (walk + floor) / 2, z: v.z, hx: S.half + 0.1, hy: (walk - floor) / 2, hz: v.h, yaw, walkable: true, solid: true, surface: 'stone' });
+  const st = along(S.r, S.stairR, 0);
+  const bottom = floor - 0.7;
+  k.main.collider({ shape: 'box', x: st.x, y: (walk + bottom) / 2, z: st.z, hx: st.h + 0.05, hy: (walk - bottom) / 2, hz: S.half + 0.1, yaw: Math.atan2(-az, ax), slopeRise: walk - floor, walkable: true, solid: true, surface: 'stone' });
+  // The ceiling over the stair slopes down to the chamber's doorway: stepped boxes up to the
+  // tunnel's top keep the camera out of the rock.
+  for (let i = 0; i < 4; i++) {
+    const v0 = S.r - 0.3 + ((S.stairR - S.r + 0.3) * i) / 4, v1 = S.r - 0.3 + ((S.stairR - S.r + 0.3) * (i + 1)) / 4;
+    const lo = tunnelCeil(v0);
+    const c = along(v0, v1, 0);
+    k.main.collider({ shape: 'box', x: c.x, y: (lo + tunnelTop) / 2, z: c.z, hx: S.half + 0.2, hy: (tunnelTop - lo) / 2, hz: c.h, yaw, walkable: false, solid: true, surface: 'stone' });
+  }
+}
 
 /**
  * Annular-sector prism whose inner and outer radii vary with the bearing (θ in degrees):
@@ -240,7 +391,7 @@ const SK = new SimplexNoise(SEED + 3);
  * It only ever recedes behind the edge, never past the floor colliders. Radial ends of a
  * sector that drop away get the same treatment.
  */
-function cliffSkirts(k: Kit, rock: THREE.Material, rEdgeAt: (th: number) => number, a0: number, a1: number, y: number, wall: number, level: number): void {
+function cliffSkirts(k: Kit, rock: THREE.Material, rEdgeAt: (th: number) => number, a0: number, a1: number, y: number, wall: number, level: number, hole?: (th: number, yy: number, r: number) => boolean): void {
   const full = a1 - a0 >= 359.9;
   const cols = Math.max(2, Math.round((a1 - a0) / 1.5));
   const top = BASE + y - wall + 0.6;
@@ -256,7 +407,7 @@ function cliffSkirts(k: Kit, rock: THREE.Material, rEdgeAt: (th: number) => numb
     const blob = SK.noise2(Math.cos(a) * r * 0.06 + yy * 0.03, Math.sin(a) * r * 0.06);
     return Math.max(0, 0.25 + strata * 0.75 + flute * 0.9 + blob * 0.8 + 0.4);
   };
-  const face = (pts: (i: number, yy: number) => [number, number], n: number, bottoms: number[]) => {
+  const face = (pts: (i: number, yy: number) => [number, number], n: number, bottoms: number[], cut?: (i: number, yy: number, r: number) => boolean) => {
     const yMin = Math.min(...bottoms);
     const rows = Math.max(1, Math.ceil((top - yMin) / 2));
     const pos: number[] = [];
@@ -271,6 +422,11 @@ function cliffSkirts(k: Kit, rock: THREE.Material, rEdgeAt: (th: number) => numb
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < rows; j++) {
         const a = i * (rows + 1) + j, b = a + rows + 1;
+        if (cut) {
+          const my = (pos[a * 3 + 1] + pos[(b + 1) * 3 + 1]) / 2;
+          const mr = Math.hypot((pos[a * 3] + pos[(b + 1) * 3]) / 2, (pos[a * 3 + 2] + pos[(b + 1) * 3 + 2]) / 2);
+          if (cut(i + 0.5, my, mr)) continue;
+        }
         idx.push(a, a + 1, b, b, a + 1, b + 1);
       }
     }
@@ -292,6 +448,7 @@ function cliffSkirts(k: Kit, rock: THREE.Material, rEdgeAt: (th: number) => numb
     },
     cols,
     bottoms,
+    hole ? (i, yy, r) => hole(a0 + ((a1 - a0) * i) / cols, yy, r) : undefined,
   );
   // Winding: the face must look outward (normals computed from index order).
   flipIfInward(outer, true);

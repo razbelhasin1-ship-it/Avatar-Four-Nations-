@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import type { GameContext } from '../../../core/GameContext';
 import { AirRegion } from './AirRegion';
-import { BASE, C, LEVEL_Y, polar } from './sat/layout';
+import { BASE, C, LEVEL_Y, place, polar } from './sat/layout';
+import { SITES, buildBisonTerrace, buildCourts, buildGatePlaza, buildHalls, buildOrchards, buildQuarters, buildSummit, meditationSpots } from './sat/levels';
 import { buildMist } from './sat/mist';
 import { buildRoad, buildEdges, roadInlayMaterial } from './sat/road';
 import { buildTerraces, floorY, pinnacleGeometry, rockMaterial } from './sat/rock';
+import { Sanctuary, buildSanctuaryShell, sanctuaryMaterial } from './sat/sanctuary';
 import { buildSpireRing } from './sat/spires';
 import type { P2 } from './parts';
 
@@ -13,7 +15,8 @@ import type { P2 } from './parts';
  * sea of cloud (master plan and every tunable constant in sat/layout.ts).
  * The pinnacle stands on the flat top of the temple mesa (L0); terraces L1–L6
  * stack up it, joined by one white switchback road; a ring of taller misty
- * spires stands round it.
+ * spires stands round it. What stands on each level: sat/levels.ts; the Avatar
+ * sanctuary under the summit: sat/sanctuary.ts.
  */
 export class SouthernAirTemple extends AirRegion {
   readonly id = 'air_temple_summit';
@@ -26,17 +29,29 @@ export class SouthernAirTemple extends AirRegion {
   }
 
   protected parts(_ctx: GameContext): Array<[string, () => void]> {
+    const k = (name: string) => this.zone(name, C, 110);
     return [
       ['pinnacle', () => this.buildPinnacle()],
-      ['terraces', () => buildTerraces(this.zone('terraces', C, 110), this.rock!)],
-      ['road', () => buildRoad(this.zone('road', C, 110), this.ownMaterial(roadInlayMaterial()))],
-      ['edges', () => buildEdges(this.zone('edges', C, 110))],
+      ['terraces', () => buildTerraces(k('terraces'), this.rock!)],
+      ['road', () => buildRoad(k('road'), this.ownMaterial(roadInlayMaterial()))],
+      ['edges', () => buildEdges(k('edges'))],
+      ['gate', () => buildGatePlaza(k('gate'), this.rock!)],
+      ['bison', () => buildBisonTerrace(k('bison'))],
+      ['orchards', () => buildOrchards(k('orchards'))],
+      ['quarters', () => buildQuarters(k('quarters'))],
+      ['courts', () => buildCourts(k('courts'))],
+      ['halls', () => buildHalls(k('halls'))],
+      ['summit', () => buildSummit(k('summit'))],
+      ['sanctuary', () => this.buildSanctuary()],
       ['spires', () => buildSpireRing(this.zone('spires', C, 700, { far: true }))],
       ['mist', () => this.buildMistSheets()],
     ];
   }
 
   private rock: THREE.Material | null = null;
+  /** The Avatar sanctuary (door, glow, the chamber built on approach); tests reach it through debug.air.region(). */
+  sanctuary: Sanctuary | null = null;
+  private session: GameContext | null = null;
 
   private buildPinnacle(): void {
     const k = this.zone('pinnacle', C, 110);
@@ -44,6 +59,13 @@ export class SouthernAirTemple extends AirRegion {
     const g = pinnacleGeometry();
     k.main.mesh(this.rock, g, { x: C.x, y: 0, z: C.z });
     g.dispose();
+  }
+
+  private buildSanctuary(): void {
+    const mat = this.ownMaterial(sanctuaryMaterial());
+    const shell = buildSanctuaryShell(this.zone('sanctuary', C, 110), mat);
+    this.sanctuary = new Sanctuary(this.group, mat, shell);
+    if (this.session) this.sanctuary.sessionStart(this.session);
   }
 
   private buildMistSheets(): void {
@@ -55,6 +77,10 @@ export class SouthernAirTemple extends AirRegion {
     this.own(holder);
   }
 
+  protected override animate(dt: number, ctx: GameContext): void {
+    this.sanctuary?.update(dt, ctx);
+  }
+
   // ---------------------------------------------------------------------------
   // Session content: interactions with real effects
   // ---------------------------------------------------------------------------
@@ -64,6 +90,8 @@ export class SouthernAirTemple extends AirRegion {
 
   protected override sessionStart(ctx: GameContext): void {
     this.sessionEnd(ctx);
+    this.session = ctx;
+    this.sanctuary?.sessionStart(ctx);
     const reg = (id: string, pos: P2, y: number, radius: number, label: string, cooldown: number, fn: () => void) => {
       this.unregister.push(
         ctx.interactions.register({
@@ -79,30 +107,28 @@ export class SouthernAirTemple extends AirRegion {
         }),
       );
     };
-    const gong = polar(200, 50);
+    const gong = polar(SITES.gong.th, SITES.gong.r);
     const gy = floorY(LEVEL_Y[4]);
-    reg('air_gong', gong, gy + 1.4, 2.6, 'Strike the temple gong', 4, () => {
+    reg('air_gong', gong, gy + 1.4, 2.8, 'Strike the temple gong', 4, () => {
       ctx.audio.play('amb.bell', { position: { x: gong.x, y: gy + 1.8, z: gong.z }, volume: 1, range: 220 });
       ctx.events.emit('ui:notify', { text: "The gong's note rolls out over the sea of clouds.", kind: 'info', duration: 3 });
     });
-    const bell = polar(20, 38);
-    const by = floorY(LEVEL_Y[5]);
-    reg('air_great_bell', bell, by + 1.2, 3.0, 'Ring the great bell', 6, () => {
-      ctx.audio.play('amb.bell', { position: { x: bell.x, y: by + 2.5, z: bell.z }, volume: 1, range: 260 });
+    const bell = place('bellPavilion');
+    reg('air_great_bell', bell, bell.y + 1.2, 3.4, 'Ring the great bell', 6, () => {
+      ctx.audio.play('amb.bell', { position: { x: bell.x, y: bell.y + 3, z: bell.z }, volume: 1, range: 260 });
       ctx.events.emit('ui:notify', { text: 'The great bell sounds across the pinnacle. Somewhere below, a sky bison answers.', kind: 'info', duration: 3 });
     });
-    const wheels = polar(236, 54);
-    reg('air_prayer_wheels', wheels, gy + 1, 3.2, 'Spin the prayer wheels', 60, () => {
+    const wheels = polar(SITES.wheels.th, SITES.wheels.r + 0.9);
+    reg('air_prayer_wheels', wheels, gy + 1, 3.4, 'Spin the prayer wheels', 60, () => {
       ctx.audio.play('amb.chime', { position: { x: wheels.x, y: gy + 1.2, z: wheels.z } });
       ctx.player?.addStatus('regen', 20, 1);
       ctx.events.emit('ui:notify', { text: 'The prayer wheels whirl — a gentle warmth mends your wounds.', kind: 'success', duration: 4 });
     });
-    for (const [i, a] of [356, 14, 32].entries()) {
-      const p = polar(a, 47);
-      reg(`air_meditate_${i + 1}`, p, by + 0.8, 2.6, 'Meditate above the clouds', 30, () => {
+    for (const [i, m] of meditationSpots().entries()) {
+      reg(`air_meditate_${i + 1}`, m, m.y + 0.2, 2.8, 'Meditate above the clouds', 30, () => {
         const pl = ctx.player;
         if (pl) pl.chi = pl.maxChi;
-        ctx.audio.play('amb.chime', { position: { x: p.x, y: by + 1, z: p.z } });
+        ctx.audio.play('amb.chime', { position: { x: m.x, y: m.y + 0.4, z: m.z } });
         ctx.events.emit('ui:notify', { text: 'You breathe with the wind. Chi fully restored.', kind: 'success', duration: 3 });
       });
     }
@@ -112,6 +138,14 @@ export class SouthernAirTemple extends AirRegion {
     for (const u of this.unregister) u();
     this.unregister = [];
     this.cooldowns.clear();
+    this.sanctuary?.sessionEnd();
+    this.session = null;
+  }
+
+  override dispose(ctx: GameContext): void {
+    this.sanctuary?.dispose();
+    this.sanctuary = null;
+    super.dispose(ctx);
   }
 
   /** Height of the floor the temple offers at the base of the mesa (tests). */

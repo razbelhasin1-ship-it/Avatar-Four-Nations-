@@ -86,7 +86,6 @@ function ribbon(s: RoadSample[], w: number, y: number): THREE.BufferGeometry {
 
 /** A stair flight along the road from (t0, r0, y0) to (t1, r1, y1) (angles in degrees, y above BASE). */
 export function flightAlong(k: Kit, t0: number, r0: number, y0: number, t1: number, r1: number, y1: number, width = ROAD_W): void {
-  const len = Math.abs(((t1 - t0) * DEG) * ((r0 + r1) / 2)) + Math.abs(r1 - r0) * 0.5;
   const rise = y1 - y0;
   const n = Math.max(4, Math.round(rise / 0.22));
   const sh = rise / n;

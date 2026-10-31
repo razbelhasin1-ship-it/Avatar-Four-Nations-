@@ -1,6 +1,6 @@
 import { defineSpots, type Spot } from '../../Spots';
 import type { P2 } from '../../WorldLayout';
-import { BASE, C, LEVEL_Y, floorY, place, type PlaceId } from './sat/layout';
+import { BASE, C, LEVEL_Y, floorY, place, rOutAt, terrace, type PlaceId } from './sat/layout';
 
 /**
  * Shared coordinates of the Air Nomad region modules and the named spots they
@@ -43,11 +43,13 @@ const pol = (th: number, r: number, level: number | null, o: Partial<Spot> = {})
 const face = (x: number, z: number, tx: number, tz: number): number => Math.atan2(tx - x, tz - z);
 /** Yaw facing the pinnacle's centre from bearing θ. */
 const inward = (th: number): number => Math.atan2(-Math.cos((th * Math.PI) / 180), -Math.sin((th * Math.PI) / 180));
+/** Radius of a meditation terrace on L5 (kept inside the terrace's wandering edge). */
+const medR = (th: number): number => Math.min(46.2, rOutAt(terrace('halls'), th) - 4.7);
 
 export const AIR_SPOTS: Record<string, Spot> = {
   // --- Masters & training grounds (docs/TECHNIQUES.md) ---------------------
   master_tenzo: at('moonGateCourt', { dth: 3, dr: 4, yaw: inward(227), r: 2, label: 'Monk Tenzo — moon-gate courtyard' }),
-  training_tenzo: at('moonGateCourt', { r: 11, label: 'Moon-gate training courtyard' }),
+  training_tenzo: at('moonGateCourt', { dr: 5, r: 7, label: 'Moon-gate training courtyard' }),
   master_iio: at('airball', { dth: -7, dr: -2, yaw: inward(111) + Math.PI, r: 2, label: 'Brother Iio — airball court' }),
   training_iio: at('airball', { r: 11, label: 'Airball court' }),
   master_pasang: pol(60, 14, 6, { yaw: inward(60) + Math.PI, r: 2, label: 'Abbot Pasang — summit' }),
@@ -57,7 +59,7 @@ export const AIR_SPOTS: Record<string, Spot> = {
   // --- Quest givers / elders -------------------------------------------------
   giver_air_elder: pol(284, 74, 1, { yaw: face(polar(284, 74).x, polar(284, 74).z, place('arrival').x, place('arrival').z), r: 2, label: 'Monk Tenzo greets arrivals (bison terrace)' }),
   // --- Merchants ---------------------------------------------------------------
-  merchant_air_temple_1: at('entranceCourt', { dth: -4, dr: 8, yaw: inward(188), r: 2, label: 'Nomad trader (entrance courtyard)' }),
+  merchant_air_temple_1: at('entranceCourt', { dth: 5.5, dr: 5.5, yaw: inward(198.5), r: 2, label: 'Nomad trader (entrance courtyard)' }),
   merchant_air_temple_2: { x: 1203.5, z: 974, yaw: face(1203.5, 974, 1210, 980), r: 2, label: 'Trailhead pedlar', region: R },
   // --- Creature habitats -------------------------------------------------------
   habitat_bison_stable: at('stables', { dr: 4, r: 9, label: 'Sky bison stables' }),
@@ -67,18 +69,20 @@ export const AIR_SPOTS: Record<string, Spot> = {
   habitat_bison_meadow: { x: 1366, z: 1050, r: 32, label: 'Sky Bison Meadow', region: R },
   // --- Shrines -------------------------------------------------------------------
   shrine_wind: { x: 1577.05, z: 1344.7, y: WIND_SHRINE.y + 0.5, r: 3, label: 'Shrine of the Four Winds', region: R },
-  shrine_air_pavilion: at('labyrinthCourt', { dr: -9, r: 4, label: 'Teal pavilion (labyrinth courtyard)' }),
+  shrine_air_pavilion: pol(271, 39, 4, { r: 4, label: 'Teal pavilion (labyrinth courtyard)' }),
   shrine_air_sanctum: at('sanctuaryDoor', { dr: 3, r: 2.5, label: 'Sanctuary door' }),
   shrine_air_avatars: { x: C.x, z: C.z + 4, y: BASE + 63.2, r: 6, label: 'Avatar sanctuary (statue room)', region: R },
   shrine_air_chortens: at('gardens', { dr: 3, r: 8, label: 'Garden shrines' }),
   shrine_air_bell: at('bellPavilion', { r: 4, label: 'Great-bell pavilion' }),
   // --- Viewpoints ------------------------------------------------------------------
-  viewpoint_air_meditation_1: pol(30, 47.5, 5, { yaw: inward(30) + Math.PI, r: 3, label: 'Meditation terrace' }),
-  viewpoint_air_meditation_2: pol(48, 47.5, 5, { yaw: inward(48) + Math.PI, r: 3, label: 'Meditation terrace' }),
-  viewpoint_air_meditation_3: pol(66, 47.5, 5, { yaw: inward(66) + Math.PI, r: 3, label: 'Meditation terrace' }),
+  // The meditation terraces of L5 (sat/levels.ts meditationSpots: bearings 40, 54, 86).
+  viewpoint_air_meditation_1: pol(40, medR(40), 5, { yaw: inward(40) + Math.PI, r: 3, label: 'Meditation terrace' }),
+  viewpoint_air_meditation_2: pol(54, medR(54), 5, { yaw: inward(54) + Math.PI, r: 3, label: 'Meditation terrace' }),
+  viewpoint_air_meditation_3: pol(86, medR(86), 5, { yaw: inward(86) + Math.PI, r: 3, label: 'Meditation terrace' }),
   viewpoint_air_sanctum: pol(160, 24, 6, { r: 2.5, label: 'Summit rim' }),
   viewpoint_air_outlook_north: at('landingNE', { dr: 7, r: 4, label: 'North-east landing ledge' }),
-  viewpoint_air_outlook_south: at('airball', { dr: 7, r: 4, label: 'Airball court rim' }),
+  viewpoint_air_outlook_south: at('airball', { dth: 2, dr: 6, r: 4, label: 'Airball court rim' }),
+  viewpoint_air_outlook_pavilion: at('outlook', { r: 3, label: 'Outlook pavilion' }),
   viewpoint_air_east_balcony: pol(96, 70, 3, { r: 4, label: 'East cliff balcony' }),
   // --- Glide launch points (open edges) ------------------------------------------
   glide_launch_east: at('launch', { dr: 5, yaw: inward(140) + Math.PI, r: 1.8, label: 'Summit launch platform' }),
@@ -86,7 +90,7 @@ export const AIR_SPOTS: Record<string, Spot> = {
   // --- Updrafts (wind corridors an airbender can ride) ----------------------------
   updraft_1: pol(100, 112, null, { y: BASE - 30, r: 9, label: 'East cliff updraft' }),
   updraft_2: pol(20, 112, null, { y: BASE - 26, r: 9, label: 'Orchard cliff updraft' }),
-  updraft_3: pol(160, 114, null, { y: BASE - 30, r: 10, label: 'South cliff updraft' }),
+  updraft_3: pol(173, 112, null, { y: BASE - 30, r: 10, label: 'South cliff updraft' }),
   updraft_4: pol(300, 116, null, { y: BASE - 34, r: 9, label: 'Bison terrace updraft' }),
   updraft_5: pol(60, 124, null, { y: BASE - 50, r: 10, label: 'South-east updraft' }),
   updraft_6: { x: 1300, z: 1135, y: 175, r: 10, label: 'Switchback gorge updraft', region: R },

@@ -33,7 +33,7 @@ Road: one white switchback road, ~1.6 turns, L0 θ 190 → L1 → L2 → L3 → 
 ## Phases
 - [x] 0 explore, branch, plan (fc20391)
 - [x] 1 terrain + terrace blockout, road, mist, spires (walk test: 146 road points gate → summit, 0 stuck)
-- [ ] 2 buildings + statue room
+- [x] 2 buildings + statue room (walk tests: road 145/145, trail → plaza, door shut/air-cast opens, into the chamber and back)
 - [ ] 3 sky bison + lemurs + calling
 - [ ] 4 monks + routines
 - [ ] 5 atmosphere + audio
@@ -44,9 +44,20 @@ Road: one white switchback road, ~1.6 turns, L0 θ 190 → L1 → L2 → L3 → 
 - `air_elder` (Monk Tenzo, greets arrivals) → bison terrace by the landing; masters: Tenzo → moon-gate courtyard (L4), Iio → airball court (L3), Pasang → summit (L6); fallbacks updated.
 - Spots in `air/layout.ts` now come from `sat/layout.ts` PLACES (trail, trailhead, meadow, Four Winds unchanged).
 - Shop `air_beasts` fallback → bison terrace.
+- Great-bell pavilion (spot `shrine_air_bell`, the sq_bells bells, Brother Sonam) → summit north side (θ 270, r 19).
+- Sanctuary door (`shrine_air_sanctum`) → L4 behind the labyrinth courtyard (θ 258) at the foot of the summit rock under the tower.
+- Meditation viewpoints → the three L5 terraces (θ 40/54/86); merchant 1 → inside the entrance court; Tenzo's training ground → open part of the moon-gate court; `updraft_3` → θ 173 (the outlook pillar now stands at θ 160); new `viewpoint_air_outlook_pavilion`.
 
 ## Notes / open items
 - Level heights final: L0 0, L1 18, L2 36, L3 52, L4 68, L5 90, L6 108 (summit floor 438.2 world).
 - Edge noise (EDGE_AMP 4.5) calmed where the L2 stairs run alongside (CALM table); flat road off-terrace = causeways.
 - Old `grounds.ts` removed; `towers.ts` buildSpires is now unused (spires in sat/spires.ts).
+- The trail's last flight was buried under the gate plaza since phase 1 (8 m wall at r 94): the plaza now has a stair
+  trench (notched slab, trench walls with parapets, rock skin following the carved trail, colliders clear of it) and
+  the temple gate stands astride its top; the plaza road moved in to r 81.
+- Sanctuary: chamber r 12.6, floor +63.2, ceiling +107.3 inside the summit rock (summit collider hollowed: core below
+  the floor, 36 wall sectors, tunnel walls/ramp/stepped ceiling); 168 statues on an 8-turn ledge in cycle order
+  (air, water, earth, fire; the last is Fire, the great bearded statue at the door); eyes glow bottom→top on
+  `avatarState:changed`; door opens on a player air cast within 11 m (flag `air_sanctuary_open` keeps it open);
+  chamber built within 70 m of the door, dropped beyond 130 m.
 - Masters "Sister Iio" and "Sister Yeshe": the monastery is men and boys only → renamed Brother (ids kept).

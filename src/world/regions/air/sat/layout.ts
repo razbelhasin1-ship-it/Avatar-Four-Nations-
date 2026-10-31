@@ -1,4 +1,5 @@
 import { SimplexNoise } from '../../../../core/Noise';
+import { TRAILS, heightAt } from '../../../Heightfield';
 import type { P2 } from '../../../WorldLayout';
 
 /**
@@ -120,27 +121,29 @@ export function shelf(id: string): ShelfDef {
 export const PLACES = {
   arrival: [280, 91, 1],
   landingNE: [322, 90, 1],
-  bisonPavilion: [300, 71, 1],
-  stables: [314, 62, 1],
-  hayYard: [268, 72, 1],
-  refectory: [16, 62, 2],
-  kitchens: [38, 62, 2],
-  orchardA: [352, 62, 2],
-  orchardB: [70, 62, 2],
-  quartersA: [102, 60, 3],
-  quartersB: [160, 60, 3],
-  practiceYard: [138, 58, 3],
+  bisonPavilion: [300, 75, 1],
+  stables: [326, 70, 1],
+  hayYard: [284, 72, 1],
+  refectory: [14, 66, 2],
+  kitchens: [36, 64, 2],
+  orchardA: [354, 64, 2],
+  orchardB: [62, 58, 2],
+  quartersA: [100, 60, 3],
+  quartersB: [164, 57, 3],
+  practiceYard: [145, 52, 3],
   airball: [118, 75, 3],
-  entranceCourt: [192, 44, 4],
+  entranceCourt: [193, 44, 4],
   moonGateCourt: [224, 43, 4],
-  labyrinthCourt: [258, 43, 4],
-  gardens: [306, 42, 4],
-  gardensB: [330, 40, 4],
-  mainHall: [354, 38, 5],
-  bellPavilion: [12, 43, 5],
-  meditation: [48, 47, 5],
-  sanctuaryDoor: [100, 14, 6],
+  labyrinthCourt: [254, 44, 4],
+  gardens: [304, 40, 4],
+  gardensB: [326, 38, 4],
+  mainHall: [2, 41, 5],
+  bellPavilion: [270, 19, 6],
+  meditation: [48, 46, 5],
+  sanctuaryDoor: [258, 33.5, 4],
   launch: [140, 30, 6],
+  gate: [204.5, 80, 0],
+  outlook: [160, 117, 0],
 } as const satisfies Record<string, readonly [number, number, number]>;
 
 export type PlaceId = keyof typeof PLACES;
@@ -158,8 +161,8 @@ export function place(id: PlaceId, dth = 0, dr = 0): { x: number; z: number; y: 
 
 /** Waypoints along the road, θ increasing; flat runs lie on terraces, climbs are stair flights. */
 export const ROAD: Array<[number, number, number]> = [
-  [186, 84, 0],
-  [214, 84, 0], // gate plaza: the trail arrives at θ ≈ 205
+  [186, 81, 0],
+  [214, 81, 0], // gate plaza: the trail tops out at θ ≈ 205, r ≈ 84 (see TRAIL_TOP)
   [262, 83, 18], // climb to L1 along the foot of the courts' cliff
   [324, 81, 18], // through the bison terrace
   [368, 79, 36], // climb past the north-east landing ledge, outside the orchards' cliff
@@ -287,6 +290,77 @@ export function rOutAt(t: TerraceDef, th: number): number {
   return t.level === 0 ? t.rOut : t.rOut + EDGE_AMP * edgeNoise(th, t.level) * calm(th, t.level);
 }
 
+// ---------------------------------------------------------------------------
+// The pilgrims' trail and the sanctuary (openings through the rock)
+// ---------------------------------------------------------------------------
+
+const TRAIL_PTS = TRAILS.find((t) => t.id === 'air_temple_switchbacks')?.points ?? [{ x: 1330, z: 1200 }, { x: 1375, z: 1215 }];
+
+/**
+ * The switchback trail's last leg climbs onto the gate plaza through a stair trench: `a`→`b` is
+ * that leg (its stairs top out at r0, level with the plaza), `wall` the trench walls' inner face
+ * (lateral distance from the axis), `skin` how far the rock skin follows the carved trail.
+ */
+export const TRAIL_TOP = {
+  a: TRAIL_PTS[TRAIL_PTS.length - 2],
+  b: TRAIL_PTS[TRAIL_PTS.length - 1],
+  r0: 84.3,
+  wall: 2.75,
+  wallT: 0.65,
+  skin: 5.8,
+  /** Walls (with their walkable shoulders) reach this far out from the axis. */
+  shoulder: 6,
+};
+
+/** Signed lateral distance of a world point from the trail's last leg (left of a→b positive). */
+export function trailLateral(x: number, z: number): number {
+  const { a, b } = TRAIL_TOP;
+  const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz);
+  return ((x - a.x) * -dz + (z - a.z) * dx) / l;
+}
+
+/** Distance along the trail's last leg from `a` (metres). */
+export function trailAlong(x: number, z: number): number {
+  const { a, b } = TRAIL_TOP;
+  const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz);
+  return ((x - a.x) * dx + (z - a.z) * dz) / l;
+}
+
+/** Is a world point inside the trail trench (within `half` of the last leg, outside r0)? */
+export function inTrailTrench(x: number, z: number, half: number): boolean {
+  const { a, b } = TRAIL_TOP;
+  const s = trailAlong(x, z);
+  return s > -2 && s < Math.hypot(b.x - a.x, b.z - a.z) + 1 && radiusOf(x, z) > TRAIL_TOP.r0 - 0.5 && Math.abs(trailLateral(x, z)) < half;
+}
+
+/**
+ * The Avatar sanctuary: a round chamber cut into the summit rock under the central tower (heights
+ * above BASE). Its door is at the foot of the summit cliff on L4 (bearing `th`, behind the
+ * labyrinth courtyard): a short vestibule at the courtyard's level, then a stair down into the
+ * chamber, 44 m tall.
+ */
+export const SANCTUARY = {
+  th: 258,
+  /** Chamber wall radius, floor (walking) and ceiling heights. */
+  r: 12.6,
+  floor: 63.2,
+  ceil: 107.3,
+  /** Tunnel half-width and ceiling; the vestibule floor is L4's walking level. */
+  half: 2.2,
+  top: 75.4,
+  /** The stair runs down from here (radius) to the chamber wall. */
+  stairR: 21.2,
+  /** Statues on the spiral ledge. */
+  turns: 8,
+  ledge0: 4.6,
+  ledge1: 39,
+} as const;
+
+/** Radius of the sanctuary façade's back plane (the summit cliff face at the door). */
+export function sanctuaryFace(): number {
+  return summitRAt(SANCTUARY.th) + 0.4;
+}
+
 /** Summit rim radius at bearing θ. */
 export function summitRAt(th: number): number {
   return SUMMIT_R + 2.6 * edgeNoise(th, 6);
@@ -313,6 +387,11 @@ export function floorAt(th: number, r: number): number | null {
  * between them is roughened with noise, the mesa ground lies just over the heightfield.
  */
 export function rockTop(th: number, r: number): number {
+  if (r > TRAIL_TOP.r0 - 1) {
+    // Inside the trail trench the rock follows the carved trail.
+    const p = polar(th, r);
+    if (inTrailTrench(p.x, p.z, TRAIL_TOP.skin)) return Math.min(-0.25, heightAt(p.x, p.z) - BASE - 0.6);
+  }
   if (r <= summitRAt(th)) return LEVEL_Y[6] - 0.25;
   const t = terraceAt(th, r);
   if (t) return t.y - 0.25;
