@@ -599,18 +599,23 @@ export function buildHalls(k: Kit): void {
   P.canal(k, { id: 'air:sat_hall_rill', label: 'Rill', a: polar(th, 48.1), b: polar(th, edge + 0.1), y, width: 0.8, wallH: 0.35, register: false });
   const lip = polar(th, edge + 0.25);
   P.waterfall(k, { id: 'air:sat_hall_falls', label: 'Hall falls', x: lip.x, y: y + 0.05, z: lip.z, yaw: yawOut(th), width: 1.1, drop: y - FL(2) + 0.1, out: 0.9 });
-  // Lanterns along the outer side of the road.
+  // Lanterns along the outer side of the road (its pass across this level).
   for (const a of [347, 357, 7, 17]) {
-    const r = roadRadius(a) + 3.4;
+    const r = roadRadius(a, LEVEL_Y[5]) + 3.4;
     const p = polar(a, r);
     P.lanternPost(k, p.x, y, p.z, 'warm');
   }
 }
 
-/** Radius of the road's centre line at bearing θ on a flat run (for dressing beside it). */
-function roadRadius(th: number): number {
+/**
+ * Radius of the road's centre line at bearing θ on its flat run at level height `y` (for dressing
+ * beside it). The road spirals round the summit and passes each bearing on several levels, so the
+ * level picks the pass.
+ */
+function roadRadius(th: number, y: number): number {
   for (let i = 0; i < ROAD.length - 1; i++) {
-    const [t0, r0] = ROAD[i], [t1, r1] = ROAD[i + 1];
+    const [t0, r0, y0] = ROAD[i], [t1, r1, y1] = ROAD[i + 1];
+    if (y0 !== y || y1 !== y) continue;
     for (const t of [th, th + 360, th + 720]) if (t >= t0 && t <= t1) return r0 + ((r1 - r0) * (t - t0)) / (t1 - t0);
   }
   return 40;
