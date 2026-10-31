@@ -31,6 +31,7 @@ export function techniqueSources(): Map<string, string> {
     for (const s of q.steps) for (const a of [...(s.onStart ?? []), ...(s.onComplete ?? [])]) if (a.type === 'learn' && !m.has(a.technique)) m.set(a.technique, `Quest — “${q.title}”`);
   }
   for (const id of SPHERE_TECHNIQUES) m.set(id, 'Awakens with the Elements Sphere (master all four elements)');
+  for (const d of allTechniques()) if (d.innate) m.set(d.id, d.innate);
   sourceCache = m;
   return m;
 }

@@ -142,6 +142,44 @@ try {
     },
     settle: 120,
   });
+  // Combustionbending: refused without the Third Eye marking; with it, the eye glows while the
+  // bender focuses, a streak leaps from the brow to the first dummy and detonates — the struck
+  // dummy and the one beside it are hurt and thrown, the far one is untouched.
+  const eye = (on) => (g, on) => {
+    const p = g.game.player;
+    p.setAppearance({ ...JSON.parse(JSON.stringify(p.appearance)), facePaint: on ? 'fire_third_eye' : 'none' });
+  };
+  await run({
+    id: 'fire_combustion',
+    targets: [[14, 0], [15, 1.3], [24, -6]],
+    frames: 60,
+    shots: [20, 36],
+    cam: { back: 5, side: 3, up: 2.2 },
+    setup: async (hh) => {
+      await hh.eval(eye(false), false);
+      const refused = await hh.eval((g) => g.cast('fire_combustion', null, 1));
+      assert.equal(refused.ok, false, 'combustionbending cast without the third eye');
+      assert.equal(refused.reason, 'locked');
+      await hh.eval(eye(true), true);
+    },
+    check: (r) => {
+      assert.ok(r.targets[0].totalDamage >= 40, `the struck dummy took only ${r.targets[0].totalDamage}`);
+      assert.ok(r.targets[1].totalDamage > 0 && r.targets[1].moved > 1, `the blast did not catch the dummy beside it (${r.targets[1].totalDamage} dmg, ${r.targets[1].moved} m)`);
+      assert.equal(r.targets[2].totalDamage ?? 0, 0, 'the far dummy was hit');
+    },
+  });
+  // Point blank: the blast catches the combustionbender too.
+  await run({
+    id: 'fire_combustion',
+    name: 'combustion point blank',
+    targets: [[1.8, 0]],
+    frames: 50,
+    check: async (r, hh) => {
+      const pid = await hh.eval((g) => g.game.player.id);
+      assert.ok(r.targets[0].totalDamage >= 40, `the dummy at point blank took only ${r.targets[0].totalDamage}`);
+      assert.ok(r.events.some((e) => e.type === 'hit' && e.target === pid && e.damage > 0), 'the bender was not caught by their own blast');
+    },
+  });
 } finally {
   await finish(h, E, results, shots);
 }

@@ -25,7 +25,7 @@ describe('masters & curricula', () => {
       expect(def!.element).toBe(m.element);
       taught.set(l.technique, (taught.get(l.technique) ?? 0) + 1);
     }
-    const masterTechs = allTechniques().filter((t) => t.element !== 'avatar' && !t.starter && t.kind !== 'ultimate' && t.kind !== 'combined');
+    const masterTechs = allTechniques().filter((t) => t.element !== 'avatar' && !t.starter && !t.innate && t.kind !== 'ultimate' && t.kind !== 'combined');
     for (const t of masterTechs) expect(taught.get(t.id), `${t.id} must be taught once`).toBe(1);
   });
 

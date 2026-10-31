@@ -24,9 +24,9 @@ export type ArrowDesign = 'classic' | 'swirl' | 'glyph' | 'glyph_light' | 'filig
 export const ARROW_DESIGNS: Array<{ id: ArrowDesign; name: string; desc: string }> = [
   { id: 'classic', name: 'Classic', desc: 'The plain sky-blue arrow, as the masters of the four temples wear it.' },
   { id: 'swirl', name: 'Swirled', desc: 'A blue arrow filled with curling wind patterns and a darker outline.' },
-  { id: 'glyph', name: 'Ink Glyph', desc: 'Dark line-work glyphs: a diamond head over a ladder of marks.' },
-  { id: 'glyph_light', name: 'Pale Glyph', desc: 'The glyph design in fine, pale blue lines.' },
-  { id: 'filigree', name: 'Filigree', desc: 'An open arrow of interlaced wind curls, outlined in light blue.' },
+  { id: 'glyph', name: 'Ink Glyph', desc: 'Dark runic line-work: a ringed spiral in a diamond with wing marks, and a column of runes down the shaft.' },
+  { id: 'glyph_light', name: 'Pale Glyph', desc: 'The runic glyphs in fine pale-blue lines edged in blue.' },
+  { id: 'filigree', name: 'Filigree', desc: 'An open arrow of mirrored wind scrolls over a falling drop, in light blue edged in blue.' },
   { id: 'ornate', name: 'Ornate', desc: 'A pale arrowhead filled with fine blue filigree.' },
   { id: 'tribal', name: 'Tribal', desc: 'A bold deep-blue arrow with light carved patterns.' },
 ];
@@ -107,8 +107,8 @@ export const FACE_PAINTS: FacePaintDef[] = [
     id: 'fire_third_eye',
     name: 'Third Eye',
     nation: 'fire',
-    desc: 'The eye tattooed on the forehead of a combustionbender, like Combustion Man and P’Li.',
-    colors: ['#1c2030', '#000000', '#000000'],
+    desc: 'The red eye on the forehead of a combustionbender, like P’Li and Combustion Man. It lets you combustionbend: focus, and an exploding beam leaps from your brow.',
+    colors: ['#c62a38', '#5c1219', '#ffb0a0'],
   },
   {
     id: 'fire_painted_lady',
@@ -182,9 +182,9 @@ export function arrowInks(d: ArrowDesign, tattoo: string): [THREE.Color, THREE.C
     case 'glyph':
       return [base.clone(), new THREE.Color('#1b2534')];
     case 'glyph_light':
-      return [light(0.35), base.clone()];
+      return [base.clone(), light(0.55)];
     case 'filigree':
-      return [light(0.22), base.clone()];
+      return [base.clone(), light(0.5)];
     case 'ornate':
       return [light(0.5), dark(0.85)];
     case 'tribal':
@@ -309,6 +309,90 @@ const braid = (c: Ctx, m: Map2, w: number, px: number, amp: number, y0: number, 
   }
 };
 
+/**
+ * Glyph arrowhead (line-work): a column of runes runs into a diamond holding a ringed spiral, with
+ * outward-pointing wing triangles to either side, framed by the arrow's outline; a short stem with
+ * cross-ticks carries the point down to the brow.
+ */
+function glyphHead(c: Ctx, m: Map2, px: number, w: number): void {
+  line(c, m, [[-1.12, -1.0], [1.12, -1.0], [0, 0.04], [-1.12, -1.0]], w * 0.75, px);
+  line(c, m, [[0, -1.2], [0.42, -0.66], [0, -0.14], [-0.42, -0.66], [0, -1.2]], w, px);
+  circle(c, m, 0, -0.66, 0.2, px, false, w * 0.8);
+  line(c, m, curl(0, -0.66, 0.13, 1, -Math.PI / 2, 1.0), w * 0.7, px);
+  for (const s of [1, -1]) {
+    line(c, m, [[0.5 * s, -0.46], [1.3 * s, -0.66], [0.5 * s, -0.86], [0.5 * s, -0.46]], w * 0.85, px);
+    circle(c, m, 0.78 * s, -0.66, 0.06, px);
+    line(c, m, [[1.3 * s, -0.66], [1.42 * s, -0.66]], w * 0.7, px);
+    line(c, m, [[0.62 * s, -1.0], [0.62 * s, -1.12]], w * 0.6, px);
+  }
+  line(c, m, [[0, -0.14], [0, 0.0]], w * 0.8, px);
+  line(c, m, [[-0.1, -0.08], [0.1, -0.08]], w * 0.6, px);
+  line(c, m, [[0, -1.2], [0, ARROW_CELL.Y0]], w * 0.8, px);
+  line(c, m, [[-0.22, -1.3], [0.22, -1.3]], w * 0.7, px);
+  line(c, m, [[-0.18, -1.38], [0, -1.46], [0.18, -1.38]], w * 0.6, px);
+}
+
+/** Glyph shaft (period 1): a spine of runes — a crossed box, a barred tick, a ringed dot, a small diamond. */
+function glyphShaft(c: Ctx, m: Map2, px: number, w: number): void {
+  for (let k = -1; k < 3; k++) {
+    line(c, m, [[0, k], [0, k + 0.06]], w, px);
+    line(c, m, [[-0.5, k + 0.08], [0.5, k + 0.08], [0.5, k + 0.34], [-0.5, k + 0.34], [-0.5, k + 0.08]], w * 0.85, px);
+    line(c, m, [[-0.5, k + 0.08], [0.5, k + 0.34]], w * 0.7, px);
+    line(c, m, [[0.5, k + 0.08], [-0.5, k + 0.34]], w * 0.7, px);
+    line(c, m, [[0, k + 0.34], [0, k + 0.46]], w, px);
+    line(c, m, [[-0.72, k + 0.5], [0.72, k + 0.5]], w * 0.9, px);
+    line(c, m, [[-0.72, k + 0.44], [-0.72, k + 0.56]], w * 0.7, px);
+    line(c, m, [[0.72, k + 0.44], [0.72, k + 0.56]], w * 0.7, px);
+    line(c, m, [[0, k + 0.5], [0, k + 0.58]], w, px);
+    circle(c, m, 0, k + 0.68, 0.12, px, false, w * 0.7);
+    circle(c, m, 0, k + 0.68, 0.04, px);
+    line(c, m, [[0, k + 0.8], [0, k + 0.84]], w, px);
+    line(c, m, [[0, k + 0.84], [0.2, k + 0.92], [0, k + 1.0], [-0.2, k + 0.92], [0, k + 0.84]], w * 0.8, px);
+  }
+}
+
+/**
+ * Filigree arrowhead: a fine outline whose top dips where the shaft comes in, two mirrored scrolls
+ * curling in from the corners to meet over a small drop above the point, little hooks with dots at
+ * the outer corners.
+ */
+function filigreeHead(c: Ctx, m: Map2, px: number, w: number): void {
+  line(c, m, [[-1.12, -1.0], [-0.5, -1.0], [-0.39, -1.1], [-0.39, ARROW_CELL.Y0]], w, px);
+  line(c, m, [[1.12, -1.0], [0.5, -1.0], [0.39, -1.1], [0.39, ARROW_CELL.Y0]], w, px);
+  line(c, m, [[-1.12, -1.0], [0, 0.02], [1.12, -1.0]], w, px);
+  for (const s of [1, -1]) {
+    // A scroll from the centre line sweeping out and curling back in.
+    const sc: Array<[number, number]> = [[0.04 * s, -0.94], [0.3 * s, -0.95], [0.6 * s, -0.86], [0.74 * s, -0.7]];
+    const cu = curl(0.5 * s, -0.66, 0.24, s > 0 ? 1 : -1, s > 0 ? 0 : Math.PI, 1.2);
+    line(c, m, [...sc, ...cu], w * 0.9, px);
+    line(c, m, curl(0.24 * s, -0.4, 0.12, s > 0 ? -1 : 1, s > 0 ? Math.PI : 0, 1.1), w * 0.75, px);
+    line(c, m, [[1.12 * s, -1.0], [1.26 * s, -1.06], [1.3 * s, -0.94]], w * 0.8, px);
+    circle(c, m, 1.34 * s, -0.86, 0.05, px);
+  }
+  smoothPoly(c, m, [
+    [0, -0.08],
+    [-0.09, -0.26],
+    [0, -0.4],
+    [0.09, -0.26],
+  ]);
+  c.fill();
+  line(c, m, [[0, -1.0], [0, -0.52]], w * 0.6, px);
+  for (const s of [1, -1]) line(c, m, curl(0.2 * s, -1.26, 0.14, s > 0 ? 1 : -1, -Math.PI / 2, 1.0), w * 0.75, px);
+}
+
+/** Filigree shaft (period 1): mirrored scroll pairs on a fine spine between fine edges. */
+function filigreeShaft(c: Ctx, m: Map2, px: number, w: number): void {
+  line(c, m, [[-1, -0.1], [-1, 2.1]], w * 0.6, px);
+  line(c, m, [[1, -0.1], [1, 2.1]], w * 0.6, px);
+  line(c, m, [[0, -0.1], [0, 2.1]], w * 0.55, px);
+  for (let k = -1; k < 3; k++) {
+    for (const s of [1, -1]) {
+      line(c, m, [[0, k + 0.12], [0.3 * s, k + 0.2], ...curl(0.48 * s, k + 0.48, 0.3, s > 0 ? 1 : -1, s > 0 ? -Math.PI / 2 : -Math.PI / 2, 1.15)], w, px);
+    }
+    circle(c, m, 0, k + 0.9, 0.07, px);
+  }
+}
+
 const ARROW_HEAD: Record<ArrowDesign, Painter> = {
   classic: (c, m, layer) => {
     if (layer === 0) headFill(c, m);
@@ -326,43 +410,16 @@ const ARROW_HEAD: Record<ArrowDesign, Painter> = {
     }
   },
   glyph: (c, m, layer, px) => {
-    if (layer !== 1) return;
-    const w = 0.06;
-    line(c, m, [[0, 0.06], [-0.82, -0.56], [0, -1.18], [0.82, -0.56], [0, 0.06]], w, px);
-    line(c, m, [[0, -0.2], [-0.42, -0.56], [0, -0.92], [0.42, -0.56], [0, -0.2]], w * 0.8, px);
-    circle(c, m, 0, -0.56, 0.12, px);
-    line(c, m, [[-0.82, -0.56], [-1.18, -0.56]], w, px);
-    line(c, m, [[0.82, -0.56], [1.18, -0.56]], w, px);
-    line(c, m, [[-1.1, -0.66], [-1.25, -0.56], [-1.1, -0.46]], w * 0.8, px);
-    line(c, m, [[1.1, -0.66], [1.25, -0.56], [1.1, -0.46]], w * 0.8, px);
-    line(c, m, [[0, -1.18], [0, ARROW_CELL.Y0]], w * 0.8, px);
-    line(c, m, [[-0.24, -1.3], [0.24, -1.3]], w * 0.7, px);
-    line(c, m, [[-0.16, -1.42], [0.16, -1.42]], w * 0.7, px);
+    if (layer === 1) glyphHead(c, m, px, 0.075);
   },
+  // Pale lines over a slightly wider blue edge, so the fine pale work still reads on skin.
   glyph_light: (c, m, layer, px) => {
-    if (layer !== 0) return;
-    const w = 0.04;
-    line(c, m, [[0, 0.06], [-0.82, -0.56], [0, -1.18], [0.82, -0.56], [0, 0.06]], w, px);
-    line(c, m, [[0, -0.2], [-0.42, -0.56], [0, -0.92], [0.42, -0.56], [0, -0.2]], w, px);
-    circle(c, m, 0, -0.56, 0.09, px);
-    line(c, m, [[-0.82, -0.56], [-1.18, -0.56]], w, px);
-    line(c, m, [[0.82, -0.56], [1.18, -0.56]], w, px);
-    line(c, m, [[0, -1.18], [0, ARROW_CELL.Y0]], w, px);
-    for (const y of [-1.3, -1.42]) line(c, m, [[-0.2, y], [0.2, y]], w * 0.8, px);
+    if (layer === 0) glyphHead(c, m, px, 0.085);
+    else if (layer === 1) glyphHead(c, m, px, 0.042);
   },
   filigree: (c, m, layer, px) => {
-    if (layer !== 0) return;
-    const w = 0.05;
-    triOutline(c, m, w, px);
-    triOutline(c, m, w * 0.7, px, 0.42);
-    line(c, m, curl(-0.62, -0.84, 0.17, -1, 0), w * 0.9, px);
-    line(c, m, curl(0.62, -0.84, 0.17, 1, Math.PI), w * 0.9, px);
-    line(c, m, curl(0, -0.5, 0.11, 1, Math.PI / 2), w * 0.8, px);
-    line(c, m, [[-1.2, -1.0], [-1.0, -0.9], [-1.2, -0.8]], w * 0.8, px);
-    line(c, m, [[1.2, -1.0], [1.0, -0.9], [1.2, -0.8]], w * 0.8, px);
-    braid(c, m, w * 0.8, px, SW * 0.85, ARROW_CELL.Y0, -1.0);
-    line(c, m, [[-SW, ARROW_CELL.Y0], [-SW, -1]], w * 0.6, px);
-    line(c, m, [[SW, ARROW_CELL.Y0], [SW, -1]], w * 0.6, px);
+    if (layer === 0) filigreeHead(c, m, px, 0.08);
+    else if (layer === 1) filigreeHead(c, m, px, 0.04);
   },
   ornate: (c, m, layer, px) => {
     if (layer === 0) headFill(c, m);
@@ -411,30 +468,15 @@ const ARROW_SHAFT: Record<ArrowDesign, Painter> = {
     }
   },
   glyph: (c, m, layer, px) => {
-    if (layer !== 1) return;
-    line(c, m, [[0, -0.1], [0, 2.1]], 0.1, px);
-    for (let k = 0; k < 3; k++) {
-      const y = k;
-      line(c, m, [[0, y - 0.22], [-0.42, y], [0, y + 0.22], [0.42, y], [0, y - 0.22]], 0.12, px);
-      line(c, m, [[-0.7, y + 0.5], [0.7, y + 0.5]], 0.1, px);
-      line(c, m, [[-0.5, y + 0.62], [0.5, y + 0.62]], 0.08, px);
-    }
+    if (layer === 1) glyphShaft(c, m, px, 0.13);
   },
   glyph_light: (c, m, layer, px) => {
-    if (layer !== 0) return;
-    line(c, m, [[0, -0.1], [0, 2.1]], 0.07, px);
-    for (let k = 0; k < 3; k++) {
-      const y = k;
-      line(c, m, [[0, y - 0.22], [-0.42, y], [0, y + 0.22], [0.42, y], [0, y - 0.22]], 0.08, px);
-      line(c, m, [[-0.6, y + 0.5], [0.6, y + 0.5]], 0.07, px);
-    }
+    if (layer === 0) glyphShaft(c, m, px, 0.14);
+    else if (layer === 1) glyphShaft(c, m, px, 0.07);
   },
   filigree: (c, m, layer, px) => {
-    if (layer !== 0) return;
-    braid(c, m, 0.11, px, 0.78, -0.1, 2.1);
-    line(c, m, [[-1, -0.1], [-1, 2.1]], 0.07, px);
-    line(c, m, [[1, -0.1], [1, 2.1]], 0.07, px);
-    for (let k = 0; k < 3; k++) circle(c, m, 0, k + 0.5, 0.11, px);
+    if (layer === 0) filigreeShaft(c, m, px, 0.13);
+    else if (layer === 1) filigreeShaft(c, m, px, 0.065);
   },
   ornate: (c, m, layer, px) => {
     if (layer === 0) {
@@ -596,19 +638,42 @@ const FACE: Record<Exclude<FacePaint, 'none'>, Painter> = {
     c.fill();
   },
   fire_third_eye: (c, m, layer, px) => {
-    if (layer !== 0) return;
-    // An almond eye with a full iris, high on the forehead.
-    const top: Array<[number, number]> = [], bot: Array<[number, number]> = [];
-    for (let k = 0; k <= 20; k++) {
-      const x = -0.62 + (1.24 * k) / 20;
-      const h = 0.3 * Math.sqrt(Math.max(0, 1 - (x / 0.62) ** 2));
-      top.push([x, 1.48 + h]);
-      bot.push([x, 1.48 - h * 0.85]);
+    // An upright red eye in the middle of the forehead, as P'Li wore it: a red lens with a dark
+    // rim and pupil, dark lines rising from it toward the hairline and one running down between
+    // the brows, a bright glint.
+    const lens = (k: number): Array<[number, number]> => {
+      const pts: Array<[number, number]> = [];
+      for (let i = 0; i <= 32; i++) {
+        const a = (i / 32) * Math.PI * 2;
+        const y = 1.46 + Math.sin(a) * 0.5 * k;
+        const x = Math.cos(a) * 0.21 * k * Math.sqrt(Math.max(0, 1 - Math.sin(a) ** 2)) * 1.0;
+        pts.push([x, y]);
+      }
+      return pts;
+    };
+    if (layer === 0) {
+      poly(c, m, lens(1));
+      c.fill();
+    } else if (layer === 1) {
+      line(c, m, lens(1), 0.07, px);
+      smoothPoly(c, m, [
+        [0, 1.3],
+        [-0.06, 1.46],
+        [0, 1.62],
+        [0.06, 1.46],
+      ]);
+      c.fill();
+      line(c, m, [[0, 1.98], [0, 2.55]], 0.07, px);
+      for (const s of [1, -1]) {
+        line(c, m, [[0.05 * s, 1.94], [0.2 * s, 2.15], [0.3 * s, 2.45]], 0.06, px);
+        line(c, m, [[0.1 * s, 1.82], [0.36 * s, 1.96], [0.5 * s, 2.2]], 0.05, px);
+      }
+      line(c, m, [[0, 0.94], [0, 0.62]], 0.07, px);
+      line(c, m, [[0, 0.74], [0.12, 0.6]], 0.05, px);
+      line(c, m, [[0, 0.74], [-0.12, 0.6]], 0.05, px);
+    } else {
+      circle(c, m, 0.06, 1.58, 0.05, px);
     }
-    line(c, m, top, 0.09, px);
-    line(c, m, bot, 0.09, px);
-    circle(c, m, 0, 1.49, 0.2, px);
-    line(c, m, [[0, 1.86], [0, 2.1]], 0.07, px);
   },
   fire_painted_lady: (c, m, layer, px) => {
     if (layer === 0) {

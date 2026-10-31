@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { DEFAULT_APPEARANCE } from '../character/Appearance';
+import { DEFAULT_APPEARANCE, type Appearance } from '../character/Appearance';
 import { allTechniques, getTechnique } from '../combat/CombatSystem';
 import { TrainingDummy } from '../entities/TrainingDummy';
 import { LANDMARKS, STARTS } from '../world/WorldLayout';
@@ -71,9 +71,10 @@ export function installDebug(game: Game): void {
       };
     },
     /** Start a new campaign without going through the UI. */
-    async newGame(opts: { element?: Element; name?: string; slot?: string } = {}) {
+    async newGame(opts: { element?: Element; name?: string; slot?: string; appearance?: Partial<Appearance> } = {}) {
       const element = opts.element ?? 'water';
-      await game.newGame({ element, name: opts.name ?? 'Test Avatar', appearance: structuredClone(DEFAULT_APPEARANCE[element]), slot: opts.slot ?? 'slot3' });
+      const appearance = { ...structuredClone(DEFAULT_APPEARANCE[element]), ...(opts.appearance ?? {}) };
+      await game.newGame({ element, name: opts.name ?? 'Test Avatar', appearance, slot: opts.slot ?? 'slot3' });
       game.cameraRig.setScripted(null);
       game.player.controlLock = 0;
       ctx.ui.closeAll();

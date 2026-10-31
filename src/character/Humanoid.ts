@@ -306,6 +306,11 @@ export class Humanoid {
   // Glow & flash
   // ---------------------------------------------------------------------------
 
+  /** Glow of the face marking's main colour (0..1): a combustionbender's third eye while focusing. */
+  setFaceGlow(v: number): void {
+    this.material.cu.uFaceGlow.value = Math.max(0, v);
+  }
+
   /** Avatar State glow (0..1 each). Eyes blaze white-blue; tattoos glow if present; untattooed bodies get a luminous rim. */
   setGlow(eyes: number, tattoos: number, color?: THREE.ColorRepresentation): void {
     this.eyeGlow = Math.max(0, eyes);

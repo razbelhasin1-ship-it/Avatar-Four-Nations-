@@ -64,6 +64,8 @@ export interface TechniqueDef {
   range: number;
   /** Granted automatically when this element is unlocked. */
   starter?: boolean;
+  /** Never taught by a master: how it is gained instead (shown in the Technique Library). */
+  innate?: string;
   /** Only usable while the Avatar State / Elements Sphere is active. */
   requires?: 'avatarState' | 'elementsSphere';
   /** Number of chained steps for 'basic' combos (cast.comboIndex wraps). */

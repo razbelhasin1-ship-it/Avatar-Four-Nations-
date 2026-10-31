@@ -44,6 +44,8 @@ export interface CharUniforms {
   uFaceCol: { value: THREE.Color[] };
   /** Face projection: eye-line y, eye z, half distance between the eyes (bind pose, model space). */
   uFaceRef: { value: THREE.Vector4 };
+  /** Glow of the face paint's first colour (a combustionbender's third eye while focusing). */
+  uFaceGlow: { value: number };
   uGlowColor: { value: THREE.Color };
   uEyeGlow: { value: number };
   uTatGlow: { value: number };
@@ -88,6 +90,7 @@ uniform vec3 uArrowInk2;
 uniform float uFaceOn;
 uniform vec4 uFaceCell;
 uniform vec3 uFaceCol[3];
+uniform float uFaceGlow;
 uniform vec3 uGlowColor;
 uniform float uEyeGlow;
 uniform float uTatGlow;
@@ -155,6 +158,7 @@ vec2 charTattoo(vec3 tc) {
 }
 
 // Face paint: front projection of the face (eyes at x = ±1, y = 0), fading round the sides.
+vec3 charPaintK = vec3(0.0);
 vec3 charFacePaint(vec3 col) {
   if (uFaceOn < 0.5 || vFace.w < 0.5) return col;
   vec2 f = vFace.xy;
@@ -162,6 +166,7 @@ vec3 charFacePaint(vec3 col) {
   float front = smoothstep(-1.75, -1.05, vFace.z);
   vec2 uv = vec2((f.x + ${FACE_SPACE.X.toFixed(2)}) / ${(2 * FACE_SPACE.X).toFixed(2)}, (${FACE_SPACE.Y1.toFixed(2)} - f.y) / ${(FACE_SPACE.Y1 - FACE_SPACE.Y0).toFixed(2)});
   vec3 k = texture2D(uMarkTex, uFaceCell.xy + uv * uFaceCell.zw).rgb * front;
+  charPaintK = k;
   col = mix(col, uFaceCol[0], k.r);
   col = mix(col, uFaceCol[1], k.g);
   col = mix(col, uFaceCol[2], k.b);
@@ -192,6 +197,7 @@ const FRAG_EMISSIVE = /* glsl */ `
 float charRim = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 2.4);
 totalEmissiveRadiance += uGlowColor * (charTat * uTatGlow * 3.2 + vMat.w * uEyeGlow * 5.5 + charRim * uRim);
 totalEmissiveRadiance += uFlash;
+totalEmissiveRadiance += vec3(1.0, 0.42, 0.18) * charPaintK.r * uFaceGlow * 3.0;
 `;
 
 function patch(this: CharMaterial, shader: THREE.WebGLProgramParametersWithUniforms): void {
@@ -240,6 +246,7 @@ export class CharMaterial extends THREE.MeshStandardMaterial {
       uFaceCell: { value: new THREE.Vector4() },
       uFaceCol: { value: cols(3) },
       uFaceRef: { value: new THREE.Vector4(1.6, 0.1, 0.035, 0) },
+      uFaceGlow: { value: 0 },
       uGlowColor: { value: new THREE.Color('#bfe8ff') },
       uEyeGlow: { value: 0 },
       uTatGlow: { value: 0 },

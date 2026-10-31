@@ -13,6 +13,7 @@ import { AmbienceDirector } from './audio/AmbienceDirector';
 import { WaterContainers } from './world/WaterContainers';
 import { MusicSystem } from './audio/MusicSystem';
 import { AudioEvents } from './audio/AudioEvents';
+import { MarkingPerks } from './combat/techniques/fire/combustion';
 
 /**
  * Feature modules plug into the game here without editing Game.ts.
@@ -60,4 +61,6 @@ export const MODULES: GameModule[] = [
   { name: 'audio_ambience', order: 970, create: () => new AmbienceDirector() },
   { name: 'audio_music', order: 971, create: () => new MusicSystem() },
   { name: 'audio_events', order: 972, create: () => new AudioEvents() },
+  // Markings with powers: the Third Eye grants combustionbending to a Fire Nation character.
+  { name: 'marking_perks', order: 62, create: () => new MarkingPerks() },
 ];
