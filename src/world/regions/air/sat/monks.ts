@@ -50,6 +50,8 @@ interface Site {
   weight: number;
   /** Second endpoint for carriers; loop path for sweepers, scooters and the night watch. */
   path?: THREE.Vector3[];
+  /** Speed round a loop (scooters, chasing games). */
+  speed?: number;
   unlinked?: boolean;
 }
 
@@ -268,6 +270,11 @@ export class Monks {
     // Staff gliders off the summit launch.
     const ls = shelf('launch');
     this.site({ id: 'glide', kind: 'glide', door: v(ls.a, ls.r0 + 1, F(6)), slots: [{ ...polar(ls.a, ls.r1 - 1.5), yaw: yawOut(ls.a) }], pose: MPose.glide, acc: MAcc.glider, hours: [[9.5, 17.5]], who: ['adult', 'master', 'boy'], weight: 3 });
+    // Boys' chasing game round the labyrinth.
+    const lab = polar(254, 44);
+    const chase: THREE.Vector3[] = [];
+    for (let a = 0; a < 360; a += 20) chase.push(new THREE.Vector3(lab.x + Math.cos((a * Math.PI) / 180) * 8.6, F(4), lab.z + Math.sin((a * Math.PI) / 180) * 8.6));
+    this.site({ id: 'chase', kind: 'scooter', door: v(250, 52.8, F(4)), slots: [0, 1, 2].map(() => ({ ...polar(250, 52.8), yaw: 0 })), pose: MPose.walk, acc: MAcc.none, hours: [[9, 18]], who: ['boy'], weight: 3, path: chase, speed: 3.6 });
     // Night watch with lanterns along the road; herders asleep by the bison.
     this.site({ id: 'watch', kind: 'patrol', door: this.road[Math.floor(this.road.length * 0.3)].clone(), slots: [0, 1, 2, 3, 4].map(() => ({ x: 0, z: 0, yaw: 0 })), pose: MPose.walk, acc: MAcc.lantern, hours: [[19.5, 24], [0, 5.5]], who: ['adult', 'master'], weight: 5 });
     const sleepers = grounds.slice(0, 4).map((g) => {
@@ -382,7 +389,7 @@ export class Monks {
       let wt = 0;
       if (inHours(h, s.hours) && (s.who.includes('any') || s.who.includes(m.who)) && s.slots.some((sl) => sl.taken < 0)) {
         wt = s.weight;
-        if (s.kind === 'inside') wt = night ? 40 : 0.9;
+        if (s.kind === 'inside') wt = night ? 40 : 0.22;
         if (from) wt /= 1 + (from.distanceTo(s.door) / 45) ** 2;
         if (i === m.site) wt *= 0.2;
       }
@@ -498,6 +505,11 @@ export class Monks {
     if (this.lastHour >= 0 && this.lastHour < 5.5 && h >= 5.5 && h < 6) {
       const g = polar(LSITES.gong.th, LSITES.gong.r);
       ctx.audio.play('amb.bell', { position: { x: g.x, y: floorY(LEVEL_Y[4]) + 1.8, z: g.z }, volume: 1, range: 320 });
+    }
+    // A jump in the clock (a rest, a time skip): everyone takes up the new hour's activities at once.
+    if (this.lastHour >= 0) {
+      const dh = Math.abs(h - this.lastHour);
+      if (dh > 0.25 && dh < 23.75) this.place(h);
     }
     this.lastHour = h;
     const player = ctx.player?.root.position ?? null;
@@ -636,7 +648,7 @@ export class Monks {
 
   private act(m: Monk, dt: number, ctx: GameContext, h: number): void {
     const s = this.sites[m.site];
-    m.phase += dt * (m.pose === MPose.airbend ? 1.6 : m.pose === MPose.scooter ? 2.2 : 1.2);
+    m.phase += dt * (m.pose === MPose.airbend ? 1.6 : m.pose === MPose.scooter ? 2.2 : m.pose === MPose.walk && s.kind === 'scooter' ? ((s.speed ?? 3) / 0.62) * Math.PI : 1.2);
     const near = m.pos.distanceToSquared(ctx.camera.position) < 45 * 45;
     switch (s.kind) {
       case 'sweep':
@@ -679,7 +691,7 @@ export class Monks {
       case 'scooter': {
         // Race round the tower on air scooters.
         const path = s.path!;
-        m.u += (7.5 * dt) / 6;
+        m.u += ((s.speed ?? 7.5) * dt) / 6;
         const n = path.length;
         const f = (m.u + m.slot * (n / 4)) % n;
         const k = Math.floor(f), t = f - k;

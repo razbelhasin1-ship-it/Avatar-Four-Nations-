@@ -35,7 +35,7 @@ Road: one white switchback road, ~1.6 turns, L0 θ 190 → L1 → L2 → L3 → 
 - [x] 1 terrain + terrace blockout, road, mist, spires (walk test: 146 road points gate → summit, 0 stuck)
 - [x] 2 buildings + statue room (walk tests: road 145/145, trail → plaza, door shut/air-cast opens, into the chamber and back)
 - [x] 3 sky bison + lemurs + calling (soak: no invalid positions or bison in rock; dawn takeoff, dusk return, night roost)
-- [ ] 4 monks + routines
+- [x] 4 monks + routines (audit: 39 sites linked, walk samples touching colliders < 0.1%; 51 visible in the entrance court, 59 at the airball court)
 - [ ] 5 atmosphere + audio
 - [ ] 6 polish, perf, quests, tests, screenshots, report
 
@@ -66,4 +66,7 @@ Road: one white switchback road, ~1.6 turns, L0 θ 190 → L1 → L2 → L3 → 
   built colliders (12); one landing per ledge at a time (others circle); far herds tick every 4th frame; grounded
   bison have colliders. Whistle at either ledge: your own sky bison if bonded, else a temple bison lands and offers
   travel (map). Lemurs (sat/lemurs.ts): 34 on high, perch on the real balustrade tops and tower balconies.
+- Monks (sat/monks.ts, sat/monkFigures.ts, sat/walkgrid.ts): 170 on high (145 medium, 110 low); per-level 1.2 m
+  walkability grids from the built colliders + A* for every spur, slot approach, sweep loop and carry run; day plan by
+  site hours; a clock jump reseats everyone; far monks tick every 4th frame.
 - Masters "Sister Iio" and "Sister Yeshe": the monastery is men and boys only → renamed Brother (ids kept).
