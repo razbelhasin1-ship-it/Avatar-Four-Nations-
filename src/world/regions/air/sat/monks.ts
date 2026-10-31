@@ -4,7 +4,7 @@ import { Random } from '../../../../core/Random';
 import { COUNTS, LEVEL_Y, SEED, floorY, place, polar, rOutAt, roadSamples, shelf, summitRAt, terrace, yawOut, type PlaceId } from './layout';
 import { SITES as LSITES, airballPoles, meditationSpots, refectoryTables } from './levels';
 import { MAcc, MFlag, MPose, MonkRenderer, type MAccId, type MPoseId } from './monkFigures';
-import { WalkGrid, type Area } from './walkgrid';
+import { WalkGrid, blocksWalk, type Area } from './walkgrid';
 
 /**
  * The monks of the Southern Air Temple: ~170 men and boys living a day. They walk with purpose
@@ -118,7 +118,7 @@ export class Monks {
   private laughT = 3;
   private gustT = 0;
 
-  constructor(parent: THREE.Object3D, ctx: GameContext, quality: 'low' | 'medium' | 'high', grounds: Array<{ p: THREE.Vector3; yaw: number }>) {
+  constructor(parent: THREE.Object3D, ctx: GameContext, quality: 'low' | 'medium' | 'high', grounds: Array<{ p: THREE.Vector3; yaw: number }>, calves: Array<{ p: THREE.Vector3; yaw: number }> = []) {
     const n = quality === 'low' ? 110 : quality === 'medium' ? 150 : COUNTS.monks;
     this.renderer = new MonkRenderer(parent, n + 8);
     if (quality === 'low') this.renderer.setRange(38, 140);
@@ -127,7 +127,7 @@ export class Monks {
     parent.add(this.ball);
     // Road nodes every ~5 m from the gate plaza to the summit (y on the stairs follows the flights).
     for (const s of roadSamples(5)) this.road.push(new THREE.Vector3(s.x, floorY(s.y), s.z));
-    this.buildSites(ctx, grounds);
+    this.buildSites(ctx, grounds, calves);
     const areas: Record<number, Area[]> = {
       1: [{ a0: 258, a1: 342, r0: 56, r1: 101 }],
       2: [{ a0: 338, a1: 456, r0: 44, r1: 80 }],
@@ -168,7 +168,7 @@ export class Monks {
     this.sites.push({ ...o, attach: 0, level, via: [], slots: o.slots.map((s) => ({ x: s.x, z: s.z, y: s.y ?? o.door.y, yaw: s.yaw, taken: -1, via: [] })) });
   }
 
-  private buildSites(ctx: GameContext, grounds: Array<{ p: THREE.Vector3; yaw: number }>): void {
+  private buildSites(ctx: GameContext, grounds: Array<{ p: THREE.Vector3; yaw: number }>, calves: Array<{ p: THREE.Vector3; yaw: number }>): void {
     const F = (l: number) => floorY(LEVEL_Y[l]);
     const at = (id: PlaceId, dth = 0, dr = 0) => {
       const p = place(id, dth, dr);
@@ -258,6 +258,26 @@ export class Monks {
       return { ...p, y: g.p.y, yaw: Math.atan2(-sx, -sz) };
     });
     this.site({ id: 'tend', kind: 'slot', door: v(296, 77, F(1)), slots: tend, pose: MPose.work, acc: MAcc.none, hours: [[5.2, 9], [16.5, 20.5]], who: ['adult', 'boy', 'elder'], weight: 3 });
+    // A young monk stays with each calf (they cannot fly yet) through the day: beside it, on
+    // whichever side is clear of hay and troughs.
+    const keep: Array<{ x: number; z: number; y: number; yaw: number }> = [];
+    const homes: THREE.Vector3[] = [];
+    for (const c of calves) {
+      if (homes.some((h) => h.distanceTo(c.p) < 1)) continue;
+      homes.push(c.p);
+      const fx = Math.sin(c.yaw), fz = Math.cos(c.yaw), sx = Math.cos(c.yaw), sz = -Math.sin(c.yaw);
+      for (const [ox, oz] of [[sx * 1.9, sz * 1.9], [-sx * 1.9, -sz * 1.9], [fx * 2.3, fz * 2.3], [-fx * 2.3, -fz * 2.3]]) {
+        const x = c.p.x + ox, z = c.p.z + oz;
+        let clear = true;
+        ctx.world.collision.query(x, z, 1.5, (col) => {
+          if (clear && blocksWalk(ctx, col, x, z, 0.45, c.p.y)) clear = false;
+        });
+        if (!clear) continue;
+        keep.push({ x, z, y: c.p.y, yaw: Math.atan2(-ox, -oz) });
+        break;
+      }
+    }
+    if (keep.length) this.site({ id: 'calves', kind: 'slot', door: v(296, 77, F(1)), slots: keep, pose: MPose.work, acc: MAcc.none, hours: [[5.6, 20]], who: ['boy'], weight: 9 });
     // Whistling bison in at the ledges.
     for (const [i, id] of (['landing_main', 'landing_ne'] as const).entries()) {
       const s = shelf(id);

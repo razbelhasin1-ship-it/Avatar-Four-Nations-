@@ -51,7 +51,7 @@ export class SouthernAirTemple extends AirRegion {
       ['summit', () => buildSummit(k('summit'))],
       ['sanctuary', () => this.buildSanctuary()],
       ['herd', () => this.buildLife()],
-      ['spires', () => buildSpireRing(this.zone('spires', C, 700, { far: true }))],
+      ['spires', () => buildSpireRing(this.zone('spires', C, 700, { far: true }), this.rock!)],
       ['mist', () => this.buildMistSheets()],
     ];
   }
@@ -91,7 +91,7 @@ export class SouthernAirTemple extends AirRegion {
     this.group.add(this.herd.group);
     this.lemurs = new Lemurs(q);
     this.group.add(this.lemurs.group);
-    this.monks = new Monks(this.group, this.ctx, q, this.herd.restingPlaces());
+    this.monks = new Monks(this.group, this.ctx, q, this.herd.restingPlaces(), this.herd.calfHomes());
     this.overlay?.dispose();
     this.overlay = new SatOverlay(
       () => this.overlayLines(),

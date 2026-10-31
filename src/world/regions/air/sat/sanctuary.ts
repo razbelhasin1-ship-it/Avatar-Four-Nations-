@@ -110,14 +110,14 @@ void main() {
     vec3 d = uLamp[i] - vW;
     float dist = length(d);
     float att = 1.0 / (1.0 + dist * dist * 0.03);
-    light += uLampCol * att * (0.2 + 0.8 * max(dot(n, d / max(dist, 0.001)), 0.0));
+    light += uLampCol * (1.0 - 0.7 * uGlowAmt) * att * (0.2 + 0.8 * max(dot(n, d / max(dist, 0.001)), 0.0));
   }
   vec3 dd = uDoor - vW;
   float ddist = length(dd);
   light += vec3(0.7, 0.74, 0.82) * uDoorOpen * exp(-ddist * 0.16) * (0.3 + 0.7 * max(dot(n, dd / max(ddist, 0.001)), 0.0));
   // The glow climbs the spiral: everything below its front takes a faint blue wash.
   float on = uGlowAmt * clamp((uGlow - h) / 0.05, 0.0, 1.0);
-  light += vec3(0.1, 0.26, 0.62) * on * (0.55 + 0.45 * smoothstep(0.08, 0.0, abs(uGlow - h)));
+  light += vec3(0.12, 0.3, 0.8) * on * (0.75 + 0.5 * smoothstep(0.08, 0.0, abs(uGlow - h)));
   vec3 col = base * light;
   if (vKind > 2.5) col = vCol * 2.6;
   col = mix(col, vec3(0.62, 0.9, 1.0) * 4.2, vEye * on);

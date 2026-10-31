@@ -1,8 +1,7 @@
 import * as THREE from 'three';
 import { Random } from '../../../../core/Random';
 import { heightAt } from '../../../Heightfield';
-import { am, faceYaw, pine, waterfall, type Kit } from '../parts';
-import { rockSpireGeometry } from '../towers';
+import { faceYaw, pine, waterfall, type Kit } from '../parts';
 import { C, SEED, polar } from './layout';
 
 /**
@@ -32,44 +31,135 @@ export const SPIRES: Array<[number, number, number, number, boolean]> = [
   [352, 470, 25, 565, false],
 ];
 
-/** Tall rock spires topped with moss and pines, some with a waterfall falling into the clouds. */
-export function buildSpireRing(k: Kit): void {
+interface Spire {
+  geometry: THREE.BufferGeometry;
+  /** Surface radius at bearing a (radians, local) and height fraction t. */
+  radiusAt(a: number, t: number): number;
+  /** Axis offset (local x, z) at height fraction t (the column leans). */
+  axis(t: number): { x: number; z: number };
+  /** Strata ledges as height fractions (moss and pines cling to them). */
+  ledges: number[];
+}
+
+/**
+ * A karst spire: a fluted column that tapers as it rises, stepped in at strata ledges and closed by
+ * a rounded crown; its plan is irregular (deep grooves, lumps that twist with height) and it leans
+ * a little. Local frame: base centre at the origin, +Y up.
+ */
+function spire(seed: number, r: number, h: number): Spire {
+  const rnd = new Random(Math.floor(seed * 1000) + 7);
+  const radial = 30, rows = 56;
+  const n = 4 + Math.floor(rnd.range(0, 3));
+  const ledges: number[] = [];
+  for (let i = 0; i < n; i++) ledges.push(0.3 + (0.58 * (i + rnd.range(0.25, 0.75))) / n);
+  const lx = rnd.range(-0.05, 0.05) * h, lz = rnd.range(-0.05, 0.05) * h;
+  const crown = 0.9;
+  const prof = (t: number): number => {
+    let p = 1 - 0.55 * Math.pow(t, 1.25);
+    p *= 1 + 0.07 * Math.sin(t * 9.1 + seed) + 0.05 * Math.sin(t * 23.7 + seed * 2.3);
+    for (const l of ledges) if (t < l) p *= 1 + 0.07 * Math.min(1, (l - t) * 110);
+    if (t > crown) p *= Math.sqrt(Math.max(0, 1 - ((t - crown) / (1 - crown)) ** 2));
+    return p;
+  };
+  const radiusAt = (a: number, t: number): number => {
+    const flute = 0.11 * Math.abs(Math.sin(a * 3 + seed)) + 0.07 * Math.abs(Math.sin(a * 7 + seed * 1.7));
+    const lump = 0.16 * Math.sin(a * 2 + seed * 0.7 + t * 2.2) + 0.09 * Math.sin(a * 5 - t * 6.3 + seed);
+    return Math.max(0, r * prof(t) * (1 + flute + lump));
+  };
+  const axis = (t: number) => ({ x: lx * t * t, z: lz * t * t });
+  // Rows: even steps plus three tight ones at each ledge, so it reads as a shelf, not a bulge.
+  const ts: number[] = [];
+  for (let j = 0; j <= rows; j++) ts.push(j / rows);
+  for (const l of ledges) ts.push(l - 0.012, l - 0.002, l + 0.002);
+  ts.sort((a, b) => a - b);
+  const rowsT = ts.filter((t, i) => i === 0 || t - ts[i - 1] > 0.0015);
+  const P: number[] = [];
+  for (const t of rowsT) {
+    const o = axis(t);
+    for (let i = 0; i < radial; i++) {
+      const a = (i / radial) * Math.PI * 2;
+      const rr = radiusAt(a, t);
+      P.push(o.x + Math.cos(a) * rr, t * h, o.z + Math.sin(a) * rr);
+    }
+  }
+  const I: number[] = [];
+  const nRows = rowsT.length - 1;
+  for (let j = 0; j < nRows; j++) {
+    for (let i = 0; i < radial; i++) {
+      const a = j * radial + i, b = j * radial + ((i + 1) % radial), c = a + radial, d = b + radial;
+      I.push(a, c, b, b, c, d);
+    }
+  }
+  const top = axis(1);
+  const centre = P.length / 3;
+  P.push(top.x, h, top.z);
+  for (let i = 0; i < radial; i++) I.push(nRows * radial + i, centre, nRows * radial + ((i + 1) % radial));
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  g.setIndex(I);
+  g.computeVertexNormals();
+  return { geometry: g, radiusAt, axis, ledges };
+}
+
+/**
+ * Tall karst spires in the pinnacle's own rock (strata, cracks, moss on every ledge and on the
+ * crown), pines clinging to the ledges and crowning the tops, some with a waterfall falling into
+ * the clouds.
+ */
+export function buildSpireRing(k: Kit, rock: THREE.Material): void {
   const rnd = new Random(SEED + 77);
   SPIRES.forEach(([deg, d, r, topY, falls], i) => {
     const { x, z } = polar(deg, d);
     const base = Math.min(heightAt(x, z), 120) - 14;
     const h = topY - base;
-    const g = rockSpireGeometry(i * 9.13 + 41, r, h);
+    const s = spire(i * 9.13 + 41, r, h);
     const yaw = rnd.range(0, 6.28);
-    k.main.mesh(am('rockSpire'), g, { x, y: base, z, yaw });
-    g.dispose();
-    // Lean of the spire geometry (local +X).
-    const lean = h * 0.07 * Math.sin(i * 9.13 + 41) * 0.5;
-    const tx = x + Math.cos(yaw) * lean, tz = z - Math.sin(yaw) * lean;
-    const rt = r * 0.5;
-    const cap = new THREE.SphereGeometry(rt * 1.08, 18, 6, 0, Math.PI * 2, 0, Math.PI / 2);
-    cap.scale(1, 0.3, 1);
-    k.main.mesh(am('foliage'), cap, { x: tx, y: topY - 0.6, z: tz });
-    cap.dispose();
-    const pines = d < 400 ? 5 : 3;
-    for (let p = 0; p < pines; p++) {
-      const a = rnd.range(0, 6.28), dd = rnd.range(0, rt * 0.7);
-      pine(k, tx + Math.cos(a) * dd, topY + rt * 0.16, tz + Math.sin(a) * dd, p % 3, rnd.range(2.2, 3.4), rnd.range(0, 6), false);
+    k.main.mesh(rock, s.geometry, { x, y: base, z, yaw });
+    s.geometry.dispose();
+    // Local → world (the mesh is turned by yaw about +Y).
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const world = (lx: number, lz: number) => ({ x: x + lx * cy + lz * sy, z: z - lx * sy + lz * cy });
+    const near = d < 400;
+    // Pines on the crown.
+    const crownT = 0.97;
+    const ca = s.axis(crownT);
+    for (let p = 0; p < (near ? 4 : 2); p++) {
+      const a = rnd.range(0, 6.28), dd = rnd.range(0, s.radiusAt(a, crownT) * 0.6);
+      const w = world(ca.x + Math.cos(a) * dd, ca.z + Math.sin(a) * dd);
+      pine(k, w.x, base + h * crownT - 0.4, w.z, p % 3, rnd.range(2.4, 3.6), rnd.range(0, 6), false);
     }
-    // Moss streaks hanging off the rim.
-    for (let m = 0; m < 6; m++) {
-      const a = (m / 6) * Math.PI * 2 + rnd.range(-0.3, 0.3);
-      const len = rnd.range(8, 22);
-      k.main.box(am('foliage'), { x: tx + Math.cos(a) * rt * 0.98, y: topY - len / 2, z: tz + Math.sin(a) * rt * 0.98, sx: rnd.range(2, 4), sy: len, sz: 0.6, yaw: faceYaw(Math.cos(a), Math.sin(a)) });
+    // Pines clinging to the ledges (near spires only).
+    if (near) {
+      for (const l of s.ledges) {
+        for (let p = 0; p < 2; p++) {
+          const a = rnd.range(0, 6.28);
+          const t = l + 0.004;
+          const o = s.axis(t);
+          const rr = s.radiusAt(a, t) * 0.97;
+          const w = world(o.x + Math.cos(a) * rr, o.z + Math.sin(a) * rr);
+          pine(k, w.x, base + h * l, w.z, (p + 1) % 3, rnd.range(1.8, 2.8), rnd.range(0, 6), false);
+        }
+      }
     }
-    for (let s = 0; s < 3; s++) {
-      const t = (s + 0.5) / 3;
-      k.main.collider({ shape: 'cylinder', x: x + (tx - x) * t, y: base + h * t, z: z + (tz - z) * t, r: r * 0.85 * (1 - 0.45 * t), hy: h / 6, walkable: true, solid: true, surface: 'rock' });
+    // Colliders: stacked cylinders along the leaning axis.
+    for (let c = 0; c < 4; c++) {
+      const t = (c + 0.5) / 4;
+      const o = s.axis(t);
+      const w = world(o.x, o.z);
+      let rr = 0;
+      for (let q = 0; q < 12; q++) rr += s.radiusAt((q / 12) * Math.PI * 2, t) / 12;
+      k.main.collider({ shape: 'cylinder', x: w.x, y: base + h * t, z: w.z, r: rr * 0.92, hy: h / 8, walkable: true, solid: true, surface: 'rock' });
     }
     if (falls) {
-      const a = Math.atan2(C.z - tz, C.x - tx) + rnd.range(-0.6, 0.6);
-      const fx = Math.cos(a), fz = Math.sin(a);
-      waterfall(k, { id: `air:sat_spire_falls_${i}`, label: 'Spire falls', x: tx + fx * rt * 0.85, y: topY - 1.6, z: tz + fz * rt * 0.85, yaw: faceYaw(fx, fz), width: 4 + r * 0.1, drop: Math.min(260, topY - 300), out: 3, register: false });
+      const t = 0.94;
+      const o = s.axis(t);
+      const wc = world(o.x, o.z);
+      const ang = Math.atan2(C.z - wc.z, C.x - wc.x) + rnd.range(-0.6, 0.6);
+      const fx = Math.cos(ang), fz = Math.sin(ang);
+      // Local bearing of that direction, for the surface radius there.
+      const la = Math.atan2(fz * cy + fx * sy, fx * cy - fz * sy);
+      const rr = s.radiusAt(la, t) * 0.95;
+      waterfall(k, { id: `air:sat_spire_falls_${i}`, label: 'Spire falls', x: wc.x + fx * rr, y: base + h * t, z: wc.z + fz * rr, yaw: faceYaw(fx, fz), width: 4 + r * 0.1, drop: Math.min(260, base + h * t - 300), out: 3, register: false });
     }
   });
 }

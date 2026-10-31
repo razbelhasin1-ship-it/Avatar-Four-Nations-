@@ -355,7 +355,7 @@ export abstract class AirRegion implements RegionContent {
     if (win) {
       const h = ctx.world.sky.timeOfDay;
       const night = h < 6 ? 1 : h < 7.5 ? 1 - (h - 6) / 1.5 : h > 19 ? 1 : h > 17.5 ? (h - 17.5) / 1.5 : 0;
-      win.emissiveIntensity = 0.15 + night * 1.4;
+      win.emissiveIntensity = 0.02 + night * 1.5;
     }
     this.updateAmbient(dt, ctx);
     this.animate(dt, ctx);

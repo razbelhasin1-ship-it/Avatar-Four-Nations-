@@ -460,6 +460,7 @@ export class Herd {
   private ctx: GameContext | null = null;
   private readonly owned: Array<THREE.BufferGeometry | THREE.Material | THREE.Texture> = [];
   private stats: HerdStats = { total: 0, flying: 0, grounded: 0, calves: 0, near: 0, riders: 0, spots: 0 };
+  private calfSpots: Array<{ p: THREE.Vector3; yaw: number }> = [];
   // Scratch (no per-frame allocation).
   private readonly m4 = new THREE.Matrix4();
   private readonly q = new THREE.Quaternion();
@@ -520,6 +521,7 @@ export class Herd {
     // Resting places on the bison terrace, found against what is built there: calves by the hay
     // yard, adults along the terrace (bodies lying along it, clear of the road).
     const calfSpots = findSpots(ctx, calves, 272, 300, 70, 78, 0.9, 0.95, 4.4, []);
+    this.calfSpots = calfSpots;
     this.spots = findSpots(ctx, 14, 263, 337, 65.5, 77.6, 2.8, 1.95, 9.2, calfSpots.map((c) => c.p));
     // The landing ledges hold two resting bison each (clear of their landing lane in the middle).
     for (const i of [0, 1]) {
@@ -579,6 +581,11 @@ export class Herd {
   }
 
   /** Where bison rest on the terrace (monks tend them and sleep beside them). */
+  /** Where the calves (too young to fly) graze, by the hay yard. */
+  calfHomes(): Array<{ p: THREE.Vector3; yaw: number }> {
+    return this.calfSpots;
+  }
+
   restingPlaces(): Array<{ p: THREE.Vector3; yaw: number }> {
     return this.spots.slice(0, this.spots.length - 4);
   }

@@ -218,7 +218,7 @@ export function buildBisonTerrace(k: Kit): void {
   }
   // Watchtower at the terrace's west end.
   const wt = polar(266, 68);
-  P.roundTower(k, { x: wt.x, z: wt.z, y, r: 3.3, h: 26, roofH: 8.5, bands: 4, windows: 4, balcony: true, door: yawOut(266), base: 1.2 });
+  P.roundTower(k, { wall: 'plaster_white', band: 'stone_light', x: wt.x, z: wt.z, y, r: 3.3, h: 26, roofH: 8.5, bands: 4, windows: 4, balcony: true, door: yawOut(266), base: 1.2 });
   // Landing ledges: swirl markings, lanterns at the outer corners, a wind pennant.
   for (const id of ['landing_main', 'landing_ne']) {
     const s = shelf(id);
@@ -311,7 +311,7 @@ export function buildOrchards(k: Kit): void {
   };
   // A slender tower at the orchard's west end.
   const t1 = polar(347, 58);
-  P.roundTower(k, { x: t1.x, z: t1.z, y, r: 3.0, h: 28, roofH: 8.6, bands: 5, windows: 5, balcony: true, door: yawOut(347) });
+  P.roundTower(k, { wall: 'plaster_white', band: 'stone_light', x: t1.x, z: t1.z, y, r: 3.0, h: 28, roofH: 8.6, bands: 5, windows: 5, balcony: true, door: yawOut(347) });
   trees(345, 4.5, [58.5, 62.8, 67, 70.8], (p) => radiusOf(p.x, p.z) < edgeOf('halls', thetaOf(p.x, p.z)) + 3 || Math.hypot(p.x - t1.x, p.z - t1.z) < 5.4);
   const pool = polar(70, edgeOf('halls', 70) + 2.6);
   trees(60, 89, [edgeOf('halls', 75) + 4.5, 61.2], (p) => Math.hypot(p.x - pool.x, p.z - pool.z) < 5.2 || radiusOf(p.x, p.z) < edgeOf('halls', thetaOf(p.x, p.z)) + 3);
@@ -624,7 +624,7 @@ export function buildSummit(k: Kit): void {
   const y = FL(6);
   // Central tower on its stepped drum.
   const drumTop = P.steppedDisc(k, { x: C.x, z: C.z, y, r: 7.4, steps: 3, stepH: 0.5, stepW: 0.6 });
-  const towerTop = P.roundTower(k, { x: C.x, z: C.z, y: drumTop, r: TOWER.r, h: TOWER.h, roofH: 16, bands: 10, windows: 11, balcony: true, door: yawOut(96), segments: 28 });
+  const towerTop = P.roundTower(k, { wall: 'plaster_white', band: 'stone_light', x: C.x, z: C.z, y: drumTop, r: TOWER.r, h: TOWER.h, roofH: 16, bands: 10, windows: 11, balcony: true, door: yawOut(96), segments: 28 });
   // Prayer flags from the tower's balcony down to posts round the summit.
   const by = drumTop + TOWER.h * 0.78 + 1.0;
   for (const a of [45, 125, 315]) {
@@ -637,8 +637,8 @@ export function buildSummit(k: Kit): void {
   bellPavilion(k, bp.x, y, bp.z, yawOut(270) + Math.PI);
   // Two slender towers.
   const t2 = polar(222, 18), t3 = polar(330, 17.5);
-  P.roundTower(k, { x: t2.x, z: t2.z, y, r: 3.0, h: 30, roofH: 8.6, bands: 5, windows: 5, door: yawOut(222) });
-  P.roundTower(k, { x: t3.x, z: t3.z, y, r: 2.7, h: 23, roofH: 7.6, bands: 4, windows: 4, door: yawOut(330) });
+  P.roundTower(k, { wall: 'plaster_white', band: 'stone_light', x: t2.x, z: t2.z, y, r: 3.0, h: 30, roofH: 8.6, bands: 5, windows: 5, door: yawOut(222) });
+  P.roundTower(k, { wall: 'plaster_white', band: 'stone_light', x: t3.x, z: t3.z, y, r: 2.7, h: 23, roofH: 7.6, bands: 4, windows: 4, door: yawOut(330) });
   // The summit gate where the road arrives.
   const [ta, ra] = ROAD[ROAD.length - 2], [tb, rb] = ROAD[ROAD.length - 1];
   const a = polar(ta, ra), b = polar(tb, rb);
