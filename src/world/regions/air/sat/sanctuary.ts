@@ -757,8 +757,9 @@ export class Sanctuary {
   }
 
   /** Debug/tests: force the eye glow (0..1) or null to follow the Avatar State. */
+  /** Hold the eyes' glow at v (0–1) regardless of the Avatar State; null hands it back. */
   forceGlow(v: number | null): void {
-    this.forced = v;
+    this.forced = v === null ? null : Math.max(0, Math.min(1, v));
   }
 
   private onAvatar(active: boolean): void {

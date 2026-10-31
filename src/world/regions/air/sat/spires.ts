@@ -53,9 +53,9 @@ function spire(seed: number, r: number, h: number): Spire {
   const ledges: number[] = [];
   for (let i = 0; i < n; i++) ledges.push(0.3 + (0.58 * (i + rnd.range(0.25, 0.75))) / n);
   const lx = rnd.range(-0.05, 0.05) * h, lz = rnd.range(-0.05, 0.05) * h;
-  const crown = 0.9;
+  const crown = 0.86;
   const prof = (t: number): number => {
-    let p = 1 - 0.55 * Math.pow(t, 1.25);
+    let p = 1 - 0.66 * Math.pow(t, 1.1);
     p *= 1 + 0.07 * Math.sin(t * 9.1 + seed) + 0.05 * Math.sin(t * 23.7 + seed * 2.3);
     for (const l of ledges) if (t < l) p *= 1 + 0.07 * Math.min(1, (l - t) * 110);
     if (t > crown) p *= Math.sqrt(Math.max(0, 1 - ((t - crown) / (1 - crown)) ** 2));
@@ -63,7 +63,7 @@ function spire(seed: number, r: number, h: number): Spire {
   };
   const radiusAt = (a: number, t: number): number => {
     const flute = 0.11 * Math.abs(Math.sin(a * 3 + seed)) + 0.07 * Math.abs(Math.sin(a * 7 + seed * 1.7));
-    const lump = 0.16 * Math.sin(a * 2 + seed * 0.7 + t * 2.2) + 0.09 * Math.sin(a * 5 - t * 6.3 + seed);
+    const lump = 0.2 * Math.sin(a * 2 + seed * 0.7 + t * 3.1) + 0.1 * Math.sin(a * 5 - t * 7.3 + seed) + 0.06 * Math.sin(a * 11 + t * 13 + seed * 3.1);
     return Math.max(0, r * prof(t) * (1 + flute + lump));
   };
   const axis = (t: number) => ({ x: lx * t * t, z: lz * t * t });

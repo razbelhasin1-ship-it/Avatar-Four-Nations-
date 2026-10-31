@@ -98,7 +98,8 @@ float rn(vec3 p) {
   vec3 rock = mix(vec3(0.45, 0.40, 0.34), vec3(0.63, 0.56, 0.47), layer * 0.6 + big * 0.4);
   rock = mix(rock, rock * vec3(1.1, 0.98, 0.86), smoothstep(0.5, 0.9, rn(p * 0.07)));
   rock = mix(rock, rock * vec3(0.9, 0.95, 1.04), smoothstep(0.6, 0.95, rn(p * 0.05 + 9.0)));
-  rock *= 1.0 - 0.16 * smoothstep(0.82, 0.97, band) - 0.06 * smoothstep(0.15, 0.0, band);
+  float nearPin = 1.0 - smoothstep(96.0, 112.0, length(p.xz - vec2(${C.x.toFixed(1)}, ${C.z.toFixed(1)})));
+  rock *= 1.0 - (0.16 * smoothstep(0.82, 0.97, band) + 0.06 * smoothstep(0.15, 0.0, band)) * (0.25 + 0.75 * nearPin);
   // Rain streaks and fissures: long vertical smudges, darker in the cracks.
   float streak = rn(vec3(p.x * 0.55, p.y * 0.018, p.z * 0.55));
   rock *= 1.0 - 0.22 * smoothstep(0.55, 0.85, streak) * (1.0 - abs(wn.y));
@@ -112,7 +113,7 @@ float rn(vec3 p) {
   float below = 1e3;
   ${LEVEL_Y.slice(1).map((y) => `below = min(below, abs(${(BASE + y).toFixed(1)} - p.y - 3.5));`).join('\n  ')}
   float drip = smoothstep(3.6, 0.6, below) * smoothstep(0.35, 0.72, rn(vec3(p.x * 0.45, p.y * 0.07, p.z * 0.45))) * (1.0 - up);
-  drip *= 1.0 - smoothstep(96.0, 112.0, length(p.xz - vec2(${C.x.toFixed(1)}, ${C.z.toFixed(1)})));
+  drip *= nearPin;
   col = mix(col, moss * 0.8, drip * 0.75);
   float mesa = smoothstep(${(BASE + 1.2).toFixed(1)}, ${(BASE + 0.4).toFixed(1)}, p.y) * up;
   col = mix(col, mix(vec3(0.38, 0.47, 0.25), vec3(0.55, 0.53, 0.42), rn(p * 0.3)), mesa);
@@ -412,7 +413,7 @@ function cliffSkirts(k: Kit, rock: THREE.Material, rEdgeAt: (th: number) => numb
     const strata = 0.55 + 0.3 * Math.sin((yy / 3.4) * Math.PI * 2 + SK.noise2(a * 3, yy * 0.05) * 2.2) + 0.15 * Math.sin((yy / 8.3) * Math.PI * 2 + SK.noise2(a * 1.3 + 7, yy * 0.02) * 3.1);
     const flute = SK.noise2(Math.cos(a) * r * 0.32, Math.sin(a) * r * 0.32 + yy * 0.025);
     const blob = SK.noise2(Math.cos(a) * r * 0.06 + yy * 0.03, Math.sin(a) * r * 0.06);
-    return Math.max(0, 0.25 + strata * 0.75 + flute * 0.9 + blob * 0.8 + 0.4);
+    return Math.max(0, 0.25 + strata * 0.75 + flute * 1.15 + blob * 1.3 + 0.4);
   };
   const face = (pts: (i: number, yy: number) => [number, number], n: number, bottoms: number[], cut?: (i: number, yy: number, r: number) => boolean) => {
     const yMin = Math.min(...bottoms);
@@ -450,7 +451,8 @@ function cliffSkirts(k: Kit, rock: THREE.Material, rEdgeAt: (th: number) => numb
     (i, yy) => {
       const th = ths[i];
       const rEdge = rEdgeAt(th);
-      const r = rEdge + 0.05 - recess(th, yy, rEdge);
+      const foot = 1 - THREE.MathUtils.smoothstep(yy, bottoms[i] + 1.2, bottoms[i] + 3.8);
+      const r = rEdge + 0.05 - recess(th, yy, rEdge) * (1 - 0.92 * foot);
       return [Math.cos(th * DEG) * r, Math.sin(th * DEG) * r];
     },
     cols,
