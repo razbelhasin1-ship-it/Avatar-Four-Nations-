@@ -375,7 +375,9 @@ export function capitalGreen(x: number, z: number): boolean {
 
 /** Paved ground (streets, plaza, quays, crater floor): stone underfoot, no grass. */
 export function capitalPaved(x: number, z: number, h: number): boolean {
-  return h > 1.4 && inCapitalFootprint(x, z) && !capitalGreen(x, z);
+  if (h <= 1.4 || !inCapitalFootprint(x, z) || capitalGreen(x, z)) return false;
+  // Inside the palace ring wall: the barren, scorched rock of the palace hill.
+  return Math.hypot(x - FNC.V.x, z - FNC.V.z) > FNC.ringR + 1;
 }
 
 /** True where the capital forces the ground (vegetation is kept off streets, plaza, crater floor). */

@@ -58,7 +58,7 @@ Interiors: throne room (north wing), Royal Gallery (west wing), Agni Kai arena (
 - [x] 0 explore, rollback branch, design (this file)
 - [x] 1 layout blockout: terrain, harbor, sea wall, walls, roads, markers
 - [x] 2 Royal Plaza + Harbor City
-- [ ] 3 road, crater, Hari Bulkan
+- [x] 3 road, crater, Hari Bulkan
 - [ ] 4 palace exterior + interiors
 - [ ] 5 ships, tanks, crowds, vendors, events, audio
 - [ ] 6 polish, perf, debug overlay, walk test, 3 comparison passes, screenshots/fire-nation-capital/, report
@@ -77,4 +77,9 @@ Interiors: throne room (north wing), Royal Gallery (west wing), Agni Kai arena (
   now up. Affects BSS roofs only where they were black.
 - Road top: H0..H7 hairpins, then a final leg to (0, gateS+13) and straight north into the gate; walls split
   where they'd stand in another leg's roadway; hairpin landings with curved battlements.
+- P3: caldera.ts — square + proclamation dais, avenue (lanterns, dragon statues), ring street + spokes, waterfall
+  (air/geom waterfallRibbon + own water material, registered 'waterfall' source), Coronation Plaza, garden villa,
+  High Temple (+court for training_hira, catacombs stairwell), two academies, octagon plaza, ~5 rings of
+  mansions (pagodaTower 4-7 tiers) + noble houses in gaps, lip watchtowers + gate bunkers. Palace hill unpaved
+  (TODO P4: dark basalt drape over the hill — natural material shows grass).
 - Walk test (scratchpad/fnc/walk.mjs): quay → plaza → passage → Royal Way → 8 hairpins → gate → square → palace gate OK.
