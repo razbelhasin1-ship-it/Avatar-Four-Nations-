@@ -576,6 +576,11 @@ export class Herd {
     return { ...this.stats };
   }
 
+  /** Where bison rest on the terrace (monks tend them and sleep beside them). */
+  restingPlaces(): Array<{ p: THREE.Vector3; yaw: number }> {
+    return this.spots.slice(0, this.spots.length - 4);
+  }
+
   /** Positions of all bison (tests). */
   positions(): Array<{ x: number; y: number; z: number; state: State; calf: boolean }> {
     return this.agents.map((a) => ({ x: +a.pos.x.toFixed(1), y: +a.pos.y.toFixed(1), z: +a.pos.z.toFixed(1), state: a.state, calf: a.calf }));

@@ -8,6 +8,7 @@ import { buildRoad, buildEdges, roadInlayMaterial } from './sat/road';
 import { buildTerraces, floorY, pinnacleGeometry, rockMaterial } from './sat/rock';
 import { Herd } from './sat/herd';
 import { Lemurs } from './sat/lemurs';
+import { Monks } from './sat/monks';
 import { Sanctuary, buildSanctuaryShell, sanctuaryMaterial } from './sat/sanctuary';
 import { buildSpireRing } from './sat/spires';
 import type { P2 } from './parts';
@@ -57,6 +58,7 @@ export class SouthernAirTemple extends AirRegion {
   /** Sky bison and winged lemurs (tests reach them through debug.air.region()). */
   herd: Herd | null = null;
   lemurs: Lemurs | null = null;
+  monks: Monks | null = null;
   private session: GameContext | null = null;
 
   private buildPinnacle(): void {
@@ -81,7 +83,11 @@ export class SouthernAirTemple extends AirRegion {
     this.group.add(this.herd.group);
     this.lemurs = new Lemurs(q);
     this.group.add(this.lemurs.group);
-    if (this.session) this.herd.sessionStart(this.session);
+    this.monks = new Monks(this.group, this.ctx, q, this.herd.restingPlaces());
+    if (this.session) {
+      this.herd.sessionStart(this.session);
+      this.monks.sessionStart(this.session);
+    }
   }
 
   private buildMistSheets(): void {
@@ -97,6 +103,7 @@ export class SouthernAirTemple extends AirRegion {
     this.sanctuary?.update(dt, ctx);
     this.herd?.update(dt, ctx);
     this.lemurs?.update(dt);
+    this.monks?.update(dt, ctx);
   }
 
   // ---------------------------------------------------------------------------
@@ -111,6 +118,7 @@ export class SouthernAirTemple extends AirRegion {
     this.session = ctx;
     this.sanctuary?.sessionStart(ctx);
     this.herd?.sessionStart(ctx);
+    this.monks?.sessionStart(ctx);
     const reg = (id: string, pos: P2, y: number, radius: number, label: string, cooldown: number, fn: () => void) => {
       this.unregister.push(
         ctx.interactions.register({
@@ -181,6 +189,7 @@ export class SouthernAirTemple extends AirRegion {
     this.cooldowns.clear();
     this.sanctuary?.sessionEnd();
     this.herd?.sessionEnd();
+    this.monks?.sessionEnd();
     this.session = null;
   }
 
@@ -205,6 +214,8 @@ export class SouthernAirTemple extends AirRegion {
     this.herd = null;
     this.lemurs?.dispose();
     this.lemurs = null;
+    this.monks?.dispose();
+    this.monks = null;
     super.dispose(ctx);
   }
 

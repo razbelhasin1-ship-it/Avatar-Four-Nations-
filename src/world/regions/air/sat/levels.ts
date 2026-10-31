@@ -327,9 +327,30 @@ export function buildOrchards(k: Kit): void {
 // L3: quarters, practice yard, airball court
 // ---------------------------------------------------------------------------
 
+/** The airball court's poles: position and height (deterministic; monks hop between their tops). */
+export function airballPoles(): Array<{ x: number; z: number; y: number; h: number }> {
+  const rnd = new Random(SEED + 303);
+  const s = shelf('airball');
+  const c = polar(s.a, (s.r0 + s.r1) / 2);
+  const yaw = yawOut(s.a);
+  const out: Array<{ x: number; z: number; y: number; h: number }> = [];
+  for (let iu = -4; iu <= 4; iu++) {
+    for (let iv = -2; iv <= 2; iv++) {
+      const q = lp(c.x, c.z, yaw, iu * 2.25, iv * 3 + 1.4);
+      out.push({ x: q.x, z: q.z, y: floorY(s.y), h: 0.9 + rnd.range(0, 2.7) });
+    }
+  }
+  return out;
+}
+
+/** Centres and yaw of the refectory's two outdoor tables (benches 0.95 m either side). */
+export function refectoryTables(): Array<{ x: number; z: number; y: number; yaw: number }> {
+  const rr = edgeOf('halls', 14) + 0.4 + 9 / 2 + 0.8;
+  return [9.5, 18.5].map((a) => ({ ...polar(a, rr + 9.2), y: FL(2), yaw: yawOut(a) }));
+}
+
 export function buildQuarters(k: Kit): void {
   const y = FL(3);
-  const rnd = new Random(SEED + 303);
   hallOut(k, 101.5, 46.4, y, { w: 15, d: 9, storeys: 2, roof: 'slate', balcony: true });
   hallOut(k, 122, 46.4, y, { w: 14, d: 9, storeys: 2, roof: 'slate', balcony: true });
   hallOut(k, 164, 46.2, y, { w: 13, d: 7.5, storeys: 2, roof: 'blue' });
@@ -348,12 +369,7 @@ export function buildQuarters(k: Kit): void {
   const c = polar(s.a, rm);
   const yaw = yawOut(s.a);
   const sy = floorY(s.y);
-  for (let iu = -4; iu <= 4; iu++) {
-    for (let iv = -2; iv <= 2; iv++) {
-      const q = lp(c.x, c.z, yaw, iu * 2.25, iv * 3 + 1.4);
-      P.pole(k, q.x, sy, q.z, 0.9 + rnd.range(0, 2.7));
-    }
-  }
+  for (const p of airballPoles()) P.pole(k, p.x, sy, p.z, p.h);
   for (const side of [-1, 1]) {
     const q = lp(c.x, c.z, yaw, side * 11.4, 1.4);
     k.main.cylinder('wood_dark', { x: q.x, z: q.z, y: sy, r: 0.2, h: 4.6, segments: 8 }, { collide: true, walkable: false });
