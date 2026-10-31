@@ -101,11 +101,13 @@ export function roadPath(): RoadPoint[] {
   if (roadCache) return roadCache;
   const R = FNC.road;
   const pts: RoadPoint[] = [{ t: 0, s: R.s0 + 10, y: R.y0 - 0.6 }];
-  for (let k = 0; k <= R.legs; k++) {
+  // Hairpins H0..H(legs-1), then one last rising leg that turns straight north into the gate.
+  for (let k = 0; k < R.legs; k++) {
     const s = R.s0 - ((R.s0 - R.s1) * k) / R.legs;
     const y = R.y0 + ((R.y1 - R.y0) * k) / R.legs;
     pts.push({ t: (k % 2 === 0 ? 1 : -1) * R.lateral, s, y });
   }
+  pts.push({ t: 0, s: R.gateS + 13, y: R.y1 - 1.6 });
   pts.push({ t: 0, s: R.gateS, y: R.y1 });
   roadCache = pts;
   return pts;

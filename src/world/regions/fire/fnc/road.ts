@@ -39,28 +39,70 @@ export function* buildRoad(cap: Cap): Generator<unknown, void, unknown> {
     }
     const off = (k: number, u: number): P2 => atAxis(a.t + et * u + nt * k, a.s + es * u + ns * k);
     const trim = i === 0 ? 0 : 0.06, trimEnd = i === pts.length - 2 ? 0 : 0.06;
+    // Walls are split into runs wherever they would stand in another leg's roadway (acute turns).
+    const inOther = (q: P2): boolean => {
+      for (let j = 0; j < pts.length - 1; j++) {
+        if (j === i) continue;
+        const A = pts[j], B = pts[j + 1];
+        const ex = B.t - A.t, ez = B.s - A.s;
+        const tq = q.x - V.x, sq = q.z - V.z;
+        let u = ((tq - A.t) * ex + (sq - A.s) * ez) / (ex * ex + ez * ez);
+        u = Math.min(1, Math.max(0, u));
+        if (Math.hypot(tq - (A.t + ex * u), sq - (A.s + ez * u)) < R.half + 0.9) return true;
+      }
+      return false;
+    };
+    const runs = (list: P2[]): P2[][] => {
+      const out: P2[][] = [];
+      let cur: P2[] = [];
+      for (const q of list) {
+        if (inOther(q)) {
+          if (cur.length > 1) out.push(cur);
+          cur = [];
+        } else cur.push(q);
+      }
+      if (cur.length > 1) out.push(cur);
+      return out;
+    };
     const outer: P2[] = [], inner: P2[] = [];
-    for (let u = trim; u <= 1 - trimEnd + 1e-6; u += 0.05) {
+    for (let u = trim; u <= 1 - trimEnd + 1e-6; u += 0.025) {
       outer.push(off(R.half + 0.35, u));
       inner.push(off(-(R.half + 0.6), u));
     }
-    battlement(b, 'stone_dark', outer, { y: roadY, h: 1.05, thick: 0.7, cap: 'stone_tan' });
-    wallFace(b, 'stone_dark', inner, {
-      top: (x, z) => Math.max(roadY(x, z) + 1.2, heightAt(x - nt * 2.5, z - ns * 2.5) + 0.4),
-      bottom: (x, z) => roadY(x, z) - 0.4,
-      thick: 1.2,
-      collide: true,
-      cap: 'stone_tan',
-      capH: 0.4,
-    });
+    for (const run of runs(outer)) battlement(b, 'stone_dark', run, { y: roadY, h: 1.05, thick: 0.7, cap: 'stone_tan' });
+    for (const run of runs(inner)) {
+      wallFace(b, 'stone_dark', run, {
+        top: (x, z) => Math.max(roadY(x, z) + 1.2, heightAt(x - nt * 2.5, z - ns * 2.5) + 0.4),
+        bottom: (x, z) => roadY(x, z) - 0.4,
+        thick: 1.2,
+        collide: true,
+        cap: 'stone_tan',
+        capH: 0.4,
+      });
+    }
     if (i % 2 === 0) yield;
   }
 
-  // Watchtowers at the hairpins (outside the turn) and lanterns along the road.
+  // Hairpin landings: a paved platform at each turn, closed by a curved battlement on the outside.
   for (let k = 1; k < pts.length - 2; k++) {
     const p = pts[k];
     const side = Math.sign(p.t) || 1;
-    const c = atAxis(p.t + side * (R.half + 5.2), p.s);
+    const c = atAxis(p.t, p.s);
+    b.box('stone_tan', { x: c.x, y: p.y - 0.6, z: c.z, sx: R.half * 2 + 2.4, sy: 1.25, sz: R.half * 2 + 2.4 }, { collide: true, walkable: true, solid: true });
+    const arc: P2[] = [];
+    const rad = R.half + 1.6;
+    for (let a = -100; a <= 100.01; a += 20) {
+      const th = (a * Math.PI) / 180;
+      arc.push(atAxis(p.t + side * Math.cos(th) * rad, p.s + Math.sin(th) * rad));
+    }
+    battlement(b, 'stone_dark', side > 0 ? arc : arc.reverse(), { y: () => p.y, h: 1.05, thick: 0.7, cap: 'stone_tan' });
+  }
+  // Watchtowers at the hairpins (outside the turn) and lanterns along the road.
+  for (let k = 1; k < pts.length - 2; k++) {
+    const p = pts[k];
+    if (Math.abs(p.t) < 1) continue;
+    const side = Math.sign(p.t) || 1;
+    const c = atAxis(p.t + side * (R.half + 6.4), p.s);
     const base = Math.min(heightAt(c.x, c.z), p.y) - 4;
     const top = p.y + 9;
     b.block('stone_dark', { x: c.x, y: base, z: c.z, sx: 6, sy: top - base, sz: 6 }, { collide: true, walkable: true });

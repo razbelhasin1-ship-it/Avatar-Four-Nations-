@@ -61,7 +61,7 @@ export const PLAZA = {
   /** Parade ground in front of the main tower (Master Jeong's drill yard). */
   drill: { t: 0, s: 572, r: 13 },
   /** Main tower at the valley head; its passage climbs to the Royal Way. */
-  tower: { s0: 530, s1: 557, half: 24, passHalf: FNC.plaza.passHalf, topS: FNC.plaza.passTopS },
+  tower: { s0: 530, s1: 557, half: 30, passHalf: FNC.plaza.passHalf, topS: FNC.plaza.passTopS },
   /** Gatehouse on a platform at the harbour end, gate pavilions either side. */
   gatehouse: { t: 0, s: 646, w: 12, d: 9, plat: 1.4 },
   pavilions: [-26, 26] as number[],

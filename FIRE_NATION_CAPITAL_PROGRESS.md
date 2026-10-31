@@ -57,7 +57,7 @@ Interiors: throne room (north wing), Royal Gallery (west wing), Agni Kai arena (
 ## Phases
 - [x] 0 explore, rollback branch, design (this file)
 - [x] 1 layout blockout: terrain, harbor, sea wall, walls, roads, markers
-- [ ] 2 Royal Plaza + Harbor City
+- [x] 2 Royal Plaza + Harbor City
 - [ ] 3 road, crater, Hari Bulkan
 - [ ] 4 palace exterior + interiors
 - [ ] 5 ships, tanks, crowds, vendors, events, audio
@@ -70,4 +70,11 @@ Interiors: throne room (north wing), Royal Gallery (west wing), Agni Kai arena (
 - Harbour aprons are slabs over deep bed (sea foam reads a ~4 m height texture; a terrain quay step made foam spikes).
 - Region: fnc/FireCapital.ts (EarthRegion 'fire_capital'), builders harbor/plaza/city/road/caldera/palace.
 - Lakes in WorldLayout LAKES: hb_lake_n/s, hb_lake_w1/w2, hb_turtleduck_pond (level 134.7).
-- TODO P2: corner wall where the valley walls (|t| 34) meet the harbour walls (|t| 50) at s 655; bigger main tower.
+- P2: plaza (4-tier main tower with rising passage tunnel, 3+3 colonnaded halls + tank bays, gate pavilions,
+  gatehouse, quay steps, rim battlements + ballistae, corner walls); Harbor City ~1570 house stamps (N1..N8, cream
+  walls, red roof tints; middle alley row), Royal Way market, foundries (stacks in foundryStacks), Zoryu Park.
+- Fixed a shared bug in earth/geom.ts roofInto: square hip roofs had zero normals at the apex (black patches);
+  now up. Affects BSS roofs only where they were black.
+- Road top: H0..H7 hairpins, then a final leg to (0, gateS+13) and straight north into the gate; walls split
+  where they'd stand in another leg's roadway; hairpin landings with curved battlements.
+- Walk test (scratchpad/fnc/walk.mjs): quay → plaza → passage → Royal Way → 8 hairpins → gate → square → palace gate OK.

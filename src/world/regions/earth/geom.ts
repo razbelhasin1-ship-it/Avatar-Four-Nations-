@@ -184,6 +184,9 @@ export function roofInto(g: GeoBuilder, o: RoofOpts): void {
         _a.set(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
         _b.set(c[0] - d[0], c[1] - d[1], c[2] - d[2]);
         _c.crossVectors(_a, _b).normalize();
+        // A hip roof on a square plan meets in one apex: its rows collapse to a point and the
+        // finite-difference normal is zero there (rendered black). Point it straight up instead.
+        if (_c.lengthSq() < 0.5) _c.set(0, 1, 0);
         if (_c.y < 0) _c.negate();
         const k = (base + j * W + i) * 3;
         g.nrm[k] = _c.x;
