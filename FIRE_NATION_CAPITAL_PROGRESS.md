@@ -1,0 +1,66 @@
+# Fire Nation Capital rework — progress (temporary; delete when done)
+
+Rollback branch: `before-fire-capital-rework` (pushed). Work branch: `ccr-bee3c9ee-5j48is`.
+Wiki: avatar.fandom.com is blocked by the environment's network policy — built from the brief + the two series frames.
+Story states (invasion, eclipse, comet sky, coronation): **none exist in the game** — nothing to preserve.
+
+## Scope
+ONLY the capital: First Lord's Harbor + sea wall, Royal Plaza, Harbor City (+ Zoryu Park, hill districts, foundries),
+Sozin's switchback road, crater lip + gate, Hari Bulkan, Royal Palace (+ interiors).
+Untouched: Sun Warrior Ruins (terrain around them is blended back to the old volcano flank so they look the same),
+Ember Island, Western Causeway bridge, every other region. Shared-system edits must be additive.
+
+## Engine decisions
+- New capital = `EarthRegion` subclass (chunks + distance LOD + atlas house archetypes N1..N8 with red roof tint +
+  generator build), in `src/world/regions/fire/fnc/`. Fire parts (`fire/parts.ts`: roof/hall/pagoda/brazier/crest…)
+  build on chunk builders; FlameField for braziers/torches.
+- Crowds: `earth/bssFigures` FigureRenderer (instanced, 2 LODs) + `earth/bssNav` NavGraph, new Fire Nation
+  accessories appended additively (flame crown, skull helm, bell helm, sage hat, spear).
+- Terrain: `world/landforms/fireCapital.ts` (pure) replaces the old VOLCANO block inside Heightfield;
+  old formula kept and blended in around the ruins.
+
+## Frame (all metres; north = −Z, east = +X)
+- V = volcano / palace centre = (−1330, 1040). Axis: V → south (+Z) to the sea gate.
+- Polar: r = distance from V, φ = atan2(dz, dx) in degrees (0 E, 90 S, 180 W, 270/−90 N).
+- Sea gate (sea wall) at s = 720 (z 1760). L = 720.
+
+| s from V (south) | zone | elevation |
+|---|---|---|
+| 560–720 | First Lord's Harbor basin (funnel 76 → 220 m wide), sea wall + Gates of Azulon at 720 | water 0, quays 2.6 |
+| 470–560 | Royal Plaza (forum 36 × 90 between the side halls, pools, gatehouse) | 3.2 |
+| 470 | Main tower across the valley head; narrow passage (stair) up to Harbor City | 3.2 → 14 |
+| 250–470 | Harbor City, radial (ring streets + spokes), φ −55…185 | 14 → 46 |
+| 122–250 | Sozin's road: 8 switchback legs on the south face, towers ~every 90 m | 46 → 142 |
+| 0–122 | crater lip 142 (jagged peaks to ~215), floor 136, palace hill to 147 | |
+
+Districts: South hill (both slopes flanking the plaza), North hill (NE, φ −50…10), Foundries (φ 20…55),
+East gate (causeway road, φ ≈ 0, r ≈ 320), Zoryu Park (W, φ 150…185), markets on the Royal Way (φ 90) and ring junctions.
+Hari Bulkan: palace ring wall 12-gon r 42; square south of it (r 45–78); avenue to the crater gate (φ 90);
+big lake E (φ −15…40) with waterfall from the east wall; small lakes W; octagonal plaza W (φ 180, r 85);
+Coronation Temple + plaza SE (φ 45, r 78) by the lake; palace garden villa + turtle-duck pond SW (φ 130, r 75);
+High Temple (Fire Sages, catacombs entrance) NW (φ 235, r 82); Royal Fire Academy for Girls NE (φ 300, r 88);
+tall narrow mansions elsewhere, some on the lip.
+Palace: courtyard behind the south gate; central triple-eave tower; two front wings with end towers; throne wing north.
+Interiors: throne room (north wing), Royal Gallery (west wing), Agni Kai arena (upper floor, east wing terrace).
+
+## Gameplay hooks (old → new)
+- STARTS.fire spawn (−1310,1230) → Royal Plaza central avenue; landmark fn_plaza → plaza.
+- fn_harbor (dock, fast travel) → First Lord's Harbor quay; dock_fn_* spots → new quays; merchant_fn_3 → harbour fish market.
+- fn_palace → palace gate; fn_arena → palace Agni Kai arena; fn_turtleduck_pond → garden villa pond (habitat_turtleduck_1).
+- giver_fn_elder / fn_elder (Sage Hira, quest 'meet') → Royal Plaza. master_jeong + training_jeong → Royal Plaza
+  drill yard (first master stays near the start). master_hira + training_hira + shrine_fire_sages (Sage Ryo, braziers
+  quest) → High Temple court in Hari Bulkan. merchant_fn_1/2 → Harbor City market; merchant_fn_beasts → Harbor City stables.
+- viewpoint_fn_* re-placed (palace stair → crater gate, rim gate → crater lip).
+- ROADS fire_causeway_road re-routed from the causeway end to Harbor City's east gate.
+- Old modules removed: capital.ts, cityRing.ts, harbor.ts, rimGate.ts (+ old CAPITAL layout).
+
+## Phases
+- [x] 0 explore, rollback branch, design (this file)
+- [ ] 1 layout blockout: terrain, harbor, sea wall, walls, roads, markers
+- [ ] 2 Royal Plaza + Harbor City
+- [ ] 3 road, crater, Hari Bulkan
+- [ ] 4 palace exterior + interiors
+- [ ] 5 ships, tanks, crowds, vendors, events, audio
+- [ ] 6 polish, perf, debug overlay, walk test, 3 comparison passes, screenshots/fire-nation-capital/, report
+
+## Notes / log
