@@ -36,7 +36,7 @@ Road: one white switchback road, ~1.6 turns, L0 θ 190 → L1 → L2 → L3 → 
 - [x] 2 buildings + statue room (walk tests: road 145/145, trail → plaza, door shut/air-cast opens, into the chamber and back)
 - [x] 3 sky bison + lemurs + calling (soak: no invalid positions or bison in rock; dawn takeoff, dusk return, night roost)
 - [x] 4 monks + routines (audit: 39 sites linked, walk samples touching colliders < 0.1%; 51 visible in the entrance court, 59 at the airball court)
-- [ ] 5 atmosphere + audio
+- [x] 5 atmosphere + audio (recipes render clean; loops start after unlock; no unknown sounds)
 - [ ] 6 polish, perf, quests, tests, screenshots, report
 
 ## Markers moved
@@ -69,4 +69,8 @@ Road: one white switchback road, ~1.6 turns, L0 θ 190 → L1 → L2 → L3 → 
 - Monks (sat/monks.ts, sat/monkFigures.ts, sat/walkgrid.ts): 170 on high (145 medium, 110 low); per-level 1.2 m
   walkability grids from the built colliders + A* for every spur, slot approach, sweep loop and carry run; day plan by
   site hours; a clock jump reseats everyone; far monks tick every 4th frame.
+- Sound (sat/audio.ts): wind whistle rising with height (over the world's base wind), sanctuary hum inside the chamber
+  and tunnel, monks' chant loudness from how many meditate, bison groans and the nearest flier's tail whooshes,
+  airbending gusts with the monks' air puffs, scooter whirrs, boys laughing; dawn gong. Instanced pines and orchard
+  trees sway in the wind (air materials).
 - Masters "Sister Iio" and "Sister Yeshe": the monastery is men and boys only → renamed Brother (ids kept).

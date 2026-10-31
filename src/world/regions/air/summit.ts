@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import type { GameContext } from '../../../core/GameContext';
 import { AirRegion } from './AirRegion';
-import { BASE, C, LEVEL_Y, place, polar, shelf } from './sat/layout';
+import { BASE, C, LEVEL_Y, SANCTUARY, place, polar, sanctuaryFace, shelf } from './sat/layout';
 import { SITES, buildBisonTerrace, buildCourts, buildGatePlaza, buildHalls, buildOrchards, buildQuarters, buildSummit, meditationSpots } from './sat/levels';
 import { buildMist } from './sat/mist';
 import { buildRoad, buildEdges, roadInlayMaterial } from './sat/road';
 import { buildTerraces, floorY, pinnacleGeometry, rockMaterial } from './sat/rock';
+import './sat/audio';
+import type { LoopHandle } from '../../../audio/AudioEngine';
 import { Herd } from './sat/herd';
 import { Lemurs } from './sat/lemurs';
 import { Monks } from './sat/monks';
@@ -60,6 +62,7 @@ export class SouthernAirTemple extends AirRegion {
   lemurs: Lemurs | null = null;
   monks: Monks | null = null;
   private session: GameContext | null = null;
+  private loops: { wind: LoopHandle | null; hum: LoopHandle | null; chant: LoopHandle | null } = { wind: null, hum: null, chant: null };
 
   private buildPinnacle(): void {
     const k = this.zone('pinnacle', C, 110);
@@ -104,6 +107,33 @@ export class SouthernAirTemple extends AirRegion {
     this.herd?.update(dt, ctx);
     this.lemurs?.update(dt);
     this.monks?.update(dt, ctx);
+    this.soundscape(ctx);
+  }
+
+  /** Wind stronger the higher you climb, the sanctuary's hum inside it, the monks' chant at dusk and dawn. */
+  private soundscape(ctx: GameContext): void {
+    const pl = ctx.player;
+    if (!pl || !this.session) return;
+    if (!this.loops.wind && ctx.audio.ready) {
+      // Started once the audio is unlocked (a session can begin before the first gesture).
+      const med = meditationSpots()[1];
+      this.loops = {
+        wind: ctx.audio.loop('sat_wind', { volume: 0 }),
+        hum: ctx.audio.loop('sat_sanctuary', { volume: 0 }),
+        chant: med ? ctx.audio.loop('sat_chant', { volume: 0, position: new THREE.Vector3(med.x, med.y + 1, med.z), range: 110 }) : null,
+      };
+    }
+    const p = pl.root.position;
+    const d = Math.hypot(p.x - C.x, p.z - C.z);
+    const inside = d < SANCTUARY.r + 0.5 && p.y < BASE + SANCTUARY.ceil && p.y > BASE + SANCTUARY.floor - 1;
+    const tunnel = !inside && this.sanctuary?.state.open === 1 && d < sanctuaryFace() + 3 && Math.abs(p.y - (BASE + 66)) < 6 && Math.abs(((Math.atan2(p.z - C.z, p.x - C.x) * 180) / Math.PI + 360 - SANCTUARY.th + 540) % 360 - 180) < 12;
+    const near = Math.max(0, Math.min(1, (420 - d) / 200));
+    // The world's ambience already carries a base wind: this one adds the high whistle as you climb.
+    const height = Math.max(0, Math.min(1, (p.y - BASE - 10) / 110));
+    this.loops.wind?.setVolume(inside ? 0.03 : tunnel ? 0.12 : near * height * 0.5);
+    this.loops.hum?.setVolume(inside ? 0.9 : tunnel ? 0.35 : 0);
+    const chanters = this.monks?.chanting ?? 0;
+    this.loops.chant?.setVolume(Math.min(1, chanters / 10) * 0.9);
   }
 
   // ---------------------------------------------------------------------------
@@ -119,6 +149,7 @@ export class SouthernAirTemple extends AirRegion {
     this.sanctuary?.sessionStart(ctx);
     this.herd?.sessionStart(ctx);
     this.monks?.sessionStart(ctx);
+
     const reg = (id: string, pos: P2, y: number, radius: number, label: string, cooldown: number, fn: () => void) => {
       this.unregister.push(
         ctx.interactions.register({
@@ -190,6 +221,8 @@ export class SouthernAirTemple extends AirRegion {
     this.sanctuary?.sessionEnd();
     this.herd?.sessionEnd();
     this.monks?.sessionEnd();
+    for (const l of Object.values(this.loops)) l?.stop(0.5);
+    this.loops = { wind: null, hum: null, chant: null };
     this.session = null;
   }
 

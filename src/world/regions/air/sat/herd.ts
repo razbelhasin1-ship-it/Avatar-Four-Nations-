@@ -454,6 +454,8 @@ export class Herd {
   private laneHold: Array<Agent | null> = [null, null];
   /** Bison on their way down (approaching or landing), counted each frame. */
   private inbound = 0;
+  private groanT = 6;
+  private strokePrev = 0;
   private time = 0;
   private ctx: GameContext | null = null;
   private readonly owned: Array<THREE.BufferGeometry | THREE.Material | THREE.Texture> = [];
@@ -710,6 +712,7 @@ export class Herd {
     this.stats.grounded = grounded;
     this.stats.total = this.agents.length;
     this.stats.calves = this.calves;
+    this.sounds(dt, ctx);
     this.render(ctx);
   }
 
@@ -884,6 +887,32 @@ export class Herd {
         }
         break;
       }
+    }
+  }
+
+  /** Now and then a groan from a bison nearby; the nearest flier's tail strokes whoosh. */
+  private sounds(dt: number, ctx: GameContext): void {
+    const cam = ctx.camera.position;
+    this.groanT -= dt;
+    if (this.groanT <= 0) {
+      this.groanT = this.rnd.range(9, 24);
+      const a = this.agents[this.rnd.int(0, this.agents.length - 1)];
+      if (a.pos.distanceTo(cam) < 170) ctx.audio.play(a.calf ? 'creature.skybison.huff' : 'creature.skybison.groan', { position: a.pos, volume: a.calf ? 0.6 : 0.85, range: 320, pitch: a.calf ? 1.4 : this.rnd.range(0.9, 1.08) });
+    }
+    let best: Agent | null = null, bd = 45 * 45;
+    for (const a of this.agents) {
+      if (a.clip !== 'fly') continue;
+      const d = a.pos.distanceToSquared(cam);
+      if (d < bd) {
+        bd = d;
+        best = a;
+      }
+    }
+    if (!best) return;
+    const stroke = Math.floor(best.phase / (Math.PI * 2));
+    if (stroke !== this.strokePrev) {
+      this.strokePrev = stroke;
+      ctx.audio.play('sat_whoosh', { position: best.pos, volume: 0.65, range: 70, pitch: this.rnd.range(0.9, 1.1) });
     }
   }
 

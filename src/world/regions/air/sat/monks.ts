@@ -113,6 +113,10 @@ export class Monks {
   private readonly tv = new THREE.Vector3();
   private fx = 0;
   stats = { total: 0, visible: 0, inside: 0, walking: 0, acting: 0, gliding: 0 };
+  /** Monks meditating on the terraces right now (the chant's loudness). */
+  chanting = 0;
+  private laughT = 3;
+  private gustT = 0;
 
   constructor(parent: THREE.Object3D, ctx: GameContext, quality: 'low' | 'medium' | 'high', grounds: Array<{ p: THREE.Vector3; yaw: number }>) {
     const n = quality === 'low' ? 110 : quality === 'medium' ? 145 : COUNTS.monks;
@@ -516,7 +520,9 @@ export class Monks {
     const cam = ctx.camera.position;
     this.renderer.begin(cam);
     this.renderer.view(ctx.camera);
-    let vis = 0, inside = 0, walking = 0, acting = 0, gliding = 0;
+    let vis = 0, inside = 0, walking = 0, acting = 0, gliding = 0, chant = 0;
+    this.laughT -= dt;
+    this.gustT -= dt;
     this.fx = Math.max(0, this.fx - dt * 8);
     for (const m of this.monks) {
       const far = m.pos.distanceToSquared(cam) > 130 * 130;
@@ -530,7 +536,10 @@ export class Monks {
       }
       if (m.state === 'walk') walking++;
       else if (m.state === 'glide') gliding++;
-      else acting++;
+      else {
+        acting++;
+        if (m.pose === MPose.meditate) chant++;
+      }
       if (!this.renderer.visible(m.pos.x, m.pos.y, m.pos.z)) continue;
       vis++;
       const moving = m.state === 'walk' || m.pose === MPose.sweep || m.pose === MPose.carry;
@@ -543,6 +552,8 @@ export class Monks {
     this.stats.walking = walking;
     this.stats.acting = acting;
     this.stats.gliding = gliding;
+    this.chanting = chant;
+    this.voices(ctx);
   }
 
   private tick(m: Monk, dt: number, ctx: GameContext, h: number, player: THREE.Vector3 | null): void {
@@ -669,7 +680,7 @@ export class Monks {
           this.fx += 1;
           this.tv.set(m.pos.x + Math.sin(m.yaw) * 0.9, m.pos.y + 0.15, m.pos.z + Math.cos(m.yaw) * 0.9);
           ctx.vfx.burst('dust', this.tv, { count: 2, radius: 0.4, size: 0.7 });
-          ctx.vfx.burst('air', this.tv, { count: 1, radius: 0.3, size: 0.6 });
+          this.gust(ctx, this.tv, 1, 0.3, 0.6);
         }
         break;
       }
@@ -701,7 +712,7 @@ export class Monks {
         if (near && this.fx < 6 && (this.frame + m.i) % 20 === 0) {
           this.fx += 1;
           this.tv.set(m.pos.x, m.pos.y + 0.2, m.pos.z);
-          ctx.vfx.burst('air', this.tv, { count: 2, radius: 0.5, size: 0.8 });
+          this.gust(ctx, this.tv, 2, 0.5, 0.8);
         }
         break;
       }
@@ -733,7 +744,7 @@ export class Monks {
           if (other) {
             this.ballTo.set(other.pos.x, other.pos.y + 1.2, other.pos.z);
             this.ballT = 0;
-            ctx.vfx.burst('air', this.ballFrom, { count: 3, radius: 0.4, size: 0.8 });
+            this.gust(ctx, this.ballFrom, 3, 0.4, 0.8);
           }
         }
         break;
@@ -748,7 +759,7 @@ export class Monks {
           m.pose = MPose.glide;
           m.pitch = 1.42;
           m.from.copy(m.pos);
-          if (near) ctx.vfx.burst('air', m.pos, { count: 6, radius: 1, size: 1.2 });
+          if (near) this.gust(ctx, m.pos, 6, 1, 1.2);
         }
         break;
       }
@@ -764,7 +775,7 @@ export class Monks {
         if (m.pose === MPose.airbend && near && this.fx < 6 && Math.sin(m.phase * 1.0) > 0.995) {
           this.fx += 1;
           this.tv.set(m.pos.x + Math.sin(m.yaw) * 0.6, m.pos.y + 1.1, m.pos.z + Math.cos(m.yaw) * 0.6);
-          ctx.vfx.burst('air', this.tv, { count: 2, radius: 0.5, size: 0.9 });
+          this.gust(ctx, this.tv, 2, 0.5, 0.9);
         }
       }
     }
@@ -834,6 +845,40 @@ export class Monks {
     }
   }
 
+  /** Boys laughing at their games, scooters whirring past, now and then. */
+  private voices(ctx: GameContext): void {
+    const cam = ctx.camera.position;
+    if (this.laughT <= 0) {
+      this.laughT = this.rnd.range(4, 11);
+      let best: Monk | null = null, bd = 40 * 40;
+      for (const m of this.monks) {
+        if (m.who !== 'boy' || m.state !== 'act') continue;
+        const k = this.sites[m.site]?.kind;
+        if (k !== 'airball' && k !== 'scooter') continue;
+        const d = m.pos.distanceToSquared(cam);
+        if (d < bd && this.rnd.chance(0.5)) {
+          bd = d;
+          best = m;
+        }
+      }
+      if (best) ctx.audio.play('sat_laugh', { position: best.pos, volume: 0.7, range: 60, pitch: this.rnd.range(0.9, 1.15) });
+    }
+    for (const m of this.monks) {
+      if (m.pose !== MPose.scooter || m.state !== 'act') continue;
+      const d = m.pos.distanceToSquared(cam);
+      if (d < 14 * 14 && (this.frame + m.i) % 50 === 0) ctx.audio.play('sat_whirr', { position: m.pos, volume: 0.6, range: 30 });
+    }
+  }
+
+  /** An airbending gust: the puff of air and its sound (rate-limited). */
+  private gust(ctx: GameContext, p: THREE.Vector3, count: number, radius: number, size: number): void {
+    ctx.vfx.burst('air', p, { count, radius, size });
+    if (this.gustT <= 0) {
+      this.gustT = this.rnd.range(0.8, 1.6);
+      ctx.audio.play('sat_gust', { position: p, volume: 0.35, range: 35, pitch: this.rnd.range(0.85, 1.2) });
+    }
+  }
+
   private updateBall(dt: number, ctx: GameContext): void {
     if (this.ballT >= 1) {
       this.ball.visible = false;
@@ -844,7 +889,7 @@ export class Monks {
     this.ball.visible = true;
     this.ball.position.lerpVectors(this.ballFrom, this.ballTo, t);
     this.ball.position.y += Math.sin(t * Math.PI) * 2.2;
-    if (t >= 1) ctx.vfx.burst('air', this.ballTo, { count: 3, radius: 0.4, size: 0.8 });
+    if (t >= 1) this.gust(ctx, this.ballTo, 3, 0.4, 0.8);
   }
 
   /** Monk positions (tests). */

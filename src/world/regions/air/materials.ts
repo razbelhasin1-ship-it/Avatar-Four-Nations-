@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Random } from '../../../core/Random';
 import { emblemBanner, roofTiles } from '../../kit/Textures';
 import { createWaterMaterial } from '../../Water';
+import { attachEnvUniforms } from '../../env/EnvShared';
 
 /**
  * Air Temple specific materials (teal-blue roof tiles, labyrinth paving, straw,
@@ -142,11 +143,11 @@ function create(name: AirMaterialName): THREE.Material {
       return new THREE.MeshStandardMaterial({ color: '#ffffff', map: t, roughness: 1 });
     }
     case 'foliage':
-      return new THREE.MeshStandardMaterial({ color: '#41723f', roughness: 0.95, flatShading: true });
+      return swaying(new THREE.MeshStandardMaterial({ color: '#41723f', roughness: 0.95, flatShading: true }), 'foliage');
     case 'leaf':
-      return new THREE.MeshStandardMaterial({ color: '#6f9f48', roughness: 0.92, flatShading: true });
+      return swaying(new THREE.MeshStandardMaterial({ color: '#6f9f48', roughness: 0.92, flatShading: true }), 'leaf');
     case 'blossom':
-      return new THREE.MeshStandardMaterial({ color: '#f3c2cf', roughness: 0.9, flatShading: true });
+      return swaying(new THREE.MeshStandardMaterial({ color: '#f3c2cf', roughness: 0.9, flatShading: true }), 'blossom');
     case 'window':
       return new THREE.MeshStandardMaterial({ color: '#202830', roughness: 0.7, emissive: '#ffb860', emissiveIntensity: 0 });
     case 'banner':
@@ -339,4 +340,32 @@ function strawTexture(): THREE.Texture {
     }
     g.globalAlpha = 1;
   });
+}
+
+/**
+ * Trees sway in the wind: instanced pines and orchard trees bend with their height above the
+ * trunk's foot, phase-shifted by where they stand (merged geometry, such as the moss on the
+ * spires, is left still).
+ */
+function swaying(m: THREE.MeshStandardMaterial, key: string): THREE.MeshStandardMaterial {
+  m.onBeforeCompile = (sh) => {
+    attachEnvUniforms(sh);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uEnvTime;\nuniform vec4 uWind;').replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>
+#ifdef USE_INSTANCING
+{
+  vec3 o = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+  float h = max(0.0, transformed.y - 0.8);
+  float gust = 0.7 + 0.3 * sin(uEnvTime * 0.37 + o.x * 0.013);
+  float ph = uEnvTime * 1.25 + o.x * 0.21 + o.z * 0.17;
+  float k = h * h * 0.012 * gust * (0.8 + 0.4 * clamp(length(uWind.xy), 0.0, 1.0));
+  transformed.x += sin(ph) * k;
+  transformed.z += cos(ph * 0.83) * k * 0.7;
+}
+#endif`,
+    );
+  };
+  m.customProgramCacheKey = () => `air_sway_${key}`;
+  return m;
 }
