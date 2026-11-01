@@ -280,6 +280,7 @@ const GAITS: Record<LocoStyle, Gait> = {
     armOut: 0.1,
     fist: 0.9,
     cadence: 1.06,
+    // Standing still, firebenders take FIRE_STANCE instead (only toeOut is used, for walking).
     idle: { drop: 0.075, width: 0.1, stagger: 0.17, toeOut: 0.2, chest: 0.12, upper: [-0.75, 0.16], fore: -1.45, asym: 0.4, fist: 0.95, hipsYaw: 0.32, sway: 0.7 },
   },
   elder: {
@@ -311,6 +312,33 @@ const GAITS: Record<LocoStyle, Gait> = {
     armSwing: [0.42, 0.95],
     idle: { ...BASE_GAIT.idle, sway: 1.8 },
   },
+};
+
+/**
+ * Firebending ready stance (Northern Shaolin, the basics Iroh drills): a long, low front stance.
+ * The lead (left) foot points at the target with the knee bent over it, the rear leg is nearly
+ * straight with its foot turned out, the hips are bladed so the lead side faces the target while
+ * the shoulders turn part-way back and the head stays square to it. The lead fist guards forward
+ * at shoulder height; the rear fist is chambered at the ribs, ready to strike. Its idle motion is
+ * the breath: the inhale lifts the chest and draws the guard in, the exhale settles the hips and
+ * pushes the guard back out ("the power in firebending comes from the breath").
+ */
+const FIRE_STANCE = {
+  /** Foot targets beyond the hip joints (m): [lead out, lead forward, rear out, rear back]. */
+  feet: [0.04, 0.35, 0.1, 0.4] as const,
+  /** Foot yaw in root space [lead, rear] (rad; − = toes toward the character's right). */
+  toes: [-0.08, -0.85] as const,
+  /** Hips: drop (m), forward weight shift (m), yaw (− = lead side forward). */
+  drop: 0.15,
+  shift: 0.05,
+  hipsYaw: -0.45,
+  /** Net chest yaw: how far the shoulders stay bladed (the head turns back to face forward). */
+  chestYaw: -0.22,
+  /** Arms: [upperArm x, y, z, foreArm x] for the lead guard and the chambered rear fist. */
+  lead: [-1.0, 0, 0, -1.25] as const,
+  rear: [0.5, 0.3, -0.12, -2.0] as const,
+  /** Breath: angular rate (rad/s; ≈ 3.4 s a breath). */
+  breathRate: 1.85,
 };
 
 interface ActionLayer {
@@ -701,6 +729,32 @@ export class Animator {
     this.setLoco('footL', 0, 0, 0);
     this.setLoco('footR', 0, 0, 0);
     let fist = I.fist;
+    const fire = s === 'fire';
+    if (fire) {
+      const F = FIRE_STANCE;
+      const b = Math.sin(t * F.breathRate);
+      const turn = F.chestYaw - F.hipsYaw;
+      hipsY = -F.drop + b * 0.008;
+      hipsZ = F.shift - b * 0.006;
+      hipsX = Math.sin(t * 0.5) * 0.004;
+      this.setLoco('hips', 0, F.hipsYaw, 0);
+      this.setLoco('spine', 0.05 - b * 0.012, turn * 0.6, 0);
+      this.setLoco('chest', 0.03 - b * 0.035, turn * 0.4, 0);
+      this.setLoco('neck', -0.05, -F.chestYaw * 0.45, 0);
+      this.setLoco('head', -0.03 + b * 0.01, -F.chestYaw * 0.55 + Math.sin(t * 0.23) * 0.03, 0);
+      this.setLoco('shoulderL', 0, 0, b * 0.035);
+      this.setLoco('shoulderR', 0, 0, -b * 0.035);
+      this.setLoco('upperArmL', F.lead[0] + b * 0.04, F.lead[1], F.lead[2]);
+      this.setLoco('foreArmL', F.lead[3] - b * 0.06, 0, 0);
+      this.setLoco('upperArmR', F.rear[0] + b * 0.03, F.rear[1], F.rear[2]);
+      this.setLoco('foreArmR', F.rear[3], 0, 0);
+      this.setLoco('handL', 0, 0, 0);
+      this.setLoco('handR', 0, 0, 0);
+      // Leg twist is relative to the hips: cancel their yaw to aim the feet in root space.
+      this.setLoco('thighL', 0, F.toes[0] - F.hipsYaw, 0);
+      this.setLoco('thighR', 0, F.toes[1] - F.hipsYaw, 0);
+      fist = 1;
+    }
 
     // ---- Gait (phase, stride synced to speed) ----
     const speed = Math.max(L.speed, turning * 0.6);
@@ -773,6 +827,11 @@ export class Animator {
         this.blendLoco('shoulderL', 0, 0, -0.06, m);
         this.blendLoco('shoulderR', 0, 0, 0.06, m);
       }
+      if (fire) {
+        // Out of the stance: feet back to a natural toe-out for walking.
+        this.blendLoco('thighL', 0, I.toeOut, 0, m);
+        this.blendLoco('thighR', 0, -I.toeOut, 0, m);
+      }
       fist = lerp(fist, G.fist, m);
     }
     this.hipsY = hipsY;
@@ -785,8 +844,9 @@ export class Animator {
       for (const side of [1, -1] as const) {
         const hipX = Math.abs(this.bones[side > 0 ? 'thighL' : 'thighR'].position.x) || 0.093;
         // Idle target.
-        const ix = side * (hipX + I.width + 0.012);
-        const iz = (side > 0 ? 1 : -1) * I.stagger * 0.5 + 0.012;
+        const fs = FIRE_STANCE.feet;
+        const ix = fire ? side * (hipX + (side > 0 ? fs[0] : fs[2])) : side * (hipX + I.width + 0.012);
+        const iz = fire ? (side > 0 ? fs[1] : -fs[3]) : (side > 0 ? 1 : -1) * I.stagger * 0.5 + 0.012;
         let tx = ix, ty = restAnkle, tz = iz, pitch = 0;
         if (m > 0.001) {
           const legPh = (this.phase + (side > 0 ? 0 : 0.5)) % 1;
@@ -1040,6 +1100,7 @@ export class Animator {
     let legWL = 0;
     let legWR = 0;
     let hipsRotW = 0;
+    let torsoW = 0;
     for (const a of this.actions) {
       // Advance time & weights.
       const prevT = a.time;
@@ -1071,6 +1132,7 @@ export class Animator {
         if (!this.samplePose(a.clip, ct, b, tmp)) continue;
         if (LEG_BONES.L.has(b)) legWL = Math.max(legWL, w);
         else if (LEG_BONES.R.has(b)) legWR = Math.max(legWR, w);
+        else if (b === 'spine' || b === 'chest') torsoW = Math.max(torsoW, w);
         else if (b === 'hips') {
           hipsRotW = Math.max(hipsRotW, w);
           // Spins key the hips through ±2π: blend the yaw the short way round so a
@@ -1083,7 +1145,10 @@ export class Animator {
         fp[2] = lerp(fp[2], tmp[2], w);
       }
       const hy = this.sampleScalar(a.clip, ct, 'hipsY');
-      if (hy !== null) hipsY = lerp(hipsY, hy, w);
+      // Out of the low fire stance, a clip that leaves the legs planted only ever sinks the hips:
+      // rising out of the stance would over-reach the feet.
+      const stay = this.loco.style === 'fire' && !a.bones.has('thighL') && !a.bones.has('thighR');
+      if (hy !== null) hipsY = lerp(hipsY, stay ? Math.min(hy, this.hipsY) : hy, w);
       const hz = this.sampleScalar(a.clip, ct, 'hipsZ');
       if (hz !== null) hipsZ = lerp(hipsZ, hz, w);
       const hx = this.sampleScalar(a.clip, ct, 'hipsX');
@@ -1094,6 +1159,17 @@ export class Animator {
       if (fr !== null) fistR = lerp(fistR, fr, w);
     }
     this.actions = this.actions.filter((a) => !(a.ended && a.weight <= 0));
+
+    // A firebender strikes out of the bladed stance by squaring the hips, as a cross punch does
+    // (clips that drive the torso but not the hips were authored square to the target). Feet the
+    // clip does not drive keep pointing where they were and are re-planted below.
+    const square = this.loco.style === 'fire' ? torsoW * (1 - hipsRotW) : 0;
+    if (square > 0.001) {
+      const dy = -this.finalPose.hips[1] * square;
+      this.finalPose.hips[1] += dy;
+      this.finalPose.thighL[1] -= dy * (1 - legWL);
+      this.finalPose.thighR[1] -= dy * (1 - legWR);
+    }
 
     // Additive flinch (directional).
     if (this.flinch > 0.001) {
@@ -1117,7 +1193,7 @@ export class Animator {
     // Mid-spin the legs follow the hips (pivot) instead of being re-planted.
     const spinYaw = Math.abs(wrapPi(this.finalPose.hips[1] - this.locoPose.hips[1]));
     const plant = this.plantWeight * (1 - clamp01((spinYaw - 0.5) / 0.6));
-    const hipsMoved = Math.abs(hipsY - this.hipsY) + Math.abs(hipsZ - this.hipsZ) + Math.abs(hipsX - this.hipsX) > 1e-4 || hipsRotW > 0;
+    const hipsMoved = Math.abs(hipsY - this.hipsY) + Math.abs(hipsZ - this.hipsZ) + Math.abs(hipsX - this.hipsX) > 1e-4 || hipsRotW > 0 || square > 0.001;
     if (plant > 0.01 && hipsMoved) {
       if (legWL < 0.99) this.replant(1, plant * (1 - legWL), hipsX, hipsY, hipsZ);
       if (legWR < 0.99) this.replant(-1, plant * (1 - legWR), hipsX, hipsY, hipsZ);

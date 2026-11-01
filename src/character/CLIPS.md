@@ -90,6 +90,10 @@ Set `animator.loco` every frame; the Animator blends these automatically:
   speed (no sliding), per-style gait: `air` light and bouncy (arms swept back when sprinting),
   `earth` wide and heavy, `fire` forward and aggressive, `water` flowing arms; also `neutral`, `npc`,
   `elder`, `guard`, `child`. Turning leans into the curve.
+- **Fire stance** (`FIRE_STANCE` in Animator.ts): standing still, `fire` takes a low bladed front
+  stance — left foot and fist leading, rear fist chambered at the ribs, head square to the target —
+  and breathes. Clips that drive the torso but not the hips square the hips into the strike (feet
+  re-planted); clips that leave the legs planted never lift the hips out of the stance.
 - **Air states**: `grounded`/`vy` (jump, fall, landing via `notifyLanding(speed)`), `gliding`,
   `swimming`, `mounted`.
 - **Idle variants**: `idleVariant` = `stand | meditate | sit | kneel | work | guard | float`.

@@ -283,4 +283,51 @@ describe('Animator feet planting', () => {
     const lunge = feet();
     for (let k = 0; k < 2; k++) expect(lunge[k].distanceTo(idle[k])).toBeLessThan(0.02);
   });
+
+  it('fire stance: low bladed front stance whose hips square into a strike, feet planted', async () => {
+    const { Animator, BONE_NAMES } = await import('../../src/character/Animator');
+    const { BONE_PARENT, rigLayout } = await import('../../src/character/CharShape');
+    const root = new THREE.Group();
+    const bones = {} as Record<string, THREE.Object3D>;
+    const rig = rigLayout('average');
+    for (const n of BONE_NAMES) {
+      bones[n] = new THREE.Object3D();
+      bones[n].position.set(...rig.offset[n]);
+    }
+    for (const n of BONE_NAMES) (BONE_PARENT[n] ? bones[BONE_PARENT[n]!] : root).add(bones[n]);
+    const an = new Animator(bones as never);
+    an.loco.style = 'fire';
+    const feet = () => {
+      root.updateMatrixWorld(true);
+      return (['footL', 'footR'] as const).map((f) => bones[f].getWorldPosition(new THREE.Vector3()));
+    };
+    const toeYaw = (f: 'footL' | 'footR'): number => {
+      const v = new THREE.Vector3(0, 0, 1).applyQuaternion(bones[f].getWorldQuaternion(new THREE.Quaternion()));
+      return Math.atan2(v.x, v.z);
+    };
+    for (let i = 0; i < 60; i++) an.update(1 / 30);
+    const [lead, rear] = feet();
+    for (const p of [lead, rear]) expect(p.y).toBeCloseTo(0.065, 2);
+    expect(lead.z).toBeGreaterThan(0.25); // left foot leads
+    expect(rear.z).toBeLessThan(-0.3);
+    expect(bones.hips.position.y).toBeLessThan(0.95 - 0.1); // sunk low
+    expect(bones.hips.rotation.y).toBeLessThan(-0.3); // bladed: lead side toward the target
+    expect(Math.abs(toeYaw('footL'))).toBeLessThan(0.3); // lead toes at the target
+    const rearToe = toeYaw('footR');
+    expect(rearToe).toBeLessThan(-0.5); // rear foot turned out
+    for (const clip of ['strike_r', 'push_two']) {
+      an.play(clip, { fadeIn: 0 });
+      for (let i = 0; i < 9; i++) an.update(0.03); // the clip's deepest lunge
+      expect(Math.abs(bones.hips.rotation.y)).toBeLessThan(0.05); // squared into the strike
+      expect(bones.hips.position.y).toBeLessThan(0.95 - 0.1); // still in the stance
+      const strike = feet();
+      expect(strike[0].distanceTo(lead)).toBeLessThan(0.02);
+      expect(strike[1].distanceTo(rear)).toBeLessThan(0.02);
+      // The rear foot may pivot a little toward the target, as it does in a real cross or lunge.
+      const pivot = toeYaw('footR') - rearToe;
+      expect(pivot).toBeGreaterThan(-0.02);
+      expect(pivot).toBeLessThan(0.25);
+      for (let i = 0; i < 40; i++) an.update(1 / 30);
+    }
+  });
 });
