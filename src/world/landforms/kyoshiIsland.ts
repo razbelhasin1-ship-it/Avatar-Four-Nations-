@@ -132,7 +132,7 @@ const RIDGE: ReadonlyArray<readonly [number, number]> = [
   [-0.08, 30],
   [0.0, 60],
   [0.07, 118],
-  [0.15, 104],
+  [0.15, 98],
   [0.26, 126],
   [0.35, 136],
   [0.43, 152],
@@ -256,7 +256,7 @@ export function kyoshiNaturalHeight(x: number, z: number): number {
     const pied = 2.6 + (48 - 22 * harbor) * Math.pow(Math.min(t, 0.62), 1.7);
     // Ridge: the village sits in a valley whose head rises well behind the Meeting Hall; the outer
     // side falls steeply to sea cliffs; notched where Crystal Falls comes down.
-    const crest = KI.crest + 0.16 * village + 0.16 * dojo + 0.12 * meadow;
+    const crest = KI.crest + 0.16 * village + 0.16 * dojo + 0.18 * meadow;
     const shape = t < crest ? rise(clamp01((t - tStart) / (crest - tStart))) : Math.pow(1 - sstep(crest, 1.04, t), 0.85);
     const notch = 1 - 0.5 * Math.exp(-(((u - KI.falls.u) / 0.022) ** 2));
     const rough = 0.82 + 0.28 * noise.ridged2(x / 320, z / 320, 3);

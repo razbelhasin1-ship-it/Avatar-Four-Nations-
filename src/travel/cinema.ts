@@ -44,10 +44,10 @@ const onGround = (p: { x: number; z: number }, up: number): Vec => ({ x: p.x, y:
 const PLACES: Record<CityId | 'ki_pier' | 'ki_meadow', Place> = {
   nwt: { dock: { x: -242.2, y: 4.55, z: -1865.8 }, yaw: Math.PI, away: { x: -236, y: 4.55, z: -1990 }, cam: { x: -262, y: 12, z: -1846 }, revealCam: { x: -170, y: 85, z: -2130 }, revealLook: { x: -220, y: 18, z: -1780 }, sea: { x: -260, y: 0, z: -2160 } },
   fnc: { dock: fnc(-151.2, 824, 0), yaw: 0, away: fnc(-140, 930, 0), cam: fnc(-176, 790, 18), revealCam: fnc(60, 1050, 95), revealLook: fnc(0, 640, 25), sea: fnc(-90, 1120, 0) },
-  bss: { dock: { x: 528, y: 56.6, z: -156 }, yaw: -Math.PI / 2, away: { x: 380, y: 56.6, z: -160 }, cam: { x: 536, y: 61, z: -146 }, revealCam: { x: 330, y: 190, z: -330 }, revealLook: { x: 640, y: 40, z: -60 }, sea: { x: 1960, y: 0, z: -820 } },
+  bss: { dock: { x: 528, y: 56.6, z: -156 }, yaw: -Math.PI / 2, away: { x: 380, y: 56.6, z: -160 }, cam: { x: 440, y: 92, z: -100 }, revealCam: { x: 330, y: 190, z: -330 }, revealLook: { x: 640, y: 40, z: -60 }, sea: { x: 1960, y: 0, z: -820 } },
   sat: { dock: v3(satPolar(268.4, 70.2), 348.2), yaw: satYawOut(268.4), away: v3(satPolar(268.4, 170), 395), cam: v3(satPolar(276, 88), 354), revealCam: v3(satPolar(250, 420), 470), revealLook: { x: 1450, y: 360, z: 1250 }, sea: v3(satPolar(250, 600), 380) },
   ki_pier: { dock: v3(A(0.835, 186), 0), yaw: Math.atan2(A(0.82, 168).x - A(0.82, 210).x, A(0.82, 168).z - A(0.82, 210).z) + Math.PI / 2, away: v3(atBearing(222, 420), 0), cam: v3(A(0.81, 214), 6), revealCam: v3(atBearing(215, 760), 420), revealLook: v3(A(0.45, 120), 20), sea: v3(atBearing(225, 860), 0) },
-  ki_meadow: { dock: onGround(A(KI.meadow.u, KI.meadow.r + 6), 0), yaw: 0, away: v3(atBearing(285, 700), 160), cam: onGround(A(KI.meadow.u + 0.03, KI.meadow.r - 14), 6), revealCam: v3(atBearing(215, 760), 420), revealLook: v3(A(0.45, 120), 20), sea: v3(atBearing(300, 860), 180) },
+  ki_meadow: { dock: onGround(A(KI.meadow.u, KI.meadow.r + 6), 0), yaw: 0, away: v3(A(KI.meadow.u - 0.02, 40), 70), cam: onGround(A(KI.meadow.u + 0.03, KI.meadow.r - 14), 6), revealCam: v3(atBearing(215, 760), 420), revealLook: v3(A(0.45, 120), 20), sea: v3(atBearing(300, 860), 180) },
 };
 
 const CAPTIONS: Record<string, string> = {
@@ -154,6 +154,7 @@ export class JourneyDirector {
       await this.fade(ctx, true);
       // 2. Cruise while the destination streams in.
       this.phase = 'cruise';
+      if (route.transport === 'rail_ferry') this.setVehicle(ctx, shipModel('earth'));
       const sea = to.sea;
       if (toIsland) {
         // Hold offshore: the island builds a little every frame while we watch the sea.
@@ -185,6 +186,7 @@ export class JourneyDirector {
       if (toIsland) await load();
       else await loading;
       this.haze(ctx, 0);
+      if (route.transport === 'rail_ferry' && !toIsland) this.setVehicle(ctx, trainModel());
       // 3. Aerial reveal of the destination.
       this.phase = 'reveal';
       await this.shot(2.8, (k, dt, cam) => {
@@ -245,6 +247,7 @@ export class JourneyDirector {
     // The sky dome is placed from last frame's camera: at a cut (or while a city streams in and
     // frames are slow) the camera would sit far outside it and the sky would render black.
     ctx.world.sky.dome.position.copy(cam.position);
+    ctx.world.water.update(0, cam); // the ocean grid follows the camera the same way
     if (k >= 1 && (!this.until || this.until())) {
       const r = this.resolve;
       this.fn = null;
@@ -273,7 +276,14 @@ export class JourneyDirector {
     this.vehicle = g;
   }
 
-  /** Swap the train for the ferry once the trip reaches the sea. */
+  /** Swap the moving vehicle (Ba Sing Se route: monorail train <-> coastal ferry). */
+  private setVehicle(ctx: GameContext, g: THREE.Group): void {
+    if (this.vehicle) disposeTree(this.vehicle);
+    this.vehicle = g;
+    ctx.scene.add(g);
+  }
+
+  /** Move the vehicle (ship / train bob gently; the bison flies or stands). */
   private placeVehicle(ctx: GameContext, p: Vec, yaw: number, dt: number, fly: number): void {
     if (this.bison) {
       const b = this.bison;
@@ -311,7 +321,7 @@ export class JourneyDirector {
     if (fog) {
       if (this.fogFar === null) this.fogFar = fog.far;
       fog.near = 900;
-      fog.far = 5200;
+      fog.far = 3800; // the ocean grid ends 3.6 km out: let its edge fade
     }
   }
 
@@ -358,6 +368,13 @@ export class JourneyDirector {
     o.append(fade, top, bottom);
     ctx.ui.layers.overlay.appendChild(o);
     ctx.ui.root.classList.add('cinematic');
+    // Hint toasts step aside too (scoped to the cinematic state; injected once).
+    if (!document.getElementById('journey-cine-style')) {
+      const st = document.createElement('style');
+      st.id = 'journey-cine-style';
+      st.textContent = '#ui.cinematic .hint-toast{visibility:hidden}';
+      document.head.appendChild(st);
+    }
     this.overlay = o;
     this.fadeEl = fade;
   }
