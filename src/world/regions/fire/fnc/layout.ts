@@ -24,7 +24,8 @@ export const CONFIG = {
   rallyCrowd: 320,
   warships: 12,
   boats: 14,
-  tanks: 6,
+  /** Tundra tanks drilling in the plaza's side lanes (two lanes: up to 4 used). */
+  tanks: 4,
   balloons: 3,
 } as const;
 
@@ -62,7 +63,7 @@ export const PLAZA = {
   drill: { t: 0, s: 572, r: 13 },
   /** Main tower at the valley head; its passage climbs to the Royal Way. */
   tower: { s0: 530, s1: 557, half: 30, passHalf: FNC.plaza.passHalf, topS: FNC.plaza.passTopS },
-  /** Former gatehouse spot at the harbour end (the axis is kept open now); gate pavilions either side. */
+  /** Gatehouse on a stone platform at the harbour end, gate pavilions either side. */
   gatehouse: { t: 0, s: 646, w: 12, d: 9, plat: 1.4 },
   pavilions: [-26, 26] as number[],
   pavilionS: 652,

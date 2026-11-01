@@ -346,13 +346,15 @@ export class CapitalLife {
     // Outer lanes at |t| 20.1: clear of the tanks' turning sweep (≤ 19.2) and the halls (21).
     const cols = [-20.1, -10, -5, 0, 5, 10, 20.1];
     const P = PLAZA;
+    // The gatehouse platform at the harbour end (18 × 15 m round the hall).
+    const inGatehouse = (t: number, s: number) => Math.abs(t) < P.gatehouse.w / 2 + 3.8 && s > P.gatehouse.s - P.gatehouse.d / 2 - 3.8 && s < P.gatehouse.s + P.gatehouse.d / 2 + 3.8;
     const inPool = (t: number, s: number) => Math.abs(t) > P.poolIn - 1.2 && Math.abs(t) < P.poolOut + 1.2 && s > P.poolS0 - 1.2 && s < P.poolS1 + 1.2;
     const grid = new Map<string, number>();
     const rows: number[] = [];
     for (let s = 560; s <= 652; s += 6) rows.push(s);
     for (const s of rows) {
       for (const t of cols) {
-        if (inPool(t, s)) continue;
+        if (inPool(t, s) || inGatehouse(t, s)) continue;
         const p = ax(t, s);
         const id = nav.addNode(p.x, p.z, T.street | T.square | T.patrol | Z.plaza, 0.4);
         this.width.set(id, Math.abs(t) > 20 ? 0.5 : 2.4);
@@ -532,6 +534,8 @@ export class CapitalLife {
       this.est.set(id, s > FNC.ringR + 1 ? Y : s > FNC.ringR - 2 ? gateY : gateY + (CY - gateY) * k);
     }
     for (const side of [-1, 1]) this.poi(ax(side * 4.5, 18).x, ax(side * 4.5, 18).z, T.square | Z.palace, side > 0 ? -Math.PI / 2 : Math.PI / 2, 6, CY);
+    // Dawn audience spots facing the palace entrance.
+    for (const t of [-5, -2.5, 0, 2.5, 5]) for (const s of [15, 19, 23]) this.poi(ax(t, s).x, ax(t, s).z, T.palace | Z.palace, Math.PI, 7, CY);
     void PF;
 
     // Zone node lists (street nodes only) for spawning.
@@ -620,6 +624,12 @@ export class CapitalLife {
       px: NaN, py: 0, pz: 0, pyaw: 0, goal: -1, gx: 0, gy: 0, gz: 0, gyaw: 0, toGoal: false, reloc: false, squad: -1, callT: 3 + r() * 8, greet: 0, delay: r() * 0.6, visible: false,
     };
     if (klass === 'noble' && r() < 0.3) a.scale *= 1.03;
+    if ((klass === 'civilian' || klass === 'worker') && (role === 'walker' || role === 'sitter') && r() < (zone === 'park' ? 0.4 : 0.16)) {
+      // A child: smaller, quicker, bareheaded or a little topknot.
+      a.scale = 0.6 + r() * 0.12;
+      a.speed = 1.3 + r() * 0.5;
+      a.acc = r() < 0.5 ? Acc.none : FAcc.topknot;
+    }
     return a;
   }
 
@@ -653,7 +663,8 @@ export class CapitalLife {
       const nodes = this.zoneNodes.get(zone)!;
       if (!nodes.length) continue;
       let guardK = 0;
-      for (const [role0, klass, count] of LIFE.cast[zone]) {
+      for (const [role0, klass, count0] of LIFE.cast[zone]) {
+        const count = Math.round((count0 * CONFIG.npcs) / 440);
         for (let k = 0; k < count; k++) {
           let role = role0;
           if (role === 'seller' && zone === 'market' && !sellers.length) role = 'shopper';
@@ -799,11 +810,10 @@ export class CapitalLife {
     const slots = this.rally.slots;
     for (const s of [576.5, 580]) for (let t = -13.5; t <= 13.51; t += 3) slots.push({ ...atAxis(t, s), y: PLAZA.y, yaw: Math.PI, troop: true });
     const civ: Array<{ t: number; s: number }> = [];
-    for (let s = 585; civ.length < LIFE.rally.crowd + 60 && s < 642; s += 2.3) {
-      for (let t = -6.25; t <= 6.26; t += 1.25) civ.push({ t, s });
-      if (s < 632) for (const side of [-1, 1]) for (let k = 0; k < 6; k++) civ.push({ t: side * (13.2 + k * 1.2), s });
-    }
-    civ.sort((a, b) => a.s - b.s);
+    for (let s = 584; s < 636.5; s += 1.75) for (let t = -6.3; t <= 6.31; t += 1.05) civ.push({ t, s });
+    // More than the central lane holds: the overflow lines the side lanes (tanks hold at the ends).
+    for (let s = 584; civ.length < LIFE.rally.crowd + 60 && s < 632; s += 2) for (const side of [-1, 1]) for (let k = 0; k < 5; k++) civ.push({ t: side * (13.4 + k * 1.3), s });
+    // (Central lane first, front rows first; the side lanes only take the overflow.)
     for (const c of civ) {
       const t = c.t + (r() - 0.5) * 0.3, s = c.s + (r() - 0.5) * 0.4;
       slots.push({ ...atAxis(t, s), y: PLAZA.y, yaw: Math.PI + (r() - 0.5) * 0.3, troop: false });
@@ -858,6 +868,13 @@ export class CapitalLife {
 
   private decide(a: Agent, h: number): void {
     if (a.role === 'sage' || a.squad >= 0 && this.squads[a.squad].members[0] !== a.i) return;
+    // Dawn: Hari Bulkan's nobles gather in the palace courtyard to glimpse the Royal Family.
+    if (a.klass === 'noble' && a.zone === 'caldera' && h >= 5.5 && h < 7.5 && a.stay < 0.6) {
+      a.roam = Z.caldera | Z.palace;
+      const spot = this.pick(a, [b(T.palace)], 400);
+      a.roam = ROAM.caldera;
+      if (spot >= 0 && this.nav.nodes[spot].tags & T.palace && this.go(a, spot)) return;
+    }
     if (!this.isOut(a, h)) {
       const home = this.pick(a, [b(T.home)], 140);
       if (home >= 0 && this.nav.nodes[home].tags & T.home && this.go(a, home)) {
@@ -907,6 +924,7 @@ export class CapitalLife {
 
   private isOut(a: Agent, h: number): boolean {
     if (a.role === 'patrol' || a.role === 'guard' || a.role === 'royal') return true;
+    if (a.acc === FAcc.foodCart && (h >= 17 || h < 1)) return true;
     return a.stay < activity(a.zone, h);
   }
 
@@ -924,8 +942,14 @@ export class CapitalLife {
       a.t = 30 + Math.random() * 50;
       return;
     }
-    const face = n.tags & (T.shop | T.stall | T.home | T.work | T.water | T.bench | T.school | T.temple);
+    const face = n.tags & (T.shop | T.stall | T.home | T.work | T.water | T.bench | T.school | T.temple | T.palace);
     if (face) a.yaw = n.yaw;
+    if (n.tags & T.palace) {
+      // The dawn audience: stand and wait for a glimpse of the Royal Family.
+      a.pose = Pose.idle;
+      a.t = 40 + Math.random() * 50;
+      return;
+    }
     if (a.role === 'sitter' && n.tags & (T.bench | T.water)) {
       a.pose = Pose.sit;
       a.t = 30 + Math.random() * 60;
@@ -1162,7 +1186,7 @@ export class CapitalLife {
         if (a.role === 'seller') {
           const open = h >= LIFE.shops[0] && h < LIFE.shops[1];
           a.visible = open;
-          a.pose = open && pl && Math.hypot(pl.x - a.x, pl.z - a.z) < 4 ? Pose.talk : Pose.idle;
+          a.pose = open && pl && Math.hypot(pl.x - a.x, pl.z - a.z) < 4 ? Pose.talk : open && h < LIFE.shops[0] + 1.2 ? Pose.sweep : Pose.idle;
         } else if (a.role === 'drill' || a.role === 'student') {
           // Posed (and shown or sent in for the night) by the formation update.
         } else {

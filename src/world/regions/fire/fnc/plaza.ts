@@ -13,8 +13,8 @@ import { ballista, tank } from './machines';
  * head (the only way up into Harbor City, through the passage in the tower's base) to the gate
  * pavilions on the inner quay. Two long still pools run down its length either side of the
  * central avenue; long red-roofed colonnaded halls (barracks, tank bays) line both sides; the
- * cliff rims carry battlements and ballistae; two tiered gate pavilions flank the open harbour
- * end, so the view runs straight from the quay steps to the tower and its great insignia.
+ * cliff rims carry battlements and ballistae; the smaller gatehouse stands on its stone platform at
+ * the harbour end between two tiered gate pavilions; the great insignia crowns the tower's balcony.
  */
 
 const Y = PLAZA.y;
@@ -111,14 +111,23 @@ export function* buildPlaza(cap: Cap): Generator<unknown, void, unknown> {
   }
   yield;
 
-  // --- Gate pavilions at the harbour end.
+  // --- Gate pavilions and the gatehouse at the harbour end.
   for (const t of P.pavilions) gatePavilion(b, atAxis(t, P.pavilionS));
   // Steps from the inner quay up onto the plaza across its full width.
   {
     const a = atAxis(0, FNC.harbor.s0 + 1.6), c = atAxis(0, FNC.harbor.s0 - 0.6);
     b.stairs({ from: new THREE.Vector3(a.x, FNC.harbor.quayY, a.z), to: new THREE.Vector3(c.x, Y + 0.05, c.z), width: V.valleyHalf * 2 - 1, material: 'stone_light' });
   }
-  // (The axis stays open from the quay steps to the main tower, as in the series' harbour-end view.)
+  // The smaller gatehouse on its stone platform at the harbour end of the forum (series frame).
+  const G = P.gatehouse;
+  const gp = atAxis(G.t, G.s);
+  b.block('stone_light', { x: gp.x, y: Y, z: gp.z, sx: G.w + 6, sy: G.plat, sz: G.d + 6 }, { collide: true, walkable: true });
+  b.box('stone_dark', { x: gp.x, y: Y + G.plat - 0.1, z: gp.z, sx: G.w + 6.3, sy: 0.25, sz: G.d + 6.3 });
+  for (const dz of [-1, 1]) {
+    b.stairs({ from: new THREE.Vector3(gp.x, Y, gp.z + dz * ((G.d + 6) / 2 + 2.2)), to: new THREE.Vector3(gp.x, Y + G.plat, gp.z + dz * ((G.d + 6) / 2)), width: 6, material: 'stone_light' });
+  }
+  hall(b, { x: gp.x, y: Y + G.plat, z: gp.z, yaw: 0, w: G.w, d: G.d - 3, h: 4.6, veranda: 1.5, colSpacing: 3, roofMat: 'roof_red', horns: 1, crest: 1.2 });
+  cap.mark('gatehouse', gp.x, Y + G.plat, gp.z);
 
   // --- Shrubs at the near ends of the pools, braziers at the far ends, lamps and banners.
   for (const side of [-1, 1]) {
