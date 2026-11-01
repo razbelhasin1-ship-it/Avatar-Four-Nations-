@@ -305,7 +305,8 @@ export function kyoshiNaturalHeight(x: number, z: number): number {
  * its ridges are green and brown to the crests (grass, scrub, bare earth); rock shows only on cliffs.
  */
 export function kyoshiSurface(w: Float32Array, slope: number, h: number): void {
-  const keep = sstep(0.36, 0.46, slope) + 0.45 * sstep(140, 185, h) * sstep(0.2, 0.3, slope);
+  // Bare rock only on real cliffs (steeper than ~55 degrees): the hillsides stay grass and forest.
+  const keep = sstep(0.42, 0.52, slope) + 0.45 * sstep(140, 185, h) * sstep(0.2, 0.3, slope);
   const moved = w[2] * (1 - clamp01(keep));
   w[2] -= moved;
   w[0] += moved * 0.62;
