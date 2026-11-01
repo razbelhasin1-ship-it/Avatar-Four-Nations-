@@ -41,7 +41,10 @@ Inner shore r = 205; band thickness 170 (tips) → 430 (middle); ridge crest at 
       auto stepped falls, plateaus; island biome/surface; trees allowed to 47° on the island)
 - [x] 2 travel system + placeholder island (TravelSystem + Journey veil; probe ki/travel.mjs passes:
       there/back, origin saved, harbor offer, save/load on island, island freed, sea boundary)
-- [ ] 3 travel points in NWT / FNC / BSS / SAT
+- [x] 3 travel points in NWT / FNC / BSS / SAT (src/travel/points.ts: each its own small region;
+      NWT west-quay ice pier (-249,-1857) + trader at its head; FNC west harbour head kiosk (t-171,s788.5)
+      + stairs to a landing stage + merchant ship; BSS 'Island Ferries' booth on the lawn north of the
+      gate road (490,-179.5, faces +Z); SAT saddled bison at θ268.4 r70.2 on the bison terrace)
 - [ ] 4 village, dojo, shrine
 - [ ] 5 bay, bridge, falls, harbor
 - [ ] 6 people, boats, animals, routines, audio
@@ -70,6 +73,7 @@ Kyoshi Warriors: green kimono + dark green skirt, dark armour plates with gold s
 - src/world/env/Weather.ts (resume(type) for returning travellers)
 - src/world/regions/earth/EarthRegion.ts (dispose resets `finished` so a freed region rebuilds)
 - src/modules.ts (travel module line)
+- (phase 3: no city files touched; regions/index.ts gained the travel-point factory line)
 
 ## Notes / resume hints
 - Probe: node $S/ki/look.mjs OUTDIR [aerial,top,village,beach,harbor,falls,heights] (FAR=1600 for

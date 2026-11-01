@@ -3,6 +3,7 @@ import { AIR_REGION_FACTORIES } from './air';
 import { EARTH_REGION_FACTORIES } from './earth';
 import { FIRE_REGION_FACTORIES } from './fire';
 import { KYOSHI_REGION_FACTORIES } from './kyoshi';
+import { TRAVEL_POINT_FACTORIES } from '../../travel/points';
 import { WATER_REGION_FACTORIES } from './water';
 import { WILDS_REGION_FACTORIES } from './wilds';
 
@@ -17,4 +18,5 @@ export const REGION_FACTORIES: RegionFactory[] = [
   ...EARTH_REGION_FACTORIES, // Earth Kingdom: Ba Sing Se, Gaoling, Riverbend Village
   ...WILDS_REGION_FACTORIES, // Between the capitals: Omashu, Kyoshi, Misty Palms, Buried Library, Banyan Tree, north, caves, bridges, roadside, camps
   ...KYOSHI_REGION_FACTORIES, // Kyoshi Island: its own map (zone), reached only by the travel routes
+  ...TRAVEL_POINT_FACTORIES, // Travel points to Kyoshi Island in the four cities (src/travel/points.ts)
 ];
