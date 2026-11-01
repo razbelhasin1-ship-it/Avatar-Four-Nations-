@@ -192,7 +192,8 @@ export class HabitatManager {
     const s = this.spawned.get(id);
     if (!s) return;
     this.spawned.delete(id);
-    for (const c of s.creatures) if (c.mode !== 'companion' && c.state !== 'ridden' && c.state !== 'scripted') this.sys.removeCreature(c);
+    // (iterate a copy: removeCreature -> forget() splices this very list)
+    for (const c of [...s.creatures]) if (c.mode !== 'companion' && c.state !== 'ridden' && c.state !== 'scripted') this.sys.removeCreature(c);
     for (const u of s.unreg) u();
     for (const o of s.props) o.removeFromParent();
   }
@@ -226,7 +227,7 @@ export class HabitatManager {
       const [cx, cz] = key.split(',').map(Number);
       const x = (cx + 0.5) * CELL, z = (cz + 0.5) * CELL;
       if (Math.hypot(pp.x - x, pp.z - z) > 300) {
-        for (const c of list) if (c.mode !== 'companion') this.sys.removeCreature(c);
+        for (const c of [...list]) if (c.mode !== 'companion') this.sys.removeCreature(c);
         count -= list.length;
         this.ambient.delete(key);
       }
@@ -518,7 +519,7 @@ export class HabitatManager {
 
   clear(): void {
     for (const id of [...this.spawned.keys()]) this.despawnHabitat(id);
-    for (const list of this.ambient.values()) for (const c of list) if (c.mode !== 'companion') this.sys.removeCreature(c);
+    for (const list of this.ambient.values()) for (const c of [...list]) if (c.mode !== 'companion') this.sys.removeCreature(c);
     this.ambient.clear();
     this.forage.clear();
   }
