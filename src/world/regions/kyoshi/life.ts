@@ -114,6 +114,10 @@ export class KyoshiLife {
   private readonly prev: Int32Array<ArrayBuffer>;
   private readonly tmpPath: number[] = [];
   private hour = 9;
+  private lastHour = -1;
+  /** Where the market and harbor counts are centred. */
+  private readonly vC = A(KI.village.u, 320);
+  private readonly hC = A(0.82, 240);
   private drillT = 0;
   private stepper = 0;
   private talkTarget: Agent | null = null;
@@ -323,6 +327,31 @@ export class KyoshiLife {
     }
   }
 
+  /** Put everyone where the routine wants them at this hour (drill slots, stalls, homes...). */
+  settle(): void {
+    const yard = this.input.yard;
+    for (const a of this.agents) {
+      const plan = this.plan(a);
+      const n = this.nav.nodes[plan.goal];
+      let x = n.x, z = n.z;
+      if (a.slot && n.tags & T.yard) {
+        x = yard.x - Math.cos(yard.yaw) * a.slot.x + Math.sin(yard.yaw) * a.slot.z;
+        z = yard.z + Math.sin(yard.yaw) * a.slot.x + Math.cos(yard.yaw) * a.slot.z;
+      }
+      a.x = x;
+      a.z = z;
+      a.y = this.nodeY[plan.goal];
+      a.node = plan.goal;
+      a.goal = plan.goal;
+      a.path.length = 0;
+      a.pi = 0;
+      a.activity = plan.act === 'walk' ? 'idle' : plan.act;
+      a.timer = this.rnd.range(4, 40);
+      if (a.activity === 'drill') a.yaw = yard.yaw + Math.PI;
+      else if (n.yaw !== undefined) a.yaw = n.yaw;
+    }
+  }
+
   private route(a: Agent, goal: number): void {
     a.goal = goal;
     const p = this.nav.path(a.node, goal, this.tmpPath, this.prev);
@@ -343,14 +372,22 @@ export class KyoshiLife {
 
   update(dt: number, ctx: GameContext, cam: THREE.Camera): void {
     const t0 = performance.now();
-    this.hour = ctx.world.sky.timeOfDay;
+    const hour = ctx.world.sky.timeOfDay;
+    // First frame, or a jump in time (waiting, a journey, a loaded save): everyone is already where
+    // the day wants them, instead of the whole island walking across at once.
+    const first = this.lastHour < 0;
+    let jump = first ? 0 : Math.abs(hour - this.lastHour);
+    if (jump > 12) jump = 24 - jump;
+    this.lastHour = hour;
+    this.hour = hour;
+    if (first || jump > 0.5) this.settle();
     this.drillT += dt;
     const player = ctx.player?.position;
     const camPos = cam.position;
     // Simulate everyone every few frames when far from the player, every frame when near.
     this.stepper = (this.stepper + 1) % 4;
     let walking = 0, drilling = 0, home = 0, village = 0, harbor = 0;
-    const vC = A(KI.village.u, 320), hC = A(0.82, 240);
+    const vC = this.vC, hC = this.hC;
     let best: Agent | null = null, bestD = 3.2;
     for (let i = 0; i < this.agents.length; i++) {
       const a = this.agents[i];

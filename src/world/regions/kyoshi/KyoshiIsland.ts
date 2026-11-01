@@ -249,6 +249,7 @@ export class KyoshiIsland extends EarthRegion {
       marks: () => this.marks,
       stats: () => this.stats(),
       life: () => this.life?.counts() ?? null,
+      settle: () => this.life?.settle(),
       sea: () => this.sea?.counts() ?? null,
       unagi: () => this.sea?.summonUnagi(),
       go: (id: string) => {

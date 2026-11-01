@@ -246,17 +246,17 @@ export function kyoshiNaturalHeight(x: number, z: number): number {
     const u = p.u;
     const t = clamp01(p.t);
     // Settlement sectors: the ridge rises farther inland where the village, dojo, meadow and harbour sit.
-    const village = band(u, 0.335, 0.455, 0.03);
-    const dojo = band(u, 0.49, 0.555, 0.03);
+    const village = band(u, 0.335, 0.455, 0.06);
+    const dojo = band(u, 0.49, 0.555, 0.06);
     const harbor = band(u, 0.73, 0.9, 0.04);
-    const meadow = band(u, 0.18, 0.25, 0.03);
+    const meadow = band(u, 0.18, 0.25, 0.08);
     // (the ridge foot lies beyond the hall's, the dojo's and the meadow's flat platforms)
-    const tStart = 0.1 + 0.28 * village + 0.32 * dojo + 0.05 * harbor + 0.3 * meadow;
+    const tStart = 0.1 + Math.max(0.28 * village, 0.32 * dojo, 0.05 * harbor, 0.3 * meadow);
     // Piedmont: from the beach up toward the ridge foot; flatter behind the harbour.
     const pied = 2.6 + (48 - 22 * harbor) * Math.pow(Math.min(t, 0.62), 1.7);
     // Ridge: the village sits in a valley whose head rises well behind the Meeting Hall; the outer
     // side falls steeply to sea cliffs; notched where Crystal Falls comes down.
-    const crest = KI.crest + 0.16 * village + 0.16 * dojo + 0.18 * meadow;
+    const crest = KI.crest + Math.max(0.16 * village, 0.16 * dojo, 0.18 * meadow);
     const shape = t < crest ? rise(clamp01((t - tStart) / (crest - tStart))) : Math.pow(1 - sstep(crest, 1.04, t), 0.85);
     const notch = 1 - 0.5 * Math.exp(-(((u - KI.falls.u) / 0.022) ** 2));
     const rough = 0.82 + 0.28 * noise.ridged2(x / 320, z / 320, 3);
@@ -347,6 +347,8 @@ export function kyoshiBiome(x: number, z: number, o: BiomeWeights): BiomeWeights
   o.swamp = 0;
   o.tropical = 0;
   o.boreal = 0.78 * sstep(0.36, 0.56, t) * (1 - sstep(0.92, 1.05, t));
+  // The west arm's trail runs through pine woods.
+  o.boreal = Math.max(o.boreal, 0.72 * band(p.u, -0.1, 0.15, 0.05) * sstep(0.04, 0.16, t));
   o.dry = 0.3 * sstep(0.62, 0.95, t) + 0.12 * sstep(0.2, 0.45, noise.noise2(x / 240, z / 240));
   return o;
 }

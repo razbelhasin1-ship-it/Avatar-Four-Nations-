@@ -344,6 +344,7 @@ export function* buildVillage(env: BuildEnv, out: VillageOut): Generator<unknown
       const ground = H(c.x, c.z);
       const floor = Math.max(0.5, ground + rnd.range(0.55, 0.9) - ground) + Math.max(0, ground - gy) * 0.5;
       const tiled = rnd.chance(0.35);
+      let finish = 0;
       house(env.chunks.at('houses', c.x, c.z).builder, {
         x: c.x,
         z: c.z,
@@ -356,8 +357,9 @@ export function* buildVillage(env: BuildEnv, out: VillageOut): Generator<unknown
         floor,
         roofH: rnd.range(2.7, 3.3),
         roof: tiled ? 'roof_dark' : 'wood_dark',
-        wall: rnd.chance(0.5) ? 'wood_dark' : 'wood',
-        trim: 'wood',
+        // Painted plaster on dark timber, or plain boards.
+        wall: (finish = rnd.range(0, 1)) < 0.4 ? 'plaster_cream' : finish < 0.7 ? 'wood' : 'wood_dark',
+        trim: finish < 0.4 ? 'wood_dark' : 'wood',
         stairs: rnd.chance(0.5) ? 'front' : 'side',
         porch: rnd.chance(0.4),
       });
