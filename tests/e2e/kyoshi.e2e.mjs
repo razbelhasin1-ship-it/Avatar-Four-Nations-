@@ -30,7 +30,6 @@ try {
       return { q, inv, weather: env?.weather?.state?.().weather ?? null, hour: g.ctx.world.sky.timeOfDay, geo: m.geometries, tex: m.textures };
     });
 
-  let baseMem = null;
   for (const city of ['bss', 'nwt', 'fnc', 'sat']) {
     // Walk up to the city's travel point (streamed in like a fast travel).
     await h.eval(async (g, city) => {
@@ -42,7 +41,6 @@ try {
     }, city);
     await h.step(30);
     const before = await snapshot();
-    if (!baseMem) baseMem = before;
     const pt = await h.eval((g, city) => g.ctx.world.getRegionContent('travel_' + city)?.info?.(), city);
     ok(!!pt?.built && pt.npcs.length >= 3, `${city}: travel point built with staff and travellers`, JSON.stringify(pt?.npcs ?? []));
     for (let trip = 1; trip <= 3; trip++) {
@@ -68,9 +66,25 @@ try {
     ok(after.weather === before.weather, `${city}: weather as left`, `${before.weather} -> ${after.weather}`);
     const dh = ((after.hour - before.hour) + 24) % 24;
     ok(dh > 0.1 && dh < 1.2, `${city}: clock moved on a few minutes per trip`, `+${(dh * 60).toFixed(0)} min over 6 legs`);
+    // Same place, before and after: the island is built and freed three times in between.
+    ok(after.geo - before.geo < 60 && after.tex - before.tex < 6, `${city}: no memory growth over 3 round trips`, `geometries ${before.geo}->${after.geo}, textures ${before.tex}->${after.tex}`);
   }
-  const end = await snapshot();
-  ok(end.geo - baseMem.geo < 120 && end.tex - baseMem.tex < 12, 'no memory growth over 12 round trips', `geometries ${baseMem.geo}->${end.geo}, textures ${baseMem.tex}->${end.tex}`);
+
+  // Ten round trips from one city: memory at the travel point after the first and after the tenth.
+  const leak = await h.eval(async (g) => {
+    const mem = () => ({ geo: g.ctx.render.renderer.info.memory.geometries, tex: g.ctx.render.renderer.info.memory.textures });
+    const trip = async () => {
+      await g.debug.travel.go('fnc_to_kyoshi', true);
+      for (let i = 0; i < 20; i++) g.step(1);
+      await g.debug.travel.back(true);
+      for (let i = 0; i < 20; i++) g.step(1);
+    };
+    await trip();
+    const a = mem();
+    for (let n = 0; n < 9; n++) await trip();
+    return { a, b: mem() };
+  });
+  ok(leak.b.geo - leak.a.geo < 40 && leak.b.tex - leak.a.tex < 4, 'no memory growth over 10 round trips', `geometries ${leak.a.geo}->${leak.b.geo}, textures ${leak.a.tex}->${leak.b.tex}`);
 
   // On the island: people, boats, landmarks; save and load there.
   const isl = await h.eval(async (g) => {
@@ -83,6 +97,12 @@ try {
   // About 180 islanders (the Low preset, which this test runs, thins crowds to 70%).
   if (isl.life) ok(isl.life.total >= 120, 'islanders simulated (180, 126 on Low)', JSON.stringify(isl.life));
   if (isl.sea) ok(isl.sea.fishing >= 10 && isl.sea.traders >= 2, 'boats in the bay', JSON.stringify(isl.sea));
+  // Settled on arrival, the islanders go about their day again.
+  const walking = await h.eval((g) => {
+    for (let i = 0; i < 450; i++) g.step(1);
+    return g.debug.kyoshi?.life?.() ?? null;
+  });
+  ok(!!walking && walking.walking > 0, 'islanders walk about after settling', JSON.stringify(walking));
   const saved = await h.eval((g) => g.ctx.game.saveGame('slot3'));
   const loaded = await h.eval(async (g) => g.ctx.game.loadGame('slot3'));
   await h.step(20);
