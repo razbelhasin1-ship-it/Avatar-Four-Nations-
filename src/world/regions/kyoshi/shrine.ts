@@ -179,6 +179,15 @@ export function* buildShrine(env: BuildEnv, out: ShrineOut): Generator<unknown, 
   const rf = octRoof(R + 1.9, 3.4);
   major.mesh('roof_dark', rf, { x: c.x, y: py + 3.45, z: c.z, yaw: yaw + Math.PI / 8 });
   rf.dispose();
+  // Timber ceiling under the roof (seen from inside the pavilion) and the eaves' soffit.
+  const ceil = new THREE.CircleGeometry(R + 0.3, 8);
+  ceil.rotateX(Math.PI / 2);
+  major.mesh('wood_dark', ceil, { x: c.x, y: py + 3.5, z: c.z, yaw: yaw + Math.PI / 8 });
+  ceil.dispose();
+  const soffit = new THREE.RingGeometry(R + 0.3, R + 1.95, 8, 1);
+  soffit.rotateX(Math.PI / 2);
+  major.mesh('wood', soffit, { x: c.x, y: py + 3.62, z: c.z, yaw: yaw + Math.PI / 8 });
+  soffit.dispose();
   major.cylinder('bronze', { x: c.x, y: py + 6.7, z: c.z, r: 0.18, rTop: 0.05, h: 1.1, segments: 8 });
   major.cylinder('bronze', { x: c.x, y: py + 6.6, z: c.z, r: 0.32, h: 0.2, segments: 8 });
   out.marks.shrine = { x: c.x, y: py, z: c.z };
