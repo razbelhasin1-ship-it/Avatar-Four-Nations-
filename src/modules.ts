@@ -14,6 +14,7 @@ import { WaterContainers } from './world/WaterContainers';
 import { MusicSystem } from './audio/MusicSystem';
 import { AudioEvents } from './audio/AudioEvents';
 import { MarkingPerks } from './combat/techniques/fire/combustion';
+import { TravelSystem } from './travel/TravelSystem';
 
 /**
  * Feature modules plug into the game here without editing Game.ts.
@@ -63,4 +64,7 @@ export const MODULES: GameModule[] = [
   { name: 'audio_events', order: 972, create: () => new AudioEvents() },
   // Markings with powers: the Third Eye grants combustionbending to a Fire Nation character.
   { name: 'marking_perks', order: 62, create: () => new MarkingPerks() },
+  // Travel to Kyoshi Island (its own map) from the four cities and back: routes, journeys, saved origin,
+  // sea boundary between the maps (src/data/travel.ts, __game.debug.travel).
+  { name: 'travel', order: 78, create: () => new TravelSystem() },
 ];

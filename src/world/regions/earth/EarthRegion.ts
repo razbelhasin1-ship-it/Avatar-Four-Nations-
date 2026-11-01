@@ -259,6 +259,8 @@ export abstract class EarthRegion implements RegionContent {
     this.offSettings?.();
     this.offSettings = null;
     this.pending = null;
+    // [additive: far zones] A region freed by World (unloadRadius) is built again from scratch.
+    this.finished = false;
     if (this.chunks) this.chunks.dispose();
     for (const id of this.env?.waterIds ?? []) ctx.water.unregister(id);
     if (this.built) {

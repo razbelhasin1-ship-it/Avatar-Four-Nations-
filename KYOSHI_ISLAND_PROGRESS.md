@@ -39,7 +39,8 @@ Inner shore r = 205; band thickness 170 (tips) → 430 (middle); ridge crest at 
 ## Phases
 - [x] 1 terrain + layout blockout (crescent, bay, islet, stacks, cove, roads, Crystal Falls stream with
       auto stepped falls, plateaus; island biome/surface; trees allowed to 47° on the island)
-- [ ] 2 travel system + placeholder island
+- [x] 2 travel system + placeholder island (TravelSystem + Journey veil; probe ki/travel.mjs passes:
+      there/back, origin saved, harbor offer, save/load on island, island freed, sea boundary)
 - [ ] 3 travel points in NWT / FNC / BSS / SAT
 - [ ] 4 village, dojo, shrine
 - [ ] 5 bay, bridge, falls, harbor
@@ -65,6 +66,10 @@ Kyoshi Warriors: green kimono + dark green skirt, dark armour plates with gold s
 - src/world/WorldLayout.ts (regionAt: far-zone fallback)
 - src/world/regions/index.ts (Kyoshi factory line)
 - src/core/Game.ts (validSpawn accepts far zones)
+- src/core/events.ts (travel:started / arrived / failed)
+- src/world/env/Weather.ts (resume(type) for returning travellers)
+- src/world/regions/earth/EarthRegion.ts (dispose resets `finished` so a freed region rebuilds)
+- src/modules.ts (travel module line)
 
 ## Notes / resume hints
 - Probe: node $S/ki/look.mjs OUTDIR [aerial,top,village,beach,harbor,falls,heights] (FAR=1600 for

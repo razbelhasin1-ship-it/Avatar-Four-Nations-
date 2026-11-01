@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import type { GameContext } from '../../../core/GameContext';
+import { KYOSHI_ARRIVALS, KYOSHI_STAFF } from '../../../data/travel';
 import { heightAt } from '../../Heightfield';
 import { A, KI } from '../../landforms/kyoshiIsland';
 import { EarthRegion } from '../earth/EarthRegion';
 import type { BuildEnv } from '../earth/env';
+import { kyoshiLook } from './people';
 
 /**
  * Kyoshi Island (zone `kyoshi_island`, its own map): Suki's village, the Kyoshi Dojo and Shrine,
@@ -19,6 +21,12 @@ export class KyoshiIsland extends EarthRegion {
   readonly unloadRadius = 1800;
   protected readonly seed = KI.seed;
   protected override readonly cell = 96;
+  private complete = false;
+
+  /** Built and finished (travel waits for this before anyone steps ashore). */
+  get ready(): boolean {
+    return this.complete && !this.building;
+  }
 
   protected *construct(env: BuildEnv): Generator<unknown, void, unknown> {
     this.anchors();
@@ -27,7 +35,19 @@ export class KyoshiIsland extends EarthRegion {
     const g = A(KI.village.u, KI.village.gateR - 4);
     const y = heightAt(g.x, g.z);
     env.chunks.at('major', g.x, g.z).builder.cylinder('wood_dark', { x: g.x, y, z: g.z, r: 0.9, h: 15, segments: 14 }, { solid: true });
+    this.staff();
     this.installDebug();
+    this.complete = true;
+  }
+
+  /** The island's travel staff: the harbormaster at the passenger pier, the bison keeper on the meadow. */
+  private staff(): void {
+    const pier = KYOSHI_ARRIVALS.ki_pier, meadow = KYOSHI_ARRIVALS.ki_meadow;
+    const hm = KYOSHI_STAFF.harbormaster, kp = KYOSHI_STAFF.keeper;
+    const side = (p: { x: number; z: number; yaw: number }, d: number) => ({ x: p.x + Math.cos(p.yaw) * d, z: p.z - Math.sin(p.yaw) * d });
+    const a = side(pier, 3.2), b = side(meadow, -3.4);
+    this.npc({ id: hm.id, name: hm.name, title: hm.title, role: 'merchant', nation: 'earth', appearance: kyoshiLook(4101), x: a.x, z: a.z, yaw: pier.yaw + Math.PI, behavior: { type: 'idle', variant: 'stand' }, dialogue: 'travel_staff', region: 'kyoshi_isle', marker: 'none', schedule: 'always' });
+    this.npc({ id: kp.id, name: kp.name, title: kp.title, role: 'villager', nation: 'earth', appearance: kyoshiLook(4102), x: b.x, z: b.z, yaw: meadow.yaw + Math.PI, behavior: { type: 'idle', variant: 'stand' }, dialogue: 'travel_staff', region: 'kyoshi_isle', marker: 'none', schedule: 'always' });
   }
 
   /** Named anchors (quest markers, tests, journeys). */
@@ -55,6 +75,7 @@ export class KyoshiIsland extends EarthRegion {
     super.dispose(ctx);
     // Rebuilt from scratch on the next visit.
     this.npcDefs.length = 0;
+    this.complete = false;
   }
 
   /** `__game.debug.kyoshi`: anchors and a teleport to them. */

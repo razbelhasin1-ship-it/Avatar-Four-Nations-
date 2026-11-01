@@ -137,6 +137,11 @@ export interface GameEvents {
   // ---- beast keepers ----
   /** A companion was bought from a beast keeper (it is bonded and on its way to you). */
   'companion:purchased': { companionId: string; speciesId: string; name: string; price: number; shopId: string };
+
+  // ---- travel to far zones (Kyoshi Island; src/travel) ----
+  'travel:started': { route: string; from: string; to: string; transport: string };
+  'travel:arrived': { route: string; to: string };
+  'travel:failed': { route: string; error: string };
 }
 
 export type GameEventName = keyof GameEvents;

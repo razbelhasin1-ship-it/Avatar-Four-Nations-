@@ -389,6 +389,17 @@ export class WeatherSystem implements WorldUpdatable {
     else this.timer = 0;
   }
 
+  /**
+   * [additive: travel] Put back a remembered weather (home from a far zone): not forced, the
+   * regional cycle carries on from it after a normal interval.
+   */
+  resume(type: WeatherType): void {
+    if (!(type in PRESETS)) return;
+    this.forced = null;
+    this.setWeather(type, true);
+    this.timer = 150 + Math.random() * 150;
+  }
+
   get forcedWeather(): WeatherType | null {
     return this.forced;
   }
