@@ -133,18 +133,29 @@ const RIDGE: ReadonlyArray<readonly [number, number]> = [
   [0.0, 60],
   [0.07, 118],
   [0.15, 104],
-  [0.26, 140],
-  [0.35, 150],
-  [0.43, 178],
-  [0.52, 156],
-  [0.6, 166],
-  [0.7, 172],
-  [0.8, 140],
-  [0.88, 122],
+  [0.26, 126],
+  [0.35, 136],
+  [0.43, 152],
+  [0.52, 136],
+  [0.6, 150],
+  [0.7, 158],
+  [0.8, 118],
+  [0.88, 106],
   [0.95, 88],
   [1.0, 58],
   [1.08, 28],
 ];
+
+/**
+ * 0..1 rise whose slope ramps up over the first fifth, holds, and eases off over the last fifth: the
+ * steepest point is 1.25x the average (a smoothstep's is 1.5x), so long hillsides stay grass and forest.
+ */
+function rise(k: number): number {
+  const a = 0.2;
+  if (k <= a) return (k * k) / (2 * a * (1 - a));
+  if (k >= 1 - a) return 1 - ((1 - k) * (1 - k)) / (2 * a * (1 - a));
+  return (k - a / 2) / (1 - a);
+}
 
 function ridgeHeight(u: number): number {
   if (u <= RIDGE[0][0]) return RIDGE[0][1];
@@ -239,13 +250,14 @@ export function kyoshiNaturalHeight(x: number, z: number): number {
     const dojo = band(u, 0.49, 0.555, 0.03);
     const harbor = band(u, 0.73, 0.9, 0.04);
     const meadow = band(u, 0.18, 0.25, 0.03);
-    const tStart = 0.1 + 0.2 * village + 0.18 * dojo + 0.05 * harbor + 0.12 * meadow;
+    // (the ridge foot lies beyond the hall's, the dojo's and the meadow's flat platforms)
+    const tStart = 0.1 + 0.28 * village + 0.32 * dojo + 0.05 * harbor + 0.3 * meadow;
     // Piedmont: from the beach up toward the ridge foot; flatter behind the harbour.
     const pied = 2.6 + (48 - 22 * harbor) * Math.pow(Math.min(t, 0.62), 1.7);
     // Ridge: the village sits in a valley whose head rises well behind the Meeting Hall; the outer
     // side falls steeply to sea cliffs; notched where Crystal Falls comes down.
-    const crest = KI.crest + 0.1 * village + 0.06 * dojo;
-    const shape = t < crest ? sstep(tStart, crest, t) : Math.pow(1 - sstep(crest, 1.04, t), 0.85);
+    const crest = KI.crest + 0.16 * village + 0.16 * dojo + 0.12 * meadow;
+    const shape = t < crest ? rise(clamp01((t - tStart) / (crest - tStart))) : Math.pow(1 - sstep(crest, 1.04, t), 0.85);
     const notch = 1 - 0.5 * Math.exp(-(((u - KI.falls.u) / 0.022) ** 2));
     const rough = 0.82 + 0.28 * noise.ridged2(x / 320, z / 320, 3);
     const ridge = Math.min(200, ridgeHeight(u) * rough) * notch;
@@ -254,8 +266,11 @@ export function kyoshiNaturalHeight(x: number, z: number): number {
     h += 3.5 * noiseB.fbm2(x / 70, z / 70, 3) * sstep(0.25, 0.55, t);
     h += 0.6 * noise.noise2(x / 13, z / 13);
     // Coastal clamp: sandy beaches along the bay, sea cliffs on the outer coast (higher on the west arm).
+    // `s` is the distance to the nearest coast: on the bay side the clamp only keeps the shore low and
+    // lets go within ~90 m, so the hillsides follow the ridge profile instead of a clamped wall.
     const westCliff = band(u, -0.1, 0.16, 0.06) * outerness;
-    const k = mix(0.15, 1.7 + 0.9 * westCliff, outerness);
+    const kIn = 0.15 + 1.1 * sstep(25, 90, s);
+    const k = mix(kIn, 1.7 + 0.9 * westCliff, sstep(0.42, 0.56, t));
     h = Math.min(h, 0.5 + k * s);
     if (s < 3 && outerness < 0.5) h = Math.min(h, 0.6 + 0.5 * s); // the last metres of a beach are sand-flat
   }
@@ -290,11 +305,17 @@ export function kyoshiNaturalHeight(x: number, z: number): number {
  * its ridges are green and brown to the crests (grass, scrub, bare earth); rock shows only on cliffs.
  */
 export function kyoshiSurface(w: Float32Array, slope: number, h: number): void {
-  const keep = sstep(0.3, 0.4, slope) + 0.45 * sstep(135, 185, h) * sstep(0.16, 0.26, slope);
+  const keep = sstep(0.36, 0.46, slope) + 0.45 * sstep(140, 185, h) * sstep(0.2, 0.3, slope);
   const moved = w[2] * (1 - clamp01(keep));
   w[2] -= moved;
   w[0] += moved * 0.62;
   w[1] += moved * 0.38;
+  // No mountain scree on the island's hillsides (it reads as grey bands): grass and earth instead;
+  // gravel stays on the stream banks.
+  const scree = w[8] * sstep(36, 56, h) * sstep(0.1, 0.15, slope) * 0.9;
+  w[8] -= scree;
+  w[0] += scree * 0.7;
+  w[1] += scree * 0.3;
 }
 
 /**

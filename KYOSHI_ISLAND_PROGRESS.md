@@ -45,9 +45,10 @@ Inner shore r = 205; band thickness 170 (tips) → 430 (middle); ridge crest at 
       NWT west-quay ice pier (-249,-1857) + trader at its head; FNC west harbour head kiosk (t-171,s788.5)
       + stairs to a landing stage + merchant ship; BSS 'Island Ferries' booth on the lawn north of the
       gate road (490,-179.5, faces +Z); SAT saddled bison at θ268.4 r70.2 on the bison terrace)
-- [ ] 4 village, dojo, shrine
-- [ ] 5 bay, bridge, falls, harbor
-- [ ] 6 people, boats, animals, routines, audio
+- [x] 4 village, dojo, shrine (a3a4f11)
+- [x] 5 bay, bridge, falls, harbor (1d204d1)
+- [x] 6 people, boats, animals, routines, audio (+ softer bay-side hills: coastal clamp lets go
+      inland, ridge foot beyond the hall/dojo/meadow platforms; shrine roof NaN fixed)
 - [ ] 7 journey cutscenes
 - [ ] 8 polish, perf, verification, report (delete this file)
 
@@ -63,7 +64,7 @@ Kyoshi Warriors: green kimono + dark green skirt, dark armour plates with gold s
 - src/world/Heightfield.ts (zone grid, island height/biome/surface, island feature lists)
 - src/world/Terrain.ts (zone chunk range, height-texture window)
 - src/world/env/WorldHeightTexture.ts (movable window)
-- src/world/env/VegetationPlacement.ts (island-only: trees on steeper slopes)
+- src/world/env/VegetationPlacement.ts (island-only: trees on steeper slopes, 0.62)
 - src/world/World.ts (height window uniform, RegionContent.unloadRadius)
 - src/world/RegionContent.ts (optional unloadRadius)
 - src/world/WorldLayout.ts (regionAt: far-zone fallback)
@@ -74,8 +75,13 @@ Kyoshi Warriors: green kimono + dark green skirt, dark armour plates with gold s
 - src/world/regions/earth/EarthRegion.ts (dispose resets `finished` so a freed region rebuilds)
 - src/modules.ts (travel module line)
 - (phase 3: no city files touched; regions/index.ts gained the travel-point factory line)
+- src/audio/music/themes.ts (phase 6: new 'kyoshi' theme entry)
+- src/world/WorldLayout.ts (phase 6: 'kyoshi' added to the RegionDef theme union)
 
 ## Notes / resume hints
+- Phase 6/7 patches: $S/ki/phase6.py (applied), $S/ki/phase7.py (Journey -> cinema director, city
+  vehicle hides during the trip). Phase 8 todo: NaN geometry console error, cache A() in
+  KyoshiIsland.sounds, e2e density threshold on low (0.7x cast), screenshots, regressions.
 - Probe: node $S/ki/look.mjs OUTDIR [aerial,top,village,beach,harbor,falls,heights] (FAR=1600 for
   far views); slopes: node $S/ki/slopes.mjs. ($S = scratchpad dir)
 - Steep (>40°) planar-projected grass/dirt look striped: keep rock on cliffs, forest the flanks.

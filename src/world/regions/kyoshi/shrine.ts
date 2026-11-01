@@ -120,7 +120,7 @@ function octRoof(R: number, h: number): THREE.BufferGeometry {
   const p = g.getAttribute('position') as THREE.BufferAttribute;
   for (let i = 0; i < p.count; i++) {
     const y = p.getY(i) + h / 2;
-    const k = 1 - y / h;
+    const k = Math.min(1, Math.max(0, 1 - y / h));
     // concave slope: lower part flatter (upturned eaves)
     p.setY(i, h * Math.pow(1 - k, 1.35) * 0.98 + (k > 0.92 ? (k - 0.92) * 2.2 : 0));
   }

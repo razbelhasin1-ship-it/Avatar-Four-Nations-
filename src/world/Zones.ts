@@ -40,7 +40,7 @@ export const KYOSHI_ZONE: ZoneDef = {
     r: KI.half * 1.5,
     biome: 'temperate',
     blurb: 'A crescent of green ridges around Koi Bay, home of the Kyoshi Warriors.',
-    theme: 'earth',
+    theme: 'kyoshi',
     weather: ['clear', 'clear', 'cloudy'],
     known: true,
   },

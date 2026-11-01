@@ -92,7 +92,7 @@ export interface RegionDef extends P2 {
   biome: BiomeId;
   blurb: string;
   /** Ambient/music theme keys. */
-  theme: 'water' | 'earth' | 'fire' | 'air' | 'desert' | 'swamp' | 'wild' | 'spirit';
+  theme: 'water' | 'earth' | 'fire' | 'air' | 'desert' | 'swamp' | 'wild' | 'spirit' | 'kyoshi';
   weather: Array<'clear' | 'cloudy' | 'snow' | 'blizzard' | 'rain' | 'fog' | 'ashfall' | 'sandstorm' | 'wind'>;
   /** Shown on the map from the start. */
   known: boolean;

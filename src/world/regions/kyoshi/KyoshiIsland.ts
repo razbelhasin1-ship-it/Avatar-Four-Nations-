@@ -1,10 +1,15 @@
 import * as THREE from 'three';
+import type { LoopHandle } from '../../../audio/AudioEngine';
 import type { GameContext } from '../../../core/GameContext';
 import { KYOSHI_ARRIVALS, KYOSHI_STAFF } from '../../../data/travel';
 import { heightAt } from '../../Heightfield';
 import { A, KI } from '../../landforms/kyoshiIsland';
 import { EarthRegion } from '../earth/EarthRegion';
-import type { BuildEnv } from '../earth/env';
+import { Pose } from '../earth/bssFigures';
+import type { BuildEnv, InteractableSpec } from '../earth/env';
+import './audio';
+import { KyoshiLife } from './life';
+import { BaySea } from './sea';
 import { buildBay, type BayOut } from './bay';
 import { buildDojo, type DojoOut } from './dojo';
 import { buildHarbor, type HarborOut } from './harbor';
@@ -36,6 +41,15 @@ export class KyoshiIsland extends EarthRegion {
   shrine: ShrineOut | null = null;
   harbor: HarborOut | null = null;
   bay: BayOut | null = null;
+  /** The islanders (all in the Kyoshi Warrior outfit) and the bay's life. */
+  life: KyoshiLife | null = null;
+  sea: BaySea | null = null;
+  private loops: { harbor: LoopHandle | null; market: LoopHandle | null } = { harbor: null, market: null };
+  private loopGen = -1;
+  private sfx = { bell: 12, hammer: 2, call: 8, drill: -1 };
+  /** Where the harbor's and the market's sound beds are centred. */
+  private readonly harborEar = A(0.82, 236);
+  private readonly marketEar = A(KI.village.u, 292);
 
   /** Built and finished (travel waits for this before anyone steps ashore). */
   get ready(): boolean {
@@ -62,9 +76,122 @@ export class KyoshiIsland extends EarthRegion {
     this.shrine = s;
     this.harbor = h;
     this.bay = b;
+    yield;
+    // People and the bay's life.
+    const ground = (x: number, z: number) => this.ctx.world.groundAt(x, z, heightAt(x, z) + 8).y;
+    const density = this.ctx.settings.data.graphics.preset === 'low' ? 0.7 : 1;
+    this.life?.dispose();
+    this.life = new KyoshiLife(
+      this.group,
+      {
+        doors: [...v.doors, ...h.doors.map((x) => ({ ...x, harbor: true }))],
+        stalls: [...v.stalls, ...h.stalls.map((x) => ({ ...x, harbor: true }))],
+        kitchens: v.kitchens,
+        fields: v.fields,
+        wells: v.wells,
+        piers: h.piers,
+        yard: d.yard,
+        posts: d.posts,
+        marks: this.marks,
+        ground,
+      },
+      density,
+    );
+    this.sea?.dispose();
+    this.sea = new BaySea(this.group, h.piers, v.doors.map((x) => ({ x: x.x, z: x.z })), ground);
+    const life = this.life;
+    const talk: InteractableSpec = {
+      id: 'ki_talk',
+      position: life.talkPos,
+      radius: 3.2,
+      get label() {
+        const n = life.nearest;
+        return n ? `Talk to ${n.name}` : 'Talk';
+      },
+      priority: 0,
+      interact: (ctx: GameContext) => life.talk(ctx),
+    };
+    env.interactables.push(talk);
     this.staff();
     this.installDebug();
     this.complete = true;
+  }
+
+  override update(dt: number, ctx: GameContext): void {
+    super.update(dt, ctx);
+    const full = this.detailLevel === 'full' && !this.building;
+    if (this.life) {
+      this.life.group.visible = full;
+      if (full) this.life.update(dt, ctx, ctx.camera);
+    }
+    if (this.sea) {
+      const vis = this.detailLevel !== 'hidden';
+      this.sea.group.visible = vis;
+      if (vis) this.sea.update(dt, ctx, full);
+    }
+    if (full) this.sounds(dt, ctx);
+    else this.quiet();
+  }
+
+  /** Harbor and market beds, the shrine bell, the dojo's shouts and fan snaps, mallets and calls. */
+  private sounds(dt: number, ctx: GameContext): void {
+    const p = ctx.player?.position;
+    if (!p) return;
+    const audio = ctx.audio;
+    if (audio.ready && this.loopGen !== audio.generation) {
+      this.quiet();
+      this.loops.harbor = audio.loop('amb.harbor', { volume: 0 });
+      this.loops.market = audio.loop('amb.market', { volume: 0 });
+      this.loopGen = audio.generation;
+    }
+    const hour = ctx.world.sky.timeOfDay;
+    const day = hour > 6 && hour < 20.5;
+    const hc = this.harborEar, vc = this.marketEar;
+    const dh = Math.hypot(p.x - hc.x, p.z - hc.z), dv = Math.hypot(p.x - vc.x, p.z - vc.z);
+    const fall = (d: number, r: number) => Math.max(0, Math.min(1, 1 - d / r));
+    this.loops.harbor?.setVolume(fall(dh, 150) * 0.9);
+    this.loops.market?.setVolume(day ? fall(dv, 120) * 0.75 : 0);
+    const s = this.sfx;
+    s.bell -= dt;
+    const sh = this.marks.shrine;
+    if (s.bell <= 0) {
+      s.bell = 45 + Math.random() * 50;
+      if (sh && Math.hypot(p.x - sh.x, p.z - sh.z) < 240) audio.play('ki_bell', { position: new THREE.Vector3(sh.x, sh.y + 4, sh.z) });
+    }
+    const yard = this.dojo?.yard;
+    if (this.life && yard && Math.hypot(p.x - yard.x, p.z - yard.z) < 120 && this.life.stats.drilling > 3) {
+      const dp = this.life.drillPose();
+      if (dp.pose !== s.drill) {
+        s.drill = dp.pose;
+        if (dp.pose !== Pose.idle) audio.play(dp.pose === Pose.raise ? 'ki_fan' : 'ki_shout', { position: new THREE.Vector3(yard.x, yard.y + 1.6, yard.z), volume: 0.9 });
+      }
+    }
+    if (day && dh < 160) {
+      s.hammer -= dt;
+      if (s.hammer <= 0) {
+        s.hammer = 0.6 + Math.random() * 3;
+        const w = A(0.79 + Math.random() * 0.06, 250);
+        audio.play('ki_hammer', { position: new THREE.Vector3(w.x, heightAt(w.x, w.z) + 1, w.z), volume: 0.7 });
+      }
+      s.call -= dt;
+      if (s.call <= 0) {
+        s.call = 14 + Math.random() * 22;
+        const c = A(0.78 + Math.random() * 0.1, 175);
+        audio.play('ki_call', { position: new THREE.Vector3(c.x, 2, c.z), volume: 0.8 });
+      }
+    }
+  }
+
+  private quiet(): void {
+    this.loops.harbor?.stop(0.5);
+    this.loops.market?.stop(0.5);
+    this.loops = { harbor: null, market: null };
+    this.loopGen = -1;
+  }
+
+  override onSessionEnd(ctx: GameContext): void {
+    super.onSessionEnd(ctx);
+    this.quiet();
   }
 
   /** The island's travel staff: the harbormaster at the passenger pier, the bison keeper on the meadow. */
@@ -98,6 +225,11 @@ export class KyoshiIsland extends EarthRegion {
   override dispose(ctx: GameContext): void {
     const g = (globalThis as { __game?: { debug?: Record<string, unknown> } }).__game;
     if (g?.debug && (g.debug.kyoshi as { owner?: unknown } | undefined)?.owner === this) delete g.debug.kyoshi;
+    this.quiet();
+    this.life?.dispose();
+    this.life = null;
+    this.sea?.dispose();
+    this.sea = null;
     super.dispose(ctx);
     for (const o of this.owned) o.dispose();
     this.owned = [];
@@ -116,6 +248,9 @@ export class KyoshiIsland extends EarthRegion {
       owner: this,
       marks: () => this.marks,
       stats: () => this.stats(),
+      life: () => this.life?.counts() ?? null,
+      sea: () => this.sea?.counts() ?? null,
+      unagi: () => this.sea?.summonUnagi(),
       go: (id: string) => {
         const m = this.marks[id];
         if (!m) return false;
