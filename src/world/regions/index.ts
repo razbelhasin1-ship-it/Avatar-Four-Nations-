@@ -2,6 +2,7 @@ import type { RegionFactory } from '../RegionContent';
 import { AIR_REGION_FACTORIES } from './air';
 import { EARTH_REGION_FACTORIES } from './earth';
 import { FIRE_REGION_FACTORIES } from './fire';
+import { KYOSHI_REGION_FACTORIES } from './kyoshi';
 import { WATER_REGION_FACTORIES } from './water';
 import { WILDS_REGION_FACTORIES } from './wilds';
 
@@ -15,4 +16,5 @@ export const REGION_FACTORIES: RegionFactory[] = [
   ...WATER_REGION_FACTORIES, // Water Tribes: Northern city, Southern village, Meditation Isle
   ...EARTH_REGION_FACTORIES, // Earth Kingdom: Ba Sing Se, Gaoling, Riverbend Village
   ...WILDS_REGION_FACTORIES, // Between the capitals: Omashu, Kyoshi, Misty Palms, Buried Library, Banyan Tree, north, caves, bridges, roadside, camps
+  ...KYOSHI_REGION_FACTORIES, // Kyoshi Island: its own map (zone), reached only by the travel routes
 ];

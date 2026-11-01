@@ -12,7 +12,7 @@ import { envUniforms } from './env/EnvShared';
 import { SkySystem } from './Sky';
 import { ICE_TOP, TerrainManager } from './Terrain';
 import { WaterRenderer } from './Water';
-import { LANDMARKS, regionAt, type LandmarkDef, type RegionDef } from './WorldLayout';
+import { LANDMARKS, regionAt, WORLD_HALF, type LandmarkDef, type RegionDef } from './WorldLayout';
 
 /**
  * Environment reaction hooks used by combat, movement and weather. The world
@@ -172,6 +172,8 @@ export class World implements PhysicsWorld, Persistable {
     }
     onProgress?.(0.62, 'Raising cities and temples…');
     await new Promise((r) => setTimeout(r, 0));
+    this.syncHeightWindow();
+    this.unloadFarRegions(p);
     this.ensureRegionsAround(p);
     // Environment systems (vegetation, grass...) populate around the spawn.
     const pre = this.updatables.filter((u) => u.preload);
@@ -200,10 +202,35 @@ export class World implements PhysicsWorld, Persistable {
     this.collision.clearDynamic();
   }
 
+  /** Water shaders sample the height texture: follow its window (the mainland, or a far zone's own map). */
+  private syncHeightWindow(): void {
+    const info = envUniforms.uHeightTexInfo.value;
+    info.x = this.terrain.heightTex.ox;
+    info.y = this.terrain.heightTex.oz;
+    info.z = 1 / (WORLD_HALF * 2);
+  }
+
+  /** Free content that defines an unloadRadius once the focus is beyond it (rebuilt on the next approach). */
+  private unloadFarRegions(focus: THREE.Vector3): void {
+    for (const r of this.regions) {
+      if (r.unloadRadius === undefined || !this.builtRegions.has(r.id)) continue;
+      if (Math.hypot(focus.x - r.center.x, focus.z - r.center.z) <= r.unloadRadius) continue;
+      try {
+        r.dispose(this.ctx);
+      } catch (err) {
+        console.error(`[World] unloading region ${r.id} failed`, err);
+      }
+      this.group.remove(r.group);
+      this.builtRegions.delete(r.id);
+    }
+  }
+
   update(dt: number, focus: THREE.Vector3): void {
     this.focus.copy(focus);
     envUniforms.uEnvTime.value = (envUniforms.uEnvTime.value + dt) % 3600;
     this.terrain.update(focus, 3);
+    this.syncHeightWindow();
+    this.unloadFarRegions(focus);
     this.ensureRegionsAround(focus);
     const cam = this.ctx.camera;
     this.sky.update(dt, cam, this.ctx.settings.data.graphics.drawDistance);
@@ -223,6 +250,7 @@ export class World implements PhysicsWorld, Persistable {
     this.focus.copy(focus);
     envUniforms.uEnvTime.value = (envUniforms.uEnvTime.value + dt) % 3600;
     this.terrain.update(focus, 2);
+    this.syncHeightWindow();
     const cam = this.ctx.camera;
     this.sky.update(dt, cam, this.ctx.settings.data.graphics.drawDistance);
     this.water.update(dt, cam, this.ctx.render.sunDir, this.sky.horizonColor, this.sky.sunColor);

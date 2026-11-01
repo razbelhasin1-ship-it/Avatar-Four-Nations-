@@ -14,6 +14,9 @@ export class WorldHeightTexture {
   readonly texture: THREE.DataTexture;
   private dirtyRows = new Map<number, [number, number]>();
   static readonly UNFILLED = -60;
+  /** World position of the window's corner (−WORLD_HALF on the mainland; re-centred on a far zone's map). */
+  ox = -WORLD_HALF;
+  oz = -WORLD_HALF;
 
   constructor(res = 1024) {
     this.res = res;
@@ -35,17 +38,17 @@ export class WorldHeightTexture {
    */
   writeChunk(x0: number, z0: number, size: number, spacing: number, heights: Float32Array, gw: number): void {
     const t = this.texel;
-    const i0 = Math.max(0, Math.floor((x0 + WORLD_HALF) / t));
-    const j0 = Math.max(0, Math.floor((z0 + WORLD_HALF) / t));
-    const i1 = Math.min(this.res - 1, Math.floor((x0 + size + WORLD_HALF) / t - 1e-6));
-    const j1 = Math.min(this.res - 1, Math.floor((z0 + size + WORLD_HALF) / t - 1e-6));
+    const i0 = Math.max(0, Math.floor((x0 - this.ox) / t));
+    const j0 = Math.max(0, Math.floor((z0 - this.oz) / t));
+    const i1 = Math.min(this.res - 1, Math.floor((x0 + size - this.ox) / t - 1e-6));
+    const j1 = Math.min(this.res - 1, Math.floor((z0 + size - this.oz) / t - 1e-6));
     for (let j = j0; j <= j1; j++) {
-      const wz = -WORLD_HALF + (j + 0.5) * t;
+      const wz = this.oz + (j + 0.5) * t;
       const gz = (wz - z0) / spacing + 1;
       const gzi = Math.min(gw - 2, Math.max(0, Math.floor(gz)));
       const fz = Math.min(1, Math.max(0, gz - gzi));
       for (let i = i0; i <= i1; i++) {
-        const wx = -WORLD_HALF + (i + 0.5) * t;
+        const wx = this.ox + (i + 0.5) * t;
         const gx = (wx - x0) / spacing + 1;
         const gxi = Math.min(gw - 2, Math.max(0, Math.floor(gx)));
         const fx = Math.min(1, Math.max(0, gx - gxi));
@@ -60,6 +63,20 @@ export class WorldHeightTexture {
         r[1] = Math.max(r[1], i1);
       } else this.dirtyRows.set(j, [i0, i1]);
     }
+  }
+
+  /**
+   * Move the window (same size) so its corner is at (ox, oz): everything reads "unfilled" again and
+   * the chunks built afterwards fill it. Used when the focus jumps to a far zone's own map and back.
+   */
+  setWindow(ox: number, oz: number): void {
+    if (ox === this.ox && oz === this.oz) return;
+    this.ox = ox;
+    this.oz = oz;
+    this.data.fill(THREE.DataUtils.toHalfFloat(WorldHeightTexture.UNFILLED));
+    this.dirtyRows.clear();
+    this.texture.clearUpdateRanges();
+    this.texture.needsUpdate = true;
   }
 
   /** Upload dirty rows (call once per frame). */

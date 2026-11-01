@@ -1,4 +1,5 @@
 import { inCapitalFootprint } from '../landforms/fireCapital';
+import { inKyoshiZone } from '../landforms/kyoshiIsland';
 import { SimplexNoise } from '../../core/Noise';
 import { Random } from '../../core/Random';
 import {
@@ -229,7 +230,8 @@ export function* generateCellMain(cx: number, cz: number, exclusions: readonly V
         work++;
         const h = heightAt(x, z);
         const n1 = normalAt(x, z, 1.5, nrm);
-        if (n1.y < 0.86) continue;
+        // Kyoshi Island's steep flanks are forested to the crests (pines on the slopes).
+        if (n1.y < (inKyoshiZone(x, z) ? 0.68 : 0.86)) continue;
         const slope = 1 - n1.y;
         sampleTerrain(x, z, h, slope, s);
         if (onRoad(s, 3.2)) continue;

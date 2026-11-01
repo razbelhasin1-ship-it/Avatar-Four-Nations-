@@ -1,4 +1,5 @@
 import { FNC } from './landforms/fireCapital';
+import { zoneAt } from './Zones';
 import type { BiomeId, Element } from '../core/types';
 
 /**
@@ -622,6 +623,8 @@ export const REGIONS: RegionDef[] = [
 
 /** Region containing (x, z): the nearest region whose radius covers the point (pure; World.regionAt). */
 export function regionAt(x: number, z: number): RegionDef | null {
+  // Far zones (their own maps, e.g. Kyoshi Island) carry their own region.
+  if (Math.abs(x) > WORLD_HALF || Math.abs(z) > WORLD_HALF) return zoneAt(x, z)?.region ?? null;
   let best: RegionDef | null = null;
   let bestScore = Infinity;
   for (const r of REGIONS) {

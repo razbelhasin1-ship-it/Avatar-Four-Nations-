@@ -21,6 +21,7 @@
  */
 import { SimplexNoise } from '../core/Noise';
 import { FNC, capitalFlank, capitalPaved, fireCapitalHeight } from './landforms/fireCapital';
+import { inKyoshiZone, KI, KI_LAKES, KI_PLATEAUS, KI_RIVERS, KI_ROADS, kyoshiBiome, kyoshiNaturalHeight, kyoshiSurface } from './landforms/kyoshiIsland';
 import type { BiomeId, SurfaceType } from '../core/types';
 import {
   LAKES,
@@ -294,12 +295,23 @@ interface Cell {
 const cells: Cell[] = [];
 for (let i = 0; i < GRID_N * GRID_N; i++) cells.push({ ranges: [], plateaus: [], trails: [], roads: [], lakes: [], rivers: [] });
 const EMPTY_CELL: Cell = { ranges: [], plateaus: [], trails: [], roads: [], lakes: [], rivers: [] };
+// Kyoshi Island's own map (a zone far off the mainland): a second grid over its square.
+const ZGRID_N = Math.ceil((KI.half * 2) / GRID_CELL);
+const ZGRID_X0 = KI.B.x - KI.half;
+const ZGRID_Z0 = KI.B.z - KI.half;
+const zcells: Cell[] = [];
+for (let i = 0; i < ZGRID_N * ZGRID_N; i++) zcells.push({ ranges: [], plateaus: [], trails: [], roads: [], lakes: [], rivers: [] });
 
 function cellAt(x: number, z: number): Cell {
   const cx = Math.floor((x + WORLD_HALF) / GRID_CELL);
   const cz = Math.floor((z + WORLD_HALF) / GRID_CELL);
   // Written so NaN coordinates (e.g. from a degenerate camera ray) also fall back to the empty cell.
-  if (!(cx >= 0 && cz >= 0 && cx < GRID_N && cz < GRID_N)) return EMPTY_CELL;
+  if (!(cx >= 0 && cz >= 0 && cx < GRID_N && cz < GRID_N)) {
+    const kx = Math.floor((x - ZGRID_X0) / GRID_CELL);
+    const kz = Math.floor((z - ZGRID_Z0) / GRID_CELL);
+    if (kx >= 0 && kz >= 0 && kx < ZGRID_N && kz < ZGRID_N) return zcells[kz * ZGRID_N + kx];
+    return EMPTY_CELL;
+  }
   return cells[cz * GRID_N + cx];
 }
 
@@ -308,6 +320,12 @@ function forEachCell(fn: (cell: Cell, x0: number, z0: number, x1: number, z1: nu
     for (let i = 0; i < GRID_N; i++) {
       const x0 = -WORLD_HALF + i * GRID_CELL, z0 = -WORLD_HALF + j * GRID_CELL;
       fn(cells[j * GRID_N + i], x0, z0, x0 + GRID_CELL, z0 + GRID_CELL);
+    }
+  }
+  for (let j = 0; j < ZGRID_N; j++) {
+    for (let i = 0; i < ZGRID_N; i++) {
+      const x0 = ZGRID_X0 + i * GRID_CELL, z0 = ZGRID_Z0 + j * GRID_CELL;
+      fn(zcells[j * ZGRID_N + i], x0, z0, x0 + GRID_CELL, z0 + GRID_CELL);
     }
   }
 }
@@ -480,6 +498,8 @@ function specialLandforms(x: number, z: number, h: number): number {
 
 /** Height before plateaus/trails/roads/lakes/rivers. */
 function naturalHeight(x: number, z: number, cell: Cell): number {
+  // Kyoshi Island's own map (zone far off the mainland).
+  if (inKyoshiZone(x, z)) return kyoshiNaturalHeight(x, z);
   let h = baseHeight(x, z);
   if (h > SEA_LEVEL - 4 && cell.ranges.length) h += rangesHeight(x, z, cell);
   h = specialLandforms(x, z, h);
@@ -642,7 +662,7 @@ export function initHeightfield(): void {
 
   // Static grid content first (ranges & plateaus) — `pre` below depends on it.
   ranges.forEach((r, i) => addLineFeature((c) => c.ranges, i, r.line, r.width + 2));
-  plateaus = PLATEAUS.map((p) => {
+  plateaus = [...PLATEAUS, ...KI_PLATEAUS].map((p) => {
     const c = cellAt(p.x, p.z);
     return { x: p.x, z: p.z, r: p.r, blend: p.blend, height: p.height ?? naturalHeight(p.x, p.z, c) };
   });
@@ -663,13 +683,13 @@ export function initHeightfield(): void {
     return { id: t.id, line, half: t.width / 2, profile: new Profile(spacing, vals) };
   });
 
-  roads = ROADS.map((r) => {
+  roads = [...ROADS, ...KI_ROADS].map((r) => {
     const line = new Polyline(r.points, r.width + 10);
     const raw = sampleProfile(line, 4, (x, z) => Math.max(SEA_LEVEL + 1.2, pre(x, z)));
     return { id: r.id, line, half: r.width / 2, profile: new Profile(4, smoothProfile(raw, 4, 3)), surface: r.surface };
   });
 
-  lakes = LAKES.map((l) => {
+  lakes = [...LAKES, ...KI_LAKES].map((l) => {
     const natural = pre(l.x, l.z);
     let ring = 0;
     for (let i = 0; i < 12; i++) {
@@ -681,7 +701,7 @@ export function initHeightfield(): void {
     return { def: l, level, depth: Math.max(1.5, l.r * 0.06), shore: Math.max(10, l.r * 0.35) };
   });
 
-  rivers = RIVERS.map((r) => {
+  rivers = [...RIVERS, ...KI_RIVERS].map((r) => {
     const line = new Polyline(r.points, Math.max(r.width[0], r.width[1]) + 40);
     const spacing = 4;
     const raw = sampleProfile(line, spacing, (x, z) => pre(x, z));
@@ -990,6 +1010,7 @@ export interface BiomeWeights {
 }
 
 export function biomeWeights(x: number, z: number, out?: BiomeWeights): BiomeWeights {
+  if (inKyoshiZone(x, z)) return kyoshiBiome(x, z, out ?? ({} as BiomeWeights));
   const n = 60 * noise.noise2(x / 300, z / 300);
   const isle = sstep(260, 160, len2(x + 1800, z + 1800));
   const north = sstep(-900, -1180, z + n) * (1 - isle);
@@ -1193,6 +1214,8 @@ export function sampleTerrain(x: number, z: number, h: number, slope: number, ou
     w[6] += moved * 0.6;
     w[2] += moved * 0.4;
   }
+  // Kyoshi Island (its own map): green-brown ridges, rock only on cliffs.
+  if (inKyoshiZone(x, z)) kyoshiSurface(out.w, slope, h);
   // Soil tint per biome.
   let sr = 1, sg = 1, sb = 1;
   sr = mix(sr, 0.78, b.volcanic); sg = mix(sg, 0.66, b.volcanic); sb = mix(sb, 0.62, b.volcanic);

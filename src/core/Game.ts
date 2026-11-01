@@ -22,6 +22,7 @@ import { VFXSystem } from '../vfx/VFX';
 import { InteractionSystem } from '../world/Interactables';
 import { World } from '../world/World';
 import { regionById, STARTS, TUTORIAL_SPAWN, WORLD_HALF } from '../world/WorldLayout';
+import { zoneAt } from '../world/Zones';
 import { installDebug } from './Debug';
 import { EventBus } from './EventBus';
 import type { GameContext, GameSystem, GameTime, SessionInfo } from './GameContext';
@@ -485,7 +486,8 @@ export class Game {
 
   private validSpawn(p: THREE.Vector3): boolean {
     if (![p.x, p.y, p.z].every((v) => Number.isFinite(v))) return false;
-    if (Math.abs(p.x) > WORLD_HALF - 150 || Math.abs(p.z) > WORLD_HALF - 150) return false;
+    // Far zones (their own maps, e.g. Kyoshi Island) are valid places to save and load.
+    if ((Math.abs(p.x) > WORLD_HALF - 150 || Math.abs(p.z) > WORLD_HALF - 150) && !zoneAt(p.x, p.z)) return false;
     const h = this.world.heightAt(p.x, p.z);
     if (h < -1) return false;
     const w = this.world.waterAt(p.x, p.z);

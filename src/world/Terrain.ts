@@ -4,6 +4,7 @@ import { attachEnvUniforms, ENV_NOISE_GLSL, ENV_PARS_GLSL } from './env/EnvShare
 import { createTerrainTexture, TERRAIN_LAYER_SCALE, terrainLayerMeans } from './env/TerrainTextures';
 import { WorldHeightTexture } from './env/WorldHeightTexture';
 import { WORLD_HALF } from './WorldLayout';
+import { zoneAt } from './Zones';
 
 /**
  * Streams terrain chunks around a focus point with distance-based LOD.
@@ -816,8 +817,20 @@ export class TerrainManager {
     const c1z = Math.floor((focus.z + range) / CHUNK_SIZE);
     const maxC = Math.floor(WORLD_HALF / CHUNK_SIZE);
     this.wanted.length = 0;
-    for (let cz = Math.max(-maxC, c0z); cz <= Math.min(maxC - 1, c1z); cz++) {
-      for (let cx = Math.max(-maxC, c0x); cx <= Math.min(maxC - 1, c1x); cx++) {
+    // The mainland's square, or the square of the far zone (its own map) the focus is in.
+    const zone = zoneAt(focus.x, focus.z);
+    let lo = -maxC, hi = maxC - 1, loZ = -maxC, hiZ = maxC - 1;
+    if (zone) {
+      lo = Math.floor((zone.cx - zone.half) / CHUNK_SIZE);
+      hi = Math.ceil((zone.cx + zone.half) / CHUNK_SIZE) - 1;
+      loZ = Math.floor((zone.cz - zone.half) / CHUNK_SIZE);
+      hiZ = Math.ceil((zone.cz + zone.half) / CHUNK_SIZE) - 1;
+    }
+    // Water shaders read depths from the height texture: keep its window on the map being streamed.
+    const ox = zone ? zone.cx - WORLD_HALF : -WORLD_HALF, oz = zone ? zone.cz - WORLD_HALF : -WORLD_HALF;
+    if (ox !== this.heightTex.ox || oz !== this.heightTex.oz) this.heightTex.setWindow(ox, oz);
+    for (let cz = Math.max(loZ, c0z); cz <= Math.min(hiZ, c1z); cz++) {
+      for (let cx = Math.max(lo, c0x); cx <= Math.min(hi, c1x); cx++) {
         const mx = (cx + 0.5) * CHUNK_SIZE, mz = (cz + 0.5) * CHUNK_SIZE;
         const d = Math.max(0, Math.hypot(mx - focus.x, mz - focus.z) - CHUNK_SIZE * 0.7);
         if (d > range) continue;

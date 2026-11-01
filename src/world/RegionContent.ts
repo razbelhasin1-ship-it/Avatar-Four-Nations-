@@ -24,6 +24,11 @@ export interface RegionContent {
   readonly center: P2;
   /** Distance from center at which build() is triggered. */
   readonly loadRadius: number;
+  /**
+   * Optional: farther than this from center, World disposes the content (frees its memory) and
+   * builds it again on the next approach. Used by far zones (their own maps) left behind by travel.
+   */
+  readonly unloadRadius?: number;
   /** Root object for all meshes of this content (added to the scene by World). */
   readonly group: THREE.Group;
   build(ctx: GameContext): void;
