@@ -6,7 +6,7 @@ import { brazier, crest, hall, roof, tree, wallBanner } from '../parts';
 import type { Cap } from './FireCapital';
 import { FNC, PLAZA, atAxis, harborHalf } from './layout';
 import { battlement, slabRect, wallFace } from './kit';
-import { ballista, tank } from './machines';
+import { ballista } from './machines';
 
 /**
  * The Royal Plaza: a sand-coloured forum in a valley between cliffs, from the main tower at its
@@ -77,9 +77,22 @@ export function* buildPlaza(cap: Cap): Generator<unknown, void, unknown> {
     const a = atAxis(side * (V.valleyHalf - 1), FNC.harbor.s0 + 0.2), e = atAxis(side * (harborHalf(FNC.harbor.s0) + FNC.harbor.quayW + 1.5), FNC.harbor.s0 + 0.2);
     wallFace(b, 'stone_tan', [a, e], { top: (x, z) => Math.max(Y + 5, heightAt(x, z - 6) + 0.8), bottom: () => FNC.harbor.bedY, thick: 3, collide: true, cap: 'stone_light', capH: 0.5 });
   }
+  // Head walls holding the hill behind the main tower. Behind the tower's upper storeys the fill
+  // runs flush with the hill right up to the second tier, so the Royal Way's terrace meets the
+  // tower with no gap; beyond them the wall reaches the tower's back face and stands a parapet
+  // over the ground tier's roof and the plaza.
+  const upper = TIERS[1].w / 2, s2 = (T.s0 + T.s1) / 2 - TIERS[1].d / 2;
   for (const side of [-1, 1]) {
-    const a = atAxis(side * (V.passHalf + 0.6), V.s0), c = atAxis(side * V.valleyHalf, V.s0);
-    wallFace(b, 'stone_tan', [a, c], { top: (x, z) => heightAt(x, z - 8) + 0.6, bottom: () => Y - 0.4, thick: 3, collide: true, cap: 'stone_light', capH: 0.5 });
+    const hillY = (x: number, z: number) => heightAt(x, z - 8);
+    const fs = (V.s0 - 1 + s2 + 0.3) / 2;
+    const a = atAxis(side * (V.passHalf + 0.4), fs), c = atAxis(side * upper, fs);
+    wallFace(b, 'stone_tan', [a, c], { top: hillY, bottom: () => Y - 0.4, thick: s2 + 0.3 - (V.s0 - 1), collide: true, cap: null });
+    const ws = (V.s0 - 1 + T.s0 + 0.5) / 2;
+    const d = atAxis(side * upper, ws), e = atAxis(side * V.valleyHalf, ws);
+    wallFace(b, 'stone_tan', [d, e], { top: (x, z) => hillY(x, z) + 0.6, bottom: () => Y - 0.4, thick: T.s0 + 0.5 - (V.s0 - 1), collide: true, cap: 'stone_light', capH: 0.5 });
+    // Parapet closing the fill's end over the ground tier's roof.
+    const f = atAxis(side * (upper - 0.3), T.s0 + 0.5), g = atAxis(side * (upper - 0.3), s2 + 0.3);
+    wallFace(b, 'stone_tan', [f, g], { top: (x, z) => hillY(x, z) + 0.6, bottom: (x, z) => hillY(x, z) - 1, thick: 0.6, collide: true, cap: 'stone_light', capH: 0.5 });
   }
   yield;
 
@@ -95,12 +108,11 @@ export function* buildPlaza(cap: Cap): Generator<unknown, void, unknown> {
       const yaw = side < 0 ? Math.PI / 2 : -Math.PI / 2;
       hall(b, { x: c.x, y: Y, z: c.z, yaw, w: 22, d: 6.6, h: 6.4, veranda: 2.2, colSpacing: 3.7, roofMat: 'roof_red', lattice: i !== 1, doors: i !== 1, horns: 1.2, upper: i === 1 ? { h: 3.4, inset: 1.4, roofH: 2.6 } : undefined });
       if (i === 1) {
-        // Tank bays: two wide dark doorways and the tanks parked before them.
+        // Tank bays: two wide dark doorways. Their tanks are the ones drilling up and down the
+        // side lanes in front of them (vessels.ts); none are parked across the lanes.
         for (const k of [-5.5, 5.5]) {
           const d = atAxis(side * (P.hallIn + 0.7 + 1.1), hallS[i] + k);
           b.box(bayMat(), { x: d.x, y: Y + 2.3, z: d.z, sx: 0.12, sy: 4.6, sz: 7.2 });
-          const tp = atAxis(side * (P.hallIn - 5.6), hallS[i] + k);
-          tank(props, tp.x, Y, tp.z, side < 0 ? Math.PI / 2 : -Math.PI / 2);
         }
         cap.mark(`tankBay${side > 0 ? 'E' : 'W'}`, c.x, Y, c.z);
       }
@@ -129,23 +141,25 @@ export function* buildPlaza(cap: Cap): Generator<unknown, void, unknown> {
   hall(b, { x: gp.x, y: Y + G.plat, z: gp.z, yaw: 0, w: G.w, d: G.d - 3, h: 4.6, veranda: 1.5, colSpacing: 3, roofMat: 'roof_red', horns: 1, crest: 1.2 });
   cap.mark('gatehouse', gp.x, Y + G.plat, gp.z);
 
-  // --- Shrubs at the near ends of the pools, braziers at the far ends, lamps and banners.
+  // --- Shrubs at the near ends of the pools, braziers at the far ends, lamps and banners. (One
+  // shrub per pool, close to it: clear of the side lanes' turning tanks, the walk up from the
+  // harbour steps and the cross walk the crowd takes along the pools' ends.)
   for (const side of [-1, 1]) {
     const tm = (side * (P.poolIn + P.poolOut)) / 2;
-    for (const ds of [0, 1]) {
-      const p = atAxis(tm + (ds ? side * 2.2 : 0), P.poolS1 + 2.6 + ds * 0.4);
+    {
+      const p = atAxis(tm, P.poolS1 + 1.8);
       props.cylinder('stone_light', { x: p.x, y: Y, z: p.z, r: 1.1, h: 0.6, segments: 10 }, { collide: true, walkable: false });
-      tree(props, 'bush', { x: p.x, y: Y + 0.55, z: p.z, s: 2.2 + ds * 0.4, variant: ds });
+      tree(props, 'bush', { x: p.x, y: Y + 0.55, z: p.z, s: 2.4, variant: side > 0 ? 1 : 0 });
     }
     const bz = atAxis(tm, P.poolS0 - 2.4);
     brazier(b, cap.flames, { x: bz.x, y: Y, z: bz.z, size: 1.15 });
   }
   cap.mark('plazaSpawn', atAxis(0, 606).x, Y, atAxis(0, 606).z);
 
-  // --- Rims: battlements with ballistae and corner watchtowers.
+  // --- Rims: battlements (on the valley walls' crest) with ballistae and corner watchtowers.
   for (const side of [-1, 1]) {
     const pts: Array<{ x: number; z: number }> = [];
-    for (let s = V.s0 + 2; s <= FNC.harbor.s0 - 2; s += 4) pts.push(atAxis(side * (V.valleyHalf + 1.6), s));
+    for (let s = V.s0 + 2; s <= FNC.harbor.s0 - 2; s += 4) pts.push(atAxis(side * (V.valleyHalf + 0.4), s));
     battlement(b, 'stone_tan', pts, { y: (x, z) => rimY(x, z, side) + 0.5, h: 1.1, thick: 0.8, cap: 'stone_light' });
     for (let s = V.s0 + 16; s < FNC.harbor.s0 - 8; s += 22) {
       const q = atAxis(side * (V.valleyHalf + 4.6), s);

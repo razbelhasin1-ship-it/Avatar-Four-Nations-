@@ -269,7 +269,8 @@ export class Vessels {
       this.root.add(g);
       const s = k > 1 ? 626 : 584;
       const id = col.add({ shape: 'box', x: 0, y: PLAZA.y + 1.4, z: 0, hx: 1.8, hy: 1.4, hz: 3.8, yaw: 0, walkable: true, solid: true, tag: 'fnc_tank' }, true);
-      this.tanks.push({ g, t: side * 15.4, s0: 574, s1: 636, s, dir: k > 1 ? -1 : 1, turn: 0, collider: id, puff: k * 0.3, yaw: k > 1 ? Math.PI : 0 });
+      // Lane ends: the turn in place (a 4.2 m sweep) clears the pools' rims and their shrubs.
+      this.tanks.push({ g, t: side * 15.4, s0: 574, s1: 637, s, dir: k > 1 ? -1 : 1, turn: 0, collider: id, puff: k * 0.3, yaw: k > 1 ? Math.PI : 0 });
     }
     // War balloons over the city.
     const bm = {

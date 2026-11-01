@@ -273,9 +273,11 @@ function coastHeight(t: number, s: number, around: number): { h: number; w: numb
   const hill = Math.max(around, H.headY + 6 * sstep(H.s0 + 40, P.s0, s));
   let h = hill;
   if (s <= H.s0 + 4) {
-    // Plaza valley: flat floor, steep sides; the valley head is the main tower's wall.
-    const side = sstep(P.valleyHalf, P.valleyHalf + 7, at);
-    const head = sstep(P.s0 + 1, P.s0 - 5, s);
+    // Plaza valley: flat floor, steep sides; the valley head is the main tower's wall. The hills
+    // run right up to the retaining walls (head and sides) and drop inside the walls' thickness
+    // (they used to fall away behind the walls, leaving deep ditches behind the tower and rims).
+    const side = sstep(P.valleyHalf - 0.6, P.valleyHalf + 1, at);
+    const head = sstep(P.s0 + 1.2, P.s0 - 0.6, s);
     h = mix(P.y, hill, Math.max(side, head));
   }
   // The two long pools down the forum.
