@@ -259,6 +259,9 @@ export class TravelPoint implements RegionContent {
   private ctx!: GameContext;
   private detail: 'full' | 'far' | 'hidden' = 'full';
 
+  /** Animation state reused every frame (no per-frame allocation). */
+  private readonly anim = defaultAnim();
+
   constructor(readonly def: TravelPointDef) {
     this.id = `travel_${def.id}`;
     this.center = { x: def.stand.x, z: def.stand.z };
@@ -280,7 +283,7 @@ export class TravelPoint implements RegionContent {
   update(dt: number, ctx: GameContext): void {
     if (!this.built || this.detail === 'hidden') return;
     for (const m of this.built.models) {
-      const a = defaultAnim();
+      const a = this.anim;
       a.dt = dt;
       a.grounded = true;
       a.time = ctx.time.elapsed;
