@@ -20,7 +20,7 @@ export const CONFIG = {
   wayW: 12,
   laneW: 3,
   /** Life (phase 5). */
-  npcs: 440,
+  npcs: 520,
   rallyCrowd: 320,
   warships: 12,
   boats: 14,

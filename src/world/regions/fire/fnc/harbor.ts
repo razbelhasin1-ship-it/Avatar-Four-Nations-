@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { heightAt } from '../../../Heightfield';
-import { brazier, crest, roof } from '../parts';
+import { bannerPole, brazier, crest, roof } from '../parts';
 import { crimsonMat, steelDarkMat } from '../materials';
 import type { Cap } from './FireCapital';
 import { FNC, HARBOR, atAxis, harborHalf } from './layout';
@@ -199,6 +199,37 @@ export function* buildHarbor(cap: Cap): Generator<unknown, void, unknown> {
     for (let s = Q.s0 + 12; s < HARBOR.wallS - 10; s += 22) {
       const p = atAxis(side * (harborHalf(s) + Q.quayW - 2.2), s);
       props.lantern(new THREE.Vector3(p.x, Q.quayY + 3.2, p.z), { color: 'warm', post: true });
+    }
+  }
+  // Cargo cranes beside the moored warships (crimson masts, black booms over the water, a load
+  // hanging on its rope), crate stacks and barrels at their feet, banners along the quays.
+  for (const side of [-1, 1]) {
+    for (const s of [692, 722, 757]) {
+      const e = harborHalf(s);
+      const base = atAxis(side * (e + 3.2), s);
+      const yb = Q.quayY;
+      props.block('stone_dark', { x: base.x, y: yb, z: base.z, sx: 2.6, sy: 0.8, sz: 2.6 }, { collide: true, walkable: true });
+      props.cylinder(crimsonMat(), { x: base.x, y: yb + 0.8, z: base.z, r: 0.34, rTop: 0.26, h: 11.6, segments: 8 }, { collide: true, walkable: false });
+      // Boom out over the water (toward the axis), rising a little.
+      const reach = 8.5, tip = atAxis(side * (e + 3.2 - reach), s);
+      const yaw = Math.atan2(tip.x - base.x, tip.z - base.z);
+      const mid = { x: (base.x + tip.x) / 2, z: (base.z + tip.z) / 2 };
+      props.box('black_lacquer', { x: mid.x, y: yb + 12, z: mid.z, sx: 0.36, sy: 0.36, sz: reach + 1, yaw, pitch: -0.12 });
+      props.box('black_lacquer', { x: base.x, y: yb + 12.2, z: base.z, sx: 0.8, sy: 0.8, sz: 0.8 });
+      props.cylinder('iron', { x: tip.x, y: yb + 9.2, z: tip.z, r: 0.04, h: 3.6, segments: 4 });
+      props.box(s % 2 ? 'wood_dark' : 'wood', { x: tip.x, y: yb + 8.6, z: tip.z, sx: 1.6, sy: 1.2, sz: 1.6, yaw: 0.4 });
+      for (let k = 0; k < 6; k++) {
+        const q = atAxis(side * (e + 11.6 + (k % 3) * 1.4), s + 3 + Math.floor(k / 3) * 1.4);
+        props.box(k % 2 ? 'wood' : 'wood_dark', { x: q.x, y: yb + 0.6 + (k % 2) * 1.15, z: q.z, sx: 1.25, sy: 1.15, sz: 1.25, yaw: side * 0.6 }, k % 2 ? {} : { collide: true, walkable: true });
+      }
+      for (let k = 0; k < 3; k++) {
+        const q = atAxis(side * (e + 2.0), s - 3 - k * 0.9);
+        props.cylinder(k % 2 ? 'wood_dark' : 'wood', { x: q.x, y: yb, z: q.z, r: 0.4, h: 1, segments: 8 }, { collide: true, walkable: false });
+      }
+    }
+    for (let s = Q.s0 + 20; s < HARBOR.wallS - 20; s += 30) {
+      const q = atAxis(side * (harborHalf(s) + Q.quayW - 0.8), s);
+      bannerPole(props, { x: q.x, y: Q.quayY, z: q.z, yaw: 0, h: 7 });
     }
   }
   const qw = atAxis(-(harborHalf(700) + 8), 700);

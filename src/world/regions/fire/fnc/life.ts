@@ -7,7 +7,7 @@ import type { P2 } from '../../../WorldLayout';
 import { Acc, FigureRenderer, Pose } from '../../earth/bssFigures';
 import { NavGraph, NavTag } from '../../earth/bssNav';
 import './audio';
-import { foundryStacks, marketStalls, openRuns, shopFronts } from './city';
+import { foundryStacks, homeFronts, marketStalls, openRuns, rimStreets, shopFronts } from './city';
 import type { Emitter } from '../../../../vfx/VFX';
 import { CALDERA, CONFIG, DISTRICTS, FNC, HARBOR, PLAZA, atAxis, atPolar, cityBlocked, footR, harborHalf, polarOf, ringR, roadPath, spokeBearings } from './layout';
 import { FAcc, PALETTE, SKIN, registerFireAccessories, type Klass } from './people';
@@ -61,7 +61,7 @@ export const LIFE = {
   drill: [[7, 10], [13, 16]] as Array<[number, number]>,
   academy: [8, 17] as [number, number],
   shops: [6.5, 21] as [number, number],
-  draw: { near: 70, far: 300, farLow: 210 },
+  draw: { near: 70, far: 360, farLow: 270 },
 };
 
 /**
@@ -70,7 +70,7 @@ export const LIFE = {
  * out of a door or come round a corner the camera is not watching.
  */
 const BUBBLE = 120;
-const BUBBLE_TARGET: Partial<Record<ZoneName, number>> = { harbor: 60, plaza: 75, city: 130, market: 85, park: 36, foundry: 36 };
+const BUBBLE_TARGET: Partial<Record<ZoneName, number>> = { harbor: 75, plaza: 80, city: 130, market: 85, park: 36, foundry: 36 };
 const ZTOWN = Z.harbor | Z.plaza | Z.city | Z.market | Z.park | Z.foundry;
 const MOVABLE = new Set<Role>(['walker', 'shopper', 'porter', 'vendor', 'sitter', 'docker', 'smith']);
 
@@ -215,6 +215,7 @@ export class CapitalLife {
   private comp: Int32Array | null = null;
   /** The walking graph's main connected component (people live only there). */
   private main = 0;
+  private readonly big = new Set<number>();
   private prev: Int32Array<ArrayBuffer> = new Int32Array(0);
   /** POI node ids by tag bit (index = bit number). */
   private readonly pois = new Map<number, number[]>();
@@ -417,6 +418,8 @@ export class CapitalLife {
       const pts = [...rs].sort((x, y) => x - y).map((r) => atPolar(a, r));
       for (const run of openRuns(pts)) this.street(run, T.street | Z.city, 1.6, 10, 3);
     }
+    // The harbour quarters on the terraces above the plaza's cliffs and the harbour walls.
+    for (const pts of rimStreets) this.street(pts, T.street | T.patrol | Z.city, 2.4, 9, 3);
     // Districts: foundries (east), Zoryu Park (west), the market on the Royal Way.
     for (const n of nav.nodes) {
       if (!(n.tags & Z.city)) continue;
@@ -437,6 +440,7 @@ export class CapitalLife {
       return k >= 0 ? nav.nodes[k].tags & ZALL : Z.city;
     };
     for (const f of shopFronts) this.poi(f.x, f.z, T.shop | zoneAt(f.x, f.z), f.yaw, 9);
+    for (const f of homeFronts) this.poi(f.x, f.z, T.home | zoneAt(f.x, f.z), f.yaw, 9);
     for (const st of marketStalls) {
       const fx = Math.sin(st.yaw), fz = Math.cos(st.yaw);
       this.poi(st.x + fx * 2.1, st.z + fz * 2.1, T.stall | Z.market, st.yaw + Math.PI, 8);
@@ -595,8 +599,10 @@ export class CapitalLife {
       main = k;
     }
     this.main = main;
-    for (const z of ZONES) this.zoneNodes.set(z, this.zoneNodes.get(z)!.filter((i) => this.comp![i] === main));
-    for (const [b, l] of this.pois) this.pois.set(b, l.filter((i) => this.comp![i] === main));
+    // Every sizeable walkable area keeps people (the harbour quarters sit apart on the cliff tops).
+    for (const [k, v] of size) if (v >= 30) this.big.add(k);
+    for (const z of ZONES) this.zoneNodes.set(z, this.zoneNodes.get(z)!.filter((i) => this.big.has(this.comp![i])));
+    for (const [b, l] of this.pois) this.pois.set(b, l.filter((i) => this.big.has(this.comp![i])));
     this.spawn(ctx);
     this.buildEvents(ctx);
     const g = ctx.settings.data.graphics;
@@ -842,6 +848,7 @@ export class CapitalLife {
       const k = l[Math.floor(Math.random() * l.length)];
       const n = this.nav.nodes[k];
       if (!(n.tags & a.roam)) continue;
+      if (a.node >= 0 && this.comp![k] !== this.comp![a.node]) continue;
       if (Math.abs(n.x - a.x) + Math.abs(n.z - a.z) > maxD) continue;
       return k;
     }
@@ -851,6 +858,7 @@ export class CapitalLife {
     for (let tries = 0; tries < 8; tries++) {
       const k = nodes[Math.floor(Math.random() * nodes.length)];
       const n = this.nav.nodes[k];
+      if (a.node >= 0 && this.comp![k] !== this.comp![a.node]) continue;
       if (Math.abs(n.x - a.x) + Math.abs(n.z - a.z) < 160) return k;
     }
     return nodes[Math.floor(Math.random() * nodes.length)];
@@ -1045,7 +1053,14 @@ export class CapitalLife {
     const target = this.nav.near(s.x, s.z, 14, ZALL);
     a.toGoal = true;
     if (!this.go(a, target)) {
+      // No way there on foot (another walkable area, e.g. the harbour quarters): arrive with the crowd.
+      a.toGoal = false;
+      a.x = s.x;
+      a.y = s.y;
+      a.z = s.z;
+      a.yaw = s.yaw;
       a.st = 'goal';
+      a.node = target;
     }
   }
 
@@ -1301,7 +1316,7 @@ export class CapitalLife {
     const key = `${Math.floor(F.x / 24)},${Math.floor(F.z / 24)}`;
     if (key !== this.doorKey) {
       this.doorKey = key;
-      this.doors = this.nav.around(F.x, F.z, BUBBLE, ZTOWN).filter((k) => this.comp![k] === this.main);
+      this.doors = this.nav.around(F.x, F.z, BUBBLE, ZTOWN).filter((k) => this.big.has(this.comp![k]));
     }
     if (!this.doors.length) return;
     const N = this.nav.nodes;

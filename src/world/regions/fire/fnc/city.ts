@@ -3,10 +3,10 @@ import { heightAt } from '../../../Heightfield';
 import { capitalGreen } from '../../../landforms/fireCapital';
 import type { P2 } from '../../../WorldLayout';
 import type { ArchetypeId } from '../../earth/archetypes';
-import { emberGlowMat } from '../materials';
+import { crimsonMat, emberGlowMat } from '../materials';
 import { bannerPole, brazier, hall, roof, stall, tree } from '../parts';
 import type { Cap } from './FireCapital';
-import { CONFIG, DISTRICTS, FNC, PLAZA, atAxis, atPolar, cityBlocked, footR, polarOf, ringR, sectorWeight, spokeBearings } from './layout';
+import { CONFIG, DISTRICTS, FNC, PLAZA, atAxis, atPolar, cityBlocked, footR, harborHalf, polarOf, ringR, sectorWeight, spokeBearings } from './layout';
 import { drapedStrip, groundSpan, rng } from './kit';
 
 /**
@@ -93,6 +93,7 @@ export function* buildCity(cap: Cap): Generator<unknown, void, unknown> {
     cap.mark('eastGate', -968, heightAt(-968, 968), 968);
   }
   yield* houses(cap);
+  yield* rimQuarters(cap);
   yield* market(cap);
   yield* foundries(cap);
   yield* park(cap);
@@ -201,6 +202,127 @@ function* houses(cap: Cap): Generator<unknown, void, unknown> {
   cap.mark('houses', count, 0, 0);
 }
 
+/**
+ * The harbour quarters: the terraces above the plaza's cliffs and the harbour walls, packed with
+ * cream-walled, red-roofed houses, shops and warehouses along three streets that follow the walls
+ * down towards the sea (cross streets between them), watchtowers with braziers on the cliff edge,
+ * banners at the corners. Harbor City climbing the slopes behind the plaza and the harbour.
+ */
+function* rimQuarters(cap: Cap): Generator<unknown, void, unknown> {
+  const { env } = cap;
+  const rnd = rng(CONFIG.seed ^ 0x7e11);
+  const A = env.arch;
+  rimStreets.length = 0;
+  homeFronts.length = 0;
+  const S0 = 552, S1 = 772;
+  const STREETS = [10, 40, 70];
+  const CROSS = [612, 672, 732];
+  const edge = (s: number): number => (s < FNC.harbor.s0 - 8 ? FNC.plaza.valleyHalf + 10 : harborHalf(s) + FNC.harbor.quayW + 4);
+  const ok = (x: number, z: number): boolean => !cityBlocked(x, z) && heightAt(x, z) > 4;
+  const at = (side: number, o: number, s: number): P2 => atAxis(side * (edge(s) + o), s);
+  let count = 0;
+  for (const side of [-1, 1]) {
+    const b = env.chunks.named('major', `fnc_rim${side > 0 ? 'E' : 'W'}`).builder;
+    // Streets along the walls (they end where the land does), cross streets between them.
+    for (const o of STREETS) {
+      const pts: P2[] = [];
+      for (let s = S0; s <= S1; s += 4) {
+        const p = at(side, o, s);
+        if (!ok(p.x, p.z)) break;
+        pts.push(p);
+      }
+      if (pts.length > 2) {
+        drapedStrip(b, 'paving', pts, 6, { tile: 4 });
+        rimStreets.push(pts);
+      }
+    }
+    for (const s of CROSS) {
+      const pts: P2[] = [];
+      for (const o of STREETS) {
+        const p = at(side, o, s);
+        if (ok(p.x, p.z)) pts.push(p);
+      }
+      if (pts.length > 1) {
+        drapedStrip(b, 'paving', pts, 5, { tile: 4 });
+        rimStreets.push(pts);
+      }
+    }
+    yield;
+    // Houses in four rows facing the streets: the cliff-side row, back-to-back rows along the
+    // middle street, the outer row climbing the slope.
+    const rows: Array<{ o: number; face: 1 | -1 }> = [{ o: 10, face: 1 }, { o: 40, face: -1 }, { o: 40, face: 1 }, { o: 70, face: 1 }];
+    for (const row of rows) {
+      for (let s = S0 + 3; s < S1 - 3; ) {
+        if (CROSS.some((c) => Math.abs(c - s) < 5.5)) {
+          s += 1.5;
+          continue;
+        }
+        const r = rnd();
+        const ids: ArchetypeId[] = r < 0.28 ? ['N3', 'N3b'] : r < 0.55 ? ['N4', 'N8', 'N2', 'N7'] : ['N1', 'N2', 'N5', 'N7'];
+        const arch = A[ids[Math.floor(rnd() * ids.length)]];
+        const p0 = at(side, row.o, s - 2), p1 = at(side, row.o, s + 2);
+        const dl = Math.hypot(p1.x - p0.x, p1.z - p0.z) || 1;
+        const dx = (p1.x - p0.x) / dl, dz = (p1.z - p0.z) / dl;
+        // Outward normal (away from the plaza / harbour axis).
+        let nx = dz, nz = -dx;
+        if (Math.sign(nx) !== side) {
+          nx = -nx;
+          nz = -nz;
+        }
+        const st = at(side, row.o, s);
+        const off = 3.5 + arch.spanD / 2;
+        const c = { x: st.x + nx * row.face * off, z: st.z + nz * row.face * off };
+        const yaw = Math.atan2(-nx * row.face, -nz * row.face);
+        const step = (arch.spanW + 0.3 + rnd() * 0.8) * dz;
+        s += Math.max(3, step);
+        const span = groundSpan(c.x, c.z, arch.spanW, arch.spanD, yaw);
+        if (span.max - span.min > 4.5) continue;
+        let clear = true;
+        const cs = Math.cos(yaw), sn = Math.sin(yaw);
+        for (const [lx, lz] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5], [0, 0]] as const) {
+          const qx = c.x + lx * arch.spanW * cs + lz * arch.spanD * sn, qz = c.z - lx * arch.spanW * sn + lz * arch.spanD * cs;
+          if (!ok(qx, qz) || capitalGreen(qx, qz)) clear = false;
+        }
+        if (!clear) continue;
+        const y = span.max;
+        env.chunks.addHouse(arch, c.x, y, c.z, yaw, { tint: new THREE.Color(WALL_TINTS[Math.floor(rnd() * WALL_TINTS.length)]), roofTint: new THREE.Color(ROOF_TINTS[Math.floor(rnd() * ROOF_TINTS.length)]) });
+        if (span.max - span.min > 0.35) {
+          const fb = env.chunks.at('houses', c.x, c.z).builder;
+          fb.box('stone_tan', { x: c.x, y: (span.min - 0.4 + y) / 2, z: c.z, sx: arch.w + 0.3, sy: y - span.min + 0.4, sz: arch.d + 0.3, yaw });
+        }
+        const f = arch.spanD / 2 + 1.1;
+        const door = { x: c.x + Math.sin(yaw) * f, z: c.z + Math.cos(yaw) * f, yaw: yaw + Math.PI };
+        if (ids[0] === 'N3') shopFronts.push({ ...door, w: arch.spanW });
+        else homeFronts.push(door);
+        count++;
+      }
+      yield;
+    }
+    // Watchtowers on the cliff edge, banners and braziers at the street corners.
+    const props = env.chunks.named('props', `fnc_rim_props${side > 0 ? 'E' : 'W'}`).builder;
+    for (let s = S0 + 14; s < S1 - 10; s += 56) {
+      const c = at(side, 3.2, s);
+      if (!ok(c.x, c.z)) continue;
+      const base = heightAt(c.x, c.z) - 0.5, top = base + 9;
+      b.block('stone_dark', { x: c.x, y: base, z: c.z, sx: 4.4, sy: top - base, sz: 4.4 }, { collide: true, walkable: true });
+      b.box(crimsonMat(), { x: c.x, y: top - 1.6, z: c.z, sx: 4.6, sy: 1.1, sz: 4.6 });
+      roof(b, { x: c.x, y: top + 2.8, z: c.z, w: 3.4, d: 3.4, h: 2, style: 'pyramid', mat: 'roof_red', trim: 'gold', tips: 0.3, finial: 0.9 });
+      for (const [px, pz] of [[-1.5, -1.5], [1.5, -1.5], [1.5, 1.5], [-1.5, 1.5]] as const) b.box('wood_red', { x: c.x + px, y: top + 1.4, z: c.z + pz, sx: 0.26, sy: 2.8, sz: 0.26 });
+      brazier(b, cap.flames, { x: c.x, y: top, z: c.z, size: 0.6, style: 'bowl', collide: false });
+    }
+    for (const s of CROSS) {
+      for (const o of STREETS) {
+        const q = at(side, o + 3.6, s + 3.6);
+        if (!ok(q.x, q.z)) continue;
+        if ((o / 30 + s) % 2 < 1) bannerPole(props, { x: q.x, y: heightAt(q.x, q.z), z: q.z, yaw: 0, h: 6.5 });
+        else brazier(props, cap.flames, { x: q.x, y: heightAt(q.x, q.z), z: q.z, size: 0.7, style: 'tripod', collide: false });
+      }
+    }
+    yield;
+  }
+  cap.mark('rimHouses', count, 0, 0);
+}
+
 /** Royal Way market: stalls both sides, banners, braziers. */
 function* market(cap: Cap): Generator<unknown, void, unknown> {
   const { env } = cap;
@@ -276,6 +398,10 @@ function* foundries(cap: Cap): Generator<unknown, void, unknown> {
 
 /** Smokestack tops (smoke columns in phase 5). */
 export const foundryStacks: Array<{ x: number; y: number; z: number }> = [];
+/** The harbour quarters' streets (polylines) and house doors, for the crowds' walking graph. */
+export const rimStreets: P2[][] = [];
+export const homeFronts: Array<{ x: number; z: number; yaw: number }> = [];
+
 /** Shop fronts along the streets (a spot on the street before the door, facing it) for the crowds. */
 export const shopFronts: Array<{ x: number; z: number; yaw: number; w: number }> = [];
 /** Market stalls on the Royal Way (centre, facing the way) for sellers and the night covers. */
