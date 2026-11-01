@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { heightAt } from '../../../Heightfield';
 import { roadNear } from '../../../landforms/fireCapital';
 import type { P2 } from '../../../WorldLayout';
-import { bannerPole, brazier, crest, roof } from '../parts';
+import { bannerPole, brazier, crest, lanternPost, roof } from '../parts';
 import { crimsonMat } from '../materials';
 import type { Cap } from './FireCapital';
 import { FNC, atAxis, roadPath } from './layout';
@@ -116,16 +116,22 @@ export function* buildRoad(cap: Cap): Generator<unknown, void, unknown> {
     cap.mark(`roadTower${k}`, c.x, top, c.z);
   }
   {
+    // Street lamps: a lacquered post at the road's edge (sides alternating) whose bracket hangs a
+    // paper lantern over the road. (They were bare lamps floating over the middle of the road.)
     const props = env.chunks.named('props', 'fnc_road_props').builder;
     const d = densify(world, 1);
     let acc = 0;
+    let side = 1;
     for (let i = 1; i < d.length; i++) {
       acc += Math.hypot(d[i].x - d[i - 1].x, d[i].z - d[i - 1].z);
       if (acc < 24) continue;
       acc = 0;
-      const q = d[i];
-      const y = roadY(q.x, q.z);
-      props.lantern(new THREE.Vector3(q.x, y + 2.4, q.z), { color: 'warm', post: false, hanging: false });
+      const tx = d[i].x - d[i - 1].x, tz = d[i].z - d[i - 1].z;
+      const tl = Math.hypot(tx, tz) || 1;
+      const nx = (-tz / tl) * side, nz = (tx / tl) * side;
+      const px = d[i].x + nx * (R.half - 0.45), pz = d[i].z + nz * (R.half - 0.45);
+      lanternPost(props, { x: px, y: roadY(px, pz), z: pz, yaw: Math.atan2(-nx, -nz) });
+      side = -side;
     }
   }
   yield;
