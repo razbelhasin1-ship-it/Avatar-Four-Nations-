@@ -5,7 +5,11 @@ import { heightAt } from '../../Heightfield';
 import { A, KI } from '../../landforms/kyoshiIsland';
 import { EarthRegion } from '../earth/EarthRegion';
 import type { BuildEnv } from '../earth/env';
+import { buildDojo, type DojoOut } from './dojo';
 import { kyoshiLook } from './people';
+import { buildShrine, type ShrineOut } from './shrine';
+import './spots';
+import { buildVillage, type VillageOut } from './village';
 
 /**
  * Kyoshi Island (zone `kyoshi_island`, its own map): Suki's village, the Kyoshi Dojo and Shrine,
@@ -22,6 +26,12 @@ export class KyoshiIsland extends EarthRegion {
   protected readonly seed = KI.seed;
   protected override readonly cell = 96;
   private complete = false;
+  /** Painted textures / materials owned by the island (fans, mural, swirl paving). */
+  private owned: Array<THREE.Material | THREE.Texture> = [];
+  /** Built outputs (crowd and life read them). */
+  village: VillageOut | null = null;
+  dojo: DojoOut | null = null;
+  shrine: ShrineOut | null = null;
 
   /** Built and finished (travel waits for this before anyone steps ashore). */
   get ready(): boolean {
@@ -31,10 +41,19 @@ export class KyoshiIsland extends EarthRegion {
   protected *construct(env: BuildEnv): Generator<unknown, void, unknown> {
     this.anchors();
     yield;
-    // Blockout: the Avatar statue's pillar at the village entrance (scale reference).
-    const g = A(KI.village.u, KI.village.gateR - 4);
-    const y = heightAt(g.x, g.z);
-    env.chunks.at('major', g.x, g.z).builder.cylinder('wood_dark', { x: g.x, y, z: g.z, r: 0.9, h: 15, segments: 14 }, { solid: true });
+    const v: VillageOut = { marks: {}, doors: [], stalls: [], kitchens: [], fields: [], wells: [], lanterns: [], owned: [] };
+    yield* buildVillage(env, v);
+    const d: DojoOut = { marks: {}, yard: { x: 0, y: 0, z: 0, yaw: 0, w: 0, d: 0 }, posts: [], owned: [] };
+    yield* buildDojo(env, d);
+    const s: ShrineOut = { marks: {}, owned: [], lanterns: [] };
+    yield* buildShrine(env, s);
+    for (const out of [v, d, s]) {
+      for (const [k, m] of Object.entries(out.marks)) this.mark(k, m.x, m.y, m.z);
+      this.owned.push(...out.owned);
+    }
+    this.village = v;
+    this.dojo = d;
+    this.shrine = s;
     this.staff();
     this.installDebug();
     this.complete = true;
@@ -44,7 +63,7 @@ export class KyoshiIsland extends EarthRegion {
   private staff(): void {
     const pier = KYOSHI_ARRIVALS.ki_pier, meadow = KYOSHI_ARRIVALS.ki_meadow;
     const hm = KYOSHI_STAFF.harbormaster, kp = KYOSHI_STAFF.keeper;
-    const side = (p: { x: number; z: number; yaw: number }, d: number) => ({ x: p.x + Math.cos(p.yaw) * d, z: p.z - Math.sin(p.yaw) * d });
+    const side = (p: { x: number; z: number; yaw: number }, dd: number) => ({ x: p.x + Math.cos(p.yaw) * dd, z: p.z - Math.sin(p.yaw) * dd });
     const a = side(pier, 3.2), b = side(meadow, -3.4);
     this.npc({ id: hm.id, name: hm.name, title: hm.title, role: 'merchant', nation: 'earth', appearance: kyoshiLook(4101), x: a.x, z: a.z, yaw: pier.yaw + Math.PI, behavior: { type: 'idle', variant: 'stand' }, dialogue: 'travel_staff', region: 'kyoshi_isle', marker: 'none', schedule: 'always' });
     this.npc({ id: kp.id, name: kp.name, title: kp.title, role: 'villager', nation: 'earth', appearance: kyoshiLook(4102), x: b.x, z: b.z, yaw: meadow.yaw + Math.PI, behavior: { type: 'idle', variant: 'stand' }, dialogue: 'travel_staff', region: 'kyoshi_isle', marker: 'none', schedule: 'always' });
@@ -57,7 +76,6 @@ export class KyoshiIsland extends EarthRegion {
       this.mark(id, p.x, heightAt(p.x, p.z), p.z);
     };
     at('village_entrance', KI.village.u, KI.village.gateR - 10);
-    at('statue', KI.village.u, KI.village.gateR - 4);
     at('meeting_hall', KI.village.u, KI.village.hallR);
     at('dojo', KI.dojo.u, KI.dojo.r);
     at('shrine', KI.shrine.u, KI.shrine.r);
@@ -73,12 +91,15 @@ export class KyoshiIsland extends EarthRegion {
     const g = (globalThis as { __game?: { debug?: Record<string, unknown> } }).__game;
     if (g?.debug && (g.debug.kyoshi as { owner?: unknown } | undefined)?.owner === this) delete g.debug.kyoshi;
     super.dispose(ctx);
+    for (const o of this.owned) o.dispose();
+    this.owned = [];
+    this.village = this.dojo = this.shrine = null;
     // Rebuilt from scratch on the next visit.
     this.npcDefs.length = 0;
     this.complete = false;
   }
 
-  /** `__game.debug.kyoshi`: anchors and a teleport to them. */
+  /** `__game.debug.kyoshi`: anchors, stats and a teleport to them. */
   private installDebug(): void {
     const g = (globalThis as { __game?: { debug?: Record<string, unknown> } }).__game;
     if (!g?.debug) return;
