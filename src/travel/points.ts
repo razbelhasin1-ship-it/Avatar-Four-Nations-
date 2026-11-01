@@ -5,7 +5,7 @@ import type { GameContext } from '../core/GameContext';
 import { TRAVEL_POINTS, type CityId, type TravelPointDef } from '../data/travel';
 import type { NPCDef } from '../npc/NPCTypes';
 import { ContentBuilder } from '../world/kit/Builder';
-import type { KitMaterialName } from '../world/kit/Materials';
+import { kitMaterial as kitMaterialOf, type KitMaterialName } from '../world/kit/Materials';
 import { atAxis } from '../world/landforms/fireCapital';
 import type { RegionContent, RegionFactory } from '../world/RegionContent';
 import { polar as satPolar, yawOut as satYawOut } from '../world/regions/air/sat/layout';
@@ -34,18 +34,25 @@ interface Built {
   owned: Array<THREE.Material | THREE.Texture>;
   /** Trigger position (on the sign). */
   trigger: THREE.Vector3;
+  /** The docked ship (own meshes) that hides while the journey's moving copy sails. */
+  vehicle?: THREE.Group;
   npcs: NPCDef[];
 }
 
 type CityBuilder = (b: ContentBuilder, ctx: GameContext, p: TravelPointDef, out: Built) => void;
 
-/** A merged ship moored at (x, y, z) with heading `yaw` (bow along +Z at yaw 0). */
-function ship(b: ContentBuilder, style: ShipStyle, x: number, y: number, z: number, yaw: number): void {
-  const s = shipParts(style);
-  for (const part of s.parts) {
-    b.mesh(part.mat, part.geo, { x, y, z, yaw });
-    part.geo.dispose();
+/** A ship moored at (x, y, z) with heading `yaw` (bow along +Z at yaw 0): its own meshes, so it can hide. */
+function ship(out: Built, style: ShipStyle, x: number, y: number, z: number, yaw: number): void {
+  const g = new THREE.Group();
+  g.position.set(x, y, z);
+  g.rotation.y = yaw;
+  for (const part of shipParts(style).parts) {
+    const m = new THREE.Mesh(part.geo, kitMaterialOf(part.mat));
+    m.castShadow = true;
+    m.receiveShadow = true;
+    g.add(m);
   }
+  out.vehicle = g;
 }
 
 /** A signboard on two posts facing `yaw` (its painted face looks along forward). */
@@ -78,7 +85,7 @@ const buildNwt: CityBuilder = (b, _ctx, p, out) => {
   for (const x of [-252, -248.5, -245]) for (const z of [-1858.3, -1855.7]) b.cylinder('ice_deep', { x, y: 3, z, r: 0.32, h: 2.2, segments: 8 }, { collide: false });
   for (const z of [-1858.4, -1855.6]) b.cylinder('ice', { x: -245.1, y: NWT_Y, z, r: 0.22, h: 0.8, segments: 8 }, { collide: true, solid: true });
   // The trader moored at the pier head, bow toward the sea gate; a gangplank to its deck.
-  ship(b, 'water', -242.2, 4.55, -1865.8, Math.PI);
+  ship(out, 'water', -242.2, 4.55, -1865.8, Math.PI);
   b.box('wood', { x: -243.7, y: NWT_Y + 0.25, z: -1859.4, sx: 0.9, sy: 0.08, sz: 2.4, pitch: 0.18 }, { collide: false });
   // Cargo waiting on the quay.
   for (const [x, z, s] of [[-264.5, -1858.4, 0.9], [-265.6, -1856.9, 0.8], [-264.8, -1855.6, 0.7]] as const) b.box('wood_dark', { x, y: NWT_Y + s / 2, z, sx: s, sy: s, sz: s, yaw: x * 0.7 }, { collide: true, solid: true });
@@ -134,7 +141,7 @@ const buildFnc: CityBuilder = (b, ctx, p, out) => {
   }
   // The merchant ship alongside the stage, bow to the open sea.
   const sh = fncAt(-151.2, 824);
-  ship(b, 'fire', sh.x, 0, sh.z, 0);
+  ship(out, 'fire', sh.x, 0, sh.z, 0);
   const plank = fncAt(-155.2, 822);
   b.box('wood', { x: plank.x, y: 1.95, z: plank.z, sx: 2.2, sy: 0.08, sz: 0.9, roll: -0.12 }, { collide: false });
   // Sign at the stair head.
@@ -265,6 +272,7 @@ export class TravelPoint implements RegionContent {
     BUILDERS[this.def.id](b, ctx, this.def, out);
     b.finish();
     for (const m of out.models) this.group.add(m.root);
+    if (out.vehicle) this.group.add(out.vehicle);
     this.b = b;
     this.built = out;
   }
@@ -278,6 +286,13 @@ export class TravelPoint implements RegionContent {
       a.time = ctx.time.elapsed;
       m.update(a);
     }
+  }
+
+  /** Hide the docked ship / waiting bison while the journey's moving copy is on screen. */
+  setVehicleVisible(v: boolean): void {
+    if (!this.built) return;
+    if (this.built.vehicle) this.built.vehicle.visible = v;
+    for (const m of this.built.models) m.root.visible = v;
   }
 
   setDetail(level: 'full' | 'far' | 'hidden'): void {
@@ -317,6 +332,10 @@ export class TravelPoint implements RegionContent {
         m.dispose();
       }
       for (const o of this.built.owned) o.dispose();
+      if (this.built.vehicle) {
+        this.built.vehicle.traverse((c) => (c as THREE.Mesh).isMesh && (c as THREE.Mesh).geometry.dispose());
+        this.built.vehicle.removeFromParent();
+      }
     }
     this.built = null;
     this.group.clear();

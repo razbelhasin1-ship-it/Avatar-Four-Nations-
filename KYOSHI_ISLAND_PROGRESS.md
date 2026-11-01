@@ -49,7 +49,8 @@ Inner shore r = 205; band thickness 170 (tips) → 430 (middle); ridge crest at 
 - [x] 5 bay, bridge, falls, harbor (1d204d1)
 - [x] 6 people, boats, animals, routines, audio (+ softer bay-side hills: coastal clamp lets go
       inland, ridge foot beyond the hall/dojo/meadow platforms; shrine roof NaN fixed)
-- [ ] 7 journey cutscenes
+- [x] 7 journey cutscenes (src/travel/cinema.ts; sky dome follows the scripted camera, game letterbox +
+      HUD hidden; verifying ship / bison / monorail-ferry trips with $S/ki/cine.mjs)
 - [ ] 8 polish, perf, verification, report (delete this file)
 
 ## USER OVERRIDE (mid-task message)

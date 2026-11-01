@@ -1,39 +1,33 @@
 import type { GameContext } from '../core/GameContext';
 import type { RouteDef } from '../data/travel';
+import { JourneyDirector } from './cinema';
 import type { Destination } from './TravelSystem';
 
 /**
- * The trip itself: departure, the cruise while the destination streams in, arrival. Skippable.
+ * The trip itself: a short, skippable cutscene (src/travel/cinema.ts) — departure, the open sea or
+ * the clouds while the destination streams in, an aerial reveal, arrival. `instant` skips the shots.
  * `load` places the traveller at the destination and waits until the world there is ready.
  */
 export class Journey {
-  private phase: 'idle' | 'cruise' = 'idle';
-  private skipRequested = false;
+  private readonly director = new JourneyDirector();
 
-  async run(ctx: GameContext, _route: RouteDef, dest: Destination, _instant: boolean, load: () => Promise<void>): Promise<void> {
-    this.phase = 'cruise';
-    this.skipRequested = false;
-    ctx.ui.showLoading(`${dest.title} · ${dest.subtitle}`);
-    try {
-      await load();
-    } finally {
-      ctx.ui.hideLoading();
-      this.phase = 'idle';
-    }
+  async run(ctx: GameContext, route: RouteDef, dest: Destination, instant: boolean, load: () => Promise<void>): Promise<void> {
+    if (instant) return this.director.instant(load);
+    const islandReady = () => !!(ctx.world.getRegionContent('kyoshi_isle') as { ready?: boolean } | undefined)?.ready;
+    await this.director.run(ctx, route, dest.title, load, islandReady);
   }
 
   update(_dt: number, _ctx: GameContext): void {}
 
   skip(): void {
-    this.skipRequested = true;
+    this.director.skip();
   }
 
   cancel(ctx: GameContext): void {
-    if (this.phase !== 'idle') ctx.ui.hideLoading();
-    this.phase = 'idle';
+    this.director.cancel(ctx);
   }
 
   state(): { phase: string; skip: boolean } {
-    return { phase: this.phase, skip: this.skipRequested };
+    return { phase: this.director.phase, skip: this.director.skipping };
   }
 }
