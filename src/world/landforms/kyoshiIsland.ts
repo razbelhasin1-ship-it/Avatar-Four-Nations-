@@ -297,6 +297,24 @@ export function kyoshiSurface(w: Float32Array, slope: number, h: number): void {
   w[1] += moved * 0.38;
 }
 
+/**
+ * Paved ground on the island (road type code: 1 dirt, 2 stone; 0 none) — the shrine's round plaza,
+ * the dojo's platform and the village's entrance plaza (no grass or trees through them).
+ */
+export function kyoshiPaved(x: number, z: number): number {
+  const s = A(KI.shrine.u, KI.shrine.r);
+  if (Math.hypot(x - s.x, z - s.z) < 12) return 2;
+  const d = A(KI.dojo.u, KI.dojo.r);
+  const yaw = yawOutward(KI.dojo.u) + Math.PI;
+  const dx = x - d.x, dz = z - d.z;
+  const f = dx * Math.sin(yaw) + dz * Math.cos(yaw);
+  const r = -dx * Math.cos(yaw) + dz * Math.sin(yaw);
+  if (Math.abs(r) < 27.5 && Math.abs(f) < 22.5) return 2;
+  const g = A(KI.village.u, KI.village.gateR - 2);
+  if (Math.hypot(x - g.x, z - g.z) < 13) return 1;
+  return 0;
+}
+
 /** Biome weights on the island: lush temperate lowlands, pines on the upper slopes, browner outer flanks. */
 export function kyoshiBiome(x: number, z: number, o: BiomeWeights): BiomeWeights {
   const p = kyoshiPolar(x, z, pol);

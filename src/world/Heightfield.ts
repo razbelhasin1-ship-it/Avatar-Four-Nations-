@@ -21,7 +21,7 @@
  */
 import { SimplexNoise } from '../core/Noise';
 import { FNC, capitalFlank, capitalPaved, fireCapitalHeight } from './landforms/fireCapital';
-import { inKyoshiZone, KI, KI_LAKES, KI_PLATEAUS, KI_RIVERS, KI_ROADS, kyoshiBiome, kyoshiNaturalHeight, kyoshiSurface } from './landforms/kyoshiIsland';
+import { inKyoshiZone, KI, KI_LAKES, KI_PLATEAUS, KI_RIVERS, KI_ROADS, kyoshiBiome, kyoshiNaturalHeight, kyoshiPaved, kyoshiSurface } from './landforms/kyoshiIsland';
 import type { BiomeId, SurfaceType } from '../core/types';
 import {
   LAKES,
@@ -1237,6 +1237,11 @@ export function sampleTerrain(x: number, z: number, h: number, slope: number, ou
     out.roadLat = 0;
     out.roadHalf = 60;
     out.roadType = ROAD_TYPE.stone;
+  } else if (inKyoshiZone(x, z) && kyoshiPaved(x, z)) {
+    // Kyoshi Island's paved plazas (shrine, dojo, village entrance).
+    out.roadLat = 0;
+    out.roadHalf = 60;
+    out.roadType = kyoshiPaved(x, z) === 2 ? ROAD_TYPE.stone : ROAD_TYPE.dirt;
   } else {
     out.roadLat = 99;
     out.roadHalf = 0;

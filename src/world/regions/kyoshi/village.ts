@@ -201,8 +201,8 @@ function meetingHall(env: BuildEnv, out: VillageOut): void {
   // Lanterns either side of the door.
   for (const s of [-1, 1]) {
     const q = off(front, yaw, s * 3.4, 1.2);
-    out.lanterns.push(new THREE.Vector3(q.x, y + 2.4, q.z));
-    b.lantern(new THREE.Vector3(q.x, y, q.z), { color: 'warm', post: true });
+    out.lanterns.push(new THREE.Vector3(q.x, y + 2.9, q.z));
+    b.lantern(new THREE.Vector3(q.x, y + 2.9, q.z), { color: 'warm', post: true });
   }
   out.marks.meeting_hall = { x: front.x, y, z: front.z };
 }
@@ -372,8 +372,8 @@ export function* buildVillage(env: BuildEnv, out: VillageOut): Generator<unknown
     for (const side of [-1, 1]) {
       const q = streetPt(s + (side > 0 ? 7 : 0), side * 3.6);
       const y = H(q.x, q.z);
-      env.chunks.at('props', q.x, q.z).builder.lantern(new THREE.Vector3(q.x, y, q.z), { color: 'warm', post: true });
-      out.lanterns.push(new THREE.Vector3(q.x, y + 2.4, q.z));
+      env.chunks.at('props', q.x, q.z).builder.lantern(new THREE.Vector3(q.x, y + 2.9, q.z), { color: 'warm', post: true });
+      out.lanterns.push(new THREE.Vector3(q.x, y + 2.9, q.z));
     }
   }
   for (const side of [-1, 1]) {

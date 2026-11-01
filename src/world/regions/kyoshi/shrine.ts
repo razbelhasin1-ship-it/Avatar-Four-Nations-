@@ -225,8 +225,8 @@ export function* buildShrine(env: BuildEnv, out: ShrineOut): Generator<unknown, 
   props.cylinder('bronze', { x: bowl.x, y: y + 0.05, z: bowl.z, r: 0.5, rTop: 0.62, h: 0.6, segments: 12 }, { collide: true, solid: true });
   for (const sgn of [-1, 1]) {
     const q = off(c, yaw, sgn * 2.4, R + 3.6);
-    props.lantern(new THREE.Vector3(q.x, y, q.z), { color: 'warm', post: true });
-    out.lanterns.push(new THREE.Vector3(q.x, y + 2.4, q.z));
+    props.lantern(new THREE.Vector3(q.x, y + 2.9, q.z), { color: 'warm', post: true });
+    out.lanterns.push(new THREE.Vector3(q.x, y + 2.9, q.z));
   }
   const rnd = env.rnd;
   for (let i = 0; i < 7; i++) {

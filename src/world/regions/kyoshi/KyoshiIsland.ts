@@ -5,7 +5,9 @@ import { heightAt } from '../../Heightfield';
 import { A, KI } from '../../landforms/kyoshiIsland';
 import { EarthRegion } from '../earth/EarthRegion';
 import type { BuildEnv } from '../earth/env';
+import { buildBay, type BayOut } from './bay';
 import { buildDojo, type DojoOut } from './dojo';
+import { buildHarbor, type HarborOut } from './harbor';
 import { kyoshiLook } from './people';
 import { buildShrine, type ShrineOut } from './shrine';
 import './spots';
@@ -32,6 +34,8 @@ export class KyoshiIsland extends EarthRegion {
   village: VillageOut | null = null;
   dojo: DojoOut | null = null;
   shrine: ShrineOut | null = null;
+  harbor: HarborOut | null = null;
+  bay: BayOut | null = null;
 
   /** Built and finished (travel waits for this before anyone steps ashore). */
   get ready(): boolean {
@@ -47,13 +51,17 @@ export class KyoshiIsland extends EarthRegion {
     yield* buildDojo(env, d);
     const s: ShrineOut = { marks: {}, owned: [], lanterns: [] };
     yield* buildShrine(env, s);
-    for (const out of [v, d, s]) {
-      for (const [k, m] of Object.entries(out.marks)) this.mark(k, m.x, m.y, m.z);
-      this.owned.push(...out.owned);
-    }
+    const h: HarborOut = { marks: {}, piers: [], stalls: [], doors: [], lanterns: [] };
+    yield* buildHarbor(env, h);
+    const b: BayOut = { marks: {}, lanterns: [] };
+    yield* buildBay(env, b);
+    for (const out of [v, d, s, h, b]) for (const [k, m] of Object.entries(out.marks)) this.mark(k, m.x, m.y, m.z);
+    for (const out of [v, d, s]) this.owned.push(...out.owned);
     this.village = v;
     this.dojo = d;
     this.shrine = s;
+    this.harbor = h;
+    this.bay = b;
     this.staff();
     this.installDebug();
     this.complete = true;
@@ -94,6 +102,7 @@ export class KyoshiIsland extends EarthRegion {
     for (const o of this.owned) o.dispose();
     this.owned = [];
     this.village = this.dojo = this.shrine = null;
+    this.harbor = this.bay = null;
     // Rebuilt from scratch on the next visit.
     this.npcDefs.length = 0;
     this.complete = false;

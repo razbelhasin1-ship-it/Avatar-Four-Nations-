@@ -81,7 +81,7 @@ export function* buildDojo(env: BuildEnv, out: DojoOut): Generator<unknown, void
     const wy = Math.atan2(b2.x - a.x, b2.z - a.z);
     major.box(wallMat, { x: m.x, y: yd + wallH / 2, z: m.z, sx: 0.7, sy: wallH, sz: L, yaw: wy }, { collide: true, walkable: true, solid: true });
     major.box('stone_grey', { x: m.x, y: yd + 0.25, z: m.z, sx: 0.85, sy: 0.5, sz: L, yaw: wy });
-    major.roof(roof, { x: m.x, y: yd + wallH, z: m.z, w: 0.7, d: L, height: 0.5, yaw: wy + Math.PI / 2, overhang: 0.3, curve: 0.3, style: 'gable', ridge: null });
+    major.roof(roof, { x: m.x, y: yd + wallH, z: m.z, w: L, d: 0.7, height: 0.5, yaw: wy + Math.PI / 2, overhang: 0.3, curve: 0.3, style: 'gable', ridge: null });
   };
   const P = (r: number, f: number) => off(c, yaw, r, f);
   seg(P(-W / 2, D / 2), P(-6, D / 2));
@@ -104,7 +104,7 @@ export function* buildDojo(env: BuildEnv, out: DojoOut): Generator<unknown, void
   }
   for (const s of [-1, 1]) {
     const q = off(gh, yaw, s * 6.5, 3.6);
-    major.lantern(new THREE.Vector3(q.x, yd, q.z), { color: 'warm', post: true });
+    major.lantern(new THREE.Vector3(q.x, yd + 2.9, q.z), { color: 'warm', post: true });
   }
   out.marks.dojo_gate = { x: gh.x, y: yd, z: gh.z };
   // Main hall at the back on a raised plinth, open front facing the yard.
