@@ -43,6 +43,7 @@ try {
     const before = await snapshot();
     const pt = await h.eval((g, city) => g.ctx.world.getRegionContent('travel_' + city)?.info?.(), city);
     ok(!!pt?.built && pt.npcs.length >= 3, `${city}: travel point built with staff and travellers`, JSON.stringify(pt?.npcs ?? []));
+    let warm = null;
     for (let trip = 1; trip <= 3; trip++) {
       const there = await h.eval(async (g, city) => {
         const r = await g.debug.travel.go(`${city}_to_kyoshi`, true);
@@ -59,6 +60,8 @@ try {
       }, city);
       ok(home.r && !home.s.onIsland && home.d < 4 && home.s.origin === null, `${city} trip ${trip}: home at the travel point`, `d=${home.d.toFixed(2)}`);
       ok(!home.islandBuilt, `${city} trip ${trip}: island freed after leaving`);
+      // Memory baseline once the city has fully streamed in and been drawn (after the first trip).
+      if (trip === 1) warm = await snapshot();
     }
     const after = await snapshot();
     ok(after.q === before.q, `${city}: quests unchanged`);
@@ -66,8 +69,8 @@ try {
     ok(after.weather === before.weather, `${city}: weather as left`, `${before.weather} -> ${after.weather}`);
     const dh = ((after.hour - before.hour) + 24) % 24;
     ok(dh > 0.1 && dh < 1.2, `${city}: clock moved on a few minutes per trip`, `+${(dh * 60).toFixed(0)} min over 6 legs`);
-    // Same place, before and after: the island is built and freed three times in between.
-    ok(after.geo - before.geo < 60 && after.tex - before.tex < 6, `${city}: no memory growth over 3 round trips`, `geometries ${before.geo}->${after.geo}, textures ${before.tex}->${after.tex}`);
+    // Same place, after the first and after the third trip: the island is built and freed in between.
+    ok(after.geo - warm.geo < 60 && after.tex - warm.tex < 6, `${city}: no memory growth over trips 2-3`, `geometries ${warm.geo}->${after.geo}, textures ${warm.tex}->${after.tex}`);
   }
 
   // Ten round trips from one city: memory at the travel point after the first and after the tenth.
