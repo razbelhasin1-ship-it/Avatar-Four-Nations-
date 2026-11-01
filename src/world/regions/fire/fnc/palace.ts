@@ -79,25 +79,34 @@ function ringWall(cap: Cap, b: ContentBuilder): void {
   const n = PALACE.sides;
   const R = PALACE.ringR;
   const gateHalf = 5;
+  /** A broad pale rampart (the series' aerial view of the crater): a walk on top, battlements both sides. */
+  const W = 6;
   const vertex = (i: number) => atPolar(90 + (360 / n) * (i + 0.5), R);
   for (let i = 0; i < n; i++) {
     const a = vertex(i - 1), c = vertex(i);
-    const pieces = i === 0 ? [[a, atPolar(90 - 7.6, R)], [atPolar(90 + 7.6, R), c]] : [[a, c]];
+    const pieces = i === 0 ? [[a, atPolar(90 - 9, R)], [atPolar(90 + 9, R), c]] : [[a, c]];
     for (const [p, q] of pieces) {
       const mx = (p.x + q.x) / 2, mz = (p.z + q.z) / 2;
       const len = Math.hypot(q.x - p.x, q.z - p.z);
       const yaw = Math.atan2(q.x - p.x, q.z - p.z);
       const base = Math.min(heightAt(p.x, p.z), heightAt(q.x, q.z)) - 1;
-      b.box('stone_dark', { x: mx, y: base + (PALACE.wallH + 1) / 2, z: mz, sx: 2.4, sy: PALACE.wallH + 1, sz: len, yaw }, { collide: true, walkable: true });
-      b.box(crimsonMat(), { x: mx, y: base + PALACE.wallH - 0.6, z: mz, sx: 2.5, sy: 0.7, sz: len + 0.02, yaw });
-      battlement(b, 'stone_dark', [p, q], { y: () => base + PALACE.wallH + 1, h: 0.9, thick: 0.6, cap: 'stone_tan' });
+      const top = base + PALACE.wallH + 1;
+      b.box('stone_tan', { x: mx, y: base + (PALACE.wallH + 1) / 2, z: mz, sx: W, sy: PALACE.wallH + 1, sz: len, yaw }, { collide: true, walkable: true });
+      b.box('stone_light', { x: mx, y: top - 0.1, z: mz, sx: W + 0.1, sy: 0.22, sz: len + 0.02, yaw }, { castShadow: false });
+      b.box(crimsonMat(), { x: mx, y: base + PALACE.wallH - 1.4, z: mz, sx: W + 0.1, sy: 0.6, sz: len + 0.02, yaw });
+      // Battlements along both edges of the walk.
+      const nx = (q.z - p.z) / len, nz = -(q.x - p.x) / len;
+      for (const side of [-1, 1]) {
+        const o = side * (W / 2 - 0.3);
+        battlement(b, 'stone_tan', [{ x: p.x + nx * o, z: p.z + nz * o }, { x: q.x + nx * o, z: q.z + nz * o }], { y: () => top, h: 0.9, thick: 0.5, cap: 'stone_light' });
+      }
     }
     const v = vertex(i);
     const vb = heightAt(v.x, v.z) - 1;
-    b.block('stone_dark', { x: v.x, y: vb, z: v.z, sx: 5.4, sy: PALACE.wallH + 6, sz: 5.4 }, { collide: true, walkable: true });
-    b.box(crimsonMat(), { x: v.x, y: vb + PALACE.wallH + 4.6, z: v.z, sx: 5.6, sy: 1, sz: 5.6 });
-    roof(b, { x: v.x, y: vb + PALACE.wallH + 8, z: v.z, w: 4.6, d: 4.6, h: 2.8, style: 'pyramid', mat: 'roof_red', trim: 'gold', tips: 0.45, finial: 1.1 });
-    for (const [px, pz] of [[-2, -2], [2, -2], [2, 2], [-2, 2]] as const) b.box('black_lacquer', { x: v.x + px, y: vb + PALACE.wallH + 7, z: v.z + pz, sx: 0.32, sy: 2.2, sz: 0.32 });
+    b.block('stone_tan', { x: v.x, y: vb, z: v.z, sx: W + 1.6, sy: PALACE.wallH + 6, sz: W + 1.6 }, { collide: true, walkable: true });
+    b.box(crimsonMat(), { x: v.x, y: vb + PALACE.wallH + 4.6, z: v.z, sx: W + 1.8, sy: 1, sz: W + 1.8 });
+    roof(b, { x: v.x, y: vb + PALACE.wallH + 8, z: v.z, w: 5.4, d: 5.4, h: 3, style: 'pyramid', mat: 'roof_red', trim: 'gold', tips: 0.45, finial: 1.1 });
+    for (const [px, pz] of [[-2.4, -2.4], [2.4, -2.4], [2.4, 2.4], [-2.4, 2.4]] as const) b.box('black_lacquer', { x: v.x + px, y: vb + PALACE.wallH + 7, z: v.z + pz, sx: 0.32, sy: 2.2, sz: 0.32 });
   }
   const g = atAxis(0, R);
   const gy = heightAt(g.x, g.z);

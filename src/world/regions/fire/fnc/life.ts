@@ -70,7 +70,7 @@ export const LIFE = {
  * out of a door or come round a corner the camera is not watching.
  */
 const BUBBLE = 120;
-const BUBBLE_TARGET: Partial<Record<ZoneName, number>> = { harbor: 55, plaza: 70, city: 110, market: 70, park: 30, foundry: 34 };
+const BUBBLE_TARGET: Partial<Record<ZoneName, number>> = { harbor: 60, plaza: 75, city: 130, market: 85, park: 36, foundry: 36 };
 const ZTOWN = Z.harbor | Z.plaza | Z.city | Z.market | Z.park | Z.foundry;
 const MOVABLE = new Set<Role>(['walker', 'shopper', 'porter', 'vendor', 'sitter', 'docker', 'smith']);
 

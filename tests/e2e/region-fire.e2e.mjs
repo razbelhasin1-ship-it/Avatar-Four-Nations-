@@ -156,25 +156,29 @@ try {
   });
 
   await check('people: hundreds simulated, a Harbor City view full of them, rally and proclamation', async () => {
-    await h.eval((g, p) => g.teleport(p[0], p[1]), ax(0, 470));
-    await h.step(10);
-    await h.eval((g, p) => g.freeCamera({ x: p[0] + 20, y: 62, z: p[1] + 70 }, { x: p[0], y: 34, z: p[1] - 40 }), ax(0, 470));
-    await h.step(90);
-    const l = await h.eval((g) => g.debug.fnc.life());
-    console.log(`  people: ${JSON.stringify(l)}`);
-    assert.ok(l.total >= 400, `simulated ${l.total}`);
-    assert.ok(l.visible >= 100, `drawn in the Harbor City view: ${l.visible}`);
-    assert.ok(l.squads >= 3, 'marching squads');
-    await h.eval((g, p) => { g.teleport(p[0], p[1]); g.freeCamera({ x: p[0], y: 30, z: p[1] + 100 }, { x: p[0], y: 8, z: p[1] - 30 }); g.debug.fnc.rally(true, true); }, ax(0, 600));
-    await h.step(30);
-    const r = await h.eval((g) => g.debug.fnc.life());
-    assert.ok(r.rally >= 300, `rally crowd ${r.rally}`);
-    await h.eval((g) => g.debug.fnc.rally(null));
-    await h.eval((g, p) => { g.teleport(p[0], p[1]); g.setTime(15.1); g.debug.fnc.proclaim(true); }, ax(0, 70));
-    await h.step(200);
-    const p = await h.eval((g) => g.debug.fnc.life());
-    assert.ok(p.proclaim >= 20, `proclamation crowd ${p.proclaim}`);
-    await h.eval((g) => { g.debug.fnc.proclaim(null); g.setTime(9); g.freeCamera(null); });
+    try {
+      await h.eval((g, p) => g.teleport(p[0], p[1]), ax(0, 470));
+      await h.step(10);
+      await h.eval((g, p) => g.freeCamera({ x: p[0] + 20, y: 62, z: p[1] + 70 }, { x: p[0], y: 34, z: p[1] - 40 }), ax(0, 470));
+      await h.step(150);
+      const l = await h.eval((g) => g.debug.fnc.life());
+      console.log(`  people: ${JSON.stringify(l)}`);
+      assert.ok(l.total >= 400, `simulated ${l.total}`);
+      assert.ok(l.visible >= 100, `drawn in the Harbor City view: ${l.visible}`);
+      assert.ok(l.squads >= 3, 'marching squads');
+      await h.eval((g, p) => { g.teleport(p[0], p[1]); g.freeCamera({ x: p[0], y: 30, z: p[1] + 100 }, { x: p[0], y: 8, z: p[1] - 30 }); g.debug.fnc.rally(true, true); }, ax(0, 600));
+      await h.step(30);
+      const r = await h.eval((g) => g.debug.fnc.life());
+      assert.ok(r.rally >= 300, `rally crowd ${r.rally}`);
+      await h.eval((g) => g.debug.fnc.rally(null));
+      await h.eval((g, p) => { g.teleport(p[0], p[1]); g.setTime(15.1); g.debug.fnc.proclaim(true); }, ax(0, 70));
+      await h.step(200);
+      const p = await h.eval((g) => g.debug.fnc.life());
+      assert.ok(p.proclaim >= 20, `proclamation crowd ${p.proclaim}`);
+    } finally {
+      // Always hand the camera back and end the events, so a failure here cannot derail later walks.
+      await h.eval((g) => { g.debug.fnc.rally(null); g.debug.fnc.proclaim(null); g.setTime(9); g.freeCamera(null); });
+    }
   });
 
   await check('ships, tanks, balloons: the schedule opens the sea gate, hulls stay on the water', async () => {
