@@ -86,7 +86,7 @@ export function buildVillage(b: ContentBuilder, props: ContentBuilder, list: Dwe
     } else {
       // Sealskin tent on a frame of branches: hide cone, poles crossing above the apex, a wave emblem.
       const h = 2.5 + rnd.next() * 0.5;
-      b.instance('swt_tent', () => tentCone(1, 1, 9), rnd.next() < 0.35 ? wtMatTinted('hide', '#b9ae9f') : wtMatTinted('hide', '#ddd3c2'), mat(d.x, y - 0.03, d.z, d.yaw, d.r, h, d.r));
+      b.instance('swt_tent', () => tentCone(1, 1, 9), rnd.next() < 0.35 ? wtMatTinted('hide_pale', '#c4bbac') : wtMat('hide_pale'), mat(d.x, y - 0.03, d.z, d.yaw, d.r, h, d.r));
       for (let k = 0; k < 4; k++) {
         const a = d.yaw + (k / 4) * Math.PI * 2 + 0.4;
         const pole = new THREE.Matrix4().compose(

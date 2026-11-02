@@ -362,6 +362,29 @@ const tmpQ = new THREE.Quaternion();
 const tmpP = new THREE.Vector3();
 const tmpS = new THREE.Vector3(1, 1, 1);
 const UP = new THREE.Vector3(0, 1, 0);
+const accL = new THREE.Matrix4();
+const accW = new THREE.Matrix4();
+
+/** The body offset and torso lean the shader gives a pose (figPose), for accessories that follow it. */
+function poseBody(pose: number, phase: number, amount: number, lean: number): { dy: number; lean: number } {
+  const out = poseOut;
+  out.dy = 0;
+  out.lean = lean;
+  if (pose < 0.5) out.dy = 0.006 * Math.sin(phase * 0.5);
+  else if (pose < 1.5) out.dy = 0.035 * amount * Math.abs(Math.cos(phase));
+  else if (pose < 2.5) out.dy = -0.4;
+  else if (pose < 3.5) {
+    out.dy = -0.12 + 0.05 * Math.max(0, Math.sin(phase));
+    out.lean += 0.12;
+  } else if (pose < 4.5) out.dy = 0;
+  else if (pose < 5.5) out.dy = 0.02 * amount * Math.abs(Math.cos(phase));
+  else if (pose < 6.5) out.lean += 0.2;
+  else if (pose < 7.5) out.dy = -0.1 * amount;
+  else out.lean += 0.65;
+  return out;
+}
+const poseOut = { dy: 0, lean: 0 };
+const HIP = 0.88;
 
 export class FigureRenderer {
   readonly group = new THREE.Group();
@@ -378,6 +401,11 @@ export class FigureRenderer {
   private readonly pv = new THREE.Matrix4();
   private readonly sphere = new THREE.Sphere(new THREE.Vector3(), 2);
   private hasView = false;
+  /**
+   * Accessories follow the pose's crouch and torso lean (hoods stay on seated and stooping heads).
+   * Off by default: crowds whose accessories were authored for the upright figure keep that.
+   */
+  accFollowPose = false;
   /** Figures pushed last frame (debug). */
   stats = { near: 0, far: 0, culled: 0 };
 
@@ -502,7 +530,16 @@ export class FigureRenderer {
     L.skin.setXYZ(i, ((skin >> 16) & 255) / 255, ((skin >> 8) & 255) / 255, (skin & 255) / 255);
     if (acc) {
       const a = this.acc(acc);
-      if (a && a.n < this.capacity) a.mesh.setMatrixAt(a.n++, tmpM);
+      if (a && a.n < this.capacity) {
+        if (this.accFollowPose) {
+          // Figure space: about the hips by the lean, then down by the crouch (as the shader does).
+          const pb = poseBody(pose, phase, amount, lean);
+          const c = Math.cos(pb.lean), sn = Math.sin(pb.lean);
+          accL.makeRotationX(pb.lean);
+          accL.setPosition(0, pb.dy + HIP * (1 - c), -HIP * sn);
+          a.mesh.setMatrixAt(a.n++, accW.multiplyMatrices(tmpM, accL));
+        } else a.mesh.setMatrixAt(a.n++, tmpM);
+      }
     }
     if (lod === 0 && pose !== Pose.sit && this.shadowN < this.capacity) {
       tmpP.y += 0.04;

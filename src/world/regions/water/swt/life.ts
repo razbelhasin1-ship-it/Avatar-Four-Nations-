@@ -316,6 +316,7 @@ export class WolfCoveLife {
     for (const r of Object.keys(SWT_LIFE.cast) as SwtRole[]) n += Math.round(SWT_LIFE.cast[r] * density);
     this.figures = new FigureRenderer(this.group, n + 24);
     this.figures.setRange(SWT_LIFE.draw.near, SWT_LIFE.draw.far);
+    this.figures.accFollowPose = true;
     for (let i = 1; i < this.run.length; i++) this.runLen += Math.hypot(this.run[i].x - this.run[i - 1].x, this.run[i].z - this.run[i - 1].z);
     // Little sleds under the children riding the run.
     this.sledGeo = sledGeometry();

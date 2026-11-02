@@ -32,6 +32,7 @@ export type WTMaterialName =
   | 'canal_bed' // dark canal floor under the water surface
   | 'hide' // tanned hide (tents, kayaks)
   | 'hide_dark'
+  | 'hide_pale' // pale sealskin (Wolf Cove's tents)
   | 'fur' // white-grey fur trims
   | 'bone' // whalebone / ivory
   | 'wood' // weathered driftwood
@@ -477,6 +478,7 @@ const DEFS: Record<WTMaterialName, Def> = {
   canal_bed: { kind: 'plain', color: '#0b2738', rough: 1 },
   hide: { kind: 'uv', color: '#ffffff', tex: () => hideTexture('#b89468', 61), ownTex: true, rough: 0.95, side: THREE.DoubleSide },
   hide_dark: { kind: 'uv', color: '#ffffff', tex: () => hideTexture('#7d5c3e', 62), ownTex: true, rough: 0.95, side: THREE.DoubleSide },
+  hide_pale: { kind: 'uv', color: '#ffffff', tex: () => hideTexture('#d8ccb6', 63), ownTex: true, rough: 0.95, side: THREE.DoubleSide },
   fur: { kind: 'uv', color: '#ffffff', tex: furTexture, ownTex: true, rough: 1 },
   bone: { kind: 'plain', color: '#e7dcc2', rough: 0.6 },
   wood: { kind: 'uv', color: '#ffffff', tex: () => planks('#7a6450', 171), rough: 0.9 },

@@ -72,7 +72,7 @@ const MENU_SHOTS: MenuShot[] = [
   // In over the harbour, between the cove's ice cliffs (the old arc started inside the west cliff).
   { id: 'water', name: 'Northern Water Tribe', subtitle: 'The city of ice and canals', x: -220, z: -1550, lookY: 6, az: 2.95, sweep: 0.4, radius: 260, height: 80, duration: 15 },
   // Wolf Cove from the north-east, high over the gate: the ring wall, the igloos, the Great Igloo.
-  { id: 'water_south', name: 'Southern Water Tribe', subtitle: 'Wolf Cove, on the southern ice', x: 212, z: 1664, lookY: -4, az: 2.47, sweep: 0.3, radius: 205, height: 86, duration: 15 },
+  { id: 'water_south', name: 'Southern Water Tribe', subtitle: 'Wolf Cove, on the southern ice', x: 214, z: 1662, lookY: -6, az: 2.5, sweep: 0.28, radius: 135, height: 60, duration: 15 },
   { id: 'earth', name: 'Ba Sing Se', subtitle: 'The impenetrable city', x: 850, z: -50, lookY: 12, az: -1.25, sweep: -0.3, radius: 240, height: 95, duration: 15 },
   { id: 'fire', name: 'Fire Nation Capital', subtitle: 'From the harbour to the palace', x: -1300, z: 1400, lookY: 40, az: 0.25, sweep: 0.35, radius: 300, height: 110, duration: 15 },
 ];
