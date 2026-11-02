@@ -18,7 +18,10 @@ const ev = (fn, ...a) => h.eval(fn, ...a);
 const wait = (sec) => h.step(Math.max(1, Math.round(sec / 0.1)), 0.1);
 const results = [];
 const t0 = Date.now();
+/** ONLY=word,word runs just the checks whose names contain one of the words. */
+const ONLY = process.env.ONLY ? process.env.ONLY.split(',') : null;
 const check = async (name, fn) => {
+  if (ONLY && !ONLY.some((w) => name.includes(w))) return;
   console.log(`[${((Date.now() - t0) / 1000).toFixed(0)}s] ${name}`);
   try {
     if (h.page.isClosed()) {
@@ -145,20 +148,20 @@ try {
       await wait(1);
       await ev((g) => g.game.saveGame('slot3'));
       await ev((g) => g.game.exitToMenu(false));
+      // The journey's origin lives in the progression system's save (systems.progression.origin).
       const stripped = await ev(() => {
-        const k = 'a4n.save.slot3';
-        const f = JSON.parse(localStorage.getItem(k));
         let n = 0;
-        const strip = (o) => {
-          if (!o || typeof o !== 'object') return;
-          if ('origin' in o) {
-            delete o.origin;
+        for (const k of ['a4n.save.slot3', 'a4n.save.slot3.bak']) {
+          const raw = localStorage.getItem(k);
+          if (!raw) continue;
+          const f = JSON.parse(raw);
+          const pr = f.systems?.progression;
+          if (pr && 'origin' in pr) {
+            delete pr.origin;
             n++;
           }
-          for (const v of Object.values(o)) strip(v);
-        };
-        strip(f.data);
-        localStorage.setItem(k, JSON.stringify(f));
+          localStorage.setItem(k, JSON.stringify(f));
+        }
         return n;
       });
       assert.ok(stripped >= 1, 'origin removed from the save');
@@ -181,7 +184,11 @@ try {
     assert.ok(s.life.drawn >= 30, `drawn ${s.life.drawn}`);
     assert.ok(s.wild.dogs > 0 && s.wild.seals > 0, 'dogs and seals');
     assert.ok(s.wild.boats >= 3 && s.wild.boatsOut >= 3, `boats out by day ${s.wild.boatsOut}/${s.wild.boats}`);
-    await ev((g) => g.setTime(23));
+    // A night without the festival (on clear evenings the village meditates outside until one).
+    await ev((g) => {
+      g.debug.swt.festival(false);
+      g.setTime(2.5);
+    });
     await wait(3);
     const n = await ev((g) => g.debug.swt.state());
     assert.ok(n.life.home > s.life.home + 60, `night: indoors ${n.life.home} (day ${s.life.home})`);
