@@ -104,7 +104,7 @@ function greatHall(b: ContentBuilder, props: ContentBuilder, it: Interior, info:
 
 function healer(b: ContentBuilder, props: ContentBuilder, it: Interior, info: VillageInfo, rnd: Random): void {
   const y = FLOOR;
-  const h = it.r * 0.88;
+  const h = it.r * 1.0;
   // A low fire, a bed of furs, the healing basin of clear water, bundles of herbs hanging overhead.
   const fire = local(it, 0, 0.4);
   for (let i = 0; i < 8; i++) {
@@ -128,7 +128,7 @@ function healer(b: ContentBuilder, props: ContentBuilder, it: Interior, info: Vi
 
 function workshop(b: ContentBuilder, props: ContentBuilder, it: Interior, info: VillageInfo, rnd: Random): void {
   const y = FLOOR;
-  const h = it.r * 0.85;
+  const h = it.r * 0.98;
   // A bench of bone and whale-tooth carvings, a kayak frame on trestles, tools and spears on the walls.
   const bench = local(it, -it.r + 1.4, -0.4);
   b.mesh(wtMat('wood'), new THREE.BoxGeometry(0.8, 0.75, 2.2), { x: bench.x, y: y + 0.38, z: bench.z, yaw: it.yaw });
@@ -149,7 +149,7 @@ function workshop(b: ContentBuilder, props: ContentBuilder, it: Interior, info: 
 
 function familyHome(b: ContentBuilder, props: ContentBuilder, it: Interior, info: VillageInfo, rnd: Random, low: boolean): void {
   const y = FLOOR;
-  const h = it.r * 0.86;
+  const h = it.r * 1.0;
   // Bamboo floor (slats) under the pelts.
   props.mesh(wtMat('wood'), new THREE.CircleGeometry(it.r - 0.5, 16).rotateX(-Math.PI / 2), { x: it.x, y: y + 0.015, z: it.z }, { castShadow: false });
   if (!low) {

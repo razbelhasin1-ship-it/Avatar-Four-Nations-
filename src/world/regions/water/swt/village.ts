@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Random } from '../../../../core/Random';
 import type { ContentBuilder } from '../../../kit/Builder';
 import { WC } from '../../../landforms/wolfCove';
-import { boulder, emblem, hull, pillow, tentCone } from '../geometry';
+import { boulder, emblem, hull, mergeParts, pillow, tentCone } from '../geometry';
 import { wtMat, wtMatTinted } from '../materials';
 import { banner, barrel, crate, dryingRack } from '../parts';
 import { annexUnit, driftUnit, hollowDome, iglooDoorUnit, iglooUnit } from './domes';
@@ -67,13 +67,13 @@ export function buildVillage(b: ContentBuilder, props: ContentBuilder, list: Dwe
     if (d.kind === 'igloo') {
       if (d.home) {
         const r = d.r + 0.35;
-        hollowDome(b, { x: d.x, y, z: d.z, r, h: r * 0.86, yaw: d.yaw, tunnel: 1.2, tw: 1.15, th: 1.45 });
+        hollowDome(b, { x: d.x, y, z: d.z, r, h: r * 1.0, yaw: d.yaw, tunnel: 1.2, tw: 1.15, th: 1.45 });
         info.interiors.push({ id: `home_${homeN++}`, x: d.x, z: d.z, r, yaw: d.yaw, kind: 'home' });
         info.doors.push({ x: d.x + Math.sin(d.yaw) * (r + 1.3), z: d.z + Math.cos(d.yaw) * (r + 1.3), yaw: d.yaw });
       } else {
         b.instance('swt_igloo', iglooUnit, IGLOO_MAT(), mat(d.x, y - 0.04, d.z, d.yaw, d.r));
         props.instance('swt_igloo_door', iglooDoorUnit, wtMat('dark'), mat(d.x, y - 0.04, d.z, d.yaw, d.r), false);
-        b.collider({ shape: 'sphere', x: d.x, y: y - d.r * 0.18, z: d.z, r: d.r, walkable: true, solid: true, surface: 'snow' });
+        b.collider({ shape: 'sphere', x: d.x, y: y + d.r * 0.08, z: d.z, r: d.r, walkable: true, solid: true, surface: 'snow' });
         info.doors.push({ x: d.x + Math.sin(d.yaw) * d.r * 1.4, z: d.z + Math.cos(d.yaw) * d.r * 1.4, yaw: d.yaw });
       }
       // Wind-packed drift against the north side.
@@ -81,7 +81,7 @@ export function buildVillage(b: ContentBuilder, props: ContentBuilder, list: Dwe
       if (d.annex) {
         const a = d.annex;
         b.instance('swt_annex', annexUnit, IGLOO_MAT(), mat(a.x, y - 0.04, a.z, rnd.next() * 6.28, a.r));
-        b.collider({ shape: 'sphere', x: a.x, y: y - a.r * 0.22, z: a.z, r: a.r, walkable: true, solid: true, surface: 'snow' });
+        b.collider({ shape: 'sphere', x: a.x, y, z: a.z, r: a.r, walkable: true, solid: true, surface: 'snow' });
       }
     } else {
       // Sealskin tent on a frame of branches: hide cone, poles crossing above the apex, a wave emblem.
@@ -120,10 +120,10 @@ export function buildVillage(b: ContentBuilder, props: ContentBuilder, list: Dwe
   b.mesh(wtMat('dark'), new THREE.CylinderGeometry(POND_HOLE.r, POND_HOLE.r * 0.92, 0.6, 18, 1, true), { x: POND_HOLE.x, y: y - 0.25, z: POND_HOLE.z }, { castShadow: false });
   trainingCircle(b, props, rnd);
   // --- Healer's igloo and the workshop (enterable), the carvers' bench, the tannery, the boat yard.
-  hollowDome(b, { x: HEALER.x, y, z: HEALER.z, r: HEALER.r + 0.4, h: (HEALER.r + 0.4) * 0.88, yaw: Math.atan2(C.x - HEALER.x, C.z - HEALER.z), tunnel: 1.3, tw: 1.25, th: 1.55 });
+  hollowDome(b, { x: HEALER.x, y, z: HEALER.z, r: HEALER.r + 0.4, h: (HEALER.r + 0.4) * 1.0, yaw: Math.atan2(C.x - HEALER.x, C.z - HEALER.z), tunnel: 1.3, tw: 1.25, th: 1.55 });
   info.interiors.push({ id: 'healer', x: HEALER.x, z: HEALER.z, r: HEALER.r + 0.4, yaw: Math.atan2(C.x - HEALER.x, C.z - HEALER.z), kind: 'healer' });
   const wy = Math.atan2(C.x - WORKSHOP.x, C.z - WORKSHOP.z);
-  hollowDome(b, { x: WORKSHOP.x, y, z: WORKSHOP.z, r: WORKSHOP.r + 0.5, h: (WORKSHOP.r + 0.5) * 0.85, yaw: wy, tunnel: 1.4, tw: 1.5, th: 1.7 });
+  hollowDome(b, { x: WORKSHOP.x, y, z: WORKSHOP.z, r: WORKSHOP.r + 0.5, h: (WORKSHOP.r + 0.5) * 0.98, yaw: wy, tunnel: 1.4, tw: 1.5, th: 1.7 });
   info.interiors.push({ id: 'workshop', x: WORKSHOP.x, z: WORKSHOP.z, r: WORKSHOP.r + 0.5, yaw: wy, kind: 'workshop' });
   carvers(b, props, rnd);
   tannery(b, props, rnd);
@@ -296,11 +296,16 @@ function kayakRack(b: ContentBuilder, props: ContentBuilder, x: number, z: numbe
 function storage(b: ContentBuilder): void {
   const y = FLOOR;
   const { x, z, len, w, yaw } = STORAGE;
-  const g = new THREE.SphereGeometry(1, 22, 7, 0, Math.PI * 2, 0, Math.PI / 2);
-  g.scale(w / 2, 2.6, len / 2);
+  // A long vault standing on the snow (it bulges a little past upright at the base, like the igloos).
+  const t = Math.PI * 0.58;
+  const g = new THREE.SphereGeometry(1, 22, 9, 0, Math.PI * 2, 0, t);
+  g.translate(0, -Math.cos(t), 0);
+  g.scale(w / 2, 3.1 / (1 - Math.cos(t)), len / 2);
   b.mesh(wtMat('ice_wall'), g, { x, y, z, yaw });
-  b.mesh(wtMat('dark'), new THREE.CircleGeometry(0.75, 10, 0, Math.PI), { x: x + Math.sin(yaw) * (len / 2 - 0.02), y, z: z + Math.cos(yaw) * (len / 2 - 0.02), yaw });
-  b.collider({ shape: 'box', x, y: y + 1.1, z, hx: w / 2 - 0.3, hy: 1.1, hz: len / 2 - 0.6, yaw, walkable: false, solid: true });
+  // The doorway at the end: an arch on short walls.
+  const door = mergeParts([new THREE.CircleGeometry(0.72, 10, 0, Math.PI).translate(0, 0.5, 0), new THREE.PlaneGeometry(1.44, 0.5).translate(0, 0.25, 0)]);
+  b.mesh(wtMat('dark'), door, { x: x + Math.sin(yaw) * (len / 2 - 0.15), y, z: z + Math.cos(yaw) * (len / 2 - 0.15), yaw });
+  b.collider({ shape: 'box', x, y: y + 1.4, z, hx: w / 2 - 0.25, hy: 1.4, hz: len / 2 - 0.5, yaw, walkable: false, solid: true });
 }
 
 function dogPens(b: ContentBuilder, props: ContentBuilder, rnd: Random): void {
@@ -322,8 +327,9 @@ function dogPens(b: ContentBuilder, props: ContentBuilder, rnd: Random): void {
   for (let k = 0; k < 3; k++) {
     const a = 0.8 + k * 1.6;
     const kx = x + Math.cos(a) * (r - 1.8), kz = z + Math.sin(a) * (r - 1.8);
-    b.mesh(wtMat('ice_wall'), new THREE.SphereGeometry(0.9, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.75, 1), { x: kx, y, z: kz });
-    b.mesh(wtMat('dark'), new THREE.CircleGeometry(0.32, 8, 0, Math.PI), { x: kx + Math.cos(a + Math.PI) * 0.9, y, z: kz + Math.sin(a + Math.PI) * 0.9, yaw: -a - Math.PI / 2 });
+    b.instance('swt_kennel', annexUnit, IGLOO_MAT(), mat(kx, y - 0.02, kz, 0, 0.9), true);
+    const kd = mergeParts([new THREE.CircleGeometry(0.3, 8, 0, Math.PI).translate(0, 0.12, 0), new THREE.PlaneGeometry(0.6, 0.12).translate(0, 0.06, 0)]);
+    b.mesh(wtMat('dark'), kd, { x: kx + Math.cos(a + Math.PI) * 0.87, y, z: kz + Math.sin(a + Math.PI) * 0.87, yaw: -a - Math.PI / 2 });
   }
   void rnd;
 }

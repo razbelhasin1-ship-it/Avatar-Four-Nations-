@@ -26,25 +26,40 @@ export function flipped(g: THREE.BufferGeometry): THREE.BufferGeometry {
   return f;
 }
 
-/** Unit solid igloo (radius 1, base y = 0, entrance toward +Z): dome + vaulted tunnel. */
+/** Height of the tunnel's straight side walls under its vault (unit igloo): the doorway is an arch. */
+const TUNNEL_WALL = 0.2;
+
+/**
+ * Unit solid igloo (radius 1, base y = 0, entrance toward +Z). The dome bulges a little past
+ * upright before it meets the snow, so it sits on the ground (about 1.07 radii tall) instead of
+ * looking sunk; the entrance tunnel is a vault on short straight walls with an arched doorway.
+ */
 export function iglooUnit(): THREE.BufferGeometry {
-  const d = new THREE.SphereGeometry(1, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2);
-  d.scale(1, 0.82, 1);
+  const t = Math.PI * 0.58;
+  const d = new THREE.SphereGeometry(1, 18, 9, 0, Math.PI * 2, 0, t);
+  d.translate(0, -Math.cos(t), 0);
+  d.scale(1, 0.86, 1);
+  const w = TUNNEL_WALL;
   const tunnel = new THREE.CylinderGeometry(0.4, 0.4, 0.75, 10, 1, false, 0, Math.PI);
-  tunnel.rotateZ(Math.PI / 2).rotateY(Math.PI / 2).translate(0, 0, 0.98);
-  const cap = new THREE.CircleGeometry(0.4, 10, 0, Math.PI).translate(0, 0, 1.355);
-  return mergeParts([d, tunnel, cap]);
+  tunnel.rotateZ(Math.PI / 2).rotateY(Math.PI / 2).translate(0, w, 0.98);
+  const sides = [-1, 1].map((sd) => new THREE.BoxGeometry(0.07, w, 0.75).translate(sd * 0.365, w / 2, 0.98));
+  const cap = new THREE.CircleGeometry(0.4, 10, 0, Math.PI).translate(0, w, 1.355);
+  const capLow = new THREE.PlaneGeometry(0.8, w).translate(0, w / 2, 1.355);
+  return mergeParts([d, tunnel, ...sides, cap, capLow]);
 }
 
-/** Unit dark doorway at the tunnel mouth (radius-1 igloo). */
+/** Unit dark doorway at the tunnel mouth (radius-1 igloo): an arch down to the snow. */
 export function iglooDoorUnit(): THREE.BufferGeometry {
-  return new THREE.CircleGeometry(0.29, 10, 0, Math.PI).translate(0, 0, 1.362);
+  const w = TUNNEL_WALL;
+  return mergeParts([new THREE.CircleGeometry(0.29, 10, 0, Math.PI).translate(0, w, 1.362), new THREE.PlaneGeometry(0.58, w).translate(0, w / 2, 1.362)]);
 }
 
-/** Unit annex dome (no tunnel). */
+/** Unit annex dome (no tunnel), standing on the snow like the igloo (about one radius tall). */
 export function annexUnit(): THREE.BufferGeometry {
-  const d = new THREE.SphereGeometry(1, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2);
-  d.scale(1, 0.78, 1);
+  const t = Math.PI * 0.56;
+  const d = new THREE.SphereGeometry(1, 14, 7, 0, Math.PI * 2, 0, t);
+  d.translate(0, -Math.cos(t), 0);
+  d.scale(1, 0.84, 1);
   return d;
 }
 

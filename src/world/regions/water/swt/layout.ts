@@ -56,7 +56,7 @@ export const HEALER = { ...at(Math.PI * 0.62, 0.26), r: 3.2 } as const;
 export const WORKSHOP = { ...at(-Math.PI * 0.42, 0.27), r: 3.4 } as const;
 export const CARVERS = { ...at(-Math.PI * 0.6, 0.3), r: 3 } as const;
 export const STORAGE = { ...at(-Math.PI * 0.78, 0.55), len: 14, w: 5, yaw: -Math.PI * 0.78 + Math.PI / 2 } as const;
-export const DOG_PENS = { ...at(Math.PI * 1.22, 0.55), r: 6 } as const;
+export const DOG_PENS = { ...at(Math.PI * 1.38, 0.55), r: 6 } as const;
 export const STORY_RING = { ...at(Math.PI * 1.08, 0.27), r: 4.2 } as const;
 /** Drying racks and the tannery, north (either side of the processional path). */
 export const RACKS_N = [at(-0.32, 0.5), at(0.34, 0.52), at(-0.5, 0.6), at(0.52, 0.62)] as const;
