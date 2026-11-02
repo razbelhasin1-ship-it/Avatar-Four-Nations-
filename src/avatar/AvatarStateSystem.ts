@@ -13,8 +13,8 @@ import { ElementsSphere, SPHERE_SEQUENCE } from './fx/ElementsSphere';
  * Avatar State controller.
  *  - Standard Avatar State: available from the start, toggled at will with the
  *    dedicated input (rebindable, T by default). A short (<1 s) transformation:
- *    levitation stance, eyes ignite, tattoos glow (or a luminous outline when
- *    the character has none), an energy aura, hair/cloth stirred by the surge,
+ *    levitation stance, eyes ignite, tattoos glow when the character has them
+ *    (nothing else on the body glows), wind round the body, hair/cloth stirred by the surge,
  *    an expanding energy wave that knocks enemies back (CombatSystem areaHit)
  *    and makes the surroundings react. Control never leaves the player.
  *  - Elements Sphere: when progression.elementsSphereUnlocked, the same input

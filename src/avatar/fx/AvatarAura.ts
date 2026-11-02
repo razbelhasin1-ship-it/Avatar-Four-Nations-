@@ -4,27 +4,27 @@ import type { GameContext } from '../../core/GameContext';
 import { setOpacity, windMaterial } from '../../vfx/effects/materials';
 import { shared, shellTorus } from '../../vfx/effects/shapes';
 import type { Player } from '../../player/Player';
-import { byQuality, dynamicLights } from './common';
+import { byQuality } from './common';
 
 const tmp = new THREE.Vector3();
 
 /**
  * Standard Avatar State presentation around the player (all characters, with or without
- * tattoos). The glow carries it: eyes and tattoos are lit by AvatarStateSystem (Humanoid.setGlow;
- * a luminous rim when untattooed), with a soft light, a levitation hover and an updraft that
- * stirs hair and cloth. No shell is drawn over the body. The air answers the Avatar's power
+ * tattoos). The glowing eyes carry it, with the tattoos when the character has them (lit by
+ * AvatarStateSystem through Humanoid.setGlow); nothing else on the body glows, no light shines
+ * from it and no shell is drawn over it. A levitation hover and an updraft stir hair and cloth.
+ * The air answers the Avatar's power
  * instead: a few thin streaks of wind circle the body well clear of it, and gusts ruffle the
  * ground around it (grass and foliage bend; dust, leaves, sand or snow lift). In the Elements
  * Sphere the sphere itself is the wind, so only the gusts remain.
  *
  * release() fades everything out (~0.35 s); dispose() restores the character exactly (hover 0,
- * wind 0) and frees every material / light / loop.
+ * wind 0) and frees every material / loop.
  */
 export class AvatarAura {
   private readonly group = new THREE.Group();
   private readonly bands: THREE.Mesh[] = [];
   private readonly mats: THREE.ShaderMaterial[] = [];
-  private readonly light: THREE.PointLight | null;
   private readonly hum: LoopHandle;
   private level = 0;
   private releasing = false;
@@ -52,11 +52,6 @@ export class AvatarAura {
         this.group.add(band);
       }
     }
-    if (dynamicLights(ctx)) {
-      this.light = new THREE.PointLight(sphere ? '#e6f4ff' : '#9fd8ff', 0, 8, 2);
-      this.light.position.y = 1.2;
-      this.group.add(this.light);
-    } else this.light = null;
     ctx.vfx.group.add(this.group);
     this.hum = ctx.audio.loop('loop.avatar.hum', { position: player.position, volume: 0.55 });
     this.follow();
@@ -82,7 +77,6 @@ export class AvatarAura {
     this.level = this.releasing ? Math.max(0, this.level - dt / 0.35) : Math.min(1, this.level + dt / 0.3);
     this.follow();
     const k = this.level;
-    const pulse = 0.85 + 0.15 * Math.sin(this.t * 5.3);
     // The wind: each streak ring breathes and tilts a little as it circles; the fourth sweeps the ground.
     this.bands.forEach((b, i) => {
       const ground = i === 3;
@@ -92,7 +86,6 @@ export class AvatarAura {
       b.rotation.set(Math.PI / 2 + (ground ? 0.04 : 0.14) * Math.sin(this.t * 0.9 + i * 1.9), (ground ? 0.03 : 0.18) * Math.cos(this.t * 0.7 + i), 0);
       setOpacity(this.mats[i], (ground ? 0.24 : 0.27) * k);
     });
-    if (this.light) this.light.intensity = (this.sphere ? 9 : 6) * k * pulse;
     this.hum.setPosition(p.position);
     // Gusts: the ground around the Avatar answers its power.
     if (!this.releasing) {
@@ -135,7 +128,6 @@ export class AvatarAura {
       h.wind.set(0, 0, 0);
     }
     this.group.removeFromParent();
-    if (this.light) this.light.dispose();
     for (const m of this.mats) m.dispose();
   }
 }

@@ -207,6 +207,7 @@ try {
     assert.ok(p1.totalDamage > 0, 'wave hit through CombatSystem');
     const glow = await ev(() => window.__av.glow());
     assert.ok(glow.eye > 0.9 && glow.tat > 0.9, 'eyes + tattoos glow: ' + JSON.stringify(glow));
+    assert.equal(glow.rim, 0, 'no glowing outline on the body');
     const c = await ev(() => window.__av.counts());
     assert.ok(c.hover > 0.1, 'levitation hover ' + c.hover);
     assert.ok(c.wind > 1, 'hair/cloth wind ' + c.wind);
@@ -238,6 +239,41 @@ try {
     assert.equal(c.vfxChildren, baseline.vfxChildren, 'no leftover vfx objects');
     const s = await ev((g) => g.debug.avatar.state());
     assert.equal(s.boosts.power, 1);
+  });
+
+  await check('untattooed character: only the eyes glow (no outline, no light from the body)', async () => {
+    await ev((g) => {
+      const a = structuredClone(g.game.player.appearance);
+      window.__av.saved = { tattoos: a.tattoos, lights: g.ctx.settings.data.graphics.dynamicLights };
+      a.tattoos = 'none';
+      g.game.player.setAppearance(a);
+      // Dynamic lights on (High / Ultra), so a light shining from the body would be created.
+      g.ctx.settings.data.graphics.dynamicLights = true;
+      g.debug.avatar.setSpirit(100);
+    });
+    try {
+      assert.equal(await ev((g) => g.debug.avatar.press()), true, 'press enters the state');
+      await ev(() => window.__av.adv(24));
+      const glow = await ev(() => window.__av.glow());
+      assert.ok(glow.eye > 0.9, 'eyes glow: ' + JSON.stringify(glow));
+      assert.equal(glow.tat, 0, 'no tattoos to light');
+      assert.equal(glow.rim, 0, 'no glowing outline on the body');
+      const lights = await ev((g) => {
+        let n = 0;
+        g.ctx.scene.getObjectByName('avatar_aura')?.traverse((o) => { if (o.isLight) n++; });
+        return n;
+      });
+      assert.equal(lights, 0, 'no light shining from the body');
+    } finally {
+      await ev((g) => g.ctx.avatar.active && g.debug.avatar.press());
+      await ev(() => window.__av.adv(20));
+      await ev((g) => {
+        const a = structuredClone(g.game.player.appearance);
+        a.tattoos = window.__av.saved.tattoos;
+        g.game.player.setAppearance(a);
+        g.ctx.settings.data.graphics.dynamicLights = window.__av.saved.lights;
+      });
+    }
   });
 
   if (BEAUTY) await beautyShots();

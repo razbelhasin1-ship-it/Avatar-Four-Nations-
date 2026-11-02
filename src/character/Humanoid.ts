@@ -25,8 +25,9 @@ import { resolveItem } from './buildUtil';
  *  - bones: Record<BoneName, Object3D> driven by `animator` (THREE.Bone instances).
  *  - anchors: attach VFX/props (handL, handR, head, eyes, chest, back, hips, footL, footR).
  *  - setAppearance(a): rebuilds visuals; keeps bones/animator intact.
- *  - setGlow(eyes, tattoos, color?): Avatar State glow 0..1 (emissive, bloom-friendly).
- *    Characters without tattoos get blazing eyes plus a luminous rim; (0,0) restores exactly.
+ *  - setGlow(eyes, tattoos, color?, rim?): Avatar State glow 0..1 (emissive, bloom-friendly):
+ *    the eyes blaze and tattoos glow if the character has them; nothing else on the body lights
+ *    up unless a `rim` outline is asked for (a lesson's flourish). (0,0) restores exactly.
  *  - flash(color, dur): brief hit flash.  - height: standing height in metres.
  */
 
@@ -93,6 +94,7 @@ export class Humanoid {
   private freezeLeft = 0;
   private eyeGlow = 0;
   private tattooGlow = 0;
+  private rimGlow = 0;
   /** [additive: avatar] World-space wind acceleration for hair / cloth chains (m/s²); zero = still air. */
   readonly wind = new THREE.Vector3();
   private readonly glowColor = new THREE.Color('#bfe8ff');
@@ -152,7 +154,7 @@ export class Humanoid {
     this.appearance = a;
     this.rebuild();
     this.applyColors();
-    this.setGlow(this.eyeGlow, this.tattooGlow);
+    this.setGlow(this.eyeGlow, this.tattooGlow, undefined, this.rimGlow);
   }
 
   /** Initial bone rest positions (the hips rest position never changes after the Animator captures it). */
@@ -311,17 +313,21 @@ export class Humanoid {
     this.material.cu.uFaceGlow.value = Math.max(0, v);
   }
 
-  /** Avatar State glow (0..1 each). Eyes blaze white-blue; tattoos glow if present; untattooed bodies get a luminous rim. */
-  setGlow(eyes: number, tattoos: number, color?: THREE.ColorRepresentation): void {
+  /**
+   * Avatar State glow (0..1 each): the eyes blaze white-blue and tattoos glow if the character has
+   * them; the rest of the body never lights up. `rim` (0..1) is a luminous outline round the whole
+   * body for other effects (a lesson's flourish); the Avatar State leaves it off.
+   */
+  setGlow(eyes: number, tattoos: number, color?: THREE.ColorRepresentation, rim = 0): void {
     this.eyeGlow = Math.max(0, eyes);
     this.tattooGlow = Math.max(0, tattoos);
+    this.rimGlow = Math.max(0, rim);
     if (color !== undefined) this.glowColor.set(color);
     const cu = this.material.cu;
     cu.uGlowColor.value.copy(this.glowColor);
     cu.uEyeGlow.value = this.eyeGlow;
     cu.uTatGlow.value = this.hasTattoos ? this.tattooGlow : 0;
-    const g = Math.max(this.eyeGlow, this.tattooGlow);
-    cu.uRim.value = g * (this.hasTattoos ? 0.35 : 0.9);
+    cu.uRim.value = this.rimGlow;
   }
 
   get hasTattoos(): boolean {

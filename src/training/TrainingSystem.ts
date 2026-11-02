@@ -747,7 +747,7 @@ export class TrainingSystem implements GameSystem {
       this.after(t, () => {
         if (this.ctx.avatar.active) return;
         const k = i === 32 ? 0 : Math.max(0, Math.sin((t / 1.6) * Math.PI));
-        hm.setGlow(k, k, color);
+        hm.setGlow(k, k, color, k * (hm.hasTattoos ? 0.35 : 0.9));
       });
     }
   }

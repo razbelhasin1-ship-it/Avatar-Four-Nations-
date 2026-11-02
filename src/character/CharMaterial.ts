@@ -15,8 +15,8 @@ import { ARROW_CELL, FACE_SPACE, markingsAtlas } from './Markings';
  *    from the markings atlas (Markings.ts) instead, along the same paths
  *  - face paint from the markings atlas, projected onto the face from the bind pose (skin and
  *    lips only), three colours layered
- *  - Avatar State glow: eye mask (aMat.w) and tattoo mask emit `uGlowColor`, plus a Fresnel
- *    rim so characters without tattoos still transform
+ *  - Avatar State glow: eye mask (aMat.w) and tattoo mask emit `uGlowColor`; an optional Fresnel
+ *    rim (uRim) outlines the whole body for other effects (the Avatar State leaves it off)
  *  - additive hit flash
  *
  * All instances share one compiled program (constant customProgramCacheKey).
@@ -195,7 +195,8 @@ diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0), vMat.w * clamp(uEyeGlow * 1.
 const FRAG_EMISSIVE = /* glsl */ `
 #include <emissivemap_fragment>
 float charRim = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 2.4);
-totalEmissiveRadiance += uGlowColor * (charTat * uTatGlow * 3.2 + vMat.w * uEyeGlow * 5.5 + charRim * uRim);
+// Eyes: bright enough to blaze white and bloom, not so bright that the halo washes over the face.
+totalEmissiveRadiance += uGlowColor * (charTat * uTatGlow * 3.2 + vMat.w * uEyeGlow * 2.4 + charRim * uRim);
 totalEmissiveRadiance += uFlash;
 totalEmissiveRadiance += vec3(1.0, 0.42, 0.18) * charPaintK.r * uFaceGlow * 3.0;
 `;
