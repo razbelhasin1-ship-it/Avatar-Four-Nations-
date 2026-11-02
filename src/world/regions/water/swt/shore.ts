@@ -38,6 +38,8 @@ export const SHORE = {
 /** Region hooks the shore needs (water sources go through the region so they unregister on dispose). */
 export interface ShoreHost {
   addWater(def: { id: string; type: 'pond' | 'ice' | 'fountain'; label: string; x: number; y: number; z: number; r: number; capacity: number; regen: number; frozen?: boolean; size?: 'small' | 'medium' | 'large' }): void;
+  /** Track a material made here so it is disposed with the region. */
+  ownMaterial<T extends THREE.Material>(m: T): T;
 }
 
 const mat4 = (x: number, y: number, z: number, yaw: number, sx: number, sy = sx, sz = sx, pitch = 0, roll = 0) =>
@@ -48,9 +50,9 @@ export function buildShore(host: ShoreHost, b: ContentBuilder, props: ContentBui
   beach(b, props, sheets, rnd);
   huntingIce(host, b, props, sheets);
   bay(b, props, rnd, low);
-  shipwreck(b, props, rnd);
+  shipwreck(host, b, props, rnd);
   sledRun(b, props, rnd);
-  tundra(b, props, sheets, rnd, low);
+  tundra(host, b, props, sheets, rnd, low);
 }
 
 function beach(b: ContentBuilder, props: ContentBuilder, sheets: WaterSheets, rnd: Random): void {
@@ -134,11 +136,11 @@ function bay(b: ContentBuilder, props: ContentBuilder, rnd: Random, low: boolean
   }
 }
 
-function shipwreck(b: ContentBuilder, props: ContentBuilder, rnd: Random): void {
+function shipwreck(host: ShoreHost, b: ContentBuilder, props: ContentBuilder, rnd: Random): void {
   const W = WC_WRECK;
-  const rust = new THREE.MeshStandardMaterial({ color: '#5b3527', roughness: 0.82, metalness: 0.35 });
-  const dark = new THREE.MeshStandardMaterial({ color: '#2a2422', roughness: 0.7, metalness: 0.5 });
-  const red = new THREE.MeshStandardMaterial({ color: '#7a1e14', roughness: 0.9, metalness: 0, side: THREE.DoubleSide });
+  const rust = host.ownMaterial(new THREE.MeshStandardMaterial({ color: '#5b3527', roughness: 0.82, metalness: 0.35 }));
+  const dark = host.ownMaterial(new THREE.MeshStandardMaterial({ color: '#2a2422', roughness: 0.7, metalness: 0.5 }));
+  const red = host.ownMaterial(new THREE.MeshStandardMaterial({ color: '#7a1e14', roughness: 0.9, metalness: 0, side: THREE.DoubleSide }));
   const cy = Math.cos(W.yaw), sy = Math.sin(W.yaw);
   const at = (along: number, side: number) => ({ x: W.x + sy * along + cy * side, z: W.z + cy * along - sy * side });
   const base = 0.1 - 1.4; // the hull sits sunk in the shore ice
@@ -224,7 +226,7 @@ function sledRun(b: ContentBuilder, props: ContentBuilder, rnd: Random): void {
   void rnd;
 }
 
-function tundra(b: ContentBuilder, props: ContentBuilder, sheets: WaterSheets, rnd: Random, low: boolean): void {
+function tundra(host: ShoreHost, b: ContentBuilder, props: ContentBuilder, sheets: WaterSheets, rnd: Random, low: boolean): void {
   // Sled tracks running out across the plain, caches marked by poles, breathing holes in the sea ice.
   for (let t = 0; t < 3; t++) {
     let x = WC.x - 40 + t * 40, z = WC.z + WC.R + 10;
@@ -256,7 +258,7 @@ function tundra(b: ContentBuilder, props: ContentBuilder, sheets: WaterSheets, r
     holes++;
   }
   // Low ridges and mountains on the southern horizon (far silhouettes, beyond the sea ice).
-  const ridge = new THREE.MeshStandardMaterial({ color: '#e3ecf6', roughness: 0.95, flatShading: true });
+  const ridge = host.ownMaterial(new THREE.MeshStandardMaterial({ color: '#e3ecf6', roughness: 0.95, flatShading: true }));
   for (let i = 0; i < (low ? 5 : 9); i++) {
     const x = WC.x - 700 + i * 170 + (rnd.next() - 0.5) * 80;
     const z = 2420 + rnd.next() * 260;

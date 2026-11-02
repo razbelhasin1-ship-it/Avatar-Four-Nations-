@@ -164,7 +164,7 @@ export function treeProbability(x: number, z: number, b: BiomeWeights): number {
   p *= 1 - 0.97 * b.desert;
   p = p * (1 - flank) + flank * (0.03 + 0.08 * f);
   // The South Pole is a frozen plain: no trees on the southern polar lands (Wolf Cove's tundra).
-  if (z > 1300 && b.cold > 0.3 && x > -700 && x < 900) p *= 1 - sstep(0.3, 0.5, b.cold);
+  if (z > 1180 && b.cold > 0.3 && x > -700 && x < 900) p *= 1 - sstep(0.3, 0.5, b.cold);
   return Math.min(1, Math.max(0, p));
 }
 

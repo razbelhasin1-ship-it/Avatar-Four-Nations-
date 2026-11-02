@@ -224,6 +224,28 @@ export const THEMES: Record<string, ThemeDef> = {
     level: 0.82,
     combat: { pattern: 'X...x...X...x.x.', map: TAIKO, ostinato: 'lowstrings' },
   },
+  // The Southern Water Tribe (Wolf Cove): a slow frame drum and a low open drone under a breathy
+  // flute, a few bells like ice settling.
+  swt: {
+    id: 'swt',
+    root: 57,
+    scale: SCALES.minorPenta,
+    bpm: 58,
+    beatsPerBar: 4,
+    style: style(R4.flowing, { ornament: 0.2, ornaments: ['slide', 'grace'], range: [-2, 7], restProb: 0.18 }),
+    form: ['A', 'B', 'A'],
+    harmony: { A: [0, 0, 5, 7], A2: [0, 3, 5, 0], B: [5, 3, 0, 7], B2: [3, 5, 7, 0] },
+    signature: [0, 3, 2, 0],
+    lead: { inst: 'xiao', oct: 0, vel: 0.72 },
+    counter: { inst: 'bell', oct: 1, vel: 0.32 },
+    drone: { inst: 'drone', intervals: [0, 7], vel: 0.85, rest: true },
+    perc: { pattern: 'O...o...O..oo...', map: WATERDRUM },
+    sparkle: { inst: 'chime', prob: 0.06, oct: 2, vel: 0.3 },
+    rest: [14, 28],
+    reverb: 0.65,
+    level: 0.88,
+    combat: { pattern: 'O..oX..oO..oX.oo', map: WATERDRUM, ostinato: 'lowstrings' },
+  },
   spirit: {
     id: 'spirit',
     root: 65,

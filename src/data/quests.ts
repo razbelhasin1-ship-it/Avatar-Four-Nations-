@@ -31,7 +31,7 @@ export const QUESTS: QuestDef[] = [
     autoStart: { startingElement: 'water', origin: 'water_south' },
     steps: [
       { id: 'meet', text: 'Speak with Master Aput at the entrance of the Great Igloo.', objectives: [{ type: 'talk', npc: 'swt_elder', text: 'Talk to Master Aput' }] },
-      { id: 'draw', text: 'Draw water from the Frozen Pond or a fishing hole and practice your water lash.', objectives: [{ type: 'event', event: 'water:drawn', text: 'Draw water from a source', count: 1 }, { type: 'cast', element: 'water', count: 3, text: 'Use waterbending 3 times' }] },
+      { id: 'draw', text: 'Draw water from a melt barrel by the hearth or the Frozen Pond and practice your water lash.', objectives: [{ type: 'event', event: 'water:drawn', text: 'Draw water from a source', count: 1 }, { type: 'cast', element: 'water', count: 3, text: 'Use waterbending 3 times' }] },
       { id: 'avatar', text: 'A sail darkens the horizon and the sea ice groans. Enter the Avatar State.', objectives: [{ type: 'avatarState', text: 'Activate the Avatar State' }] },
     ],
     rewards: { xp: 120, currency: 50, items: [{ id: 'sea_prunes', count: 5 }] },

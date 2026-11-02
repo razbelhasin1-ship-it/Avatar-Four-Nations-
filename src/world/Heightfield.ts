@@ -1019,8 +1019,12 @@ export function biomeWeights(x: number, z: number, out?: BiomeWeights): BiomeWei
   const n = 60 * noise.noise2(x / 300, z / 300);
   const isle = sstep(260, 160, len2(x + 1800, z + 1800));
   const north = sstep(-900, -1180, z + n) * (1 - isle);
-  // Wolf Cove's bay and its shores are polar too (landforms/wolfCove.ts), not the desert's edge.
-  const coveCold = z > 1150 && z < 1650 && x > -200 && x < 760 ? sstep(1.8, 1.25, coveE(x, z)) : 0;
+  // Wolf Cove's bay, its far shore and the land round the village out to the sled hill and the tundra
+  // are polar too (landforms/wolfCove.ts), not the desert's edge or temperate grass.
+  const coveCold =
+    z > 1150 && z < 1960 && x > -250 && x < 800
+      ? Math.max(sstep(3.2, 1.25, coveE(x, z)), sstep(1.3, 0.85, ((x - 225) / 330) ** 2 + ((z - 1650) / 270) ** 2))
+      : 0;
   const southPolar = Math.max(sstep(1430, 1560, z + n) * sstep(820, 560, Math.abs(x - 220) + n), coveCold);
   const desert = sstep(DESERT.r + 60, DESERT.r * 0.7, len2(x - DESERT.x, z - DESERT.z) + n) * (1 - coveCold);
   const fireD = len2(x - FIRE_ISLAND.x, z - FIRE_ISLAND.z);

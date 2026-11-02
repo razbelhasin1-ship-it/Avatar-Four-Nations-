@@ -6,8 +6,8 @@
  *    Spirit Oasis; harbor quay → harbor-head bridge → promenade → grand
  *    stairs → plaza; plaza → district lanes and footbridges → Waterbending
  *    Courtyard; harbor quay → gate stairs → wall walk; noble quarter →
- *    Glacier Pass → northern road. SWT: road → gate → meeting ground → sea
- *    ice. Isle: spawn → training circle)
+ *    Glacier Pass → northern road. SWT (Wolf Cove): shore → gate ramp → gate →
+ *    Hearth Plaza; stair ramp → wall walk; shore → hunting ice. Isle: spawn → training circle)
  *  - checks walkable heights (groundAt), flat/open training grounds, registered
  *    water sources (g.waterNearby), published spots, no console errors
  *  - reports draw calls / triangles / fps at the NWT plaza (street + aerial)
@@ -261,13 +261,30 @@ try {
     assert.ok(a.drawCalls < 450 && b.drawCalls < 600, `draw calls ${a.drawCalls}/${b.drawCalls}`);
   });
 
-  await check('SWT walk: southern road → whalebone gate → meeting ground → sea ice (Akka)', async () => {
-    await teleport(220, 1505, 60);
+  await check('SWT walk (Wolf Cove): shore → gate ramp → gate → Hearth Plaza; stairs → wall walk; shore ice (Akka)', async () => {
+    await teleport(226, 1506, 60);
     const built = await h.eval((g) => g.debug.waterRegions.built());
     assert.ok(built.includes('swt_village'), 'swt built: ' + JSON.stringify(built));
-    const r = await walkPath([[220, 1548], [220, 1556], [220, 1572], [211, 1588], [219, 1601], [220, 1630], [221, 1645], [222, 1662]], { tol: 1.3 });
+    // Up the ramp, through the north gate, along the processional path to the plaza (the terrace floor).
+    let r = await walkPath([[220, 1530], [220, 1550], [220, 1568], [220, 1582], [220, 1594], [221, 1612], [222, 1632], [223, 1640]], { tol: 1.3 });
+    near(r.y, 11, 0.4, 'on the village floor at the Hearth Plaza');
+    // Water within a few steps of the spawn (melt barrels by the hearth, the Frozen Pond).
+    const home = await sources(10);
+    assert.ok(home.some((s) => s.id.startsWith('swt:melt_barrel') && !s.frozen), 'melt barrels by the spawn: ' + JSON.stringify(home));
+    // A stair ramp up to the wall walk (the first tower's stairs).
+    const stairs = await h.eval((g) => g.debug.swt.stairs());
+    assert.ok(stairs && stairs.length >= 6, 'six stair ramps: ' + JSON.stringify(stairs));
+    {
+      const s0 = stairs[0];
+      await teleport(s0.foot.x + (s0.foot.x - s0.head.x) * 0.3, s0.foot.z + (s0.foot.z - s0.head.z) * 0.3, 15);
+      r = await walkPath([[s0.foot.x, s0.foot.z], [s0.head.x, s0.head.z], [s0.walk.x, s0.walk.z]], { tol: 1.0 });
+      near(r.y, 13, 0.4, 'on the wall walk');
+    }
+    // Down at the shore: onto the hunting ice where Hunter Akka teaches.
+    await teleport(232, 1484, 30);
+    r = await walkPath([[240, 1476], [250, 1468], [262, 1461]], { tol: 1.3 });
     const spots = await h.eval((g) => g.debug.waterRegions.spots());
-    near(r.y, spots.training_akka.y, 0.3, 'standing on the sea ice');
+    near(r.y, spots.training_akka.y, 0.3, 'standing on the hunting ice');
     await assertOpenFlat(spots.training_akka, 'training_akka');
     const src = await sources(25);
     assert.ok(src.some((s) => s.id === 'swt:sea_ice' && s.frozen), 'sea ice source: ' + JSON.stringify(src));

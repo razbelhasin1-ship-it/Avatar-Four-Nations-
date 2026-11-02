@@ -8,7 +8,7 @@ Rollback branch: `before-southern-water-tribe` (pushed). Work branch: `ccr-bee3c
 - [x] 2 Terrain (landforms/wolfCove.ts: cove opening east, terrace, ramp, hill; polar shores; treeless south), wall.ts (slabs, cap, icicles, 6 lookouts, 2 gate towers, 6 stairs), layout.ts (seeded: 120 igloos, 25 tents, 7 homes)
 - [~] 3 Village (village.ts) + interiors (interiors.ts, domes.ts) built; polish lighting/night, verify interiors
 - [~] 4 Outskirts (shore.ts): beach, hunting ice + fishing holes (swt:fishing_hole_*, swt:sea_ice), bergs, wreck, sled run + tunnel, tundra; verify
-- [ ] 5 People (~180, roles, routines), animals, boats, weather, audio, festival, raided state
+- [~] 5 People (swt/life.ts: 180 villagers, 12 roles, routines, nav grid + wall walk + shore/sled/tundra), figures.ts (parkas, hoods, loops, wolf tails, war paint), wildlife.ts (penguins, tiger seals, dogs, gulls, polar bear dog, canoes/kayaks on a schedule), atmosphere.ts (aurora, raid marks), audio.ts (ice, animals, drums, carving), music theme 'swt', weather + fog; debug `__game.debug.swt`
 - [ ] 6 Southern first quest (Master Aput) mirroring mq_awakening_water
 - [ ] 7 Preview (menu tour stop), polish, perf, e2e five starts + old saves, screenshots (3 passes), report
 

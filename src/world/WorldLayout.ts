@@ -92,7 +92,7 @@ export interface RegionDef extends P2 {
   biome: BiomeId;
   blurb: string;
   /** Ambient/music theme keys. */
-  theme: 'water' | 'earth' | 'fire' | 'air' | 'desert' | 'swamp' | 'wild' | 'spirit' | 'kyoshi';
+  theme: 'water' | 'earth' | 'fire' | 'air' | 'desert' | 'swamp' | 'wild' | 'spirit' | 'kyoshi' | 'swt';
   weather: Array<'clear' | 'cloudy' | 'snow' | 'blizzard' | 'rain' | 'fog' | 'ashfall' | 'sandstorm' | 'wind'>;
   /** Shown on the map from the start. */
   known: boolean;
@@ -593,8 +593,8 @@ export const REGIONS: RegionDef[] = [
     r: 330,
     biome: 'polar',
     blurb: 'Wolf Cove: a walled village of igloos on the southern ice.',
-    theme: 'water',
-    weather: ['clear', 'snow', 'cloudy'],
+    theme: 'swt',
+    weather: ['clear', 'snow', 'cloudy', 'fog'],
     known: false,
   },
   {
