@@ -45,7 +45,7 @@ defineSpots({
   viewpoint_swt_tower: { x: towerAt(TOWER_ANGLES[0]).x, z: towerAt(TOWER_ANGLES[0]).z, y: WC.wallTop, r: 3, label: 'Wall Lookout', region: R },
   // Masters: Hunter Akka on the hunting ice (the cove's shore ice), Master Aput by the Frozen Pond.
   master_akka: { x: SHORE.akka.x, z: SHORE.akka.z + 11, y: SHORE.iceY, yaw: Math.PI, r: 2, label: 'Hunter Akka', region: R },
-  training_akka: { x: SHORE.akka.x, z: SHORE.akka.z, y: SHORE.iceY, r: 11, label: 'Hunting Ice', region: R },
+  training_akka: { x: SHORE.akka.x, z: SHORE.akka.z, y: SHORE.iceY, r: 12, label: 'Hunting Ice', region: R },
   master_aput: { x: TRAINING.x - TRAINING.r - 1.4, z: TRAINING.z, y: FLOOR, yaw: Math.PI / 2, r: 2, label: 'Master Aput', region: R },
   training_aput: { x: TRAINING.x, z: TRAINING.z, y: FLOOR, r: TRAINING.r, label: 'Training Circle', region: R },
   // The shore: canoe landing and the otter penguins' floes by the sled run.
