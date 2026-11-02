@@ -4,7 +4,7 @@ import { Random } from '../../../../core/Random';
 import { heightAt } from '../../../Heightfield';
 import { WC, WC_GATE, WC_LANDING, WC_RAMP_FOOT, WC_SLED_RUN } from '../../../landforms/wolfCove';
 import type { P2 } from '../../../WorldLayout';
-import { FigureRenderer, Pose } from '../../earth/bssFigures';
+import { Acc, FigureRenderer, Pose } from '../../earth/bssFigures';
 import { NavGraph } from '../../earth/bssNav';
 import { registerSwtAccessories, SAcc, SWT_LOOK } from './figures';
 import { BOATYARD, C, CARVERS, CHIEF, DOG_PENS, type Dwelling, FLOOR, GREAT, HEARTH, PLAZA, POND, POND_HOLE, RACKS_N, RI, STORAGE, STORY_RING, SWT, TANNERY, TRADER, TRAINING } from './layout';
@@ -78,7 +78,7 @@ const T = {
   cook: 1 << 28,
 } as const;
 
-type Activity = 'walk' | 'idle' | 'work' | 'talk' | 'sit' | 'form' | 'carry' | 'home' | 'sled' | 'dance' | 'play';
+type Activity = 'walk' | 'idle' | 'work' | 'talk' | 'sit' | 'form' | 'carry' | 'home' | 'sled' | 'meditate' | 'play';
 
 interface Agent {
   role: SwtRole;
@@ -115,7 +115,32 @@ interface Agent {
   runs: number;
   /** Index within the role (sentry posts, the storyteller's chair). */
   k: number;
+  /** Distance to the player this frame (breath, greeting). */
+  d: number;
 }
+
+/** A villager's dog follows them about (wildlife.ts draws it). */
+export interface PetOwner {
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  /** Out and about (false while indoors). */
+  out: boolean;
+}
+
+const byDistance = (p: Agent, q: Agent): number => p.d - q.d;
+
+/** Fire Navy raiders holding the gate in the raided state: offsets from the gate, facing. */
+const RAIDERS: ReadonlyArray<[number, number, number]> = [
+  [-2.6, -6, 0.15],
+  [2.8, -5.5, -0.2],
+  [-6.5, -11, 0.4],
+  [6.2, -10.5, -0.35],
+  [0.4, -14, 0],
+  [-1.2, 4.5, 0.6],
+  [1.8, 6, -0.4],
+];
 
 /** A person in a boat or on a sled the wildlife module wants drawn with the crowd. */
 export interface Rider {
@@ -257,6 +282,10 @@ export class WolfCoveLife {
   readonly talkPos = new THREE.Vector3(0, -1000, 0);
   /** Mouths of the villagers nearest the player (breath in the cold); `breathN` are valid. */
   readonly breathers: THREE.Vector3[] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  /** Dog owners (children and neighbours with a pet at heel). */
+  readonly pets: PetOwner[] = [];
+  private readonly petAgents: Agent[] = [];
+  private readonly spotTmp = { x: 0, z: 0 };
   breathN = 0;
   private readonly nearBuf: Agent[] = [];
   /** The sentry posts (towers and the gate) in order. */
@@ -276,7 +305,7 @@ export class WolfCoveLife {
   /** Festival night (everyone at the plaza, dancing) and the raided state (people indoors, guards out). */
   festival = false;
   raided = false;
-  stats = { total: 0, drawn: 0, walking: 0, home: 0, village: 0, shore: 0, hall: 0, wall: 0, sledding: 0, outside: 0, nodes: 0, unreachable: 0, lost: 0, ms: 0 };
+  stats = { total: 0, drawn: 0, walking: 0, home: 0, village: 0, shore: 0, hall: 0, wall: 0, sledding: 0, outside: 0, nodes: 0, unreachable: 0, lost: 0, raiders: 0, ms: 0 };
 
   constructor(parent: THREE.Group, private readonly input: LifeInput, density = 1) {
     registerSwtAccessories();
@@ -401,6 +430,7 @@ export class WolfCoveLife {
     for (const d of inp.village.doors) poi(d.x, d.z, T.home, d.yaw, 0.25);
     // Hearth Plaza: standing room, the cooks' places at the fire, the seats.
     ring(PLAZA.x, PLAZA.z, 6.3, 9, T.plaza, 1.3, 0.2);
+    ring(PLAZA.x, PLAZA.z, 9.6, 12, T.plaza, 1.5, 0.45);
     ring(HEARTH.x, HEARTH.z, 2.15, 3, T.cook, 0.2, 0.9);
     // The Great Igloo: tunnel, hall floor round the fire, the seats.
     const mouth = poi(GREAT.x, GREAT.z - GREAT.r - GREAT.tunnel - 1.2, T.plaza, 0, 0.6, 3);
@@ -657,7 +687,7 @@ export class WolfCoveLife {
         const acc =
           role === 'kid' ? SAcc.kid
           : role === 'elder' || role === 'storyteller' ? SAcc.elder
-          : role === 'warrior' ? SAcc.warrior
+          : role === 'warrior' ? (kIndex.warrior ?? 0) % 2 ? SAcc.warriorShield : SAcc.warrior
           : role === 'bender' ? SAcc.bender
           : role === 'hunter' || (role === 'fisher' && rnd.chance(0.6)) ? SAcc.hunter
           : female ? (rnd.chance(0.65) ? SAcc.woman : SAcc.womanViolet)
@@ -698,11 +728,19 @@ export class WolfCoveLife {
           sled: -1,
           runs: 0,
           k,
+          d: 1e9,
         };
         this.agents.push(a);
       }
     }
     this.stats.total = this.agents.length;
+    for (const role of ['kid', 'villager', 'kid', 'villager'] as const) {
+      const a = this.agents.find((x) => x.role === role && !this.petAgents.includes(x));
+      if (a) {
+        this.petAgents.push(a);
+        this.pets.push({ x: a.x, y: a.y, z: a.z, yaw: a.yaw, out: false });
+      }
+    }
   }
 
   /** Where an agent wants to be now, and what to do there. */
@@ -720,20 +758,24 @@ export class WolfCoveLife {
       if (s >= 0) return { goal: s, act: 'sit' };
       const hs = r.chance(0.4) ? this.seat(a, T.hearth) : -1;
       if (hs >= 0) return { goal: hs, act: 'sit' };
-      return r.chance(0.5) ? { goal: this.pick(T.hall), act: 'talk' } : { goal: this.pick(T.plaza), act: 'talk' };
+      return r.chance(0.35) && this.standing(T.hall) < 12 ? { goal: this.pick(T.hall), act: 'talk' } : { goal: this.pick(T.plaza), act: 'talk' };
     };
     // Sentries keep their posts at night and through a raid.
     if (a.role === 'warrior' && (night || this.raided) && a.k < this.posts.length) return { goal: this.posts[a.k], act: 'idle' };
     if (this.raided && a.role !== 'warrior' && a.role !== 'bender' && a.role !== 'cook') {
       return h >= 9 && h < 17 && r.chance(0.25) ? { goal: this.pick(r.chance(0.5) ? T.storage : T.cook), act: 'carry' } : home;
     }
-    // Festival nights: the plaza fills, people dance round the hearth, children too.
-    if (this.festival && (h >= 19 || h < 1) && a.role !== 'warrior') {
-      if (a.role === 'elder') {
-        const s = this.seat(a, T.hearth);
+    // Glacier Spirits festival nights: the village fasts (no meal) and meditates round the hearth and
+    // on the plaza under the southern lights; the elders commune with the spirits in the Great Igloo.
+    if (this.festival && (h >= 18 || h < 1) && a.role !== 'warrior') {
+      if (a.role === 'elder' || a.role === 'storyteller') {
+        const s = this.seat(a, T.hall);
         if (s >= 0) return { goal: s, act: 'sit' };
       }
-      return { goal: this.pick(T.plaza), act: r.chance(0.65) ? 'dance' : 'talk' };
+      if (a.role === 'kid') return { goal: this.pick(r.chance(0.6) ? T.plaza : T.pond), act: 'idle' };
+      const s = r.chance(0.25) ? this.seat(a, T.hearth) : -1;
+      if (s >= 0) return { goal: s, act: 'sit' };
+      return { goal: this.pick(T.plaza), act: 'meditate' };
     }
     switch (a.role) {
       case 'hunter':
@@ -823,16 +865,29 @@ export class WolfCoveLife {
     }
   }
 
+  /** Villagers standing (not seated) at places with `mask` or on their way there. */
+  private standing(mask: number): number {
+    let n = 0;
+    for (const a of this.agents) {
+      if (a.activity === 'home' || a.seat >= 0) continue;
+      const t = this.nav.nodes[a.goal].tags;
+      if (t & mask && !(t & T.seat)) n++;
+    }
+    return n;
+  }
+
   /** Where to stand at a node (open places spread a crowd out; seats and posts are exact). */
   private spot(a: Agent, node: number): P2 {
     const n = this.nav.nodes[node], j = this.jit[node];
-    return { x: n.x + a.ox * j, z: n.z + a.oz * j };
+    this.spotTmp.x = n.x + a.ox * j;
+    this.spotTmp.z = n.z + a.oz * j;
+    return this.spotTmp;
   }
 
   /** Face what the agent is doing: seats and posts their way, groups their centre. */
   private faceAt(a: Agent, node: number): void {
     const n = this.nav.nodes[node];
-    if (this.jit[node] > 0.3 && (a.activity === 'talk' || a.activity === 'dance' || a.activity === 'idle')) a.yaw = Math.atan2(-a.ox, -a.oz);
+    if (this.jit[node] > 0.3 && (a.activity === 'talk' || a.activity === 'idle')) a.yaw = Math.atan2(-a.ox, -a.oz);
     else if (n.yaw) a.yaw = n.yaw;
   }
 
@@ -964,11 +1019,12 @@ export class WolfCoveLife {
           bestD = d;
           best = a;
         }
+        a.d = d;
         if (d < 12) this.nearBuf.push(a);
       }
     }
     if (player) {
-      this.nearBuf.sort((p, q) => Math.hypot(p.x - player.x, p.z - player.z) - Math.hypot(q.x - player.x, q.z - player.z));
+      this.nearBuf.sort(byDistance);
       this.breathN = Math.min(this.breathers.length, this.nearBuf.length);
       for (let i = 0; i < this.breathN; i++) {
         const a = this.nearBuf[i];
@@ -1028,13 +1084,12 @@ export class WolfCoveLife {
           amt = 0.8;
           break;
         }
-        case 'dance': {
-          const k = (this.t * 0.9 + a.phase) % 2;
-          pose = k < 1 ? Pose.raise : Pose.walk;
-          amt = k < 1 ? 0.7 : 0.6;
-          yaw += Math.sin(this.t * 1.3 + a.phase) * 0.8;
+        case 'meditate':
+          // Seated on a fur on the snow, still.
+          pose = Pose.sit;
+          y -= 0.38;
+          amt = 0.2;
           break;
-        }
         case 'play':
           pose = Pose.talk;
           break;
@@ -1050,7 +1105,7 @@ export class WolfCoveLife {
           }
           break;
       }
-      if (a.greet > 0.05 && player && a.activity !== 'form' && a.activity !== 'sit') {
+      if (a.greet > 0.05 && player && a.activity !== 'form' && a.activity !== 'sit' && a.activity !== 'meditate') {
         const want = Math.atan2(player.x - a.x, player.z - a.z);
         let d = want - yaw;
         while (d > Math.PI) d -= Math.PI * 2;
@@ -1070,10 +1125,43 @@ export class WolfCoveLife {
       f.push(r.x, r.y, r.z, r.yaw, r.pose, r.phase, 1, 0.1, SWT_LOOK.coats[SAcc.hunter], 0x1e2a3a, SWT_LOOK.skin[i % SWT_LOOK.skin.length], SAcc.hunter, 1);
       drawn++;
     }
+    // Raiders at the gate (the raided state).
+    let raiders = 0;
+    if (this.raided) {
+      for (let i = 0; i < RAIDERS.length; i++) {
+        const [dx, dz, yaw] = RAIDERS[i];
+        const x = WC_GATE.x + dx, z = WC_GATE.z + dz;
+        const y = dz > 0 ? FLOOR : outY(x, z);
+        raiders++;
+        if (!f.visible(x, y, z)) continue;
+        const k = (this.t * 0.3 + i * 1.7) % 4;
+        f.push(x, y, z, yaw, k < 1 ? Pose.talk : Pose.idle, this.t + i, 0.6, 0, 0x7a1f16, 0x1b1918, 0xe2b896, Acc.soldierHelm, 1.02);
+        drawn++;
+      }
+    }
     f.end();
     this.sledMesh.count = sleds;
     if (sleds) this.sledMesh.instanceMatrix.needsUpdate = true;
-    Object.assign(this.stats, { drawn, walking, home, village, shore, hall, wall, sledding, outside });
+    const st = this.stats;
+    st.drawn = drawn;
+    st.walking = walking;
+    st.home = home;
+    st.village = village;
+    st.shore = shore;
+    st.hall = hall;
+    st.wall = wall;
+    st.sledding = sledding;
+    st.outside = outside;
+    st.raiders = raiders;
+    for (let i = 0; i < this.petAgents.length; i++) {
+      const a = this.petAgents[i], o = this.pets[i];
+      o.out = a.activity !== 'home' && a.activity !== 'sled';
+      if (!o.out) continue;
+      o.x = a.x;
+      o.y = a.y;
+      o.z = a.z;
+      o.yaw = a.yaw;
+    }
   }
 
   private tick(a: Agent, dt: number): void {
@@ -1175,7 +1263,7 @@ export class WolfCoveLife {
     const extra = this.raided
       ? ' Stay near the walls. The fire ships may still be watching.'
       : this.festival && (h >= 18 || h < 1)
-        ? ' Tonight the lights dance over the ice — it is the festival!'
+        ? ' Tonight is the Glacier Spirits festival. We fast, and sit with the spirits under the southern lights.'
         : h >= 17.5 && h < 21.5
           ? ' The meal in the Great Igloo is starting.'
           : h >= 21.5 || h < 5

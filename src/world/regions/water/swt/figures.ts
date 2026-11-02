@@ -30,6 +30,8 @@ export const SAcc = {
   kid: 57,
   /** Waterbenders and healers: hair loops, a water skin at the hip, a blue sash. */
   bender: 58,
+  /** Warriors with a round hide shield on the back instead of the boomerang. */
+  warriorShield: 59,
 } as const;
 
 /** Coat colour for each accessory (the hood is part of the coat). */
@@ -44,6 +46,7 @@ export const SWT_LOOK = {
     [SAcc.elder]: 0x33517c,
     [SAcc.kid]: 0x4676b4,
     [SAcc.bender]: 0x30629f,
+    [SAcc.warriorShield]: 0x213f72,
   } as Record<number, number>,
   /** Trousers and boots: dark blue-greys and browns. */
   pants: [0x1e2a3a, 0x233246, 0x2a2622, 0x1b2230, 0x3a2f27],
@@ -189,6 +192,38 @@ function warPaint(): Part[] {
   ];
 }
 
+/** A bladed boomerang slung across the back. */
+function boomerang(): Part[] {
+  const arm = new THREE.TorusGeometry(0.2, 0.03, 4, 10, Math.PI * 0.62);
+  arm.scale(1, 1, 0.35);
+  arm.rotateZ(0.35);
+  return [{ g: at(arm, 0.02, 1.12, -0.2), c: '#d9cdb0' }];
+}
+
+/** A round hide shield on the back, painted with a wave. */
+function shield(): Part[] {
+  const disc = new THREE.CylinderGeometry(0.27, 0.27, 0.04, 14);
+  disc.rotateX(Math.PI / 2);
+  const rim = new THREE.TorusGeometry(0.27, 0.022, 4, 16);
+  const wave = new THREE.TorusGeometry(0.11, 0.02, 4, 10, Math.PI);
+  return [
+    { g: at(disc, 0, 1.15, -0.22), c: '#b8956a' },
+    { g: at(rim, 0, 1.15, -0.22), c: '#5a3d25' },
+    { g: at(wave, 0, 1.12, -0.245), c: '#2f5c97' },
+  ];
+}
+
+/** A whale-tooth machete at the hip. */
+function machete(): Part[] {
+  const blade = new THREE.ConeGeometry(0.035, 0.32, 4);
+  blade.scale(1, 1, 0.35);
+  blade.rotateZ(Math.PI + 0.15);
+  return [
+    { g: at(blade, 0.24, 0.84, 0.05), c: '#efe6d2' },
+    { g: at(new THREE.CylinderGeometry(0.018, 0.018, 0.12, 5), 0.25, 1.02, 0.05), c: WOOD },
+  ];
+}
+
 function club(): Part[] {
   const shaft = new THREE.CylinderGeometry(0.022, 0.026, 0.55, 5);
   shaft.rotateZ(0.25);
@@ -248,8 +283,9 @@ const DEFS: Record<number, () => Part[]> = {
   [SAcc.manNavy]: () => [...furTrim(), ...hoodDown(coat(SAcc.manNavy)), ...wolfTail()],
   [SAcc.woman]: () => [...furTrim(), ...hoodDown(coat(SAcc.woman)), ...loopsAndBraid(true)],
   [SAcc.womanViolet]: () => [...furTrim(), ...hoodDown(coat(SAcc.womanViolet)), ...loopsAndBraid(false)],
-  [SAcc.hunter]: () => [...furTrim(), ...hoodUp(coat(SAcc.hunter)), ...spearOnBack()],
-  [SAcc.warrior]: () => [...furTrim(), ...mantle('#e4e2dc'), ...wolfTail(), ...warPaint(), ...club()],
+  [SAcc.hunter]: () => [...furTrim(), ...hoodUp(coat(SAcc.hunter)), ...spearOnBack(), ...machete()],
+  [SAcc.warrior]: () => [...furTrim(), ...mantle('#e4e2dc'), ...wolfTail(), ...warPaint(), ...club(), ...boomerang()],
+  [SAcc.warriorShield]: () => [...furTrim(), ...mantle('#e4e2dc'), ...wolfTail(), ...warPaint(), ...club(), ...shield()],
   [SAcc.elder]: () => [...furTrim(), ...mantle(), ...greyBun()],
   [SAcc.kid]: () => [...furTrim(), ...hoodUp(coat(SAcc.kid))],
   [SAcc.bender]: () => [...furTrim(), ...hoodDown(coat(SAcc.bender)), ...loopsAndBraid(false), ...waterSkin()],

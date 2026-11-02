@@ -4,7 +4,8 @@ import type { WaterSourceDef } from '../../../../combat/WaterSources';
 import type { GameContext } from '../../../../core/GameContext';
 import type { Emitter } from '../../../../vfx/VFX';
 import type { EnvironmentSystem } from '../../../env/EnvironmentSystem';
-import { WC, WC_LANDING, WC_WRECK } from '../../../landforms/wolfCove';
+import { WC, WC_GATE, WC_LANDING, WC_WRECK } from '../../../landforms/wolfCove';
+import { SatOverlay } from '../../air/sat/overlay';
 import { defineSpots } from '../../../Spots';
 import { WaterRegion } from '../base';
 import { wtMat, wtWater } from '../materials';
@@ -80,6 +81,11 @@ export class WolfCove extends WaterRegion {
   private loops: { murmur: LoopHandle | null; hearth: LoopHandle | null; shore: LoopHandle | null } = { murmur: null, hearth: null, shore: null };
   private loopGen = -1;
   private sfx = { creak: 6, boom: 30, carve: 3, drum: 0, drumStep: 0, breath: 1, drift: 0.5 };
+  /** The spirits answering the elders on festival nights (the Great Igloo's smoke hole, the hearth). */
+  private spiritFx: Emitter[] = [];
+  /** F3 debug overlay (shared with the Southern Air Temple). */
+  private overlay: SatOverlay | null = null;
+  private fps = 60;
 
   constructor() {
     super('swt_village', { x: C.x, z: C.z - 80 }, 480);
@@ -109,7 +115,19 @@ export class WolfCove extends WaterRegion {
     this.life = new WolfCoveLife(this.main, { dwellings: list, village: this.village, wall }, density);
     this.wild = new WolfCoveWildlife(this.main, low);
     this.aurora = new Aurora(this.group);
-    this.raid = new RaidMarks(this.main);
+    // The igloos nearest the gate are the ones a raid burns.
+    const damaged = list
+      .filter((d) => d.kind === 'igloo' && !d.home)
+      .sort((a, b) => Math.hypot(a.x - WC_GATE.x, a.z - WC_GATE.z) - Math.hypot(b.x - WC_GATE.x, b.z - WC_GATE.z))
+      .slice(0, 5);
+    this.raid = new RaidMarks(this.main, damaged);
+    this.overlay = new SatOverlay(
+      () => this.overlayLines(),
+      () => {
+        const pp = this.ctx.player?.position;
+        return !!pp && Math.hypot(pp.x - C.x, pp.z - C.z) < 600;
+      },
+    );
     current = this;
     installSwtDebug();
     const life = this.life;
@@ -170,6 +188,8 @@ export class WolfCove extends WaterRegion {
   override update(dt: number, ctx: GameContext): void {
     super.update(dt, ctx);
     this.time += dt;
+    if (dt > 0) this.fps += (1 / dt - this.fps) * 0.05;
+    this.overlay?.update(dt);
     this.updateInteriorLight(dt, ctx);
     const hour = ctx.world.sky.timeOfDay;
     const p = ctx.player?.position ?? ctx.camera.position;
@@ -194,10 +214,11 @@ export class WolfCove extends WaterRegion {
     }
     if (this.wild) {
       this.wild.group.visible = this.lod !== 'hidden';
-      if (this.lod !== 'hidden') this.wild.update(dt, ctx, full);
+      if (this.lod !== 'hidden') this.wild.update(dt, ctx, full, this.life?.pets ?? []);
     }
     this.aurora?.update(dt, this.time, dist < 1600 ? nightFactor(hour) * this.clear * (this.festival ? 1 : 0.6) : 0);
     this.updateRaid(ctx, full && dist < 260);
+    this.updateSpirits(ctx, full && dist < 320 && this.festival && (hour >= 19 || hour < 1));
     if (full && dist < 420) {
       this.sounds(dt, ctx, p, hour);
       this.air(dt, ctx, p, dist);
@@ -244,6 +265,34 @@ export class WolfCove extends WaterRegion {
     if ((!on || !near) && this.raidFx.length) this.stopRaidFx();
     const p = ctx.player?.position;
     if (this.sootFall && p) this.sootFall.position.set(p.x, p.y + 9, p.z);
+  }
+
+  /** Festival nights: spirit lights rising from the Great Igloo, where the elders commune, and at the hearth. */
+  private updateSpirits(ctx: GameContext, on: boolean): void {
+    if (on && !this.spiritFx.length && ctx.settings.data.graphics.ambientEffects) {
+      const top = ctx.vfx.emitter('spirit', 5, { radius: 1.6, size: 0.55, speed: 0.7, color: '#c8f4ff', color2: '#7fd8c8' });
+      top.position.set(GREAT.x, FLOOR + GREAT.h - 0.6, GREAT.z);
+      const hearth = ctx.vfx.emitter('spirit', 3, { radius: 1.1, size: 0.4, speed: 0.5, color: '#d4f7ff', color2: '#8fd0ff' });
+      hearth.position.set(HEARTH.x, FLOOR + 1.4, HEARTH.z);
+      this.spiritFx.push(top, hearth);
+    } else if (!on && this.spiritFx.length) this.stopSpirits();
+  }
+
+  private stopSpirits(): void {
+    for (const e of this.spiritFx) e.stop();
+    this.spiritFx.length = 0;
+  }
+
+  private overlayLines(): string[] {
+    const info = this.ctx.render.renderer.info.render;
+    const l = this.life?.stats, w = this.wild?.stats;
+    return [
+      'Wolf Cove — Southern Water Tribe',
+      `fps ${this.fps.toFixed(0)}  draw calls ${info.calls}  triangles ${(info.triangles / 1000).toFixed(0)}k`,
+      l ? `people ${l.total}: drawn ${l.drawn}, walking ${l.walking}, indoors ${l.home}, village ${l.village}, shore ${l.shore}, hall ${l.hall}, wall ${l.wall}, sledding ${l.sledding}  (${l.ms.toFixed(2)} ms)` : 'people —',
+      w ? `animals: penguins ${w.penguins}, seals ${w.seals}, dogs ${w.dogs}, gulls ${w.gulls}, polar bear dog ${w.bear}; boats out ${w.boatsOut}/${w.boats}` : 'animals —',
+      `festival ${this.festival ? 'yes' : 'no'}  raided ${this.raided ? 'yes' : 'no'}  aurora ${(this.aurora?.intensity ?? 0).toFixed(2)}  detail ${this.lod}`,
+    ];
   }
 
   private stopRaidFx(): void {
@@ -323,14 +372,13 @@ export class WolfCove extends WaterRegion {
       const w = Math.random() < 0.5 ? WORKSHOP : CARVERS;
       if (Math.hypot(p.x - w.x, p.z - w.z) < 45) audio.play('swt_carve', { position: V(w.x, FLOOR + 1, w.z), volume: 0.8 });
     }
-    // Festival drums: a steady two-beat round the hearth.
-    if (this.festival && dPlaza < 160) {
+    // Festival nights: one slow drum beat for the meditation, like a heartbeat under the lights.
+    if (this.festival && dPlaza < 160 && (hour >= 19 || hour < 1)) {
       s.drum -= dt;
       if (s.drum <= 0) {
-        const pattern = [0.62, 0.31, 0.62, 0.62, 0.31, 0.93];
-        s.drum = pattern[s.drumStep % pattern.length];
+        s.drum = 2.4;
         s.drumStep++;
-        audio.play('swt_drum', { position: V(HEARTH.x + 3, FLOOR + 0.8, HEARTH.z + 2), volume: s.drumStep % 3 === 1 ? 1 : 0.7 });
+        audio.play('swt_drum', { position: V(GREAT.x, FLOOR + 1, GREAT.z - GREAT.r - 1), volume: s.drumStep % 4 === 0 ? 0.6 : 0.42 });
       }
     }
   }
@@ -346,6 +394,7 @@ export class WolfCove extends WaterRegion {
   protected override offSession(_ctx: GameContext): void {
     this.quiet();
     this.stopRaidFx();
+    this.stopSpirits();
   }
 
   /** Debug / tests: crowd, animals and boats counts and the area's state. */
@@ -368,6 +417,9 @@ export class WolfCove extends WaterRegion {
     }
     this.quiet();
     this.stopRaidFx();
+    this.stopSpirits();
+    this.overlay?.dispose();
+    this.overlay = null;
     this.life?.dispose();
     this.life = null;
     this.wild?.dispose();

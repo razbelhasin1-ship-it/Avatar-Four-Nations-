@@ -9,7 +9,7 @@ import type { P2 } from '../../../WorldLayout';
 import { Pose } from '../../earth/bssFigures';
 import { coloured, type Part } from './figures';
 import { DOG_PENS, FLOOR, SWT } from './layout';
-import type { Rider } from './life';
+import type { PetOwner, Rider } from './life';
 import { SHORE } from './shore';
 
 /**
@@ -77,7 +77,9 @@ export class WolfCoveWildlife {
   readonly riders: Rider[] = [];
   private readonly rnd = new Random(SWT.seed + 313);
   private readonly penguins: Penguin[] = [];
-  private bear: { m: CreatureModel; anim: AnimInput; s: number; pause: number; x: number; z: number; yaw: number } | null = null;
+  private bear: { m: CreatureModel; anim: AnimInput; s: number; dir: number; pause: number; x: number; z: number; yaw: number } | null = null;
+  private readonly loopPt = { x: 0, z: 0, yaw: 0 };
+  private readonly riderPool: Rider[] = Array.from({ length: 16 }, () => ({ x: 0, y: 0, z: 0, yaw: 0, pose: 0, phase: 0 }));
   private readonly bearPath: P2[] = [
     { x: 340, z: 1812 },
     { x: 290, z: 1858 },
@@ -89,7 +91,7 @@ export class WolfCoveWildlife {
   ];
   private bearLen = 0;
   private readonly seals: Array<{ x: number; z: number; yaw: number; phase: number; t: number; hop: number }> = [];
-  private readonly dogs: Array<{ x: number; z: number; yaw: number; tx: number; tz: number; state: 'trot' | 'sit' | 'lie'; t: number; phase: number }> = [];
+  private readonly dogs: Array<{ x: number; y: number; z: number; yaw: number; tx: number; tz: number; state: 'trot' | 'sit' | 'lie'; t: number; phase: number }> = [];
   private readonly boats: Boat[] = [];
   private readonly meshes: THREE.InstancedMesh[] = [];
   private readonly geos: THREE.BufferGeometry[] = [];
@@ -179,7 +181,7 @@ export class WolfCoveWildlife {
     for (let i = 0; i < SWT_WILD.dogs; i++) {
       const a = this.rnd.next() * Math.PI * 2, r = this.rnd.next() * (DOG_PENS.r - 1.2);
       const x = DOG_PENS.x + Math.sin(a) * r, z = DOG_PENS.z + Math.cos(a) * r;
-      this.dogs.push({ x, z, yaw: this.rnd.range(-3, 3), tx: x, tz: z, state: this.rnd.chance(0.5) ? 'lie' : 'sit', t: this.rnd.range(2, 12), phase: this.rnd.range(0, 10) });
+      this.dogs.push({ x, y: FLOOR, z, yaw: this.rnd.range(-3, 3), tx: x, tz: z, state: this.rnd.chance(0.5) ? 'lie' : 'sit', t: this.rnd.range(2, 12), phase: this.rnd.range(0, 10) });
     }
   }
 
@@ -238,14 +240,14 @@ export class WolfCoveWildlife {
       const a = this.bearPath[i], b = this.bearPath[(i + 1) % this.bearPath.length];
       this.bearLen += Math.hypot(b.x - a.x, b.z - a.z);
     }
-    this.bear = { m, anim: defaultAnim(), s: this.rnd.next() * this.bearLen, pause: 0, x: 0, z: 0, yaw: 0 };
+    this.bear = { m, anim: defaultAnim(), s: this.rnd.next() * this.bearLen, dir: 1, pause: 0, x: 0, z: 0, yaw: 0 };
   }
 
   // ---------------------------------------------------------------------------
   // Frame
   // ---------------------------------------------------------------------------
 
-  update(dt: number, ctx: GameContext, near: boolean): void {
+  update(dt: number, ctx: GameContext, near: boolean, pets: readonly PetOwner[] = []): void {
     this.time += dt;
     this.calls.length = 0;
     const hour = ctx.world.sky.timeOfDay;
@@ -262,7 +264,7 @@ export class WolfCoveWildlife {
     }
     this.updatePenguins(dt, p);
     this.updateSeals(dt, p);
-    this.updateDogs(dt, p);
+    this.updateDogs(dt, p, pets);
     this.updateGulls();
     this.updateBear(dt, p);
   }
@@ -361,9 +363,37 @@ export class WolfCoveWildlife {
     this.stats.seals = n;
   }
 
-  private updateDogs(dt: number, p: THREE.Vector3): void {
+  private updateDogs(dt: number, p: THREE.Vector3, pets: readonly PetOwner[]): void {
     let n = 0;
-    for (const d of this.dogs) {
+    for (let i = 0; i < this.dogs.length; i++) {
+      const d = this.dogs[i];
+      const owner = i < pets.length ? pets[i] : null;
+      if (owner) {
+        // A pet at heel: trots after its villager, sits when they stop, waits at the door when they go in.
+        let bob = 0, pitch = 0, sy = 1;
+        if (owner.out) {
+          const tx = owner.x - Math.sin(owner.yaw) * 1.3 + Math.cos(owner.yaw) * 0.55;
+          const tz = owner.z - Math.cos(owner.yaw) * 1.3 - Math.sin(owner.yaw) * 0.55;
+          const dx = tx - d.x, dz = tz - d.z, dd = Math.hypot(dx, dz);
+          if (dd > 30) {
+            d.x = tx;
+            d.z = tz;
+          } else if (dd > 0.45) {
+            const s = Math.min(dd, Math.min(4, 1.2 + dd) * dt);
+            d.x += (dx / dd) * s;
+            d.z += (dz / dd) * s;
+            d.yaw = Math.atan2(dx, dz);
+            bob = Math.abs(Math.sin(this.time * 9 + d.phase)) * 0.06;
+          } else pitch = -0.38;
+          d.y = owner.y;
+        } else sy = 0.72;
+        e4.set(pitch, d.yaw, 0, 'YXZ');
+        q4.setFromEuler(e4);
+        v4.set(d.x, d.y + bob + (pitch ? 0.08 : 0), d.z);
+        s4.set(1, sy, 1);
+        this.dogMesh.setMatrixAt(n++, m4.compose(v4, q4, s4));
+        continue;
+      }
       d.t -= dt;
       if (d.t <= 0) {
         const r = this.rnd.next();
@@ -429,24 +459,27 @@ export class WolfCoveWildlife {
     const b = this.bear;
     if (!b) return;
     let speed = 0;
+    // It keeps its distance: a traveller closer than ~170 m sends it loping away along its round.
+    const shy = Math.hypot(b.x - p.x, b.z - p.z) < 170;
+    if (shy) b.pause = 0;
     if (b.pause > 0) b.pause -= dt;
     else {
-      speed = 1.3;
-      b.s = (b.s + speed * dt) % this.bearLen;
-      if (this.rnd.next() < dt / 40) b.pause = this.rnd.range(6, 14);
-    }
-    let s = b.s;
-    for (let i = 0; i < this.bearPath.length; i++) {
-      const a = this.bearPath[i], c = this.bearPath[(i + 1) % this.bearPath.length];
-      const l = Math.hypot(c.x - a.x, c.z - a.z);
-      if (s <= l) {
-        b.x = a.x + ((c.x - a.x) * s) / l;
-        b.z = a.z + ((c.z - a.z) * s) / l;
-        b.yaw = Math.atan2(c.x - a.x, c.z - a.z);
-        break;
+      speed = shy ? 3.4 : 1.3;
+      if (shy) {
+        const L = this.bearLen;
+        this.loopAt((b.s + 4) % L);
+        const ahead = Math.hypot(this.loopPt.x - p.x, this.loopPt.z - p.z);
+        this.loopAt((b.s - 4 + L) % L);
+        const back = Math.hypot(this.loopPt.x - p.x, this.loopPt.z - p.z);
+        b.dir = ahead >= back ? 1 : -1;
       }
-      s -= l;
+      b.s = (b.s + b.dir * speed * dt + this.bearLen) % this.bearLen;
+      if (!shy && this.rnd.next() < dt / 40) b.pause = this.rnd.range(6, 14);
     }
+    this.loopAt(b.s);
+    b.x = this.loopPt.x;
+    b.z = this.loopPt.z;
+    b.yaw = this.loopPt.yaw + (b.dir < 0 ? Math.PI : 0);
     const vis = Math.hypot(b.x - p.x, b.z - p.z) < 420;
     b.m.root.visible = vis;
     this.stats.bear = vis ? 1 : 0;
@@ -462,10 +495,26 @@ export class WolfCoveWildlife {
     b.m.update(a);
   }
 
+  /** Point and heading at distance `s` round the bear's loop (into loopPt). */
+  private loopAt(s: number): void {
+    for (let i = 0; i < this.bearPath.length; i++) {
+      const a = this.bearPath[i], c = this.bearPath[(i + 1) % this.bearPath.length];
+      const l = Math.hypot(c.x - a.x, c.z - a.z);
+      if (s <= l || i === this.bearPath.length - 1) {
+        const t = Math.min(1, s / l);
+        this.loopPt.x = a.x + (c.x - a.x) * t;
+        this.loopPt.z = a.z + (c.z - a.z) * t;
+        this.loopPt.yaw = Math.atan2(c.x - a.x, c.z - a.z);
+        return;
+      }
+      s -= l;
+    }
+  }
+
   /** Boats on the daily schedule; paddlers go to `riders`. */
   private updateBoats(dt: number, hour: number, settle: boolean): void {
     this.riders.length = 0;
-    let nc = 0, nk = 0, out = 0;
+    let nc = 0, nk = 0, out = 0, nr = 0;
     for (const b of this.boats) {
       const away = hour >= b.leave && hour < b.back;
       if (settle) {
@@ -511,16 +560,16 @@ export class WolfCoveWildlife {
       else this.canoeMesh.setMatrixAt(nc++, m4);
       // Paddlers out on the water (at the berth the boats wait empty).
       if (b.state !== 'berth') {
-        const seats = b.kayak ? [0] : [0.85, -0.85];
-        for (const sz of seats) {
-          this.riders.push({
-            x: b.x + Math.sin(b.yaw) * sz,
-            y: bob - 0.28,
-            z: b.z + Math.cos(b.yaw) * sz,
-            yaw: b.yaw,
-            pose: moving ? Pose.work : Pose.sit,
-            phase: this.time * 2 + b.phase + sz,
-          });
+        for (let k = 0; k < (b.kayak ? 1 : 2) && nr < this.riderPool.length; k++) {
+          const sz = b.kayak ? 0 : k ? -0.85 : 0.85;
+          const r = this.riderPool[nr++];
+          r.x = b.x + Math.sin(b.yaw) * sz;
+          r.y = bob - 0.28;
+          r.z = b.z + Math.cos(b.yaw) * sz;
+          r.yaw = b.yaw;
+          r.pose = moving ? Pose.work : Pose.sit;
+          r.phase = this.time * 2 + b.phase + sz;
+          this.riders.push(r);
         }
       }
     }

@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { Random } from '../../../../core/Random';
-import { C, FLOOR, RI, SWT } from './layout';
+import { heightAt } from '../../../Heightfield';
+import { WC_GATE, WC_RAMP_FOOT } from '../../../landforms/wolfCove';
+import { C, FLOOR, PLAZA, RI, SWT } from './layout';
 
 /**
  * Wolf Cove's sky and air: the aurora — curtains of green, teal and violet light over the southern
@@ -19,8 +21,8 @@ void main() {
   vC = aCurtain;
   vec3 p = position;
   // Slow folds travelling along the curtain.
-  p.x += sin(uv.x * 9.0 + uTime * 0.07 + aCurtain * 2.1) * 26.0 * (0.4 + uv.y);
-  p.z += cos(uv.x * 7.0 - uTime * 0.05 + aCurtain) * 18.0 * (0.4 + uv.y);
+  p.x += sin(uv.x * 9.0 + uTime * 0.07 + aCurtain * 2.1) * 60.0 * (0.4 + uv.y);
+  p.z += cos(uv.x * 7.0 - uTime * 0.05 + aCurtain) * 45.0 * (0.4 + uv.y);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }
 `;
@@ -60,18 +62,19 @@ export class Aurora {
   constructor(parent: THREE.Object3D) {
     const pos: number[] = [], uv: number[] = [], cur: number[] = [], idx: number[] = [];
     const seg = 96;
-    // Three curtains arcing over the southern sky (south = +Z), high above the tundra.
+    // Three curtains over the southern horizon (south = +Z), 1–2 km out over the tundra: from the
+    // village they stand roughly 8°–38° above the horizon, bowing toward the viewer in the middle.
     const curtains = [
-      { cx: C.x - 120, cz: C.z + 760, r: 900, a0: -0.55, a1: 0.5, y: 330, h: 300 },
-      { cx: C.x + 160, cz: C.z + 980, r: 1100, a0: -0.45, a1: 0.42, y: 420, h: 360 },
-      { cx: C.x - 40, cz: C.z + 560, r: 700, a0: -0.35, a1: 0.65, y: 280, h: 240 },
+      { w: 2600, d: 1250, off: 0, bend: -250, y: 220, h: 560 },
+      { w: 3000, d: 1750, off: 260, bend: -300, y: 300, h: 700 },
+      { w: 1600, d: 1000, off: -300, bend: -150, y: 240, h: 380 },
     ];
     curtains.forEach((c, ci) => {
       const base = pos.length / 3;
       for (let i = 0; i <= seg; i++) {
         const u = i / seg;
-        const a = c.a0 + (c.a1 - c.a0) * u;
-        const x = c.cx + Math.sin(a) * c.r, z = c.cz - Math.cos(a) * c.r * 0.55;
+        const x = C.x + c.off + (u - 0.5) * c.w;
+        const z = C.z + c.d + c.bend * Math.sin(Math.PI * u) + 70 * Math.sin(u * Math.PI * 3 + ci * 1.7);
         for (const v of [0, 1]) {
           pos.push(x, c.y + v * c.h, z);
           uv.push(u, v);
@@ -136,38 +139,77 @@ export function nightFactor(hour: number): number {
 }
 
 /**
- * What a raid leaves behind: soot fallen on the snow round the gate and through the northern
- * neighbourhoods, scorched patches, and the igloos still smoking (positions for smoke emitters).
+ * What a raid leaves behind (the optional raided state; the default is peaceful): soot fallen on the
+ * snow at the gate, down the ramp and along the processional path, scorched patches through the
+ * northern neighbourhoods, the igloos nearest the gate burnt and broken with rubble round them, and
+ * smoke rising from them (positions for smoke emitters).
  */
 export class RaidMarks {
   readonly group = new THREE.Group();
   readonly smoke: THREE.Vector3[] = [];
-  private readonly geo: THREE.BufferGeometry;
-  private readonly mat: THREE.MeshBasicMaterial;
+  private readonly geos: THREE.BufferGeometry[] = [];
+  private readonly mats: THREE.Material[] = [];
 
-  constructor(parent: THREE.Object3D) {
+  constructor(parent: THREE.Object3D, damaged: ReadonlyArray<{ x: number; z: number; r: number }>) {
     const rnd = new Random(SWT.seed + 919);
-    this.geo = new THREE.CircleGeometry(1, 14).rotateX(-Math.PI / 2);
-    this.mat = new THREE.MeshBasicMaterial({ color: '#1d1a18', transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
-    const n = 70;
-    const mesh = new THREE.InstancedMesh(this.geo, this.mat, n);
-    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), v = new THREE.Vector3();
-    for (let i = 0; i < n; i++) {
-      // Thickest at the gate (north), thinning south through the village.
-      const a = rnd.gaussian() * 0.7;
-      const r = RI * (0.35 + rnd.next() * 0.62);
-      const x = C.x + Math.sin(a) * r, z = C.z - Math.cos(a) * r;
-      const sz = 1.5 + rnd.next() * 4;
-      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd.next() * 6);
-      s.set(sz * (0.6 + rnd.next() * 0.8), 1, sz);
-      v.set(x, FLOOR + 0.03 + i * 0.0004, z);
-      mesh.setMatrixAt(i, m.compose(v, q, s));
-      if (i % 9 === 0) this.smoke.push(new THREE.Vector3(x, FLOOR + 1.6, z));
+    const disc = new THREE.CircleGeometry(1, 14).rotateX(-Math.PI / 2);
+    const soot = new THREE.MeshBasicMaterial({ color: '#1d1a18', transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
+    const burnt = new THREE.MeshLambertMaterial({ color: '#2d2724' });
+    this.geos.push(disc);
+    this.mats.push(soot, burnt);
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), v = new THREE.Vector3();
+    const UP = new THREE.Vector3(0, 1, 0);
+    const marks: Array<[number, number, number, number]> = [];
+    // The gate and the ramp below it.
+    for (let i = 0; i < 12; i++) marks.push([WC_GATE.x + rnd.gaussian() * 4, WC_GATE.z + rnd.gaussian() * 3, 1.6 + rnd.next() * 2.4, 0]);
+    for (let z = WC_GATE.z - 4; z > WC_RAMP_FOOT.z; z -= 5) marks.push([WC_GATE.x + rnd.gaussian() * 2, z + rnd.gaussian(), 1.4 + rnd.next() * 2, 0]);
+    // The processional path to the plaza.
+    for (let z = WC_GATE.z + 4; z < PLAZA.z - PLAZA.r; z += 3) marks.push([C.x + rnd.gaussian() * 1.6, z + rnd.gaussian(), 1.2 + rnd.next() * 1.8, 0]);
+    // Scattered through the northern neighbourhoods.
+    for (let i = 0; i < 26; i++) {
+      const a = rnd.gaussian() * 0.75, r = RI * (0.45 + rnd.next() * 0.5);
+      marks.push([C.x + Math.sin(a) * r, C.z - Math.cos(a) * r, 1.4 + rnd.next() * 3, 0]);
     }
-    mesh.instanceMatrix.needsUpdate = true;
-    mesh.name = 'swt_raid_soot';
-    mesh.renderOrder = 1;
-    this.group.add(mesh);
+    const sootMesh = new THREE.InstancedMesh(disc, soot, marks.length);
+    marks.forEach(([x, z, s], i) => {
+      q.setFromAxisAngle(UP, rnd.next() * 6);
+      sc.set(s * (0.6 + rnd.next() * 0.8), 1, s);
+      const inside = Math.hypot(x - C.x, z - C.z) < RI;
+      v.set(x, (inside ? FLOOR : heightAt(x, z)) + 0.03 + i * 0.0004, z);
+      sootMesh.setMatrixAt(i, m.compose(v, q, sc));
+    });
+    sootMesh.instanceMatrix.needsUpdate = true;
+    sootMesh.name = 'swt_raid_soot';
+    sootMesh.renderOrder = 1;
+    this.group.add(sootMesh);
+    // Burnt, broken igloos by the gate: a scorched, caved-in shell over each and rubble round it.
+    const cap = new THREE.SphereGeometry(1, 12, 6, 0.4, Math.PI * 1.25, 0, Math.PI * 0.5);
+    const block = new THREE.BoxGeometry(1, 1, 1);
+    this.geos.push(cap, block);
+    const caps = new THREE.InstancedMesh(cap, burnt, Math.max(1, damaged.length));
+    const rubble = new THREE.InstancedMesh(block, burnt, Math.max(1, damaged.length * 5));
+    let nr = 0;
+    damaged.forEach((d, i) => {
+      q.setFromAxisAngle(UP, rnd.next() * 6);
+      sc.set(d.r * 1.04, d.r * 0.82, d.r * 1.04);
+      v.set(d.x, FLOOR - 0.05, d.z);
+      caps.setMatrixAt(i, m.compose(v, q, sc));
+      for (let k = 0; k < 5; k++) {
+        const a = rnd.next() * Math.PI * 2, rr = d.r + 0.4 + rnd.next() * 1.2, s = 0.35 + rnd.next() * 0.45;
+        q.setFromEuler(new THREE.Euler(rnd.next() * 0.6, rnd.next() * 6, rnd.next() * 0.6));
+        sc.set(s * 1.4, s, s);
+        v.set(d.x + Math.sin(a) * rr, FLOOR + s * 0.4, d.z + Math.cos(a) * rr);
+        rubble.setMatrixAt(nr++, m.compose(v, q, sc));
+      }
+      this.smoke.push(new THREE.Vector3(d.x, FLOOR + d.r * 0.9, d.z));
+    });
+    caps.count = damaged.length;
+    rubble.count = nr;
+    caps.instanceMatrix.needsUpdate = true;
+    rubble.instanceMatrix.needsUpdate = true;
+    caps.name = 'swt_raid_burnt_igloos';
+    rubble.name = 'swt_raid_rubble';
+    this.group.add(caps, rubble);
     this.group.name = 'swt_raid';
     this.group.visible = false;
     parent.add(this.group);
@@ -175,7 +217,8 @@ export class RaidMarks {
 
   dispose(): void {
     this.group.removeFromParent();
-    this.geo.dispose();
-    this.mat.dispose();
+    for (const g of this.geos) g.dispose();
+    for (const mt of this.mats) mt.dispose();
+    for (const o of this.group.children) (o as THREE.InstancedMesh).dispose?.();
   }
 }

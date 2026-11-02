@@ -594,8 +594,8 @@ export const REGIONS: RegionDef[] = [
     biome: 'polar',
     blurb: 'Wolf Cove: a walled village of igloos on the southern ice.',
     theme: 'swt',
-    weather: ['clear', 'snow', 'cloudy', 'fog'],
-    known: false,
+    weather: ['clear', 'snow', 'cloudy', 'fog', 'blizzard'],
+    known: true,
   },
   {
     id: 'kyoshi_island',
