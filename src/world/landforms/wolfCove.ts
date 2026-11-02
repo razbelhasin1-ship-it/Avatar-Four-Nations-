@@ -105,13 +105,16 @@ export function inGateGap(x: number, z: number): boolean {
   return Math.abs(x - WC.x) < WC.gateHalf + 0.4 && z < WC.z - WC.R + 4 && z > WC.z - WC.R - 2.5;
 }
 
+/** The snow ridge along the bay's north shore: extent (coveE), crest height (m), west/east ends (x). */
+export const NORTH_RIDGE = { reach: 2.0, crest: 22, x0: 120, x1: 600 } as const;
+
 /** Terrain height with Wolf Cove applied (called by Heightfield after the natural relief). */
 export function wolfCoveHeight(x: number, z: number, natural: number): number {
   const Z = WC.zone;
   const zx = (x - Z.x) / Z.rx, zz = (z - Z.z) / Z.rz;
   const zd = Math.sqrt(zx * zx + zz * zz);
   const coveOut = 1.35;
-  if (zd > 1 + Z.fade / Math.min(Z.rx, Z.rz) && coveE(x, z) > coveOut) return natural;
+  if (zd > 1 + Z.fade / Math.min(Z.rx, Z.rz) && coveE(x, z) > NORTH_RIDGE.reach) return natural;
   let h = natural;
   // The tundra plain, levelled over the zone (fading back into the land beyond; the deep sea stays sea).
   const zoneW = 1 - sstep(1, 1 + Z.fade / Math.min(Z.rx, Z.rz), zd);
@@ -139,6 +142,23 @@ export function wolfCoveHeight(x: number, z: number, natural: number): number {
         const d = (e - 1) * rz; // metres inland
         h = Math.min(h, 0.55 + d * 0.12 + 0.15 * noiseB.noise2(x / 6, z / 6) * sstep(0, 4, d));
       }
+    }
+  }
+  // The bay's far (north) shore: a snow ridge rising steeply out of the water, which closes the bay
+  // off from the warm lands beyond (they would otherwise show across the water).
+  {
+    const e = coveE(x, z);
+    const R = NORTH_RIDGE;
+    const side = sstep(WC.cove.z - 15, WC.cove.z - 50, z) * sstep(R.x0, R.x0 + 55, x) * sstep(R.x1, R.x1 - 65, x);
+    if (side > 0 && e > 1 && e < R.reach) {
+      const u = e - 1;
+      const crest = R.crest + 6 * noise.noise2(x / 70, z / 70);
+      const rise = u < 0.16 ? sstep(0, 0.16, u) * 0.5 : 0.5 + 0.5 * sstep(0.16, 0.45, u);
+      const fall = 1 - sstep(0.55, R.reach - 1.05, u);
+      const ridge = 0.6 + (crest - 0.6) * rise * fall + 1.5 * noiseB.noise2(x / 18, z / 18) * sstep(0.1, 0.4, u) * fall;
+      // Gone by `reach` (where this function hands back the natural relief) and by z = 1200 (where
+      // Heightfield stops calling it), so neither edge leaves a step.
+      h = mix(h, Math.max(h, ridge), side * sstep(R.reach, R.reach - 0.1, e) * sstep(1200, 1250, z));
     }
   }
   // The village terrace: flat floor inside the wall; it falls to the plain inside the wall's

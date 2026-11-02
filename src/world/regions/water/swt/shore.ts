@@ -3,8 +3,8 @@ import { Random } from '../../../../core/Random';
 import { heightAt } from '../../../Heightfield';
 import type { ContentBuilder } from '../../../kit/Builder';
 import { coveE, WC, WC_LANDING, WC_SLED_RUN, WC_WRECK } from '../../../landforms/wolfCove';
-import { boulder, crystal, hull } from '../geometry';
-import { wtMat, wtWater } from '../materials';
+import { boulder, hull } from '../geometry';
+import { wtMat, wtMatTinted, wtWater } from '../materials';
 import { dryingRack, type WaterSheets } from '../parts';
 import { SWT } from './layout';
 import { sled } from './village';
@@ -90,25 +90,38 @@ function beach(b: ContentBuilder, props: ContentBuilder, sheets: WaterSheets, rn
 function huntingIce(host: ShoreHost, b: ContentBuilder, props: ContentBuilder, sheets: WaterSheets): void {
   const A = SHORE.akka;
   // A solid sheet of shore ice (bevelled extrusion) with the fishing holes cut through it.
-  const shape = new THREE.Shape();
-  shape.absarc(0, 0, A.r, 0, Math.PI * 2, false);
+  // Its edge is ragged like a real floe (never inside 12.5 m, where the fishing holes and the
+  // training ground are).
+  const edge: THREE.Vector2[] = [];
+  const er = new Random(SWT.seed + 61);
+  const n = 34;
+  for (let k = 0; k < n; k++) {
+    const a = (k / n) * Math.PI * 2;
+    const r = A.r + 0.4 + 3.2 * Math.abs(Math.sin(a * 2.3 + 0.7)) * er.range(0.35, 1) + 1.2 * Math.abs(Math.sin(a * 5.1 + 2)) + er.range(-0.4, 0.4);
+    edge.push(new THREE.Vector2(Math.cos(a) * Math.max(12.5, r), Math.sin(a) * Math.max(12.5, r)));
+  }
+  const shape = new THREE.Shape(edge);
   for (const h of SHORE.holes) {
     const hole = new THREE.Path();
     hole.absarc(h.x - A.x, -(h.z - A.z), h.r, 0, Math.PI * 2, true);
     shape.holes.push(hole);
   }
-  const depth = 0.5;
-  const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelSize: 0.7, bevelThickness: 0.12, bevelSegments: 2, curveSegments: 40 });
+  const depth = 0.24;
+  const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelSize: 0.35, bevelThickness: 0.08, bevelSegments: 2, curveSegments: 40 });
   geo.rotateX(-Math.PI / 2);
-  b.mesh(wtMat('ice_clear'), geo, { x: A.x, y: SHORE.iceY - depth - 0.12, z: A.z }, { castShadow: false });
+  // Faintly blue, like the sea ice round it (plain snow white glares against the floes).
+  b.mesh(wtMatTinted('snow', '#e2ebf5'), geo, { x: A.x, y: SHORE.iceY - depth - 0.08, z: A.z }, { castShadow: false });
   b.collider({ shape: 'cylinder', x: A.x, y: SHORE.iceY - 0.4, z: A.z, r: A.r, hy: 0.4, walkable: true, solid: false, surface: 'ice' });
   SHORE.holes.forEach((h, i) => {
     sheets.disc(wtWater('pond'), h.x, h.z, h.r + 0.05, SHORE.iceY - 0.3, 18);
     b.mesh(wtMat('canal_bed'), new THREE.CircleGeometry(h.r + 0.1, 16).rotateX(-Math.PI / 2), { x: h.x, y: SHORE.iceY - 1.1, z: h.z }, { castShadow: false });
     host.addWater({ id: `swt:fishing_hole_${i}`, type: 'pond', label: 'Fishing Hole', x: h.x, y: SHORE.iceY - 0.3, z: h.z, r: h.r, capacity: 90, regen: 5, size: 'small' });
-    // A fishing pole and a little windbreak of snow blocks beside each hole.
+    // A fishing pole and a little windbreak beside each hole: a low arc of snow blocks.
     props.instance('swt_fishing_pole', () => new THREE.CylinderGeometry(0.03, 0.04, 2.4, 5).rotateZ(0.9).translate(0.6, 0.9, 0), wtMat('wood'), new THREE.Matrix4().makeTranslation(h.x + h.r + 0.4, SHORE.iceY, h.z));
-    b.mesh(wtMat('snow'), new THREE.BoxGeometry(1.6, 0.6, 0.4), { x: h.x, y: SHORE.iceY + 0.3, z: h.z + h.r + 0.9 });
+    for (let k = -1.5; k <= 1.5; k++) {
+      const a = k * 0.42, rr = h.r + 0.95;
+      b.mesh(wtMat('snow'), new THREE.BoxGeometry(0.74, 0.46 - Math.abs(k) * 0.06, 0.36), { x: h.x + Math.sin(a) * rr, y: SHORE.iceY + 0.2, z: h.z + Math.cos(a) * rr, yaw: a + (i - 1) * 0.05 });
+    }
   });
   host.addWater({ id: 'swt:sea_ice', type: 'ice', label: 'Sea Ice', x: A.x, y: SHORE.iceY, z: A.z, r: A.r, capacity: 400, regen: 6, frozen: true, size: 'large' });
 }
@@ -120,20 +133,112 @@ function bay(b: ContentBuilder, props: ContentBuilder, rnd: Random, low: boolean
   for (let i = 0; i < 80 && placed < bergs; i++) {
     const x = 250 + rnd.next() * 260, z = 1340 + rnd.next() * 90;
     if (coveE(x, z) > 0.62 || heightAt(x, z) > -3.5) continue;
-    const s = 3 + rnd.next() * 5;
-    const h = s * (1 + rnd.next() * 1.3);
-    b.mesh(wtMat(rnd.next() < 0.5 ? 'ice_massive' : 'ice_clear'), crystal(s, h, 0.2 + rnd.next() * 0.25), { x, y: -h * 0.18, z, yaw: rnd.next() * 6 });
-    b.mesh(wtMat('snow'), boulder(i + 301, s * 0.9, s * 0.35, s * 0.7, 1), { x: x + s * 0.4, y: -0.6, z: z + s * 0.2, yaw: rnd.next() * 6 });
-    b.collider({ shape: 'cylinder', x, y: h / 2 - 1, z, r: s * 0.75, hy: h / 2 + 1, walkable: false, solid: true });
+    const s = 3.5 + rnd.next() * 5;
+    const yaw = rnd.next() * 6;
+    let top: number;
+    let box: { hx: number; hz: number } | null = null;
+    if (s > 5.5 && rnd.next() < 0.75) {
+      // Tabular (only the big ones, so they stay broad and low): an irregular slab with steep
+      // cliff sides and a flat snow top.
+      const t = tabularBerg(rnd, s * 1.45, 1.3 + rnd.next() * 1.5);
+      // A slight list (small enough that the flat walkable collider still meets the top).
+      const tilt = { pitch: rnd.range(-0.02, 0.02), roll: rnd.range(-0.02, 0.02) };
+      b.mesh(wtMat('ice_cliff'), t.body, { x, y: 0, z, yaw, ...tilt });
+      b.mesh(wtMat('snow'), t.cap, { x, y: 0, z, yaw, ...tilt }, { castShadow: false });
+      top = t.top;
+      box = { hx: t.rx * 0.85, hz: t.rz * 0.85 };
+    } else {
+      // A domed or pinnacled berg weathered into facets (the ice material whitens the faces that
+      // look up, where snow settles), often with a lower shoulder calved off one side.
+      const hh = s * (0.8 + rnd.next() * 0.6);
+      const main = boulder(i + 301, s * 0.85, hh, s * 0.7, 1);
+      main.computeBoundingBox();
+      b.mesh(wtMat('ice_cliff'), main, { x, y: -hh * 0.35, z, yaw });
+      top = -hh * 0.35 + main.boundingBox!.max.y;
+      if (rnd.next() < 0.7) {
+        const side = rnd.next() < 0.5 ? -1 : 1;
+        const lx = x + Math.cos(yaw) * side * s * 0.75, lz = z - Math.sin(yaw) * side * s * 0.75;
+        const lh = hh * (0.35 + rnd.next() * 0.2);
+        const lobe = boulder(i + 401, s * 0.7, lh, s * 0.6, 1);
+        lobe.computeBoundingBox();
+        const lt = -lh * 0.3 + lobe.boundingBox!.max.y;
+        b.mesh(wtMat('ice_cliff'), lobe, { x: lx, y: -lh * 0.3, z: lz, yaw: yaw + 0.8 });
+        b.collider({ shape: 'cylinder', x: lx, y: lt / 2 - 1, z: lz, r: s * 0.6, hy: lt / 2 + 1, walkable: false, solid: true });
+      }
+    }
+    if (box) b.collider({ shape: 'box', x, y: top / 2 - 1, z, hx: box.hx, hy: top / 2 + 1, hz: box.hz, yaw, walkable: true, solid: true });
+    else b.collider({ shape: 'cylinder', x, y: top / 2 - 1, z, r: s * 0.8, hy: top / 2 + 1, walkable: false, solid: true });
     placed++;
   }
+  // Pans of sea ice broken off the edge: ragged, snow-covered, a hand's breadth proud of the water.
   for (let i = 0; i < (low ? 14 : 30); i++) {
     const x = 170 + rnd.next() * 360, z = 1330 + rnd.next() * 120;
     const e = coveE(x, z);
     if (e > 0.85 || e < 0.25) continue;
     const r = 1.2 + rnd.next() * 2.6;
-    props.instance('swt_floe', () => new THREE.CylinderGeometry(1, 1.05, 0.35, 7).translate(0, -0.05, 0), wtMat('ice_clear'), mat4(x, 0.05, z, rnd.next() * 6, r, 1, r * (0.6 + rnd.next() * 0.4)), false);
+    const k = i % 3;
+    props.instance(`swt_pan_${k}`, () => icePan(SWT.seed + 71 + k), wtMat('snow'), mat4(x, 0.02, z, rnd.next() * 6, r, 1, r * (0.6 + rnd.next() * 0.4)), false);
   }
+}
+
+/** A pan of sea ice: a ragged flat slab about 2 m across (scaled per instance), top at y = 0.15. */
+function icePan(seed: number): THREE.BufferGeometry {
+  const r = new Random(seed);
+  const pts: THREE.Vector2[] = [];
+  const n = 12;
+  for (let k = 0; k < n; k++) {
+    const a = (k / n) * Math.PI * 2 + r.range(-0.18, 0.18);
+    const rr = r.range(0.72, 1.08);
+    pts.push(new THREE.Vector2(Math.cos(a) * rr, Math.sin(a) * rr));
+  }
+  const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts), { depth: 0.2, bevelEnabled: true, bevelSize: 0.07, bevelThickness: 0.05, bevelSegments: 1 });
+  g.rotateX(-Math.PI / 2);
+  g.translate(0, -0.1, 0);
+  return g;
+}
+
+/**
+ * A tabular iceberg: an irregular slab (sheer ice-cliff sides, bevelled edges) standing `above` m
+ * out of the water with most of its bulk below, and a flat snow top. Geometry in local space
+ * (place at sea level).
+ */
+function tabularBerg(rnd: Random, s: number, above: number): { body: THREE.BufferGeometry; cap: THREE.BufferGeometry; top: number; rx: number; rz: number } {
+  const pts: THREE.Vector2[] = [];
+  const n = 17;
+  const squash = 0.6 + rnd.next() * 0.3;
+  // A ragged outline: broad lobes, calved notches.
+  const lobes = 2 + Math.floor(rnd.next() * 3), ph = rnd.next() * 6;
+  for (let k = 0; k < n; k++) {
+    const a = (k / n) * Math.PI * 2 + rnd.range(-0.1, 0.1);
+    const notch = rnd.next() < 0.18 ? 0.62 : 1;
+    const r = s * (0.82 + 0.18 * Math.sin(a * lobes + ph)) * rnd.range(0.85, 1.12) * notch;
+    pts.push(new THREE.Vector2(Math.cos(a) * r, Math.sin(a) * r * squash));
+  }
+  const shape = new THREE.Shape(pts);
+  const below = above * 1.6;
+  const bevel = Math.min(0.8, s * 0.1);
+  const body = new THREE.ExtrudeGeometry(shape, { depth: above + below, bevelEnabled: true, bevelSize: bevel, bevelThickness: 0.45, bevelSegments: 2, steps: 1 });
+  body.rotateX(-Math.PI / 2);
+  body.translate(0, -below, 0);
+  const cap = new THREE.ShapeGeometry(shape);
+  cap.rotateX(-Math.PI / 2);
+  cap.translate(0, above + 0.47, 0);
+  // The sides lean in toward the top (a mesa, not a box) and splay out below the waterline.
+  for (const g of [body, cap]) {
+    const p = g.getAttribute('position') as THREE.BufferAttribute;
+    for (let i = 0; i < p.count; i++) {
+      const y = p.getY(i);
+      const k = y > 0 ? 1 - 0.09 * (y / above) : 1 + 0.12 * Math.min(1, -y / below);
+      p.setXYZ(i, p.getX(i) * k, y, p.getZ(i) * k);
+    }
+    g.computeVertexNormals();
+  }
+  let rx = 0, rz = 0;
+  for (const p of pts) {
+    rx = Math.max(rx, Math.abs(p.x));
+    rz = Math.max(rz, Math.abs(p.y));
+  }
+  return { body, cap, top: above + 0.5, rx, rz };
 }
 
 function shipwreck(host: ShoreHost, b: ContentBuilder, props: ContentBuilder, rnd: Random): void {
