@@ -9,13 +9,15 @@ import { earthTint, rockGeometry, stoneMaterial } from '../../vfx/effects/rocks'
 import { shared, shellSphere } from '../../vfx/effects/shapes';
 import { windSpiral } from '../../vfx/effects/wind';
 import { byQuality, dynamicLights } from './common';
-import { airShellMaterial, bandSheet, bandWall, fireBandMaterial, ringTube, type FireBandOptions } from './sphereMaterials';
+import { airShellMaterial, flameRingGeometry, flameRingMaterial, ringTube, type FlameRingSpec } from './sphereMaterials';
 
 /**
  * Elements Sphere (Avatar State after all four masteries), after the series' Sozin's Comet frame:
  * the Avatar hangs at the centre of a sphere of whirling air, a translucent bubble streaked by the
  * wind circling it, girdled at the waist by a broad band of fire that reaches past the sphere,
  * with a ring of water spinning on a steep tilt and stones torn from the ground orbiting inside.
+ * The fire is a ring of tongues of flame racing round (camera-facing ribbons bent along the ring),
+ * so it reads as fire from the gameplay camera above as well as from the side.
  *
  * Sequence (seconds after activation): build-up (spirit gathers inward) → 0.5 initial burst
  * (AvatarStateSystem wave) → 0.6 the air sphere blows open → 1.0 the water ring draws itself
@@ -39,13 +41,22 @@ const CONVERGE_END = 2.75;
 const RADIUS = 2.0;
 /** Seconds for the ignition to race once round the fire band. */
 const IGNITE = 0.4;
-/** Fire band slices, one thick band of flame: vertical walls [radius, height] and horizontal sheets [y]. */
-const WALLS: ReadonlyArray<readonly [number, number]> = [[1.1, 0.56], [1.38, 0.7], [1.66, 0.74], [1.94, 0.66], [2.22, 0.5], [2.5, 0.34]];
-const SHEETS: ReadonlyArray<number> = [-0.08, 0, 0.08];
-/** Height of the additive core slices (the band's white-hot middle line). */
-const CORE_H = 0.24;
-const BAND_IN = 1.02;
-const BAND_OUT = 2.62;
+/** Fire band: radii (m) its flames span, close round the waist out well past the sphere. */
+const BAND_IN = 0.9;
+const BAND_OUT = 3.3;
+/**
+ * The band's two layers: the flame body (orange and yellow tongues with red, ragged edges that
+ * partly cover what is behind them) and the white-hot core (thin additive streaks through its
+ * middle). Counts per effects quality [low, medium, high].
+ */
+const FLAME_BODY: Omit<FlameRingSpec, 'count'> & { counts: readonly [number, number, number] } = {
+  counts: [90, 150, 210], inner: BAND_IN, outer: BAND_OUT, spread: 0.22, length: [1.1, 2.4], width: [0.3, 0.55],
+  heat: [0.45, 0.95], alpha: [0.45, 0.7], occlusion: 0.75, speed: 2.6, cycle: [0.9, 1.7], seed: 1,
+};
+const FLAME_CORE: Omit<FlameRingSpec, 'count'> & { counts: readonly [number, number, number] } = {
+  counts: [32, 52, 72], inner: 1.3, outer: 2.6, spread: 0.045, length: [1.0, 2.0], width: [0.12, 0.2],
+  heat: [0.9, 1.15], alpha: [0.2, 0.38], occlusion: 0, speed: 2.9, cycle: [0.7, 1.3], seed: 2,
+};
 /** Water ring: radius and tilt from the horizontal (rad). */
 const WATER_R = 1.78;
 const WATER_TILT = 1.2;
@@ -61,11 +72,9 @@ interface Rock {
   delay: number;
 }
 
-interface FireSlice {
+interface FireLayer {
   mesh: THREE.Mesh;
   mat: THREE.ShaderMaterial;
-  /** Flow speed round the ring (noise periods per second). */
-  speed: number;
   /** Base brightness. */
   intensity: number;
 }
@@ -115,7 +124,9 @@ export class ElementsSphere {
   private readonly rocks: Rock[] = [];
   private readonly rockTint: string;
   // Fire
-  private readonly fires: FireSlice[] = [];
+  private readonly fires: FireLayer[] = [];
+  /** Integrated band time (s): runs faster while the band flares or spins up. */
+  private fireSpin = 0;
   private fireLit = false;
   private sparkClock = 0;
   private embers: Emitter | null = null;
@@ -139,7 +150,7 @@ export class ElementsSphere {
       this.group.add(s);
     }
     // --- Water: one ring on a steep tilt, precessing about the vertical while it flows round.
-    const wgeo = shared(`avatar_sphere_water_ring_${q}`, () => ringTube(WATER_R, low ? 0.085 : 0.075, low ? 72 : 128, low ? 6 : 8));
+    const wgeo = shared(`avatar_sphere_water_ring_${q}`, () => ringTube(WATER_R, low ? 0.11 : 0.1, low ? 72 : 128, low ? 6 : 8));
     this.waterMat = createWaterMaterial({ opacity: 0, flow: 4.2, foam: 1.5, glow: 0.18, shallow: '#d9f2ff', deep: '#5aa2d8' });
     this.waterMat.side = THREE.DoubleSide;
     this.water = new THREE.Mesh(wgeo, this.waterMat);
@@ -154,7 +165,7 @@ export class ElementsSphere {
     this.rockTint = earthTint(g.surface);
     const nRocks = byQuality(ctx, 5, 7, 9);
     for (let i = 0; i < nRocks; i++) {
-      const size = 0.16 + frac(i * 0.618 + 0.3) * 0.17;
+      const size = 0.09 + frac(i * 0.618 + 0.3) * 0.09;
       const mesh = new THREE.Mesh(rockGeometry(i, 1), stoneMaterial(this.rockTint));
       mesh.scale.setScalar(size);
       mesh.castShadow = !low;
@@ -170,24 +181,16 @@ export class ElementsSphere {
         delay: i * 0.05,
       });
     }
-    // --- Fire: one broad band at the waist, in slices so it reads from any angle. The body (walls +
-    // sheets) is normal-blended so the nearest flame shows, saturated; thin additive core slices
-    // along its middle give the white-hot line and the glow.
-    const seg = low ? 56 : 96;
-    const repeatAt = (r: number) => 2 * Math.round(3 + r * 2.2);
-    const walls = low ? [1, 3, 5] : q === 'medium' ? [0, 2, 3, 5] : [0, 1, 2, 3, 4, 5];
-    walls.forEach((k, i) => {
-      const [r, height] = WALLS[k];
-      const geo = shared(`avatar_sphere_fire_wall_${k}_${q}`, () => bandWall(r, height, seg));
-      this.addFire(geo, { speed: 1.4 + 0.25 * (k % 3), seed: 1.7 + i * 0.3, repeat: repeatAt(r), graze: 0.7, intensity: 1, density: 0.92 });
-    });
-    for (const k of low ? [1] : [0, 1, 2]) {
-      const geo = shared(`avatar_sphere_fire_sheet_${q}`, () => bandSheet(BAND_IN, BAND_OUT, seg));
-      this.addFire(geo, { speed: 1.25 + 0.2 * k, seed: 3.1 + k, repeat: 14, across: 3, graze: 0.97, flat: 0.7, intensity: 1, density: 0.88 }).position.y = SHEETS[k];
-    }
-    (low ? [1.75] : [1.5, 2.05]).forEach((r, i) => {
-      const geo = shared(`avatar_sphere_fire_core_${i}_${q}`, () => bandWall(r, CORE_H, seg));
-      this.addFire(geo, { speed: 2 + 0.3 * i, seed: 5.3 + i, repeat: repeatAt(r), intensity: 0.55, blend: 'add', heat: 0.3, density: 0.8 }, 5);
+    // --- Fire: one broad band at the waist: the flame body, then the white-hot core over it.
+    const qi = low ? 0 : q === 'medium' ? 1 : 2;
+    ([[FLAME_BODY, 1.1, 4], [FLAME_CORE, 0.85, 5]] as const).forEach(([spec, intensity, order], i) => {
+      const geo = shared(`avatar_sphere_flames_${i}_${q}`, () => flameRingGeometry({ ...spec, count: spec.counts[qi] }));
+      const mat = flameRingMaterial(intensity);
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.renderOrder = order;
+      mesh.visible = false;
+      this.band.add(mesh);
+      this.fires.push({ mesh, mat, intensity });
     });
     this.group.add(this.band);
     if (dynamicLights(ctx)) {
@@ -196,16 +199,6 @@ export class ElementsSphere {
     } else this.light = null;
     this.loop = ctx.audio.loop('loop.avatar.sphere', { position: player.position, volume: 0.6 });
     this.follow(0);
-  }
-
-  private addFire(geo: THREE.BufferGeometry, o: FireBandOptions & { speed: number; intensity: number }, order = 4): THREE.Mesh {
-    const mat = fireBandMaterial(o);
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.renderOrder = order;
-    mesh.visible = false;
-    this.band.add(mesh);
-    this.fires.push({ mesh, mat, speed: o.speed, intensity: o.intensity });
-    return mesh;
   }
 
   /** Spin-up flash (an ultimate was cast). */
@@ -373,12 +366,15 @@ export class ElementsSphere {
     const reveal = this.fireLit ? (this.releasing ? 2 : Math.min(2, (t - FIRE_IN) / IGNITE)) : 0;
     this.band.position.y = this.bandOffset;
     this.band.scale.set(k, 1 + 0.3 * this.flare, k);
+    this.fireSpin += dt * (1 + 1.5 * this.flare + 0.6 * settling + (this.convergeT > 0 ? 1.5 : 0));
     for (const f of this.fires) {
       const u = f.mat.uniforms;
       f.mesh.visible = fire > 0.003;
       u.uOpacity.value = fire;
       u.uReveal.value = reveal;
-      u.uFlow.value += dt * f.speed * (1 + 1.5 * this.flare + 0.6 * settling);
+      u.uClock.value = t;
+      u.uSpin.value = this.fireSpin;
+      u.uSize.value = k;
       u.uIntensity.value = f.intensity * (1 + 0.8 * this.flare);
     }
     if (this.fireLit && !this.releasing) {
@@ -396,7 +392,7 @@ export class ElementsSphere {
         if (this.sparkClock <= 0) {
           this.sparkClock = byQuality(ctx, 0.28, 0.16, 0.1);
           const a = Math.random() * Math.PI * 2;
-          const r = 1.1 + Math.random() * (BAND_OUT - 1.1);
+          const r = 1.1 + Math.random() * (BAND_OUT - 1.4);
           ctx.vfx.burst('fire', this.band.localToWorld(tA.set(Math.cos(a) * r, 0, Math.sin(a) * r)), { count: 1, speed: 0.9 });
         }
       }
@@ -480,6 +476,6 @@ export class ElementsSphere {
     this.waterMat.dispose();
     for (const f of this.fires) f.mat.dispose();
     this.light?.dispose();
-    // Rock geometry / stone material and the shell / ring / band shapes are shared caches.
+    // Rock geometry / stone material and the shell / ring / flame shapes are shared caches.
   }
 }

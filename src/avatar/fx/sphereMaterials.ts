@@ -8,9 +8,10 @@ import { getNoiseTexture } from '../../vfx/effects/noise';
  * They share the effect clock and the tileable noise texture (lookups stay cheap on software
  * WebGL); every factory returns a new material that the caller disposes.
  *
- * Geometry UVs: the air shell uses shellSphere() (uv.x = latitude 0 bottom .. 1 top, uv.y =
- * longitude 0..1); fire slices use uv.x = across the band (0..1) and uv.y = around the ring (0..1).
- * Noise is sampled at whole multiples of the around coordinate, so both close without a seam.
+ * The air shell uses shellSphere() (uv.x = latitude 0 bottom .. 1 top, uv.y = longitude 0..1) and
+ * samples the noise at whole multiples of the longitude, so it closes without a seam. The fire is
+ * not a surface: it is a ring of tongues of flame, each a camera-facing ribbon bent along its own
+ * arc of the ring, so it reads as fire from every angle (a whirl from above, a blaze from the side).
  */
 
 const NOISE = { value: getNoiseTexture() as THREE.Texture };
@@ -62,12 +63,12 @@ void main() {
   float s2 = texture2D(uNoise, q2).r;
   float s3 = texture2D(uNoise, q3).a;
   float streak = smoothstep(0.48, 0.86, s1) * 0.85 + smoothstep(0.6, 0.9, s2) * 0.55 + smoothstep(0.66, 0.93, s3) * 0.3 * uGust;
-  // Streaks pinch out at the poles, where the air turns about the axis.
-  streak *= 1.0 - smoothstep(0.76, 0.97, abs(lat));
+  // Streaks pinch out right at the poles, where the air turns about the axis (from above: a whirl).
+  streak *= 1.0 - smoothstep(0.86, 0.995, abs(lat));
   // A clear body that thickens toward the silhouette (a bubble of moving air), streaks over it:
   // thin bright lines with clear gaps, so the Avatar inside stays readable.
-  float body = mix(0.012, 0.3, pow(rim, 1.9));
-  float a = body + streak * (0.035 + 0.37 * rim);
+  float body = mix(0.045, 0.32, pow(rim, 1.7));
+  float a = body + streak * (0.1 + 0.34 * rim);
   vec3 col = mix(uTint, vec3(1.0), clamp(streak * 0.85 + rim * 0.3, 0.0, 1.0));
   // Greyer toward the bottom, brighter where the sky lights the top.
   col *= mix(0.8, 1.04, smoothstep(-0.85, 0.5, lat));
@@ -113,184 +114,211 @@ export function airShellMaterial(o: AirShellOptions = {}): THREE.ShaderMaterial 
 }
 
 // ---------------------------------------------------------------------------
-// Fire band
+// Fire band: tongues of flame racing round the Avatar
 // ---------------------------------------------------------------------------
 
-const FIRE_VERT = /* glsl */ `
+const FLAME_VERT = /* glsl */ `
+attribute vec4 aOrbit; // base angle (rad), radius (m), height (m), angular speed (rad/s)
+attribute vec4 aShape; // arc length (m), width (m), seed (0..1), heat
+attribute vec4 aLife;  // cycle (s), phase (0..1), occlusion (0 glow .. 1 covers), alpha
+uniform float uClock;
+uniform float uSpin;
+uniform float uSize;
+uniform float uReveal;
 varying vec2 vUv;
-varying float vFacing;
+varying float vHeat;
+varying float vAlpha;
+varying float vSeed;
+varying float vOcc;
+float hash(float n) { return fract(sin(n) * 43758.5453123); }
 void main() {
-  vUv = uv;
-  vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  vFacing = abs(dot(normalize(normalMatrix * normal), normalize(-mv.xyz)));
+  // Each tongue burns for one cycle, then is reborn elsewhere on the band (unseen at the switch).
+  float cyc = uClock / aLife.x + aLife.y;
+  float gen = floor(cyc);
+  float ph = cyc - gen;
+  float g = mod(gen, 997.0);
+  float h1 = hash(g * 12.9898 + aShape.z * 78.233);
+  float h2 = hash(g * 39.3468 + aShape.z * 11.1351);
+  float dir = sign(aOrbit.w);
+  float rad = aOrbit.y * (0.9 + 0.2 * h2);
+  // A ribbon bent along the ring: the head leads, the tail trails round behind it (position.x:
+  // -1 tail .. 1 head), so from above the band is a whirl of curved streaks and from the side a
+  // long horizontal blaze.
+  float head = aOrbit.x + h1 * 6.2831853 + uSpin * aOrbit.w;
+  float span = min(1.4, aShape.x / rad);
+  float s = position.x;
+  float ang = head - dir * span * (1.0 - s) * 0.5;
+  // Licking up and down along its length as it runs (the band's ragged top and bottom).
+  float y = aOrbit.z * (0.6 + 0.8 * h2) + 0.035 * sin(uClock * 2.6 + aShape.z * 37.0) + 0.05 * (1.0 - s) * h2
+    + 0.08 * (0.5 + h2) * sin(s * 2.4 + aShape.z * 19.0 + uClock * 3.1);
+  vec3 p = vec3(cos(ang) * rad, y, sin(ang) * rad);
+  vec3 tangent = vec3(-sin(ang), 0.0, cos(ang)) * dir;
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
+  vec3 tv = (modelViewMatrix * vec4(tangent, 0.0)).xyz;
+  // Widen across the motion as the screen sees it (perspective-correct).
+  vec2 sd = tv.xy * (-mv.z) + mv.xy * tv.z;
+  float sdl = length(sd);
+  vec2 ax = sdl > 1e-6 ? sd / sdl : vec2(1.0, 0.0);
+  mv.xy += vec2(-ax.y, ax.x) * position.y * 0.5 * aShape.y * uSize;
   gl_Position = projectionMatrix * mv;
+  vUv = vec2(s, position.y);
+  // Lit by the ignition racing round from +X; its front burns white-hot.
+  float around = fract(head / 6.2831853);
+  float lit = 1.0 - smoothstep(uReveal - 0.04, uReveal, around);
+  float front = uReveal < 1.0 ? smoothstep(uReveal - 0.16, uReveal - 0.02, around) : 0.0;
+  vAlpha = aLife.w * smoothstep(0.0, 0.22, ph) * (1.0 - smoothstep(0.62, 1.0, ph)) * lit;
+  vHeat = aShape.w + 0.5 * front;
+  vSeed = aShape.z * 7.31 + g * 0.173;
+  vOcc = aLife.z;
 }`;
 
-const FIRE_FRAG = /* glsl */ `
+const FLAME_FRAG = /* glsl */ `
 uniform sampler2D uNoise;
-uniform float uTime;
-uniform float uFlow;
+uniform float uClock;
 uniform float uOpacity;
 uniform float uIntensity;
-uniform float uSeed;
-uniform float uReveal;
-uniform float uRepeat;
-uniform float uAcross;
-uniform float uGraze;
-uniform float uHeat;
-uniform float uDensity;
-uniform float uFlat;
-uniform vec3 uCore;
-uniform vec3 uMid;
-uniform vec3 uEdge;
+uniform vec3 uC0;
+uniform vec3 uC1;
+uniform vec3 uC2;
+uniform vec3 uC3;
+uniform vec3 uC4;
 varying vec2 vUv;
-varying float vFacing;
+varying float vHeat;
+varying float vAlpha;
+varying float vSeed;
+varying float vOcc;
 void main() {
-  float around = vUv.y;
-  float across = vUv.x;
-  // Ignition: the flame races once round the band (uReveal 0 -> past 1).
-  float lit = 1.0 - smoothstep(uReveal - 0.05, uReveal, around);
-  if (lit <= 0.0) discard;
-  // Fire streaming round the ring: a slow warp field curls the fast detail into tongues.
-  vec2 w = texture2D(uNoise, vec2(around * uRepeat * 0.5 - uFlow * 0.45, across * uAcross * 0.6 + uSeed + uTime * 0.12)).rg - 0.5;
-  vec2 q = vec2(around * uRepeat - uFlow, across * uAcross + uSeed) + w * vec2(0.5, 0.35);
-  float n = texture2D(uNoise, q).r * 0.62 + texture2D(uNoise, q * vec2(2.0, 2.2) + 0.5).g * 0.38;
-  float prof = 1.0 - abs(across * 2.0 - 1.0);
-  // Sheets are flat-topped (a solid ring of flame from above), walls peak along their middle.
-  prof = mix(prof, smoothstep(0.0, 0.4, prof), uFlat);
-  float f = prof * 1.75 - (1.0 - n) * (0.3 + (1.0 - prof) * 0.85);
-  // Slices seen edge-on fade instead of collapsing into one bright line.
-  f *= mix(1.0 - uGraze, 1.0, smoothstep(0.0, 0.45, vFacing));
-  float a = smoothstep(0.03, 0.3, f) * uDensity * uOpacity * lit;
-  if (a < 0.003) discard;
-  float flick = 0.92 + 0.08 * sin(uTime * 23.0 + uSeed * 5.0 + n * 7.0);
-  float temp = f * 1.05 + uHeat;
-  vec3 col = mix(uEdge * 0.5, uEdge, smoothstep(0.02, 0.22, temp));
-  col = mix(col, uMid, smoothstep(0.22, 0.6, temp));
-  col = mix(col, uCore, smoothstep(0.75, 1.25, temp));
-  // The ignition front burns white-hot as it runs.
-  float head = smoothstep(uReveal - 0.07, uReveal - 0.005, around) * step(around, uReveal) * (1.0 - step(1.0, uReveal));
-  col += uCore * head * 1.2;
-  gl_FragColor = vec4(col * uIntensity * flick, a);
+  float x = vUv.x;
+  float y = vUv.y;
+  // A tongue of flame: full and round at its head (+x), drawn out thin toward the tail.
+  float w = mix(0.25, 1.0, smoothstep(-1.0, 0.35, x));
+  float hx = max(0.0, x - 0.55) / 0.45;
+  float shape = 1.0 - (y * y) / (w * w) - hx * hx;
+  shape *= smoothstep(-1.0, -0.25, x);
+  if (shape <= 0.0) discard;
+  // Turbulence streaming back from the head along the tongue.
+  vec2 q = vec2(x * 0.35 - uClock * 0.8 + vSeed, y * 0.3 + vSeed * 1.7);
+  vec2 warp = texture2D(uNoise, q * 0.5 + 0.13).gb - 0.5;
+  float n = texture2D(uNoise, q + warp * 0.35).r * 0.7 + texture2D(uNoise, q * vec2(2.3, 2.8) + 0.37).a * 0.3;
+  float f = shape * 1.35 - (1.0 - n) * (0.45 + 0.65 * (1.0 - shape));
+  float a = smoothstep(0.0, 0.45, f) * vAlpha * uOpacity;
+  if (a < 0.004) discard;
+  // Red at the ragged edges, orange and yellow inside, white-hot through the core.
+  float t = vHeat * (0.25 + 1.0 * clamp(f, 0.0, 1.0)) + 0.12 * smoothstep(0.1, 0.8, x);
+  vec3 col = mix(uC0, uC1, smoothstep(0.0, 0.3, t));
+  col = mix(col, uC2, smoothstep(0.25, 0.55, t));
+  col = mix(col, uC3, smoothstep(0.55, 0.85, t));
+  col = mix(col, uC4, smoothstep(0.9, 1.25, t));
+  gl_FragColor = vec4(col * uIntensity, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
+  // Premultiplied: adds its light and covers what is behind by vOcc (0 = pure glow), so overlapping
+  // tongues build a blazing core without the order of drawing showing.
+  gl_FragColor = vec4(gl_FragColor.rgb * a, a * vOcc * smoothstep(0.15, 0.7, f));
 }`;
 
-export interface FireBandOptions {
-  seed?: number;
-  /** Whole number of noise periods round the ring (even, so the warp closes too). */
-  repeat?: number;
-  /** Noise periods across the slice (walls ~1; wide sheets more, so tongues stream along the ring). */
-  across?: number;
-  /** How much the slice fades when seen edge-on (0..1; flat sheets ~1). */
-  graze?: number;
-  intensity?: number;
-  /**
-   * 'normal' (default): the flame body: the nearest slice shows, so the band stays saturated
-   * orange and yellow with ragged red edges. 'add': the hot core glowing through it.
-   */
-  blend?: 'normal' | 'add';
-  /** Shifts the colour ramp hotter (core slices). */
-  heat?: number;
-  /** Alpha scale. */
-  density?: number;
-  /** Flat-topped profile across the slice (sheets: 1). */
-  flat?: number;
-}
-
-/** Flame for one slice of the fire band (wall or sheet); uFlow / uOpacity / uReveal are driven per frame. */
-export function fireBandMaterial(o: FireBandOptions = {}): THREE.ShaderMaterial {
+/** Flame material for flameRingGeometry(); uClock / uSpin / uSize / uReveal / uOpacity / uIntensity are driven per frame. */
+export function flameRingMaterial(intensity: number): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
-    name: 'elements_sphere_fire',
+    name: 'elements_sphere_flames',
     uniforms: {
-      uTime: FX_TIME,
       uNoise: NOISE,
-      uFlow: { value: 0 },
-      uOpacity: { value: 0 },
-      uIntensity: { value: o.intensity ?? 0.5 },
-      uSeed: { value: o.seed ?? Math.random() * 10 },
+      uClock: { value: 0 },
+      uSpin: { value: 0 },
+      uSize: { value: 1 },
       uReveal: { value: 0 },
-      uRepeat: { value: o.repeat ?? 8 },
-      uAcross: { value: o.across ?? 0.95 },
-      uGraze: { value: o.graze ?? 0.45 },
-      uHeat: { value: o.heat ?? 0 },
-      uDensity: { value: o.density ?? 0.9 },
-      uFlat: { value: o.flat ?? 0 },
-      uCore: { value: new THREE.Color('#ffe066') },
-      uMid: { value: new THREE.Color('#ff9a1c') },
-      uEdge: { value: new THREE.Color('#d0300a') },
+      uOpacity: { value: 0 },
+      uIntensity: { value: intensity },
+      uC0: { value: new THREE.Color('#7a1a06') },
+      uC1: { value: new THREE.Color('#e0400e') },
+      uC2: { value: new THREE.Color('#ff8c1a') },
+      uC3: { value: new THREE.Color('#ffc93a') },
+      uC4: { value: new THREE.Color('#fff2c0') },
     },
-    vertexShader: FIRE_VERT,
-    fragmentShader: FIRE_FRAG,
+    vertexShader: FLAME_VERT,
+    fragmentShader: FLAME_FRAG,
     transparent: true,
     depthWrite: false,
-    blending: o.blend === 'add' ? THREE.AdditiveBlending : THREE.NormalBlending,
+    blending: THREE.CustomBlending,
+    blendEquation: THREE.AddEquation,
+    blendSrc: THREE.OneFactor,
+    blendDst: THREE.OneMinusSrcAlphaFactor,
     side: THREE.DoubleSide,
   });
+}
+
+/** One layer of the fire band: tongues of flame orbiting the vertical axis in a ring. */
+export interface FlameRingSpec {
+  count: number;
+  /** Radii (m) the tongues span; densest through the middle. */
+  inner: number;
+  outer: number;
+  /** Vertical scatter (m) at the middle radius (thinner toward the band's edges). */
+  spread: number;
+  /** Arc length (m) each tongue trails round the ring. */
+  length: readonly [number, number];
+  width: readonly [number, number];
+  /** Colour heat: ~0.5 orange, ~1 yellow, past 1 white-hot. */
+  heat: readonly [number, number];
+  alpha: readonly [number, number];
+  /** 0 = pure glow (adds light) .. 1 = covers what is behind. */
+  occlusion: number;
+  /** Angular speed at 1 m (rad/s); slower further out. */
+  speed: number;
+  /** Seconds each tongue burns before it is reborn elsewhere. */
+  cycle: readonly [number, number];
+  seed: number;
+}
+
+/** Instanced camera-facing ribbons (one per tongue) for flameRingMaterial(): deterministic per spec. */
+export function flameRingGeometry(s: FlameRingSpec): THREE.InstancedBufferGeometry {
+  const g = new THREE.InstancedBufferGeometry();
+  // A strip along the tongue (x: -1 tail .. 1 head), bent along the ring in the vertex shader.
+  const SEG = 6;
+  const pos: number[] = [];
+  const idx: number[] = [];
+  for (let i = 0; i <= SEG; i++) pos.push((i / SEG) * 2 - 1, -1, 0, (i / SEG) * 2 - 1, 1, 0);
+  for (let i = 0; i < SEG; i++) idx.push(i * 2, i * 2 + 2, i * 2 + 3, i * 2, i * 2 + 3, i * 2 + 1);
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  const orbit = new Float32Array(s.count * 4);
+  const shape = new Float32Array(s.count * 4);
+  const life = new Float32Array(s.count * 4);
+  let state = (Math.floor(s.seed * 7919) % 2147483646) + 1;
+  const rnd = (): number => {
+    state = (state * 16807) % 2147483647;
+    return (state - 1) / 2147483646;
+  };
+  const range = (r: readonly [number, number]): number => r[0] + (r[1] - r[0]) * rnd();
+  for (let i = 0; i < s.count; i++) {
+    const u = rnd() * 0.6 + (rnd() + rnd()) * 0.2;
+    const r = s.inner + (s.outer - s.inner) * u;
+    const mid = 1 - Math.abs(u * 2 - 1);
+    const gauss = (rnd() + rnd() + rnd() - 1.5) / 1.5;
+    orbit[i * 4] = ((i + rnd()) / s.count) * Math.PI * 2;
+    orbit[i * 4 + 1] = r;
+    orbit[i * 4 + 2] = gauss * s.spread * (0.45 + 0.55 * mid);
+    orbit[i * 4 + 3] = (s.speed / Math.sqrt(r)) * (0.85 + 0.3 * rnd());
+    shape[i * 4] = range(s.length) * (0.8 + 0.3 * (r / s.outer));
+    shape[i * 4 + 1] = range(s.width) * (0.8 + 0.2 * mid);
+    shape[i * 4 + 2] = rnd();
+    shape[i * 4 + 3] = range(s.heat) * (0.7 + 0.3 * mid);
+    life[i * 4] = range(s.cycle);
+    life[i * 4 + 1] = rnd();
+    life[i * 4 + 2] = s.occlusion;
+    life[i * 4 + 3] = range(s.alpha) * (0.75 + 0.25 * mid);
+  }
+  g.setAttribute('aOrbit', new THREE.InstancedBufferAttribute(orbit, 4));
+  g.setAttribute('aShape', new THREE.InstancedBufferAttribute(shape, 4));
+  g.setAttribute('aLife', new THREE.InstancedBufferAttribute(life, 4));
+  g.instanceCount = s.count;
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), s.outer * 1.1 + s.width[1]);
+  return g;
 }
 
 // ---------------------------------------------------------------------------
 // Geometry
 // ---------------------------------------------------------------------------
-
-/** Vertical cylindrical slice of the fire band, centred on y = 0: uv.x = up (across), uv.y = around. */
-export function bandWall(radius: number, height: number, seg: number, rows = 2): THREE.BufferGeometry {
-  const pos: number[] = [], nrm: number[] = [], uv: number[] = [], idx: number[] = [];
-  for (let i = 0; i <= seg; i++) {
-    const u = i / seg;
-    const a = u * Math.PI * 2;
-    const c = Math.cos(a), s = Math.sin(a);
-    for (let j = 0; j <= rows; j++) {
-      const v = j / rows;
-      pos.push(c * radius, (v - 0.5) * height, s * radius);
-      nrm.push(c, 0, s);
-      uv.push(v, u);
-    }
-  }
-  for (let i = 0; i < seg; i++) {
-    for (let j = 0; j < rows; j++) {
-      const a = i * (rows + 1) + j, b = a + rows + 1;
-      idx.push(a, b, a + 1, b, b + 1, a + 1);
-    }
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  g.setIndex(idx);
-  g.computeBoundingSphere();
-  return g;
-}
-
-/** Horizontal sheet of the fire band (annulus in the XZ plane): uv.x = inner -> outer (across), uv.y = around. */
-export function bandSheet(inner: number, outer: number, seg: number, rows = 3): THREE.BufferGeometry {
-  const pos: number[] = [], nrm: number[] = [], uv: number[] = [], idx: number[] = [];
-  for (let i = 0; i <= seg; i++) {
-    const u = i / seg;
-    const a = u * Math.PI * 2;
-    const c = Math.cos(a), s = Math.sin(a);
-    for (let j = 0; j <= rows; j++) {
-      const v = j / rows;
-      const r = inner + (outer - inner) * v;
-      pos.push(c * r, 0, s * r);
-      nrm.push(0, 1, 0);
-      uv.push(v, u);
-    }
-  }
-  for (let i = 0; i < seg; i++) {
-    for (let j = 0; j < rows; j++) {
-      const a = i * (rows + 1) + j, b = a + rows + 1;
-      idx.push(a, b, a + 1, b, b + 1, a + 1);
-    }
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  g.setIndex(idx);
-  g.computeBoundingSphere();
-  return g;
-}
 
 /** Closed tube on a circle of `radius` in the XZ plane (the water ring): uv.x = around the tube, uv.y = metres along. */
 export function ringTube(radius: number, tube: number, segs: number, radial: number): THREE.BufferGeometry {
