@@ -21,6 +21,7 @@
  */
 import { SimplexNoise } from '../core/Noise';
 import { FNC, capitalFlank, capitalPaved, fireCapitalHeight } from './landforms/fireCapital';
+import { coveE, coveWater, wolfCoveHeight } from './landforms/wolfCove';
 import { inKyoshiZone, KI, KI_LAKES, KI_PLATEAUS, KI_RIVERS, KI_ROADS, kyoshiBiome, kyoshiNaturalHeight, kyoshiPaved, kyoshiSurface } from './landforms/kyoshiIsland';
 import type { BiomeId, SurfaceType } from '../core/types';
 import {
@@ -383,7 +384,9 @@ export function landField(x: number, z: number): { s: number; lift: number } {
 export function polarSeaFactor(x: number, z: number): number {
   const north = sstep(-1120, -1220, z);
   const south = sstep(1470, 1560, z) * sstep(-330, -230, x) * sstep(780, 680, x);
-  return Math.max(north, south);
+  // Wolf Cove's bay (landforms/wolfCove.ts): its shallow margins freeze into shore ice.
+  const cove = z > 1250 && z < 1550 ? coveWater(x, z) : 0;
+  return Math.max(north, south, cove);
 }
 
 function baseHeight(x: number, z: number): number {
@@ -422,6 +425,8 @@ function specialLandforms(x: number, z: number, h: number): number {
   // Fire Nation capital: volcano, crater (Hari Bulkan), Harbor City, plaza valley and harbour
   // (landforms/fireCapital.ts; keeps the old volcano's flank around the Sun Warrior Ruins).
   h = fireCapitalHeight(x, z, h);
+  // Wolf Cove (Southern Water Tribe): the village terrace, gate ramp, sled hill, cove and tundra.
+  if (z > 1200 && z < 2000 && x > -250 && x < 700) h = wolfCoveHeight(x, z, h);
   // Air temple peak: a steep massif with noisy, ridged flanks (not a perfect cone).
   {
     const dx = x - AIR_PEAK.x, dz = z - AIR_PEAK.z;
@@ -1014,8 +1019,10 @@ export function biomeWeights(x: number, z: number, out?: BiomeWeights): BiomeWei
   const n = 60 * noise.noise2(x / 300, z / 300);
   const isle = sstep(260, 160, len2(x + 1800, z + 1800));
   const north = sstep(-900, -1180, z + n) * (1 - isle);
-  const southPolar = sstep(1430, 1560, z + n) * sstep(820, 560, Math.abs(x - 220) + n);
-  const desert = sstep(DESERT.r + 60, DESERT.r * 0.7, len2(x - DESERT.x, z - DESERT.z) + n);
+  // Wolf Cove's bay and its shores are polar too (landforms/wolfCove.ts), not the desert's edge.
+  const coveCold = z > 1150 && z < 1650 && x > -200 && x < 760 ? sstep(1.8, 1.25, coveE(x, z)) : 0;
+  const southPolar = Math.max(sstep(1430, 1560, z + n) * sstep(820, 560, Math.abs(x - 220) + n), coveCold);
+  const desert = sstep(DESERT.r + 60, DESERT.r * 0.7, len2(x - DESERT.x, z - DESERT.z) + n) * (1 - coveCold);
   const fireD = len2(x - FIRE_ISLAND.x, z - FIRE_ISLAND.z);
   const volcanic = sstep(FIRE_ISLAND.r, FIRE_ISLAND.r * 0.55, fireD + n);
   const ember = sstep(220, 120, len2(x + 1700, z - 1760));

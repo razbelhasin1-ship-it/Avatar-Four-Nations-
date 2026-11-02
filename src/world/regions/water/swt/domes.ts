@@ -1,0 +1,137 @@
+import * as THREE from 'three';
+import type { ContentBuilder } from '../../../kit/Builder';
+import { mergeParts } from '../geometry';
+import { wtMat } from '../materials';
+
+/**
+ * Igloo geometry for Wolf Cove: the solid igloo (instanced: stacked-block dome, low arched tunnel
+ * entrance, dark doorway) and the enterable hollow dome (shell inside and out, a tunnel with a
+ * vestibule, the doorway cut through, colliders round the wall) used by the Great Igloo, the
+ * healer's igloo, the workshop and the family homes.
+ */
+
+/** Flip a geometry's winding (inner surfaces seen from inside). */
+export function flipped(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  const f = g.index ? g.clone() : g.clone();
+  if (f.index) {
+    const idx = f.index;
+    for (let k = 0; k < idx.count; k += 3) {
+      const t = idx.getX(k + 1);
+      idx.setX(k + 1, idx.getX(k + 2));
+      idx.setX(k + 2, t);
+    }
+  }
+  const n = f.getAttribute('normal') as THREE.BufferAttribute | undefined;
+  if (n) for (let i = 0; i < n.count; i++) n.setXYZ(i, -n.getX(i), -n.getY(i), -n.getZ(i));
+  return f;
+}
+
+/** Unit solid igloo (radius 1, base y = 0, entrance toward +Z): dome + vaulted tunnel. */
+export function iglooUnit(): THREE.BufferGeometry {
+  const d = new THREE.SphereGeometry(1, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+  d.scale(1, 0.82, 1);
+  const tunnel = new THREE.CylinderGeometry(0.4, 0.4, 0.75, 10, 1, false, 0, Math.PI);
+  tunnel.rotateZ(Math.PI / 2).rotateY(Math.PI / 2).translate(0, 0, 0.98);
+  const cap = new THREE.CircleGeometry(0.4, 10, 0, Math.PI).translate(0, 0, 1.355);
+  return mergeParts([d, tunnel, cap]);
+}
+
+/** Unit dark doorway at the tunnel mouth (radius-1 igloo). */
+export function iglooDoorUnit(): THREE.BufferGeometry {
+  return new THREE.CircleGeometry(0.29, 10, 0, Math.PI).translate(0, 0, 1.362);
+}
+
+/** Unit annex dome (no tunnel). */
+export function annexUnit(): THREE.BufferGeometry {
+  const d = new THREE.SphereGeometry(1, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+  d.scale(1, 0.78, 1);
+  return d;
+}
+
+/** Wind-packed drift (unit): leans against the north side. */
+export function driftUnit(): THREE.BufferGeometry {
+  const s = new THREE.SphereGeometry(1, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+  s.scale(1.25, 0.42, 0.6);
+  return s;
+}
+
+export interface HollowDome {
+  x: number;
+  y: number;
+  z: number;
+  /** Dome radius and height (m). */
+  r: number;
+  h: number;
+  /** Entrance direction (yaw: local +Z points out of the doorway). */
+  yaw: number;
+  /** Tunnel: length beyond the dome wall, inner width and height. */
+  tunnel: number;
+  tw: number;
+  th: number;
+  /** A small vestibule dome over the tunnel's middle. */
+  vestibule?: boolean;
+}
+
+/**
+ * Enterable hollow igloo: outer shell, inner shell, the tunnel (outer and inner vault, side walls)
+ * and colliders: a ring of wall boxes with a gap for the doorway, the tunnel's side walls.
+ */
+export function hollowDome(b: ContentBuilder, o: HollowDome): void {
+  const hs = o.h / o.r;
+  const doorTop = o.th + 0.1;
+  const thetaDoor = Math.acos(Math.min(0.995, doorTop / hs / o.r));
+  const gapHalf = (o.tw / 2 + 0.12) / o.r;
+  const wall = wtMat('ice_wall');
+  const shell = (r: number) => {
+    const up = new THREE.SphereGeometry(r, 28, 7, 0, Math.PI * 2, 0, thetaDoor);
+    // SphereGeometry phi = π/2 points +Z: leave the doorway open there.
+    const low = new THREE.SphereGeometry(r, 28, 3, Math.PI / 2 + gapHalf, Math.PI * 2 - gapHalf * 2, thetaDoor, Math.PI / 2 - thetaDoor);
+    const g = mergeParts([up, low]);
+    g.scale(1, hs, 1);
+    return g;
+  };
+  const t = { x: o.x, y: o.y, z: o.z, yaw: o.yaw };
+  b.mesh(wall, shell(o.r), t);
+  b.mesh(wall, flipped(shell(o.r - 0.32)), t, { castShadow: false });
+  // Tunnel: a half-round vault along +Z from inside the dome wall to the mouth.
+  const z0 = o.r * Math.cos(gapHalf) - 0.45, z1 = o.r + o.tunnel;
+  const len = z1 - z0;
+  const vault = (rad: number) => {
+    const c = new THREE.CylinderGeometry(rad, rad, len, 12, 1, true, 0, Math.PI);
+    c.rotateZ(Math.PI / 2).rotateY(Math.PI / 2).translate(0, o.th - o.tw / 2, z0 + len / 2);
+    return c;
+  };
+  const vr = o.tw / 2;
+  b.mesh(wall, vault(vr + 0.3), t);
+  b.mesh(wall, flipped(vault(vr)), t, { castShadow: false });
+  // Side walls up to the vault's spring line.
+  const sideH = o.th - o.tw / 2;
+  const c = Math.cos(o.yaw), s = Math.sin(o.yaw);
+  const loc = (lx: number, lz: number) => ({ x: o.x + lx * c + lz * s, z: o.z - lx * s + lz * c });
+  for (const sd of [-1, 1]) {
+    const p = loc(sd * (vr + 0.15), z0 + len / 2);
+    b.mesh(wall, new THREE.BoxGeometry(0.3, sideH, len), { x: p.x, y: o.y + sideH / 2, z: p.z, yaw: o.yaw });
+    b.collider({ shape: 'box', x: p.x, y: o.y + 1.5, z: p.z, hx: 0.2, hy: 1.5, hz: len / 2, yaw: o.yaw, walkable: false, solid: true });
+  }
+  // Mouth: an arched rim of trim ice.
+  const rim = new THREE.TorusGeometry(vr + 0.15, 0.16, 6, 12, Math.PI);
+  const pm = loc(0, z1);
+  b.mesh(wtMat('ice_trim'), rim, { x: pm.x, y: o.y + sideH, z: pm.z, yaw: o.yaw });
+  if (o.vestibule) {
+    const pv = loc(0, z0 + len * 0.62);
+    const vd = new THREE.SphereGeometry(vr + 0.85, 16, 5, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.9, 1);
+    b.mesh(wall, vd, { x: pv.x, y: o.y + 0.2, z: pv.z, yaw: o.yaw });
+  }
+  // Wall colliders round the dome (a gap where the tunnel joins).
+  const n = Math.max(14, Math.round(o.r * 3.2));
+  const hy = Math.min(o.h, 6) / 2;
+  for (let i = 0; i < n; i++) {
+    const a = ((i + 0.5) / n) * Math.PI * 2; // local angle from +X toward +Z
+    const lx = Math.cos(a), lz = Math.sin(a);
+    // Skip the segments in front of the doorway (local +Z).
+    if (Math.abs(Math.atan2(lx, lz)) < gapHalf + Math.PI / n) continue;
+    const p = loc(lx * (o.r - 0.16), lz * (o.r - 0.16));
+    const segLen = ((Math.PI * 2) / n) * o.r + 0.1;
+    b.collider({ shape: 'box', x: p.x, y: o.y + hy, z: p.z, hx: segLen / 2, hy, hz: 0.24, yaw: o.yaw - a - Math.PI / 2, walkable: false, solid: true });
+  }
+}
