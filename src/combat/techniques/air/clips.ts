@@ -142,16 +142,41 @@ registerClip({
   ],
 });
 
-// Riding the air scooter: crouched balance on a spinning ball (body lifted via hipsY).
+// Riding the air scooter, as in the series: balanced on the toes of the right foot on top of the
+// spinning ball, the left leg folded across in front (lotus), hands meeting before the chest, with
+// small balancing sways. hipsY lifts the body so the toes rest on the top of the ball (air_scooter:
+// radius 0.44 x the rig scale, centred a little ahead of the feet).
+const SCOOTER_SIT: Pose = {
+  hips: [0, 0, 0],
+  spine: [0.05, 0, 0.02],
+  chest: [0.02, 0, 0],
+  neck: [0, 0, 0],
+  head: [-0.04, 0, 0],
+  thighL: [-1.45, 0.45, 0.78],
+  shinL: [2.45, 0, 0],
+  footL: [-0.35, 0, -0.4],
+  thighR: [-1.2, 0, -0.15],
+  shinR: [1.9, 0, 0],
+  footR: [0.9, 0, 0],
+  upperArmL: [-0.35, -0.7, 0.12],
+  upperArmR: [-0.35, 0.7, -0.12],
+  foreArmL: [-1.3, 0, 0],
+  foreArmR: [-1.3, 0, 0],
+  handL: [0, 0, 0],
+  handR: [0, 0, 0],
+  fistL: 0.85,
+  fistR: 0.85,
+  hipsY: 0.48,
+};
 registerClip({
   id: 'air_scooter_ride',
-  duration: 0.8,
+  duration: 1.6,
   mask: 'full',
   loop: true,
   keys: [
-    { t: 0, pose: { spine: [0.32, 0, 0], head: [-0.25, 0, 0], thighL: [-1.0, 0, 0.12], shinL: [1.55, 0, 0], thighR: [-0.85, 0, -0.12], shinR: [1.45, 0, 0], footL: [-0.4, 0, 0], footR: [-0.4, 0, 0], upperArmL: [-0.35, 0, 1.05], upperArmR: [-0.35, 0, -1.05], foreArmL: [-0.3, 0, 0], foreArmR: [-0.3, 0, 0], hipsY: 0.42 } },
-    { t: 0.4, pose: { spine: [0.36, 0, 0.06], upperArmL: [-0.3, 0, 1.15], upperArmR: [-0.4, 0, -0.95], hipsY: 0.45 }, ease: 'inout' },
-    { t: 0.8, pose: { spine: [0.32, 0, 0], upperArmL: [-0.35, 0, 1.05], upperArmR: [-0.35, 0, -1.05], hipsY: 0.42 }, ease: 'inout' },
+    { t: 0, pose: SCOOTER_SIT },
+    { t: 0.8, pose: { spine: [0.08, 0, -0.03], head: [-0.06, 0, 0.02], hipsY: 0.47 }, ease: 'inout' },
+    { t: 1.6, pose: { spine: [0.05, 0, 0.02], head: [-0.04, 0, 0], hipsY: 0.48 }, ease: 'inout' },
   ],
 });
 

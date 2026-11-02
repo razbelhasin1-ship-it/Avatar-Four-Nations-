@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import type { LoopHandle } from '../../../audio/AudioEngine';
 import { effect } from '../../../vfx/effects/loop';
-import { airPuff, releaseWindTrail, windCone, windRing, WindShell, windTrail } from '../../../vfx/effects/wind';
+import { airPuff, releaseWindTrail, windCone, windRing, windTrail } from '../../../vfx/effects/wind';
 import { registerTechnique } from '../../CombatSystem';
 import type { Cast } from '../../types';
 import { bending, type MoverHandle } from '../bending/runtime';
 import { aimFlat, anim, groundY, hitSphere, moveIntent, push, shake, stopAnim } from '../bending/util';
 import { openSlipstream } from './common';
+import { ScooterBall } from './scooterBall';
 
 const tmp = new THREE.Vector3();
 
@@ -129,11 +130,17 @@ bending.hook({
 });
 
 // ---------------------------------------------------------------------------
-// Air Scooter — ride a ball of air (toggle).
+// Air Scooter — ride a ball of air (toggle). As in the series: the rider balances on the toes of
+// one foot on top of the ball (clip air_scooter_ride), the other leg folded across.
 // ---------------------------------------------------------------------------
 
+/** Ball radius (m, x the rider's rig scale): the clip's raised hips put the toes on its top. */
+const SCOOTER_R = 0.44;
+/** The ball sits a little ahead of the feet position, under the balancing toes (m, x rig scale). */
+const SCOOTER_FWD = 0.12;
+
 interface ScooterData {
-  shell: WindShell;
+  ball: ScooterBall;
   loop: LoopHandle;
   handle: MoverHandle;
   vel: THREE.Vector3;
@@ -186,7 +193,7 @@ registerTechnique({
     // Mounting kicks the ball off along the aim, so it rolls even before steering.
     const vel = aimFlat(cast).multiplyScalar(7);
     const d: ScooterData = {
-      shell: new WindShell(ctx, { rings: 2, opacity: 0.95, speed: 6 }),
+      ball: new ScooterBall(ctx),
       loop: ctx.audio.loop('bend_wind_loop', { position: c.position, volume: 0.6 }),
       vel,
       waterTime: 0,
@@ -238,7 +245,14 @@ registerTechnique({
       c.yaw = Math.atan2(d.vel.x, d.vel.z);
       c.root.rotation.y = c.yaw;
     }
-    d.shell.update(dt, tmp.copy(pos).setY(pos.y + 0.42), 0.48 + Math.min(0.08, speed * 0.004));
+    // The ball under the balancing toes: its top stays put (the rider's toes on it) while it swells
+    // a little with speed; an Avatar State hover lifts rider and ball together.
+    const h = c.humanoid;
+    const s = h ? h.root.scale.x : 1;
+    const lift = h ? h.root.position.y : 0;
+    const r = SCOOTER_R * s * (1 + Math.min(0.06, speed * 0.004));
+    const top = (2 * SCOOTER_R - 0.02) * s;
+    d.ball.update(dt, tmp.set(pos.x + Math.sin(c.yaw) * SCOOTER_FWD * s, pos.y + lift + top - r, pos.z + Math.cos(c.yaw) * SCOOTER_FWD * s), r, d.vel);
     d.loop.setPosition(pos);
     d.loop.setPitch(0.8 + speed / 20);
     if (!w && b.grounded && Math.random() < dt * (6 + speed * 1.5)) ctx.vfx.burst('dust', pos, { count: 1, dir: tmp.set(-d.vel.x, 0.5, -d.vel.z).normalize(), spread: 0.4, speed: 1 });
@@ -266,7 +280,7 @@ registerTechnique({
     const d = cast.data.scooter as ScooterData | undefined;
     if (d) {
       d.handle.stop();
-      d.shell.dispose(0.2);
+      d.ball.dispose(0.2);
       d.loop.stop(0.2);
       airPuff(cast.ctx, c.position.clone().setY(c.position.y + 0.3), null, 0.9);
       cast.data.scooter = undefined;
