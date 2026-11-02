@@ -6,10 +6,10 @@ Rollback branch: `before-southern-water-tribe` (pushed). Work branch: `ccr-bee3c
 - [x] 0 Explore (start flow, quests, areas) — notes below
 - [x] 1 Start options table (data/starts.ts), origin in save + flag origin_<id>, FEATURES.START_WATER_HOMELANDS (core/features.ts), homeland step (NewGameFlow), placeholder Southern start (HOMELAND_STARTS.water_south in the stub village), master_aput + swt_elder + dlg_swt_elder + mq_awakening_water_south (placeholder steps)
 - [x] 2 Terrain (landforms/wolfCove.ts: cove opening east, terrace, ramp, hill; polar shores; treeless south), wall.ts (slabs, cap, icicles, 6 lookouts, 2 gate towers, 6 stairs), layout.ts (seeded: 120 igloos, 25 tents, 7 homes)
-- [~] 3 Village (village.ts) + interiors (interiors.ts, domes.ts) built; polish lighting/night, verify interiors
-- [~] 4 Outskirts (shore.ts): beach, hunting ice + fishing holes (swt:fishing_hole_*, swt:sea_ice), bergs, wreck, sled run + tunnel, tundra; verify
-- [~] 5 People (swt/life.ts: 180 villagers, 12 roles, routines, nav grid + wall walk + shore/sled/tundra), figures.ts (parkas, hoods, loops, wolf tails, war paint), wildlife.ts (penguins, tiger seals, dogs, gulls, polar bear dog, canoes/kayaks on a schedule), atmosphere.ts (aurora, raid marks), audio.ts (ice, animals, drums, carving), music theme 'swt', weather + fog; debug `__game.debug.swt`
-- [ ] 6 Southern first quest (Master Aput) mirroring mq_awakening_water
+- [x] 3 Village (village.ts) + interiors (interiors.ts, domes.ts); night lamplight checked; pale sealskin tents (image 1)
+- [x] 4 Outskirts (shore.ts): beach, hunting ice + fishing holes, bergs, wreck, sled run + tunnel, tundra; polar snow round the cove
+- [x] 5 People (swt/life.ts: 180 villagers, 12 roles, routines, nav grid + wall walk + shore/sled/tundra), figures.ts (parkas, hoods, loops, wolf tails, war paint), wildlife.ts (penguins, tiger seals, dogs, gulls, polar bear dog, canoes/kayaks on a schedule), atmosphere.ts (aurora, raid marks), audio.ts (ice, animals, drums, carving), music theme 'swt', weather + fog; debug `__game.debug.swt`
+- [x] 6 Southern first quest (Master Aput) mirroring mq_awakening_water (e2e: tests/e2e/starts.e2e.mjs)
 - [ ] 7 Preview (menu tour stop), polish, perf, e2e five starts + old saves, screenshots (3 passes), report
 
 ## Key facts (phase 0)
