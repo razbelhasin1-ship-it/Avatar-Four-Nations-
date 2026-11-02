@@ -86,6 +86,7 @@ export class WolfCove extends WaterRegion {
   /** F3 debug overlay (shared with the Southern Air Temple). */
   private overlay: SatOverlay | null = null;
   private fps = 60;
+  private lastHour = -1;
 
   constructor() {
     super('swt_village', { x: C.x, z: C.z - 80 }, 480);
@@ -203,7 +204,8 @@ export class WolfCove extends WaterRegion {
       this.clear = w === 'clear' ? 1 : w === 'cloudy' ? 0.3 : 0;
       this.raided = this.raidMode ?? (ctx.quests.hasFlag('swt_raided') && !ctx.quests.hasFlag('swt_rebuilt'));
     }
-    const night = hour >= 19 || hour < 1;
+    // Festival evenings start at dusk (the village fasts instead of the communal meal).
+    const night = hour >= 18 || hour < 1;
     this.festival = !this.raided && (this.festivalMode ?? (night && this.clear >= 1));
     const full = this.lod === 'full';
     if (this.life) {
@@ -216,7 +218,9 @@ export class WolfCove extends WaterRegion {
       this.wild.group.visible = this.lod !== 'hidden';
       if (this.lod !== 'hidden') this.wild.update(dt, ctx, full, this.life?.pets ?? []);
     }
-    this.aurora?.update(dt, this.time, dist < 1600 ? nightFactor(hour) * this.clear * (this.festival ? 1 : 0.6) : 0);
+    const jumped = this.lastHour >= 0 && Math.min(Math.abs(hour - this.lastHour), 24 - Math.abs(hour - this.lastHour)) > 0.25;
+    this.lastHour = hour;
+    this.aurora?.update(dt, this.time, dist < 1600 ? nightFactor(hour) * this.clear * (this.festival ? 1 : 0.6) : 0, jumped);
     this.updateRaid(ctx, full && dist < 260);
     this.updateSpirits(ctx, full && dist < 320 && this.festival && (hour >= 19 || hour < 1));
     if (full && dist < 420) {

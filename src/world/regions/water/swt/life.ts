@@ -817,7 +817,8 @@ export class WolfCoveLife {
       }
       case 'cook':
         if (night) return home;
-        if (h >= 17 && h < 20.25) return { goal: this.pick(T.hall), act: 'work' };
+        // Half the cooks serve in the Great Igloo (if there is room), the rest keep the plaza fires.
+        if (h >= 17 && h < 20.25) return a.k % 2 === 0 && this.standing(T.hall) < 16 ? { goal: this.pick(T.hall), act: 'work' } : { goal: this.pick(T.cook), act: 'work' };
         if (dawn || (h >= 11 && h < 13)) return { goal: this.pick(T.cook), act: 'work' };
         return r.chance(0.5) ? { goal: this.pick(T.storage), act: 'carry' } : { goal: this.pick(T.cook), act: 'work' };
       case 'storyteller': {

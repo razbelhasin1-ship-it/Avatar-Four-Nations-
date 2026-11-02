@@ -80,14 +80,15 @@ export class WolfCoveWildlife {
   private bear: { m: CreatureModel; anim: AnimInput; s: number; dir: number; pause: number; x: number; z: number; yaw: number } | null = null;
   private readonly loopPt = { x: 0, z: 0, yaw: 0 };
   private readonly riderPool: Rider[] = Array.from({ length: 16 }, () => ({ x: 0, y: 0, z: 0, yaw: 0, pose: 0, phase: 0 }));
+  /** The polar bear dog's round, far out on the tundra south of the wall (it never comes closer). */
   private readonly bearPath: P2[] = [
-    { x: 340, z: 1812 },
-    { x: 290, z: 1858 },
-    { x: 220, z: 1872 },
-    { x: 150, z: 1850 },
-    { x: 120, z: 1800 },
-    { x: 170, z: 1790 },
-    { x: 250, z: 1805 },
+    { x: 340, z: 1922 },
+    { x: 290, z: 1968 },
+    { x: 220, z: 1982 },
+    { x: 150, z: 1960 },
+    { x: 120, z: 1910 },
+    { x: 170, z: 1900 },
+    { x: 250, z: 1915 },
   ];
   private bearLen = 0;
   private readonly seals: Array<{ x: number; z: number; yaw: number; phase: number; t: number; hop: number }> = [];

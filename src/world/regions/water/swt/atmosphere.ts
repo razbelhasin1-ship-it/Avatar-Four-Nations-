@@ -111,8 +111,9 @@ export class Aurora {
   }
 
   /** `target` 0..1 (night × clear sky × festival boost); eases toward it. */
-  update(dt: number, time: number, target: number): void {
-    this.amt += (target - this.amt) * Math.min(1, dt * 0.5);
+  update(dt: number, time: number, target: number, snap = false): void {
+    // Eases in and out over a few seconds; a jump in time (waiting, travel, a loaded save) snaps.
+    this.amt = snap ? target : this.amt + (target - this.amt) * Math.min(1, dt * 0.5);
     this.mesh.visible = this.amt > 0.01;
     this.mat.uniforms.uTime.value = time;
     this.mat.uniforms.uAmt.value = this.amt;
