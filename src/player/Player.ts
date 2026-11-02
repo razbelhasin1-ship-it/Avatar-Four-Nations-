@@ -526,7 +526,7 @@ export class Player extends Entity implements Combatant, Persistable {
     anim.loco.mounted = !!this.mountAnchor;
     anim.loco.turnRate = turnRate;
     anim.loco.style = this.element;
-    anim.loco.idleVariant = ctx.avatar.active && !body.grounded ? 'float' : 'stand';
+    anim.loco.idleVariant = ctx.avatar.sphereActive ? 'sphere' : ctx.avatar.active && !body.grounded ? 'float' : 'stand';
   }
 
   // ---------------------------------------------------------------------------

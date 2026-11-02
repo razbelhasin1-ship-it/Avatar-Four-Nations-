@@ -153,8 +153,8 @@ export interface LocomotionState {
   gliding: boolean;
   sliding: boolean;
   mounted: boolean;
-  /** Seated/kneeling/meditating idle (overrides locomotion). */
-  idleVariant?: 'stand' | 'meditate' | 'sit' | 'kneel' | 'guard' | 'work' | 'float';
+  /** Seated/kneeling/meditating idle (overrides locomotion). 'sphere' = suspended in the Elements Sphere. */
+  idleVariant?: 'stand' | 'meditate' | 'sit' | 'kneel' | 'guard' | 'work' | 'float' | 'sphere';
   /** Turn rate (rad/s), for leaning. */
   turnRate: number;
   style: LocoStyle;
@@ -688,7 +688,7 @@ export class Animator {
     this.swimMove = damp(this.swimMove, clamp01(L.speed / 1.6), 4, dt);
     this.glideBlend = damp(this.glideBlend, L.gliding ? 1 : 0, 6, dt);
     this.mountBlend = damp(this.mountBlend, L.mounted ? 1 : 0, 10, dt);
-    const variant = L.idleVariant && L.idleVariant !== 'stand' && L.speed < 0.3 && (L.grounded || L.idleVariant === 'float') && !L.swimming && !L.mounted ? 1 : 0;
+    const variant = L.idleVariant && L.idleVariant !== 'stand' && L.speed < 0.3 && (L.grounded || L.idleVariant === 'float' || L.idleVariant === 'sphere') && !L.swimming && !L.mounted ? 1 : 0;
     if (variant && L.idleVariant !== this.variantKind && this.variantBlend < 0.05) this.variantKind = L.idleVariant;
     this.variantBlend = damp(this.variantBlend, variant && L.idleVariant === this.variantKind ? 1 : 0, 3.5, dt);
     if (this.variantBlend < 0.02 && variant) this.variantKind = L.idleVariant;
@@ -974,6 +974,32 @@ export class Animator {
     if (vb > 0.001) {
       const lt = (b: BoneName, x: number, y: number, z: number) => this.blendLoco(b, x, y, z, vb);
       switch (this.variantKind) {
+        case 'sphere': {
+          // Suspended at the centre of the Elements Sphere (the series' Sozin's Comet frame): arms
+          // spread wide and a little low with open hands, legs hanging loose and apart, a slow bob.
+          const bob = Math.sin(t * 1.3);
+          lt('hips', 0, 0, 0);
+          lt('spine', -0.04, 0, 0);
+          lt('chest', -0.07 + breath * 0.8, 0, 0);
+          lt('neck', 0.04, 0, 0);
+          lt('head', 0.03 + bob * 0.015, 0, 0);
+          lt('upperArmL', -0.2, 0.1, 1.12 + bob * 0.05);
+          lt('upperArmR', -0.2, -0.1, -1.12 - bob * 0.05);
+          lt('foreArmL', -0.34, 0.3, 0);
+          lt('foreArmR', -0.34, -0.3, 0);
+          lt('handL', 0.12, 0, 0.32);
+          lt('handR', 0.12, 0, -0.32);
+          lt('thighL', -0.2, 0.1, 0.2);
+          lt('thighR', -0.06, -0.1, -0.2);
+          lt('shinL', 0.48, 0, 0);
+          lt('shinR', 0.3, 0, 0);
+          lt('footL', 0.6, 0, 0);
+          lt('footR', 0.5, 0, 0);
+          this.hipsY = lerp(this.hipsY, bob * 0.03, vb);
+          this.hipsZ = lerp(this.hipsZ, 0, vb);
+          fist = lerp(fist, 0.04, vb);
+          break;
+        }
         case 'meditate':
         case 'float': {
           const fl = this.variantKind === 'float';

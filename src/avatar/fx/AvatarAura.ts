@@ -1,76 +1,63 @@
 import * as THREE from 'three';
 import type { LoopHandle } from '../../audio/AudioEngine';
 import type { GameContext } from '../../core/GameContext';
-import type { Emitter } from '../../vfx/VFX';
 import { setOpacity, windMaterial } from '../../vfx/effects/materials';
-import { flatRing, shared, tube } from '../../vfx/effects/shapes';
+import { shared, shellTorus } from '../../vfx/effects/shapes';
 import type { Player } from '../../player/Player';
 import { byQuality, dynamicLights } from './common';
 
+const tmp = new THREE.Vector3();
+
 /**
- * Standard Avatar State presentation around the player (all characters, with
- * or without tattoos): eyes/tattoo glow are driven by AvatarStateSystem
- * (Humanoid.setGlow → luminous rim when untattooed); this adds the energy
- * aura (rising streak shell), a swirling ground sigil, drifting spirit wisps,
- * a soft light, a levitation hover and an updraft that stirs hair and cloth.
+ * Standard Avatar State presentation around the player (all characters, with or without
+ * tattoos). The glow carries it: eyes and tattoos are lit by AvatarStateSystem (Humanoid.setGlow;
+ * a luminous rim when untattooed), with a soft light, a levitation hover and an updraft that
+ * stirs hair and cloth. No shell is drawn over the body. The air answers the Avatar's power
+ * instead: a few thin streaks of wind circle the body well clear of it, and gusts ruffle the
+ * ground around it (grass and foliage bend; dust, leaves, sand or snow lift). In the Elements
+ * Sphere the sphere itself is the wind, so only the gusts remain.
  *
- * release() fades everything out (~0.35 s); dispose() restores the character
- * exactly (hover 0, wind 0) and frees every material / light / loop.
+ * release() fades everything out (~0.35 s); dispose() restores the character exactly (hover 0,
+ * wind 0) and frees every material / light / loop.
  */
 export class AvatarAura {
   private readonly group = new THREE.Group();
-  private readonly shell: THREE.Mesh;
-  private readonly sigil: THREE.Mesh;
+  private readonly bands: THREE.Mesh[] = [];
   private readonly mats: THREE.ShaderMaterial[] = [];
   private readonly light: THREE.PointLight | null;
-  private readonly wisps: Emitter;
   private readonly hum: LoopHandle;
   private level = 0;
   private releasing = false;
   private t = 0;
   private hover = 0;
+  /** Seconds to the next gust. */
+  private gust = 0.25;
+  private gustN = 0;
   private disposed = false;
 
   constructor(private readonly ctx: GameContext, private readonly player: Player, private readonly sphere: boolean) {
     this.group.name = 'avatar_aura';
-    const radial = byQuality(ctx, 12, 16, 20);
-    const shellGeo = shared(`avatar_aura_shell_${radial}`, () => {
-      const g = tube((v) => 0.48 + 0.16 * Math.sin(Math.PI * Math.min(1, v * 1.15)) - v * 0.12, 2.25, radial, 8);
-      g.rotateX(-Math.PI / 2); // +Z → +Y: base at the feet, uv.y rises with height
-      return g;
-    });
-    const shellMat = windMaterial({
-      color: '#f2fbff',
-      tint: sphere ? '#d8f0ff' : '#8fd2ff',
-      opacity: 0.6,
-      speed: 1.1,
-      repeat: [6, 1.6],
-      threshold: 0.5,
-      body: 0.04,
-      fade: [0.3, 0.5],
-      wrapAcross: true,
-      rim: true,
-      additive: true,
-    });
-    this.mats.push(shellMat);
-    this.shell = new THREE.Mesh(shellGeo, shellMat);
-    this.shell.renderOrder = 2;
-    const sigilGeo = shared('avatar_aura_sigil', () => {
-      return flatRing(0.55, 1.35, Math.PI * 2, 48, 'around');
-    });
-    const sigilMat = windMaterial({ color: '#ffffff', tint: '#9fd8ff', opacity: 0.7, speed: 0.8, repeat: [1, 6], threshold: 0.45, body: 0.12, wrapFlow: true, additive: true });
-    this.mats.push(sigilMat);
-    this.sigil = new THREE.Mesh(sigilGeo, sigilMat);
-    this.sigil.position.y = 0.04;
-    this.group.add(this.shell, this.sigil);
-    for (const m of this.mats) setOpacity(m, 0);
+    if (!sphere) {
+      // Wind circling the Avatar: thin, broken streaks at knee, waist and chest height, and a wider
+      // gust sweeping the ground (medium / high).
+      const q = ctx.vfx.quality;
+      const geo = shared(`avatar_aura_wind_${q}`, () => shellTorus(0.03, q === 'low' ? 5 : 6, q === 'low' ? 40 : 64));
+      const n = byQuality(ctx, 2, 4, 4);
+      for (let i = 0; i < n; i++) {
+        const m = windMaterial({ color: '#ffffff', tint: '#d8ecff', opacity: 0, speed: 3 + i * 0.7, repeat: [1, 30], threshold: i === 3 ? 0.78 : 0.7, body: 0, wrapFlow: true, wrapAcross: true, seed: i * 3.7 });
+        this.mats.push(m);
+        const band = new THREE.Mesh(geo, m);
+        band.renderOrder = 2;
+        this.bands.push(band);
+        this.group.add(band);
+      }
+    }
     if (dynamicLights(ctx)) {
       this.light = new THREE.PointLight(sphere ? '#e6f4ff' : '#9fd8ff', 0, 8, 2);
       this.light.position.y = 1.2;
       this.group.add(this.light);
     } else this.light = null;
     ctx.vfx.group.add(this.group);
-    this.wisps = ctx.vfx.emitter('spirit', byQuality(ctx, 8, 14, 20), { radius: 0.45, speed: 0.7, size: 0.9 });
     this.hum = ctx.audio.loop('loop.avatar.hum', { position: player.position, volume: 0.55 });
     this.follow();
   }
@@ -79,7 +66,6 @@ export class AvatarAura {
   release(_quiet = false): void {
     if (this.releasing) return;
     this.releasing = true;
-    this.wisps.stop();
     this.hum.stop(0.4);
   }
 
@@ -97,20 +83,37 @@ export class AvatarAura {
     this.follow();
     const k = this.level;
     const pulse = 0.85 + 0.15 * Math.sin(this.t * 5.3);
-    setOpacity(this.mats[0], (this.sphere ? 0.3 : 0.5) * k * pulse);
-    setOpacity(this.mats[1], 0.65 * k);
-    this.shell.scale.set(1 + 0.04 * Math.sin(this.t * 3.1), 0.92 + 0.08 * k, 1 + 0.04 * Math.cos(this.t * 2.7));
-    this.sigil.rotation.y += dt * 0.8;
-    this.sigil.scale.setScalar(0.6 + 0.4 * k + 0.05 * Math.sin(this.t * 2));
+    // The wind: each streak ring breathes and tilts a little as it circles; the fourth sweeps the ground.
+    this.bands.forEach((b, i) => {
+      const ground = i === 3;
+      const r = (ground ? 1.75 : 1.05 + 0.2 * i) + 0.06 * Math.sin(this.t * 1.7 + i * 2.1);
+      b.scale.setScalar(r * (0.75 + 0.25 * k));
+      b.position.y = ground ? 0.12 : 0.32 + 0.55 * i + this.hover * 0.5 + 0.05 * Math.sin(this.t * 1.3 + i);
+      b.rotation.set(Math.PI / 2 + (ground ? 0.04 : 0.14) * Math.sin(this.t * 0.9 + i * 1.9), (ground ? 0.03 : 0.18) * Math.cos(this.t * 0.7 + i), 0);
+      setOpacity(this.mats[i], (ground ? 0.24 : 0.27) * k);
+    });
     if (this.light) this.light.intensity = (this.sphere ? 9 : 6) * k * pulse;
-    // Wisps rise from the chest/shoulders.
-    this.wisps.position.set(p.position.x, p.position.y + 1.1 + this.hover, p.position.z);
     this.hum.setPosition(p.position);
+    // Gusts: the ground around the Avatar answers its power.
+    if (!this.releasing) {
+      this.gust -= dt;
+      if (this.gust <= 0) {
+        this.gust = byQuality(this.ctx, 1.0, 0.75, 0.6) * (0.8 + Math.random() * 0.4);
+        this.gustN++;
+        this.ctx.world.fx.disturb(p.position, 3.4, 0.7);
+        if (!this.sphere && this.gustN % 2 === 0) {
+          const g = this.ctx.world.groundAt(p.position.x, p.position.z, p.position.y + 1.5);
+          if (p.position.y - g.y < 1.5) this.ctx.vfx.burst('swirl', tmp.set(p.position.x, g.y + 0.25, p.position.z), { count: byQuality(this.ctx, 3, 5, 7), swirl: 7, radius: 1.3, speed: 1.1 });
+        }
+      }
+    }
     // Levitation: hover when idle, skim when moving; the body stays where physics puts it.
     const b = p.body;
     const speed = b ? Math.hypot(b.velocity.x, b.velocity.z) : 0;
     const grounded = b ? b.grounded : true;
-    const target = this.releasing ? 0 : (grounded ? (speed < 1 ? 0.26 : 0.07) : 0.1) + Math.sin(this.t * 2.1) * 0.035 * (speed < 1 ? 1 : 0.3);
+    // In the Elements Sphere the Avatar rises toward its centre when still (the series' frame).
+    const idle = this.sphere ? 0.62 : 0.26;
+    const target = this.releasing ? 0 : (grounded ? (speed < 1 ? idle : 0.07) : 0.1) + Math.sin(this.t * 2.1) * 0.035 * (speed < 1 ? 1 : 0.3);
     this.hover += (target - this.hover) * Math.min(1, dt * 5);
     const h = p.humanoid;
     if (h) {
@@ -125,7 +128,6 @@ export class AvatarAura {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.wisps.stop();
     this.hum.stop(0.2);
     const h = this.player.humanoid;
     if (h) {
