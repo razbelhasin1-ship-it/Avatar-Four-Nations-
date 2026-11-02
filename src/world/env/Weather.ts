@@ -78,7 +78,7 @@ const REGION_TINT: Record<string, string> = {
   si_wong_desert: '#fff0d6',
   foggy_swamp: '#e6efdc',
   northern_water_tribe: '#eef5ff',
-  southern_water_tribe: '#eef5ff',
+  southern_water_tribe: '#e2edfc',
   frozen_tundra: '#f0f6ff',
 };
 
