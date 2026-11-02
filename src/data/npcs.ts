@@ -6,6 +6,8 @@ import type { NPCDef } from '../npc/NPCTypes';
  */
 export const NPCS: NPCDef[] = [
   { id: 'nwt_elder', name: 'Elder Kanna', title: 'Tribe Elder', role: 'elder', nation: 'water', x: -246, z: -1592, yaw: Math.PI / 2, behavior: { type: 'idle' }, dialogue: 'dlg_nwt_elder', region: 'northern_water_tribe' },
+  // Southern homeland's opening-quest elder at the Great Igloo's entrance (moves to the Frozen Pond afterwards: masters.ts master_aput).
+  { id: 'swt_elder', name: 'Master Aput', title: 'Tide Elder of Wolf Cove', role: 'elder', nation: 'water', element: 'water', x: 221, z: 1590, yaw: Math.PI, behavior: { type: 'idle' }, dialogue: 'dlg_swt_elder', region: 'southern_water_tribe', condition: { notFlag: 'aput_at_pond' } },
   { id: 'bss_guide', name: 'Lin Mei', title: 'City Guide', role: 'villager', nation: 'earth', x: 484.4, z: -150.1, yaw: -1.85, behavior: { type: 'idle' }, dialogue: 'dlg_bss_guide', region: 'ba_sing_se' },
   { id: 'bss_elder', name: 'Old Man Shoji', title: 'Retired Earthbender', role: 'elder', nation: 'earth', element: 'earth', x: 642.1, z: -31.1, yaw: -Math.PI / 2, behavior: { type: 'idle' }, dialogue: 'dlg_bss_elder', region: 'ba_sing_se' },
   { id: 'fn_elder', name: 'Sage Hira', title: 'Fire Sage', role: 'elder', nation: 'fire', x: -1293.5, z: 1588, yaw: -0.68, behavior: { type: 'idle' }, dialogue: 'dlg_fn_elder', region: 'fire_nation_capital', condition: { notFlag: 'hira_at_temple' } },

@@ -883,6 +883,152 @@ body {
   }
 }
 
+/* ---------- Water homelands (second step of the element select) ---------- */
+
+/* The Water card's preview: South | North split on a diagonal, with a chip on each side. */
+.card-art.split {
+  overflow: hidden;
+}
+
+.card-art.split .split-half {
+  position: absolute;
+  inset: 0;
+}
+
+.card-art.split .split-half.a {
+  clip-path: polygon(0 0, 56% 0, 44% 100%, 0 100%);
+}
+
+.card-art.split .split-half.b {
+  clip-path: polygon(56% 0, 100% 0, 100% 100%, 44% 100%);
+}
+
+.card-art.split .split-seam {
+  position: absolute;
+  inset: 0;
+  /* A thin gold seam from 56% at the top to 44% at the bottom. */
+  clip-path: polygon(55.6% 0, 56.4% 0, 44.4% 100%, 43.6% 100%);
+  background: rgba(241, 212, 138, 0.85);
+}
+
+.split-chips {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.split-chip {
+  font-family: var(--font-title);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold-2);
+  padding: 3px 8px;
+  border: 1px solid rgba(241, 212, 138, 0.55);
+  border-radius: 999px;
+  background: rgba(10, 8, 6, 0.6);
+}
+
+.card-art.split .emblem {
+  z-index: 1;
+}
+
+.fact-line {
+  display: block;
+  font-family: var(--font-title);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--parchment);
+}
+
+.element-select.homeland-select {
+  background: radial-gradient(ellipse at center, rgba(10, 8, 6, 0.78), rgba(5, 4, 3, 0.97));
+}
+
+.homeland-select .es-head {
+  position: relative;
+}
+
+.homeland-select .hs-title {
+  letter-spacing: 0.22em;
+}
+
+.hs-back {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  left: max(12px, env(safe-area-inset-left, 0px));
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: rgba(16, 12, 9, 0.85);
+  color: var(--gold-2);
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.hs-back:hover,
+.hs-back:focus-visible {
+  border-color: var(--gold-2);
+  outline: 2px solid var(--gold-2);
+  outline-offset: 2px;
+}
+
+.element-cards.homeland-cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(880px, 100%);
+}
+
+/* A visible gold ring on the focused (and the selected) homeland. */
+.homeland-cards .element-card:focus-visible,
+.homeland-cards .element-card[aria-checked='true']:focus {
+  outline: 2px solid var(--gold-2);
+  outline-offset: 3px;
+}
+
+/* Phones in portrait: the menu's Fullscreen toggle owns the top-left corner (styles .menu-fs),
+   so the back arrow and the header sit below it. */
+@media (max-width: 640px) {
+  .element-select.homeland-select {
+    padding-top: calc(max(14px, env(safe-area-inset-top, 0px)) + 58px);
+  }
+  .hs-back {
+    top: calc(max(14px, env(safe-area-inset-top, 0px)) + 52px);
+  }
+}
+
+/* Narrow portrait screens: the two homelands stack. */
+@media (max-width: 560px), (max-aspect-ratio: 4/5) {
+  .element-cards.homeland-cards {
+    grid-template-columns: 1fr;
+    width: min(520px, 100%);
+  }
+}
+
+@media (max-height: 500px) and (min-width: 600px) {
+  .element-cards.homeland-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .homeland-select .element-card,
+  .homeland-select .es-head {
+    animation: none;
+    transition: none;
+  }
+  .homeland-cards .element-card:hover,
+  .homeland-cards .element-card:focus-visible {
+    transform: none;
+  }
+}
+
 /* ---------- Character creator ---------- */
 
 .creator {

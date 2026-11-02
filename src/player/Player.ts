@@ -9,7 +9,7 @@ import type { Persistable } from '../core/Save';
 import { ELEMENTS, type Element, type SurfaceType } from '../core/types';
 import { Entity, Health, type HitInfo, type HitResult } from '../entities/Entity';
 import { KinematicBody } from '../entities/KinematicBody';
-import { STARTS } from '../world/WorldLayout';
+import { originStart } from '../data/starts';
 import { cosmeticById } from '../data/cosmetics';
 import { ElementPlay } from './play/ElementPlay';
 
@@ -691,7 +691,7 @@ export class Player extends Entity implements Combatant, Persistable {
     if (data.pos && [data.pos.x, data.pos.y, data.pos.z].every((v: any) => typeof v === 'number' && isFinite(v))) {
       this.safePoint.set(data.pos.x, data.pos.y, data.pos.z);
     } else {
-      const s = STARTS[start];
+      const s = originStart(this.ctx.progression.origin, start);
       this.safePoint.set(s.spawn.x, s.spawn.y ?? 0, s.spawn.z);
     }
     if (typeof data.yaw === 'number') this.yaw = data.yaw;

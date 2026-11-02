@@ -15,13 +15,15 @@ function fmtTime(s: number): string {
 
 // -----------------------------------------------------------------------------
 // Vistas: snapshots of the start cities taken by the menu tour (card art for the
-// new-journey element cards). Persisted per element in localStorage.
+// new-journey element cards). Persisted per start in localStorage: one per element,
+// plus 'water_south' for the Southern Water Tribe homeland (data/starts.ts vista ids).
 // -----------------------------------------------------------------------------
 
 const VISTA_KEY = 'a4n.vista.';
 const vistas = new Map<string, string>();
+const VISTA_IDS: readonly string[] = [...ELEMENTS, 'water_south'];
 
-export function getVista(e: Element): string | null {
+export function getVista(e: Element | string): string | null {
   if (vistas.has(e)) return vistas.get(e)!;
   try {
     const v = localStorage.getItem(VISTA_KEY + e);
@@ -33,7 +35,7 @@ export function getVista(e: Element): string | null {
 }
 
 function storeVista(id: string, src: HTMLCanvasElement): void {
-  if (!(ELEMENTS as readonly string[]).includes(id) || !src.width || !src.height) return;
+  if (!VISTA_IDS.includes(id) || !src.width || !src.height) return;
   try {
     const cv = document.createElement('canvas');
     cv.width = 480;

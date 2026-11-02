@@ -427,6 +427,29 @@ export const MASTERS: MasterDef[] = [
     ],
   },
   {
+    // Wolf Cove's own waterbending elder (Southern Water Tribe homeland). During the Southern opening
+    // quest she waits at the Great Igloo (npcs.ts swt_elder); afterwards she teaches at the Frozen Pond.
+    id: 'master_aput',
+    name: 'Master Aput',
+    title: 'Tide Elder of Wolf Cove',
+    element: 'water',
+    nation: 'water',
+    spot: 'aput',
+    fallback: { x: 248, z: 1600, yaw: -Math.PI / 2, tx: 252, tz: 1600 },
+    region: 'southern_water_tribe',
+    location: 'Southern Water Tribe — the training circle by the Frozen Pond',
+    condition: { flag: 'aput_at_pond' },
+    behavior: { type: 'train' },
+    look: { seed: 205, role: 'master', preset: 'water_south', frame: 'slim', height: 0.96, build: 0.45, skin: '#9a6644', hair: 'hair_loops', hairColor: '#cfcfd4', colors: { primary: '#3c4f8a', secondary: '#2a3866', accent: '#f2f2f2', trim: '#8a6a48' } },
+    greeting: 'Sit, sit — the pond will not run away. I am Aput. I have watched the tide come in sixty winters, and it has never once been in a hurry.',
+    philosophy: 'The sea is patient and it always wins. Push when it pushes; pull when it pulls; never fight the whole ocean at once.',
+    farewell: 'Mind the thin ice, and come back before the lamps are lit.',
+    awaken: 'Kneel by the hole in the ice. Breathe with the swell... in, and out. Now lift your hands with it. See? The water rose to meet you.',
+    // Every technique in the curriculum is taught by exactly one lesson (tests/unit/masters.test.ts):
+    // Aput opens the Southern homeland, awakens waterbending in visitors and shares the tide's wisdom.
+    lessons: [],
+  },
+  {
     id: 'master_huu',
     name: 'Huu',
     title: 'Swamp Sage',

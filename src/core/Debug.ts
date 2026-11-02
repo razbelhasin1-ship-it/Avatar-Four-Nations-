@@ -3,6 +3,7 @@ import { DEFAULT_APPEARANCE, type Appearance } from '../character/Appearance';
 import { allTechniques, getTechnique } from '../combat/CombatSystem';
 import { TrainingDummy } from '../entities/TrainingDummy';
 import { LANDMARKS, STARTS } from '../world/WorldLayout';
+import { isOrigin, startOption, type OriginId } from '../data/starts';
 import type { Game } from './Game';
 import type { Action } from './Input';
 import { ELEMENTS, type Element } from './types';
@@ -51,6 +52,7 @@ export function installDebug(game: Game): void {
         avatar: { active: ctx.avatar.active, sphere: ctx.avatar.sphereActive, spirit: +ctx.avatar.spirit.toFixed(1) },
         progression: {
           start: ctx.progression.startingElement,
+          origin: ctx.progression.origin,
           unlocked: [...ctx.progression.unlocked],
           learned: [...ctx.progression.learned.keys()],
           mastery: Object.fromEntries(ELEMENTS.map((e) => [e, { ...ctx.progression.mastery[e], progress: ctx.progression.masteryProgress(e) }])),
@@ -71,10 +73,10 @@ export function installDebug(game: Game): void {
       };
     },
     /** Start a new campaign without going through the UI. */
-    async newGame(opts: { element?: Element; name?: string; slot?: string; appearance?: Partial<Appearance> } = {}) {
-      const element = opts.element ?? 'water';
+    async newGame(opts: { element?: Element; origin?: OriginId; name?: string; slot?: string; appearance?: Partial<Appearance> } = {}) {
+      const element = opts.element ?? (opts.origin ? startOption(opts.origin).element : 'water');
       const appearance = { ...structuredClone(DEFAULT_APPEARANCE[element]), ...(opts.appearance ?? {}) };
-      await game.newGame({ element, name: opts.name ?? 'Test Avatar', appearance, slot: opts.slot ?? 'slot3' });
+      await game.newGame({ element, origin: opts.origin, name: opts.name ?? 'Test Avatar', appearance, slot: opts.slot ?? 'slot3' });
       game.cameraRig.setScripted(null);
       game.player.controlLock = 0;
       ctx.ui.closeAll();
@@ -103,8 +105,9 @@ export function installDebug(game: Game): void {
       if (!l) throw new Error('unknown landmark ' + id);
       return api.teleport(l.x, l.z);
     },
-    startPoint(e: Element) {
-      const s = STARTS[e];
+    /** Teleport to a start: an element (its default start) or an origin id such as 'water_south'. */
+    startPoint(e: Element | OriginId) {
+      const s = isOrigin(e) ? startOption(e).start : STARTS[e];
       return api.teleport(s.spawn.x, s.spawn.z);
     },
     setElement(e: Element) {

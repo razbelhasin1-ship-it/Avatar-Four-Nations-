@@ -64,7 +64,8 @@ import type { HitInfo } from '../entities/Entity';
 import type { Player } from '../player/Player';
 import type { QuestMarker } from '../quests/QuestSystem';
 import { allSpots, getSpot, spotsWithPrefix } from '../world/Spots';
-import { LAKES, LANDMARKS, ROADS, STARTS, TUTORIAL_SPAWN } from '../world/WorldLayout';
+import { LAKES, LANDMARKS, ROADS, TUTORIAL_SPAWN } from '../world/WorldLayout';
+import { START_OPTIONS } from '../data/starts';
 import { disposeAttackResources } from './attacks';
 import { Enemy, type EnemyOptions } from './Enemy';
 import { EnemyUI } from './EnemyUI';
@@ -273,7 +274,7 @@ export class EncounterDirector implements GameSystem, AiHost {
 
   private buildSafeZones(): void {
     const s: Array<{ x: number; z: number; r: number }> = [];
-    for (const st of Object.values(STARTS)) s.push({ x: st.spawn.x, z: st.spawn.z, r: 240 });
+    for (const st of START_OPTIONS) s.push({ x: st.start.spawn.x, z: st.start.spawn.z, r: 240 });
     for (const l of LANDMARKS) if (SAFE_KINDS.has(l.kind)) s.push({ x: l.x, z: l.z, r: l.discoverRadius + (l.kind === 'training' ? 45 : 75) });
     s.push({ x: TUTORIAL_SPAWN.x, z: TUTORIAL_SPAWN.z, r: 320 });
     for (const [id, sp] of allSpots()) {

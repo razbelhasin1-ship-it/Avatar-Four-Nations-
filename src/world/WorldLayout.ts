@@ -730,6 +730,22 @@ export const STARTS: Record<Element, StartDef> = {
   },
 };
 
+/**
+ * Starts beyond the one-per-element STARTS: Water has two homelands (STARTS.water is the Northern
+ * Water Tribe). The full table of start options (master, first quest, card copy) is data/starts.ts.
+ */
+export const HOMELAND_STARTS = {
+  water_south: {
+    element: 'water',
+    regionId: 'southern_water_tribe',
+    landmarkId: 'swt_village',
+    spawn: { x: 220, z: 1594 },
+    yaw: Math.PI,
+    title: 'Begin your journey in the Southern Water Tribe',
+    subtitle: 'Flowing attacks, redirection, water whips and ice.',
+  },
+} satisfies Record<string, StartDef>;
+
 /** Tutorial sandbox spawn (Meditation Isle). */
 export const TUTORIAL_SPAWN: P2 & { yaw: number } = { x: -1800, z: -1775, yaw: Math.PI };
 

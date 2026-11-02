@@ -5,6 +5,7 @@ import type { Persistable } from '../core/Save';
 import { QUESTS } from '../data/quests';
 import { LANDMARKS } from '../world/WorldLayout';
 import type { ObjectiveDef, QuestAction, QuestDef, QuestProgress } from './QuestTypes';
+import { defaultOrigin } from '../data/starts';
 
 export interface QuestMarker {
   questId: string;
@@ -344,6 +345,8 @@ export class QuestSystem implements GameSystem, Persistable {
       if (!def.autoStart || this.active.has(def.id) || this.completed.has(def.id)) continue;
       const a = def.autoStart;
       if (a.startingElement && a.startingElement !== this.ctx.progression.startingElement) continue;
+      // A journey without an origin (older data) began at its element's default start.
+      if (a.origin && a.origin !== (this.ctx.progression.origin ?? defaultOrigin(this.ctx.progression.startingElement))) continue;
       if (a.afterQuest && !this.completed.has(a.afterQuest)) continue;
       if (a.flag && !this.flags.has(a.flag)) continue;
       if (a.element && !this.ctx.progression.canBend(a.element)) continue;

@@ -32,7 +32,9 @@ import { COSMETICS, type CosmeticDef, type CosmeticSlot } from '../../data/cosme
 import { SPECIES } from '../../data/creatures';
 import { MASTERS } from '../../data/masters';
 import { QUESTS } from '../../data/quests';
-import { STARTS, regionById } from '../../world/WorldLayout';
+import { defaultOrigin, homelandsOf, startOption, type OriginId, type StartOption } from '../../data/starts';
+import { FEATURES } from '../../core/features';
+import { regionById } from '../../world/WorldLayout';
 import { clear, h } from '../dom';
 import { ELEMENT_COLORS, emblem } from '../icons';
 import type { Screen, UIManager } from '../UIManager';
@@ -46,13 +48,31 @@ const COMPANION: Record<Element, { species: string; scale: number; x: number; z:
   fire: { species: 'dragon', scale: 0.15, x: 1.8, z: -2.1, yaw: -0.35 },
 };
 
-/** The master who teaches in the start city, and the opening quest (data-driven). */
-function startInfo(e: Element): { region: string; master: string | null; quest: { title: string; summary: string } | null } {
-  const s = STARTS[e];
-  const m = MASTERS.find((x) => x.element === e && x.region === s.regionId && !x.hidden);
-  const q = QUESTS.find((x) => x.autoStart?.startingElement === e);
-  return { region: regionById(s.regionId)?.name ?? '', master: m ? `${m.name}, ${m.title}` : null, quest: q ? { title: q.title, summary: q.summary ?? '' } : null };
+/** The master who teaches at a start, and its opening quest (data/starts.ts). */
+function startInfo(o: StartOption): { region: string; master: string | null; quest: { title: string; summary: string } | null } {
+  const m = MASTERS.find((x) => x.id === o.master);
+  const q = QUESTS.find((x) => x.id === o.quest);
+  return { region: regionById(o.start.regionId)?.name ?? '', master: m ? `${m.name}, ${m.title}` : null, quest: q ? { title: q.title, summary: q.summary ?? '' } : null };
 }
+
+/** Water's two homelands get their own step (feature flag START_WATER_HOMELANDS). */
+function splitsHomelands(e: Element): boolean {
+  return FEATURES.START_WATER_HOMELANDS && homelandsOf(e).length > 1;
+}
+
+/** The homeland last chosen on this device (preselected next time). */
+const HOMELAND_KEY = 'a4n.homeland';
+function rememberedHomeland(e: Element): OriginId | null {
+  try {
+    const v = localStorage.getItem(HOMELAND_KEY);
+    return homelandsOf(e).some((o) => o.id === v) ? (v as OriginId) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Painted backdrop of the Southern Water Tribe's card until the menu tour has snapshotted Wolf Cove. */
+const CARD_BG_SOUTH = 'linear-gradient(160deg, #f4f8ff 0%, #9cc4e6 42%, #2a3f78 100%)';
 
 const CARD_BG: Record<Element, string> = {
   air: 'linear-gradient(160deg, #f7e2b0 0%, #e8b04a 35%, #6a8fb8 100%)',
@@ -224,7 +244,7 @@ body.ngf-studio .main-menu { visibility: hidden; }
 }
 `;
 
-type Step = 'element' | 'creator' | 'preview';
+type Step = 'element' | 'homeland' | 'creator' | 'preview';
 type View = 'body' | 'face';
 
 interface Studio {
@@ -244,6 +264,8 @@ export class NewGameFlow implements Screen {
   private ctx!: GameContext;
   private step: Step = 'element';
   private element: Element = 'water';
+  /** Where the journey begins (the element's start, or the chosen Water homeland). */
+  private origin: OriginId = 'water_north';
   private name = '';
   private app: Appearance = cloneAppearance(DEFAULT_APPEARANCE.water);
   private studio: Studio | null = null;
@@ -296,6 +318,7 @@ export class NewGameFlow implements Screen {
     clear(this.el);
     this.leftPanel = this.rightPanel = this.viewBar = this.hint = null;
     if (this.step === 'element') this.renderElementSelect();
+    else if (this.step === 'homeland') this.renderHomelandSelect();
     else if (this.step === 'creator') this.renderCreator();
     else this.renderPreview();
   }
@@ -307,36 +330,30 @@ export class NewGameFlow implements Screen {
   private renderElementSelect(): void {
     this.disposeStudio();
     const order: Element[] = ['earth', 'air', 'fire', 'water'];
-    const where: Record<Element, string> = {
-      earth: 'Begin your journey in Ba Sing Se',
-      air: 'Begin your journey at an Air Temple',
-      fire: 'Begin your journey in the Fire Nation Capital',
-      water: 'Begin your journey in the Northern Water Tribe',
-    };
-    const desc: Record<Element, string> = {
-      earth: 'Start in the Earth Kingdom’s great walled city. Grounding, defence, precision and powerful impacts.',
-      air: 'Start at a mountain temple above the clouds. Agility, evasion, air currents and aerial movement.',
-      fire: 'Start among the capital’s grand architecture and royal palace. Aggressive combinations and controlled bursts.',
-      water: 'Start in a polar city of ice and canals. Flowing attacks, redirection, water whips and ice.',
-    };
     const cards = order.map((e, i) => {
       const c = ELEMENT_COLORS[e];
-      const info = startInfo(e);
-      const art = h('div.card-art', { 'data-art': e }, emblem(e));
-      this.paintArt(art, e);
+      const split = splitsHomelands(e);
+      // Water (flag on): one card for both tribes, previews split South | North; it opens the homeland step.
+      const o = startOption(defaultOrigin(e));
+      const where = split ? 'Begin your journey in the Water Tribes' : o.where;
+      const desc = split ? 'Start among the Water Tribes, at either pole. Flowing attacks, redirection, water whips and ice.' : o.desc;
+      const info = startInfo(o);
+      const art = split ? this.splitArt(e) : h('div.card-art', { 'data-art': o.vista, 'data-el': e }, emblem(e));
+      if (!split) this.paintArt(art, o.vista, e);
+      const pick = () => (split ? this.openHomelands() : this.chooseElement(e));
       const card = h(
         'div.element-card',
         {
           tabindex: 0,
           role: 'button',
-          'aria-label': `${ELEMENT_INFO[e].name}: ${where[e]}`,
+          'aria-label': `${ELEMENT_INFO[e].name}: ${where}`,
           'data-element': e,
           style: { animationDelay: `${i * 0.06}s` },
-          onclick: () => this.chooseElement(e),
+          onclick: pick,
           onkeydown: (ev: KeyboardEvent) => {
             if (ev.key === 'Enter' || ev.key === ' ') {
               ev.preventDefault();
-              this.chooseElement(e);
+              pick();
             }
           },
         },
@@ -344,13 +361,15 @@ export class NewGameFlow implements Screen {
         h(
           'div.card-body',
           h('h3', ELEMENT_INFO[e].name.toUpperCase()),
-          h('div.where', where[e]),
-          h('div.desc', desc[e]),
-          h(
-            'div.card-facts',
-            info.master ? h('div', h('span.fact-k', 'Master'), h('span.fact-v', info.master)) : null,
-            info.quest ? h('div', h('span.fact-k', 'First quest'), h('span.fact-v', h('b', info.quest.title), ' — ', info.quest.summary)) : null,
-          ),
+          h('div.where', where),
+          h('div.desc', desc),
+          split
+            ? h('div.card-facts', h('div', h('span.fact-v.fact-line', 'Two homelands: choose the South or the North')))
+            : h(
+                'div.card-facts',
+                info.master ? h('div', h('span.fact-k', 'Master'), h('span.fact-v', info.master)) : null,
+                info.quest ? h('div', h('span.fact-k', 'First quest'), h('span.fact-v', h('b', info.quest.title), ' — ', info.quest.summary)) : null,
+              ),
           h('div.card-cta', 'Begin here ›'),
         ),
       );
@@ -371,20 +390,140 @@ export class NewGameFlow implements Screen {
   }
 
   /** Card art: the tour's snapshot of the start city when one exists, otherwise the painted element backdrop. */
-  private paintArt(art: HTMLElement, e: Element): void {
-    const v = getVista(e);
-    art.style.background = v ? `linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(8,6,4,0.55)), center / cover no-repeat url("${v}")` : CARD_BG[e];
+  private paintArt(art: HTMLElement, vista: string, e: Element, fallback = CARD_BG[e]): void {
+    const v = getVista(vista);
+    art.style.background = v ? `linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(8,6,4,0.55)), center / cover no-repeat url("${v}")` : fallback;
     art.classList.toggle('vista', !!v);
   }
 
-  private onTour(): void {
-    if (this.step !== 'element') return;
-    for (const art of Array.from(this.el.querySelectorAll<HTMLElement>('.card-art[data-art]'))) this.paintArt(art, art.dataset.art as Element);
+  /** The Water card's preview: the two homelands' snapshots split on a diagonal (South left, North right). */
+  private splitArt(e: Element): HTMLElement {
+    const halves = homelandsOf(e).map((o, i) => {
+      const half = h(`div.split-half.${i === 0 ? 'a' : 'b'}`, { 'data-art': o.vista, 'data-el': e, 'data-alt': String(i === 0) });
+      this.paintArt(half, o.vista, e, i === 0 ? CARD_BG_SOUTH : CARD_BG[e]);
+      return half;
+    });
+    const chips = h('div.split-chips', h('span.split-chip', 'South'), h('span.split-chip', 'North'));
+    const art = h('div.card-art.split.vista', ...halves, h('div.split-seam'), chips, emblem(e));
+    return art;
   }
 
-  private chooseElement(e: Element): void {
+  private onTour(): void {
+    if (this.step !== 'element' && this.step !== 'homeland') return;
+    for (const art of Array.from(this.el.querySelectorAll<HTMLElement>('[data-art]'))) {
+      const e = (art.dataset.el ?? 'water') as Element;
+      this.paintArt(art, art.dataset.art!, e, art.dataset.alt === 'true' ? CARD_BG_SOUTH : CARD_BG[e]);
+    }
+    for (const art of Array.from(this.el.querySelectorAll<HTMLElement>('.card-art.split'))) art.classList.add('vista');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Step 1b: Water's homelands
+  // ---------------------------------------------------------------------------
+
+  private openHomelands(): void {
     this.ctx.audio.play('ui_confirm', { bus: 'ui' });
-    if (e !== this.element || this.step === 'element') {
+    this.step = 'homeland';
+    this.render();
+  }
+
+  private renderHomelandSelect(): void {
+    this.disposeStudio();
+    const e: Element = 'water';
+    const c = ELEMENT_COLORS[e];
+    const options = homelandsOf(e);
+    const remembered = rememberedHomeland(e) ?? options[0].id;
+    const cards: HTMLElement[] = [];
+    const focusCard = (i: number) => {
+      const n = cards.length;
+      const k = ((i % n) + n) % n;
+      cards.forEach((card, j) => {
+        card.setAttribute('aria-checked', String(j === k));
+        card.tabIndex = j === k ? 0 : -1;
+      });
+      cards[k].focus({ preventScroll: true });
+    };
+    options.forEach((o, i) => {
+      const info = startInfo(o);
+      const art = h('div.card-art', { 'data-art': o.vista, 'data-el': e, 'data-alt': String(o.id === 'water_south') }, emblem(e));
+      this.paintArt(art, o.vista, e, o.id === 'water_south' ? CARD_BG_SOUTH : CARD_BG[e]);
+      const checked = o.id === remembered;
+      const card = h(
+        'div.element-card',
+        {
+          tabindex: checked ? 0 : -1,
+          role: 'radio',
+          'aria-checked': String(checked),
+          'aria-label': `${o.homeland}: ${o.where}`,
+          'data-origin': o.id,
+          style: { animationDelay: `${i * 0.06}s` },
+          onclick: () => this.chooseHomeland(o.id),
+          onfocus: () => focusCardState(i),
+          onkeydown: (ev: KeyboardEvent) => {
+            if (ev.key === 'Enter' || ev.key === ' ') {
+              ev.preventDefault();
+              this.chooseHomeland(o.id);
+            } else if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown') {
+              ev.preventDefault();
+              focusCard(i + 1);
+            } else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') {
+              ev.preventDefault();
+              focusCard(i - 1);
+            }
+          },
+        },
+        art,
+        h(
+          'div.card-body',
+          h('h3', (o.homeland ?? '').toUpperCase()),
+          h('div.where', o.where),
+          h('div.desc', o.desc),
+          h(
+            'div.card-facts',
+            info.master ? h('div', h('span.fact-k', 'Master'), h('span.fact-v', info.master)) : null,
+            info.quest ? h('div', h('span.fact-k', 'First quest'), h('span.fact-v', h('b', info.quest.title), ' — ', info.quest.summary)) : null,
+          ),
+          h('div.card-cta', 'Begin here ›'),
+        ),
+      );
+      card.style.setProperty('--el-glow', c.glow);
+      card.style.setProperty('--el-shadow', c.shadow);
+      card.style.setProperty('--el-color', c.color);
+      cards.push(card);
+    });
+    // Mouse focus moves the selection too (one radio checked at a time).
+    const focusCardState = (i: number) => cards.forEach((card, j) => {
+      card.setAttribute('aria-checked', String(j === i));
+      card.tabIndex = j === i ? 0 : -1;
+    });
+    const title = h('h1.title.hs-title', 'WATER');
+    title.style.color = c.glow;
+    this.el.append(
+      h(
+        'div.element-select.homeland-select',
+        h('button.hs-back', { 'data-action': 'homeland-back', 'aria-label': 'Back to the four elements', onclick: () => this.back() }, '‹'),
+        h('div.es-head', title, h('p.lead', 'One element, two tribes. Choose where your journey begins.')),
+        h('div.element-cards.homeland-cards', { role: 'radiogroup', 'aria-label': 'Choose your homeland' }, cards),
+        h('div.row.es-actions', h('button.btn', { 'data-action': 'homeland-back-btn', onclick: () => this.back() }, 'Back')),
+      ),
+    );
+    const k = Math.max(0, options.findIndex((o) => o.id === remembered));
+    cards[k]?.focus({ preventScroll: true });
+  }
+
+  private chooseHomeland(origin: OriginId): void {
+    try {
+      localStorage.setItem(HOMELAND_KEY, origin);
+    } catch {
+      /* private mode: the choice just is not remembered */
+    }
+    this.chooseElement(startOption(origin).element, origin);
+  }
+
+  private chooseElement(e: Element, origin: OriginId = defaultOrigin(e)): void {
+    this.ctx.audio.play('ui_confirm', { bus: 'ui' });
+    this.origin = origin;
+    if (e !== this.element || this.step === 'element' || this.step === 'homeland') {
       const changedElement = e !== this.element;
       this.element = e;
       // A new nation brings its starting look; the chosen body type stays.
@@ -695,7 +834,7 @@ export class NewGameFlow implements Screen {
         this.continueButton(),
       ),
     );
-    const start = STARTS[this.element];
+    const start = startOption(this.origin).start;
     const right = h(
       'div.panel.ngf-right',
       h('div.row', emblem(this.element, 'emblem'), h('div', h('div.title', { style: { fontSize: '17px' } }, `${ELEMENT_INFO[this.element].name} Avatar`), h('div.muted', { style: { fontSize: '14px' } }, regionById(start.regionId)?.name ?? ''))),
@@ -714,6 +853,7 @@ export class NewGameFlow implements Screen {
 
   private back(): void {
     if (this.step === 'preview') this.step = 'creator';
+    else if (this.step === 'creator' && splitsHomelands(this.element)) this.step = 'homeland';
     else this.step = 'element';
     this.render();
   }
@@ -1043,8 +1183,9 @@ export class NewGameFlow implements Screen {
     this.ensureStudio();
     this.setCompanion(true);
     const e = this.element;
-    const start = STARTS[e];
-    const info = startInfo(e);
+    const option = startOption(this.origin);
+    const start = option.start;
+    const info = startInfo(option);
     const species = SPECIES.find((s) => s.id === COMPANION[e].species);
     // Default slot: keep a previous choice if still empty, else the first empty one, else the oldest journey.
     const metas = SAVE_SLOTS.map((s) => this.ctx.save.getMeta(s));
@@ -1115,7 +1256,7 @@ export class NewGameFlow implements Screen {
 
   private launch(slot: string): void {
     const name = validateName(this.name) ? 'Avatar' : normalizeName(this.name);
-    const cfg = { element: this.element, name, appearance: cloneAppearance(this.app), slot };
+    const cfg = { element: this.element, origin: this.origin, name, appearance: cloneAppearance(this.app), slot };
     this.disposeStudio();
     this.ui.close(this.id);
     this.ui.close('mainMenu');
@@ -1148,7 +1289,7 @@ export class NewGameFlow implements Screen {
     if (!api) return;
     api.debug = api.debug ?? {};
     api.debug.creator = {
-      state: () => ({ step: this.step, element: this.element, name: this.name, view: this.view, zoom: +this.zoom.toFixed(2), appearance: cloneAppearance(this.app), height: this.studio?.humanoid.height ?? 0, stats: this.studio?.humanoid.stats ?? null }),
+      state: () => ({ step: this.step, element: this.element, origin: this.origin, name: this.name, view: this.view, zoom: +this.zoom.toFixed(2), appearance: cloneAppearance(this.app), height: this.studio?.humanoid.height ?? 0, stats: this.studio?.humanoid.stats ?? null }),
       setAppearance: (a: Appearance) => {
         this.app = cloneAppearance(a);
         this.changed();

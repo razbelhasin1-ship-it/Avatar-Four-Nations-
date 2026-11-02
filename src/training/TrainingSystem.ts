@@ -240,7 +240,10 @@ export class TrainingSystem implements GameSystem {
     const pr = this.ctx.progression;
     if (pr.startingElement !== 'air' || q.isComplete('mq_awakening_air')) q.setFlag('tenzo_in_courtyard');
     if (pr.startingElement !== 'fire' || q.isComplete('mq_awakening_fire')) q.setFlag('hira_at_temple');
-    if (ELEMENTS.some((e) => q.isComplete(`mq_awakening_${e}`))) q.setFlag('avatar_awakened');
+    if (pr.origin !== 'water_south' || q.isComplete('mq_awakening_water_south')) q.setFlag('aput_at_pond');
+    // Where the journey began, for dialogue (data/starts.ts origin ids).
+    q.setFlag(`origin_${pr.origin}`);
+    if (ELEMENTS.some((e) => q.isComplete(`mq_awakening_${e}`)) || q.isComplete('mq_awakening_water_south')) q.setFlag('avatar_awakened');
     for (const e of ELEMENTS) if (pr.canBend(e)) q.setFlag(`can_bend_${e}`);
     q.checkAutoStart();
   }
@@ -250,6 +253,7 @@ export class TrainingSystem implements GameSystem {
     const q = this.ctx.quests;
     if (id === 'mq_awakening_air') q.setFlag('tenzo_in_courtyard');
     if (id === 'mq_awakening_fire') q.setFlag('hira_at_temple');
+    if (id === 'mq_awakening_water_south') q.setFlag('aput_at_pond');
     q.setFlag('avatar_awakened');
   }
 

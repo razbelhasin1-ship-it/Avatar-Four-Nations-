@@ -189,7 +189,11 @@ async function desktop() {
       await h.page.waitForSelector('.element-card');
       const cards = await h.page.$$eval('.element-card', (cs) => cs.map((c) => ({ e: c.dataset.element, facts: c.querySelector('.card-facts')?.textContent ?? '', vista: c.querySelector('.card-art')?.classList.contains('vista') })));
       assert.equal(cards.length, 4);
-      for (const c of cards) assert.match(c.facts, /Master.*First quest/s, `${c.e} card lacks master/quest`);
+      for (const c of cards) {
+        // Water opens a second step (two homelands, START_WATER_HOMELANDS); the others name master and quest.
+        if (c.e === 'water') assert.match(c.facts, /Two homelands: choose the South or the North/, 'water card should offer the two homelands');
+        else assert.match(c.facts, /Master.*First quest/s, `${c.e} card lacks master/quest`);
+      }
       assert.ok(cards.find((c) => c.e === 'air').vista, 'air card should use the tour snapshot');
       assert.match(await h.page.textContent('.element-select h1'), /BEGIN YOUR JOURNEY AS THE AVATAR/);
       await shot('04_elements');

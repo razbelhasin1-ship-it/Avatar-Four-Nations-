@@ -79,7 +79,8 @@ export interface QuestDef {
     techniques?: string[];
   };
   /** Automatically start when conditions hold (checked periodically). */
-  autoStart?: { startingElement?: Element; afterQuest?: string; flag?: string; element?: Element; always?: boolean };
+  /** `origin`: only journeys that began there (data/starts.ts origin id, e.g. 'water_south'). */
+  autoStart?: { startingElement?: Element; origin?: string; afterQuest?: string; flag?: string; element?: Element; always?: boolean };
   /** Hidden from the journal until started. */
   hidden?: boolean;
 }

@@ -1,6 +1,7 @@
 /**
  * Dev tool: renders the procedural world to a PNG for layout review.
  * Runs only when MAP_OUT is set:  MAP_OUT=/path/map.png npx vitest run tests/tools/worldmap.test.ts
+ * A window instead of the whole world: MAP_CX / MAP_CZ (centre, m) and MAP_HALF (half-width, m).
  */
 import { writeFileSync } from 'node:fs';
 import { describe, it } from 'vitest';
@@ -10,6 +11,9 @@ import { encodePNG } from './pngEncode';
 
 const OUT = process.env.MAP_OUT;
 const SIZE = Number(process.env.MAP_SIZE ?? 768);
+const HALF = Number(process.env.MAP_HALF ?? WORLD_HALF);
+const CX = Number(process.env.MAP_CX ?? 0);
+const CZ = Number(process.env.MAP_CZ ?? 0);
 
 describe.skipIf(!OUT)('world map render', () => {
   it('renders', () => {
@@ -30,8 +34,8 @@ describe.skipIf(!OUT)('world map render', () => {
     let maxH = -1e9;
     for (let py = 0; py < SIZE; py++) {
       for (let px = 0; px < SIZE; px++) {
-        const x = -WORLD_HALF + ((px + 0.5) / SIZE) * WORLD_HALF * 2;
-        const z = -WORLD_HALF + ((py + 0.5) / SIZE) * WORLD_HALF * 2;
+        const x = CX - HALF + ((px + 0.5) / SIZE) * HALF * 2;
+        const z = CZ - HALF + ((py + 0.5) / SIZE) * HALF * 2;
         const h = heightAt(x, z);
         if (h > maxH) maxH = h;
         const n = normalAt(x, z, 3);
@@ -61,8 +65,8 @@ describe.skipIf(!OUT)('world map render', () => {
     }
     // Landmark dots
     for (const l of LANDMARKS) {
-      const px = Math.round(((l.x + WORLD_HALF) / (WORLD_HALF * 2)) * SIZE);
-      const py = Math.round(((l.z + WORLD_HALF) / (WORLD_HALF * 2)) * SIZE);
+      const px = Math.round(((l.x - CX + HALF) / (HALF * 2)) * SIZE);
+      const py = Math.round(((l.z - CZ + HALF) / (HALF * 2)) * SIZE);
       const col = l.kind === 'capital' || l.kind === 'temple' ? [255, 40, 40] : [255, 220, 0];
       for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
         const x = px + dx, y = py + dy;

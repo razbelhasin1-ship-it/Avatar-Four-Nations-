@@ -26,6 +26,28 @@ export const DIALOGUES: DialogueDef[] = [
     },
   },
   {
+    id: 'dlg_swt_elder',
+    start: [{ node: 'intro', condition: { questActive: 'mq_awakening_water_south' } }, { node: 'later' }],
+    nodes: {
+      intro: {
+        text: 'So you are the one the ice keeps talking about. Three nights now the sea ice under the cove has cracked toward your igloo and nowhere else. The old women say it is a story. I say the ice does not tell stories.',
+        next: 'intro2',
+      },
+      intro2: {
+        text: 'If you are the Avatar, it begins with water — here, with us. Go to the Frozen Pond past the drying racks, or any fishing hole, and pull. Push. Shape it. Water is never made, child, only asked.',
+        choices: [
+          { text: 'I will go to the pond.', end: true },
+          { text: 'And if I am the Avatar?', next: 'avatar' },
+        ],
+      },
+      avatar: {
+        text: 'Then one day you will learn all four, from masters across the world, and the North will want you too. But every voyage starts at a shore. Go.',
+        end: true,
+      },
+      later: { text: 'Wolf Cove is proud of you. Keep your hood up and your water close.', end: true },
+    },
+  },
+  {
     id: 'dlg_bss_guide',
     start: [{ node: 'intro' }],
     nodes: {

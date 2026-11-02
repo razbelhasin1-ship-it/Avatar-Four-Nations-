@@ -21,7 +21,8 @@ import { UIManager } from '../ui/UIManager';
 import { VFXSystem } from '../vfx/VFX';
 import { InteractionSystem } from '../world/Interactables';
 import { World } from '../world/World';
-import { regionById, STARTS, TUTORIAL_SPAWN, WORLD_HALF } from '../world/WorldLayout';
+import { regionById, TUTORIAL_SPAWN, WORLD_HALF } from '../world/WorldLayout';
+import { originStart, type OriginId } from '../data/starts';
 import { zoneAt } from '../world/Zones';
 import { installDebug } from './Debug';
 import { EventBus } from './EventBus';
@@ -33,6 +34,8 @@ import type { Element, GameMode, SessionKind } from './types';
 
 export interface NewGameConfig {
   element: Element;
+  /** Where the journey begins (data/starts.ts): defaults to the element's start (Water: the North). */
+  origin?: OriginId;
   name: string;
   appearance: Appearance;
   slot: string;
@@ -214,7 +217,7 @@ export class Game {
     this.save.metaProvider = () => ({
       characterName: this.playerEntity.characterName,
       startingElement: this.progression.startingElement,
-      regionName: this.world.currentRegion?.name ?? regionById(STARTS[this.progression.startingElement].regionId)?.name ?? 'The Four Nations',
+      regionName: this.world.currentRegion?.name ?? regionById(originStart(this.progression.origin, this.progression.startingElement).regionId)?.name ?? 'The Four Nations',
       level: this.progression.level,
       playTime: this.playerEntity.playTime,
       masteredCount: this.progression.masteredCount,
@@ -629,13 +632,13 @@ export class Game {
   async newGame(cfg: NewGameConfig): Promise<void> {
     if (this.session.active) this.endSession();
     this.save.resetAll();
-    this.progression.setupNewGame(cfg.element);
+    this.progression.setupNewGame(cfg.element, cfg.origin);
     const p = this.playerEntity;
     p.characterName = cfg.name.trim().slice(0, 24) || 'Avatar';
     p.setAppearance(cfg.appearance);
     p.element = cfg.element;
     p.waterReserve = 0;
-    const s = STARTS[cfg.element];
+    const s = originStart(this.progression.origin, cfg.element);
     const spawn = new THREE.Vector3(s.spawn.x, s.spawn.y ?? 0, s.spawn.z);
     p.safePoint.copy(spawn);
     await this.beginSession('campaign', spawn, s.yaw, true, cfg.slot);
@@ -650,7 +653,7 @@ export class Game {
     const p = this.playerEntity;
     let spawn = p.safePoint.clone();
     if (!this.validSpawn(spawn)) {
-      const s = STARTS[this.progression.startingElement];
+      const s = originStart(this.progression.origin, this.progression.startingElement);
       spawn = new THREE.Vector3(s.spawn.x, s.spawn.y ?? 0, s.spawn.z);
       p.safePoint.copy(spawn);
     }

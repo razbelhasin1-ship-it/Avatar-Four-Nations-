@@ -2,6 +2,7 @@ import type { GameContext, GameSystem } from '../core/GameContext';
 import type { Persistable } from '../core/Save';
 import { ELEMENTS, ELEMENT_INFO, type Element } from '../core/types';
 import { allTechniques, getTechnique } from '../combat/CombatSystem';
+import { defaultOrigin, isOrigin, startOption, type OriginId } from '../data/starts';
 
 /**
  * Avatar progression:
@@ -39,6 +40,7 @@ export class Progression implements Persistable, GameSystem {
   readonly saveKey = 'progression';
   private ctx: GameContext | null = null;
   startingElement: Element = 'air';
+  private chosenOrigin: OriginId = 'air';
   readonly unlocked = new Set<Element>();
   readonly learned = new Map<string, { source: string; at: number }>();
   readonly equipped: Record<Element, Array<string | null>> = { air: [], water: [], earth: [], fire: [] };
@@ -54,13 +56,26 @@ export class Progression implements Persistable, GameSystem {
     this.ctx = ctx;
   }
 
+  /**
+   * Where the journey began (data/starts.ts): the element's start, or a Water homeland. Always
+   * consistent with the starting element (an origin of another element reads as its default).
+   */
+  get origin(): OriginId {
+    return startOption(this.chosenOrigin).element === this.startingElement ? this.chosenOrigin : defaultOrigin(this.startingElement);
+  }
+
+  set origin(o: OriginId) {
+    this.chosenOrigin = o;
+  }
+
   // ---------------------------------------------------------------------------
   // New game
   // ---------------------------------------------------------------------------
 
-  setupNewGame(start: Element): void {
+  setupNewGame(start: Element, origin?: OriginId): void {
     this.reset();
     this.startingElement = start;
+    this.origin = origin && startOption(origin).element === start ? origin : defaultOrigin(start);
     this.unlockElement(start, true);
   }
 
@@ -260,6 +275,7 @@ export class Progression implements Persistable, GameSystem {
     return {
       v: 1,
       start: this.startingElement,
+      origin: this.origin,
       unlocked: [...this.unlocked],
       learned: [...this.learned.entries()],
       equipped: this.equipped,
@@ -274,6 +290,8 @@ export class Progression implements Persistable, GameSystem {
   deserialize(data: any): void {
     if (!data || typeof data !== 'object') return;
     if (ELEMENTS.includes(data.start)) this.startingElement = data.start;
+    // Journeys from before the Water homelands began in the Northern Water Tribe.
+    this.origin = isOrigin(data.origin) && startOption(data.origin).element === this.startingElement ? data.origin : defaultOrigin(this.startingElement);
     if (Array.isArray(data.unlocked)) for (const e of data.unlocked) if (ELEMENTS.includes(e)) this.unlocked.add(e);
     if (Array.isArray(data.learned)) {
       for (const entry of data.learned) {
@@ -310,6 +328,7 @@ export class Progression implements Persistable, GameSystem {
   reset(): void {
     this.sandbox = false;
     this.startingElement = 'air';
+    this.origin = 'air';
     this.unlocked.clear();
     this.learned.clear();
     for (const e of ELEMENTS) {
