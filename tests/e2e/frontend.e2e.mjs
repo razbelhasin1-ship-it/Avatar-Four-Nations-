@@ -212,13 +212,13 @@ async function desktop() {
       await h.page.click('.swatches .swatch:nth-child(3)');
       await h.page.$eval('input[data-opt="build"]', (el) => { el.value = '0.9'; el.dispatchEvent(new Event('input', { bubbles: true })); });
       await h.page.click('[data-tab="attire"]');
-      await h.page.click('[data-preset="water_south"]');
+      await h.page.click('[data-preset="fire_trainee"]');
       await c((x) => x.flush());
       const after = await c((x) => ({ a: x.state().appearance, g: x.geomHash() }));
       assert.notEqual(after.g, before.g, 'mesh did not change');
       assert.equal(after.a.hair.style, 'topknot_crown');
       assert.notEqual(after.a.skinTone, before.a.skinTone);
-      assert.equal(after.a.outfit.top, 'water_south_parka');
+      assert.equal(after.a.outfit.top, 'fire_training');
       assert.ok(Math.abs(after.a.build - 0.9) < 1e-6);
       await h.page.fill('input[data-field="name"]', 'Ember');
       await h.page.waitForTimeout(250);
@@ -413,6 +413,8 @@ async function phone() {
 
     await check('phone: creator bottom sheet with touch sliders and chips', async () => {
       await h.page.tap('.element-card[data-element="water"]');
+      await h.page.waitForSelector('.homeland-cards .element-card[data-origin="water_south"]');
+      await h.page.tap('.homeland-cards .element-card[data-origin="water_south"]');
       await h.page.waitForSelector('.ngf-mobile [data-action="creator-continue"]');
       assert.ok(await inView('.ngf-left'), 'creator sheet off-screen');
       assert.equal(await h.page.isVisible('.touch .tbtn[data-touch="jump"]'), false, 'touch controls must not cover menus / the creator');
