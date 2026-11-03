@@ -106,9 +106,12 @@ export function flightAlong(k: Kit, t0: number, r0: number, y0: number, t1: numb
     const yaw = Math.atan2(dx, dz);
     const top = floorY(y0 + sh * (i + 1));
     const ground = BASE + Math.min(rockTop(m.th, m.r) - 0.6, top - BASE - 0.8);
-    // Step tread on a solid base down to the rock.
-    k.main.box('stone_white', { x: m.x, y: (top + ground) / 2, z: m.z, sx: width, sy: top - ground, sz: run + 0.04, yaw });
-    k.main.box('stone_light', { x: m.x, y: top - 0.06, z: m.z, sx: width + 0.06, sy: 0.12, sz: run + 0.06, yaw });
+    // Step: a stone cap (its top is the tread, 2 cm proud) on a solid base down to the rock. The base
+    // stops inside the cap, so no two top faces share a plane (the cap's and the base's tops, or the last
+    // cap's and the terrace's): coplanar faces flicker as the camera moves, worst on phone GPUs.
+    const capTop = top + 0.02;
+    k.main.box('stone_white', { x: m.x, y: (capTop - 0.1 + ground) / 2, z: m.z, sx: width, sy: capTop - 0.1 - ground, sz: run + 0.04, yaw });
+    k.main.box('stone_light', { x: m.x, y: capTop - 0.06, z: m.z, sx: width + 0.06, sy: 0.12, sz: run + 0.06, yaw });
     // Parapets where the side drops away.
     for (const side of [-1, 1]) {
       const sx = Math.cos(yaw) * side * (width / 2 + 0.2), sz = -Math.sin(yaw) * side * (width / 2 + 0.2);
