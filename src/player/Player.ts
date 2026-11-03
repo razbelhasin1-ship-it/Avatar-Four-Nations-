@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { DEFAULT_APPEARANCE, sanitizeAppearance, type Appearance } from '../character/Appearance';
 import { Humanoid } from '../character/Humanoid';
-import { getTechnique } from '../combat/CombatSystem';
+import { allTechniques, getTechnique } from '../combat/CombatSystem';
 import type { Combatant } from '../combat/types';
 import type { GameContext } from '../core/GameContext';
 import { angleDiff, clamp, damp, dampAngle } from '../core/MathUtil';
@@ -252,10 +252,14 @@ export class Player extends Entity implements Combatant, Persistable {
   // ---------------------------------------------------------------------------
 
   private techniqueFor(kind: 'basic' | 'heavy', e: Element): string | null {
-    for (const id of this.ctx.progression.learnedFor(e)) {
+    const pr = this.ctx.progression;
+    for (const id of pr.learnedFor(e)) {
       const d = getTechnique(id);
       if (d && d.kind === kind && d.element === e) return id;
     }
+    // Lent for a lesson or an element awakening (progression.knows covers them while it runs): the
+    // awakening's targets are broken with the element's basic attack before it is ever learned.
+    for (const d of allTechniques()) if (d.element === e && d.kind === kind && pr.knows(d.id)) return d.id;
     return null;
   }
 

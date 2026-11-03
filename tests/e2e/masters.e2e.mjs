@@ -181,6 +181,20 @@ try {
     await h.step(2);
     await tr((g) => g.debug.training.skipDemo());
     await h.step(2);
+    // The ATTACK button itself (not a debug cast) fires the lent basic attack before earth is learned.
+    const pressed = await tr((g) => {
+      const seen = [];
+      const off = g.ctx.events.on('technique:cast', (e) => e.isPlayer && seen.push(e.id));
+      const t = g.debug.training.state().info.targets.find((x) => !x.broken);
+      g.faceTowards(t.x, t.z);
+      g.ctx.input.setVirtual('attack', true);
+      g.step(2);
+      g.ctx.input.setVirtual('attack', false);
+      for (let i = 0; i < 20; i++) g.step(1);
+      off();
+      return seen;
+    });
+    assert.ok(pressed.includes('earth_strike'), 'ATTACK casts the lent Earth Strike during the awakening: ' + JSON.stringify(pressed));
     st = await breakTargets('earth_strike');
     await h.step(6);
     s = await h.state();
