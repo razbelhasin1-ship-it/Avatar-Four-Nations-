@@ -112,9 +112,10 @@ export function* buildHarbor(env: BuildEnv, out: HarborOut): Generator<unknown, 
     dryingRack(env.chunks.at('detail', c.x, c.z).builder, c.x, Math.max(DECK_Y, heightAt(c.x, c.z)), c.z, yawOutward(u) + Math.PI / 2, i % 2 === 0);
   }
   // Warehouses (long sheds under grey tile) behind the market, the traders' inn, harbor houses.
+  // QUAY_R + 25 keeps them clear of the coast road behind (its chord cuts in to ~QUAY_R + 34 here).
   for (let i = 0; i < 3; i++) {
     const u = 0.776 + i * 0.03;
-    const c = A(u, QUAY_R + 33);
+    const c = A(u, QUAY_R + 25);
     const y = heightAt(c.x, c.z);
     const yaw = yawOutward(u) + Math.PI;
     const b = env.chunks.at('houses', c.x, c.z).builder;

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { GameContext } from '../../../core/GameContext';
 import { Random } from '../../../core/Random';
-import { getRoadRuntime } from '../../Heightfield';
+import { getRoadRuntime, heightAt, waterAt } from '../../Heightfield';
 import { A, KI } from '../../landforms/kyoshiIsland';
 import type { P2 } from '../../WorldLayout';
 import { FigureRenderer, Pose } from '../earth/bssFigures';
@@ -50,6 +50,9 @@ const T = {
   meadow: 1 << 16,
   patrol: 1 << 17,
 };
+
+/** Spots several people share (they spread round them; stalls, doors, posts and drills keep their place). */
+const SHARED = T.beach | T.statue | T.well | T.meadow | T.shrine | T.hall | T.inn | T.kitchen;
 
 export interface LifeInput {
   doors: Array<{ x: number; z: number; yaw: number; harbor?: boolean }>;
@@ -141,16 +144,58 @@ export class KyoshiLife {
   // Walking graph
   // ---------------------------------------------------------------------------
 
+  /** A walkable top well above the road's own surface, with no water under it: a building on the road (its roof). */
+  private inBuilding(x: number, z: number, roadY: number): boolean {
+    return this.input.ground(x, z) - roadY > 3.4 && !waterAt(x, z);
+  }
+
+  /** A straight way between two points on dry ground with no steps over 1.2 m (a lane can follow it). */
+  private clearLine(a: P2, b: P2): boolean {
+    const len = Math.hypot(b.x - a.x, b.z - a.z);
+    let prev = NaN;
+    for (let d = 0; d <= len; d += 1) {
+      const x = a.x + ((b.x - a.x) * d) / (len || 1), z = a.z + ((b.z - a.z) * d) / (len || 1);
+      const g = this.input.ground(x, z);
+      if (waterAt(x, z) || g - heightAt(x, z) > 3.4 || Math.abs(g - prev) > 1.2) return false;
+      prev = g;
+    }
+    return true;
+  }
+
   private buildNav(): void {
     const nav = this.nav, inp = this.input;
+    /** The road's own surface under road nodes (a node's walkable top may not stand far above it). */
+    const roadY = new Map<number, number>();
     for (const r of getRoadRuntime()) {
       if (!r.id.startsWith('ki_')) continue;
-      const pts: P2[] = [];
-      for (let s = 0; s <= r.line.length; s += 8) pts.push(r.line.pointAt(s));
-      pts.push(r.line.pointAt(r.line.length));
+      const ss: number[] = [];
+      for (let s = 0; s <= r.line.length; s += 8) ss.push(s);
+      ss.push(r.line.length);
+      // A road running into a building ends at it (the village street stops at the Meeting Hall's door).
+      const inside = (s: number) => {
+        const p = r.line.pointAt(s);
+        return this.inBuilding(p.x, p.z, r.height(s));
+      };
+      while (ss.length > 2 && inside(ss[ss.length - 1])) ss.pop();
+      while (ss.length > 2 && inside(ss[0])) ss.shift();
+      const pts = ss.map((s) => r.line.pointAt(s));
       const tag = T.street | (r.id === 'ki_village_street' ? T.village : 0) | (r.id === 'ki_coast_road' || r.id === 'ki_village_street' ? T.patrol : 0);
-      nav.street(pts, tag, 8, 3.5);
+      const at = new Float64Array(1);
+      for (const id of nav.street(pts, tag, 8, 3.5)) {
+        if (roadY.has(id)) continue;
+        r.line.distance(nav.nodes[id].x, nav.nodes[id].z, at);
+        roadY.set(id, r.height(at[0]));
+      }
     }
+    // A footpath from the coast road down to the bay beach (the beach lies ~100 m from any road).
+    const beach = inp.marks.bay_beach;
+    const coast = getRoadRuntime().find((r) => r.id === 'ki_coast_road');
+    const nearCoast = (p: P2): P2 => {
+      const s = new Float64Array(1);
+      coast!.line.distance(p.x, p.z, s);
+      return coast!.line.pointAt(s[0]);
+    };
+    if (beach && coast) nav.street([nearCoast(beach), { x: beach.x, z: beach.z }], T.street, 8, 6);
     // Harbor boardwalk along the quay and the piers.
     const board: P2[] = [];
     for (let u = KI.harbor.u0 + 0.01; u <= KI.harbor.u1 - 0.01; u += 0.008) board.push(A(u, 218.5));
@@ -161,6 +206,30 @@ export class KyoshiLife {
       nav.join(p.root.x, p.root.z, 6);
       const head = ids[ids.length - 1];
       nav.nodes[head].tags |= T.pier;
+    }
+    // Lanes from the boardwalk up to the coast road through gaps between the harbor buildings (the
+    // harbor was a network of its own: walkers crossed to it in a straight line over everything).
+    if (coast) {
+      const lanes: Array<{ u: number; a: P2; b: P2; len: number }> = [];
+      for (let u = KI.harbor.u0 + 0.01; u <= KI.harbor.u1 - 0.01; u += 0.003) {
+        const a = A(u, 218.5), b = nearCoast(a);
+        const len = Math.hypot(b.x - a.x, b.z - a.z);
+        if (len > 60) continue;
+        // Clear: on the ground (no raised floor, stall or building), dry, no steps, from 3 m off the deck.
+        let clear = true, prevY = NaN;
+        for (let d = 3; d <= len && clear; d += 1) {
+          const x = a.x + ((b.x - a.x) * d) / len, z = a.z + ((b.z - a.z) * d) / len;
+          const g = inp.ground(x, z);
+          if (g - heightAt(x, z) > 0.4 || waterAt(x, z) || Math.abs(g - prevY) > 0.6) clear = false;
+          prevY = g;
+        }
+        if (clear) lanes.push({ u, a, b, len });
+      }
+      const chosen: typeof lanes = [];
+      for (const l of lanes.sort((p, q) => p.len - q.len)) {
+        if (chosen.length < 3 && chosen.every((c) => Math.abs(c.u - l.u) > 0.025)) chosen.push(l);
+      }
+      for (const l of chosen) nav.street([l.a, l.b], T.street | T.harbor, 6, 4);
     }
     // Dojo yard: a grid of drill slots joined to the gate.
     const y = inp.yard;
@@ -185,16 +254,37 @@ export class KyoshiLife {
       nav.link(out, g);
       nav.join(out ? nav.nodes[out].x : gate.x, nav.nodes[out].z, 20);
     }
-    // Points of interest.
-    for (const d of inp.doors) nav.poi(d.x, d.z, T.home | (d.harbor ? T.harbor : T.village), d.yaw, 18);
-    for (const s of inp.stalls) nav.poi(s.x, s.z, T.stall | (s.harbor ? T.harbor : T.village), s.yaw, 16);
-    for (const k of inp.kitchens) nav.poi(k.x + 1.4, k.z + 1.4, T.kitchen | T.village, 0, 18);
-    for (const w of inp.wells) nav.poi(w.x + 1.5, w.z, T.well | T.village, 0, 16);
-    for (const f of inp.fields) nav.poi(f.x, f.z, T.field | T.village, f.yaw, 26);
-    for (const p of inp.posts) nav.poi(p.x, p.z, T.post, 0, 16);
+    // Points of interest (a spot that falls on a building moves to the nearest clear ground beside it).
+    const poi = (x: number, z: number, tags: number, yaw: number, reach: number): number => {
+      const on = (px: number, pz: number) => inp.ground(px, pz) - heightAt(px, pz) > 2.5 && !waterAt(px, pz);
+      if (on(x, z)) {
+        search: for (const r of [1.5, 2.5, 3.5, 5]) {
+          for (let k = 0; k < 8; k++) {
+            const px = x + Math.cos((k * Math.PI) / 4) * r, pz = z + Math.sin((k * Math.PI) / 4) * r;
+            if (!on(px, pz)) {
+              x = px;
+              z = pz;
+              break search;
+            }
+          }
+        }
+      }
+      return nav.poi(x, z, tags, yaw, reach);
+    };
+    for (const d of inp.doors) poi(d.x, d.z, T.home | (d.harbor ? T.harbor : T.village), d.yaw, 18);
+    for (const s of inp.stalls) poi(s.x, s.z, T.stall | (s.harbor ? T.harbor : T.village), s.yaw, 16);
+    for (const k of inp.kitchens) poi(k.x + 1.4, k.z + 1.4, T.kitchen | T.village, 0, 18);
+    for (const w of inp.wells) poi(w.x + 1.5, w.z, T.well | T.village, 0, 16);
+    for (const f of inp.fields) poi(f.x, f.z, T.field | T.village, f.yaw, 26);
+    for (const p of inp.posts) {
+      // In front of the practice post, facing it (the post itself is a solid pillar).
+      const dx = y.x - p.x, dz = y.z - p.z, l = Math.hypot(dx, dz) || 1;
+      const sx = p.x + (dx / l) * 0.9, sz = p.z + (dz / l) * 0.9;
+      nav.poi(sx, sz, T.post, Math.atan2(p.x - sx, p.z - sz), 16);
+    }
     const mark = (id: string, tags: number, reach = 20) => {
       const m = inp.marks[id];
-      if (m) nav.poi(m.x, m.z, tags, 0, reach);
+      if (m) poi(m.x, m.z, tags, 0, reach);
     };
     mark('statue', T.statue | T.village, 18);
     mark('meeting_hall', T.hall | T.village, 18);
@@ -203,9 +293,52 @@ export class KyoshiLife {
     mark('meadow', T.meadow, 30);
     mark('traders_inn', T.inn | T.harbor, 18);
     mark('fish_market', T.stall | T.harbor, 16);
-    // Heights: walkable decks (piers, boardwalk) included.
-    this.nodeY = new Float32Array(nav.nodes.length);
-    for (let i = 0; i < nav.nodes.length; i++) this.nodeY[i] = inp.ground(nav.nodes[i].x, nav.nodes[i].z);
+    // Points of interest no street reaches (fields off the lanes, a few harbor doors): a lane to the
+    // nearest street node along a clear line, so nobody heads for them in a line over everything.
+    for (let i = 0; i < nav.nodes.length; i++) {
+      const n = nav.nodes[i];
+      if (n.edges.length) continue;
+      for (const c of nav.around(n.x, n.z, 90, T.street)) {
+        if (c !== i && this.clearLine(n, nav.nodes[c])) {
+          nav.link(i, c);
+          break;
+        }
+      }
+    }
+    // Heights: walkable decks (piers, boardwalk, the bridge) included; a road node never stands on
+    // something well above its road (a post, a stall, a roof) unless there is water under it (a bridge).
+    const n0 = nav.nodes.length;
+    const Y: number[] = [];
+    for (let i = 0; i < n0; i++) {
+      const { x, z } = nav.nodes[i];
+      const g = inp.ground(x, z), ry = roadY.get(i);
+      Y.push(ry !== undefined && g - ry > 2.5 && !waterAt(x, z) ? ry : g);
+    }
+    // Links longer than 3 m (points of interest join streets up to ~40 m away) get nodes in between on
+    // the ground, so walkers follow it instead of a straight line over dips and through rises (a roof
+    // over the way, more than 1 m above both ends, is not the ground).
+    const keep = T.street | T.patrol | T.village | T.harbor;
+    for (let a = 0; a < n0; a++) {
+      for (const b of [...nav.nodes[a].edges]) {
+        if (b < a) continue;
+        const A0 = nav.nodes[a], B0 = nav.nodes[b];
+        const k = Math.ceil(Math.hypot(B0.x - A0.x, B0.z - A0.z) / 3);
+        if (k < 2) continue;
+        nav.unlink(a, b);
+        const top = Math.max(Y[a], Y[b]) + 1;
+        let prev = a;
+        for (let i = 1; i < k; i++) {
+          const x = A0.x + ((B0.x - A0.x) * i) / k, z = A0.z + ((B0.z - A0.z) * i) / k;
+          const id = nav.addNode(x, z, A0.tags & B0.tags & keep, 0);
+          const g = inp.ground(x, z);
+          Y[id] = g > top ? heightAt(x, z) : g;
+          nav.link(prev, id);
+          prev = id;
+        }
+        nav.link(prev, b);
+      }
+    }
+    this.nodeY = Float32Array.from(Y);
   }
 
   // ---------------------------------------------------------------------------
@@ -349,13 +482,39 @@ export class KyoshiLife {
       a.timer = this.rnd.range(4, 40);
       if (a.activity === 'drill') a.yaw = yard.yaw + Math.PI;
       else if (n.yaw !== undefined) a.yaw = n.yaw;
+      this.spread(a);
     }
   }
 
+  /**
+   * Someone staying at a shared spot (the beach, the statue, a well...) takes a place of their own
+   * around it instead of standing inside the others: a fixed spot per person on rings 0.9-2.3 m out,
+   * never on the water or a roof.
+   */
+  private spread(a: Agent): void {
+    const n = this.nav.nodes[a.node];
+    if (!(n.tags & SHARED)) return;
+    const k = this.agents.indexOf(a);
+    const ang = k * 2.399963, r = 0.9 + (k % 3) * 0.7;
+    const x = n.x + Math.cos(ang) * r, z = n.z + Math.sin(ang) * r;
+    const g = this.input.ground(x, z);
+    if (waterAt(x, z) || g - heightAt(x, z) > 2.5 || Math.abs(g - this.nodeY[a.node]) > 0.6) return;
+    a.x = x;
+    a.z = z;
+    a.y = g;
+  }
+
   private route(a: Agent, goal: number): void {
-    a.goal = goal;
     const p = this.nav.path(a.node, goal, this.tmpPath, this.prev);
-    a.path = p ? p.slice() : [goal];
+    if (!p) {
+      // No way there on the walking graph: wait and plan again, never a straight line across the
+      // bay or through the air.
+      a.activity = 'idle';
+      a.timer = 8 + this.rnd.range(0, 12);
+      return;
+    }
+    a.goal = goal;
+    a.path = p.slice();
     a.pi = 0;
     a.activity = 'walk';
   }
@@ -495,6 +654,7 @@ export class KyoshiLife {
             a.timer = 20 + this.rnd.range(0, 40);
             if (a.activity === 'drill') a.yaw = this.input.yard.yaw + Math.PI;
             else if (this.nav.nodes[a.node].yaw) a.yaw = this.nav.nodes[a.node].yaw;
+            this.spread(a);
           }
         }
         return;
