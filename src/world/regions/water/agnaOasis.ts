@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { Random } from '../../../core/Random';
+import { type TreeLook, treeHeight, treeMaterial, treeModel } from '../../env/VegetationModels';
 import type { Detail } from './agnaBuildings';
 import { block } from './agnaParts';
-import { boulder, flatDisc, flatRing, koi, mergeParts, roundTree } from './geometry';
+import { boulder, flatDisc, flatRing, koi, mergeParts } from './geometry';
 import { wtMat, wtWater } from './materials';
 import { L4, MOON_GATE, OASIS, OASIS_FALL_POOL, OASIS_ISLAND, OASIS_POND, OASIS_SLOT, OASIS_STREAM, inRect, type Rect } from './nwtLayout';
 import type { NwtKit } from './nwtKit';
@@ -247,8 +248,8 @@ export function buildOasis(k: NwtKit, det: Detail): void {
   }
 
   // Trees: blossoms and maples round the lawn, one on the island; shrubs and flower beds.
-  const blossom = flowerMaterial(k, '#f3b8cc'), maple = flowerMaterial(k, '#d8642e');
-  const trees: Array<[number, number, number, THREE.Material | 'leaf']> = [
+  const blossom: TreeLook = 'blossom', maple: TreeLook = 'maple';
+  const trees: Array<[number, number, number, TreeLook | 'leaf']> = [
     [ox0 + 6, oz0 + 15, 7.5, 'leaf'], [ox0 + 6, oz1 - 9, 8, blossom], [ox0 + 19, oz1 - 6, 6.5, 'leaf'], [ox0 + 14, oz0 + 24, 6, maple],
     [ox1 - 8, oz1 - 9, 8.5, 'leaf'], [ox1 - 15, oz0 + 8, 7, blossom], [ox1 - 6, oz0 + 22, 6.5, maple], [ox1 - 22, oz1 - 5, 6, 'leaf'],
     [I.x + 4.2, I.z - 3.6, 4.8, blossom],
@@ -256,12 +257,14 @@ export function buildOasis(k: NwtKit, det: Detail): void {
     [ox1 - 30, oz0 + 5, 5.5, blossom], [ox1 - 38, oz0 + 4.5, 6, 'leaf'], [ox0 + 26, oz0 + 5, 5, maple], [ox1 - 12, oz0 + 16, 6, 'leaf'],
     [ox1 - 18, oz1 - 14, 5.5, blossom], [ox0 + 30, oz1 - 4.5, 5, blossom], [ox1 - 26, oz1 - 5, 5.5, 'leaf'], [ox0 + 5, oz0 + 30, 5.5, maple],
   ];
+  // The world's tree models (two shapes each), instanced and scaled to height.
+  const up = new THREE.Vector3(0, 1, 0);
   trees.forEach(([x, z, h, foliage], i) => {
-    const [trunk, crown] = roundTree(900 + i, h);
-    cb.mesh(wtMat('wood'), trunk, { x, y: L4, z, yaw: rnd.range(0, 6) });
-    cb.mesh(foliage === 'leaf' ? wtMat('leaf') : foliage, crown, { x, y: L4, z, yaw: rnd.range(0, 6) });
-    trunk.dispose();
-    crown.dispose();
+    const look: TreeLook = foliage === 'leaf' ? 'broadleaf' : foliage;
+    const v = i % 2;
+    const s = h / treeHeight(look, v);
+    const m = new THREE.Matrix4().compose(new THREE.Vector3(x, L4, z), new THREE.Quaternion().setFromAxisAngle(up, rnd.range(0, 6)), new THREE.Vector3(s, s, s));
+    cb.instance(`oasis_tree_${look}_${v}`, () => treeModel(look, v).geo, treeMaterial(), m);
     cb.collider({ shape: 'cylinder', x, y: L4 + h * 0.25, z, r: h * 0.06 + 0.1, hy: h * 0.25, walkable: false, solid: true, surface: 'wood' });
   });
   const flowers = ['#f7f2e8', '#f2c94c', '#e86f8e', '#b98ae6'].map((c) => flowerMaterial(k, c));

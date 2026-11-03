@@ -14,18 +14,12 @@ import {
   flameFinialGeo,
   hornGeo,
   mulberry,
-  palmFrondsGeo,
-  palmTrunkGeo,
-  pineCanopyGeo,
-  pineTrunkGeo,
   ringGeo,
   rockGeo,
   roofGeo,
-  roundCanopyGeo,
-  trunkGeo,
-  willowCanopyGeo,
 } from './geom';
-import { bannerMat, barkMat, emberGlowMat, goldMat, jungleMat, lacquerRedMat, mapleMat, palmMat, paperMat, pineMat, willowMat } from './materials';
+import { bannerMat, emberGlowMat, goldMat, jungleMat, lacquerRedMat, paperMat } from './materials';
+import { type TreeLook, treeHeight, treeMaterial, treeModel } from '../../env/VegetationModels';
 
 /**
  * Fire Nation architecture & prop assemblies on top of the shared kit
@@ -703,38 +697,21 @@ export function hangingLantern(b: ContentBuilder, o: { x: number; y: number; z: 
 
 export type TreeKind = 'pine' | 'willow' | 'maple' | 'palm' | 'jungle' | 'bush';
 
-/** Instanced tree (trunk + canopy) with a trunk collider. s = total height (m). */
+/** Instanced tree (the world's tree models; a jungle bush for 'bush') with a trunk collider. s = total height (m). */
 export function tree(b: ContentBuilder, kind: TreeKind, o: { x: number; y: number; z: number; s: number; yaw?: number; variant?: number; collide?: boolean }): void {
-  // Two shape variants per kind (each variant is one instanced draw call per layer).
+  // Two shape variants per kind (each variant is one instanced draw call).
   const v = (o.variant ?? 0) % 2;
   const yaw = o.yaw ?? 0;
   const m = new THREE.Matrix4().compose(new THREE.Vector3(o.x, o.y, o.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), new THREE.Vector3(o.s, o.s, o.s));
-  const seed = 100 + v * 17;
-  switch (kind) {
-    case 'pine':
-      b.instance(`fire_pine_trunk_${v}`, () => pineTrunkGeo(seed), barkMat(), m);
-      b.instance(`fire_pine_leaves_${v}`, () => pineCanopyGeo(seed), pineMat(), m);
-      break;
-    case 'willow':
-      b.instance(`fire_willow_trunk`, () => trunkGeo(), barkMat(), m);
-      b.instance(`fire_willow_leaves_${v}`, () => willowCanopyGeo(seed), willowMat(), m);
-      break;
-    case 'maple':
-      b.instance(`fire_maple_trunk`, () => trunkGeo(), barkMat(), m);
-      b.instance(`fire_maple_leaves_${v}`, () => roundCanopyGeo(seed), mapleMat(), m);
-      break;
-    case 'palm':
-      b.instance(`fire_palm_trunk_${v}`, () => palmTrunkGeo(seed), barkMat(), m);
-      b.instance(`fire_palm_fronds_${v}`, () => palmFrondsGeo(seed), palmMat(), m);
-      break;
-    case 'jungle':
-      b.instance(`fire_jungle_trunk`, () => trunkGeo(), barkMat(), m);
-      b.instance(`fire_jungle_leaves_${v}`, () => roundCanopyGeo(seed + 5), jungleMat(), m);
-      break;
-    case 'bush':
-      b.instance(`fire_bush_${v}`, () => bushGeo(seed), jungleMat(), m);
-      return;
+  if (kind === 'bush') {
+    b.instance(`fire_bush_${v}`, () => bushGeo(100 + v * 17), jungleMat(), m);
+    return;
   }
+  // The world's tree models (two shapes each), scaled so the tree stands o.s m tall.
+  const look: TreeLook = kind === 'pine' ? 'conifer' : kind;
+  const k = o.s / treeHeight(look, v);
+  const mt = new THREE.Matrix4().compose(new THREE.Vector3(o.x, o.y, o.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), new THREE.Vector3(k, k, k));
+  b.instance(`fire_tree_${look}_${v}`, () => treeModel(look, v).geo, treeMaterial(), mt);
   if (o.collide !== false) b.collider({ shape: 'cylinder', x: o.x, y: o.y + 1.5, z: o.z, r: Math.max(0.25, o.s * 0.035), hy: 1.5, walkable: false, solid: true });
 }
 

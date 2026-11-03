@@ -481,6 +481,7 @@ export class ContentBuilder {
     const built = new Map<string, THREE.InstancedMesh>();
     for (const [key, inst] of this.instances) {
       const im = new THREE.InstancedMesh(inst.geo, inst.mat, inst.matrices.length);
+      im.name = key;
       inst.matrices.forEach((m, i) => im.setMatrixAt(i, m));
       im.instanceMatrix.needsUpdate = true;
       im.castShadow = inst.castShadow;

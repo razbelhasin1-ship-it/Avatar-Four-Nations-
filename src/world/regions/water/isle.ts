@@ -4,8 +4,9 @@ import { Random } from '../../../core/Random';
 import { heightAt } from '../../Heightfield';
 import { defineSpots } from '../../Spots';
 import { TUTORIAL_SPAWN } from '../../WorldLayout';
+import { type TreeLook, treeHeight, treeMaterial, treeModel } from '../../env/VegetationModels';
 import { WaterRegion } from './base';
-import { boulder, brazier as brazierGeo, conifer, crystalCluster, flatDisc, flatRing, mergeParts, pillow, roundTree } from './geometry';
+import { boulder, brazier as brazierGeo, crystalCluster, flatDisc, flatRing, mergeParts, pillow } from './geometry';
 import { wtMat, wtWater } from './materials';
 import { drift, iceSpikes, V, WaterSheets, waterfall } from './parts';
 
@@ -472,27 +473,17 @@ export class MeditationIsle extends WaterRegion {
       [-1768, -1728, 'round', 6.5],
       [-1860, -1745, 'pine', 10],
     ];
-    const trunks: THREE.BufferGeometry[] = [];
-    const fol: THREE.BufferGeometry[] = [];
-    const round: THREE.BufferGeometry[] = [];
-    for (const [x, z, kind, h] of spots) {
+    // Firs and broadleaves (the world's tree models, two shapes each), instanced and scaled to height.
+    const up = new THREE.Vector3(0, 1, 0);
+    spots.forEach(([x, z, kind, h], i) => {
       const y = heightAt(x, z) - 0.1;
-      const [t, f] = kind === 'pine' ? conifer(Math.round(x * 7 + z), h) : roundTree(Math.round(x + z * 3), h);
-      t.translate(x, y, z);
-      f.translate(x, y, z);
-      trunks.push(t);
-      (kind === 'pine' ? fol : round).push(f);
+      const look: TreeLook = kind === 'pine' ? 'conifer' : 'broadleaf';
+      const v = i % 2;
+      const s = h / treeHeight(look, v);
+      const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromAxisAngle(up, rnd.range(0, Math.PI * 2)), new THREE.Vector3(s, s, s));
+      b.instance(`isle_tree_${look}_${v}`, () => treeModel(look, v).geo, treeMaterial(), m);
       b.collider({ shape: 'cylinder', x, y: y + 1.5, z, r: 0.45, hy: 1.5, walkable: false, solid: true });
-    }
-    const tg = mergeParts(trunks);
-    b.mesh(wtMat('wood'), tg, { x: 0, y: 0, z: 0 });
-    tg.dispose();
-    const fg = mergeParts(fol);
-    b.mesh(wtMatPine(), fg, { x: 0, y: 0, z: 0 });
-    fg.dispose();
-    const rg = mergeParts(round);
-    b.mesh(wtMat('leaf'), rg, { x: 0, y: 0, z: 0 });
-    rg.dispose();
+    });
     // Scattered small rocks and grass tufts around the meadows (decor, density follows foliage setting).
     const dens = Math.max(0.3, Math.min(1.5, this.ctx.settings.data.graphics.foliageDensity));
     const count = Math.round(40 * dens);
@@ -587,12 +578,6 @@ let cushionMat: THREE.MeshStandardMaterial | null = null;
 function wtMatCushion(): THREE.MeshStandardMaterial {
   cushionMat ??= new THREE.MeshStandardMaterial({ color: '#2f5f9e', roughness: 0.95 });
   return cushionMat;
-}
-
-let pineMat: THREE.MeshStandardMaterial | null = null;
-function wtMatPine(): THREE.MeshStandardMaterial {
-  pineMat ??= new THREE.MeshStandardMaterial({ color: '#2f5a33', roughness: 0.9, flatShading: true });
-  return pineMat;
 }
 
 export function createMeditationIsle(): MeditationIsle {

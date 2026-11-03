@@ -73,30 +73,9 @@ export function bannerDarkMat(): THREE.MeshStandardMaterial {
   return cached('banner_dark', () => new THREE.MeshStandardMaterial({ map: emblemBanner('#1e1514', '#c8321e', 'fire', '#c89a3a'), roughness: 0.92, side: THREE.DoubleSide }));
 }
 
-export function pineMat(): THREE.MeshStandardMaterial {
-  return cached('pine', () => new THREE.MeshStandardMaterial({ color: '#2c4a2c', roughness: 0.95, flatShading: true }));
-}
-
-export function willowMat(): THREE.MeshStandardMaterial {
-  return cached('willow', () => new THREE.MeshStandardMaterial({ color: '#6f9a46', roughness: 0.9, flatShading: true, side: THREE.DoubleSide }));
-}
-
-export function palmMat(): THREE.MeshStandardMaterial {
-  return cached('palm', () => new THREE.MeshStandardMaterial({ color: '#4f8a34', roughness: 0.85, side: THREE.DoubleSide, flatShading: true }));
-}
-
-/** Autumn-red ornamental tree (maple) foliage. */
-export function mapleMat(): THREE.MeshStandardMaterial {
-  return cached('maple', () => new THREE.MeshStandardMaterial({ color: '#b8402a', roughness: 0.9, flatShading: true }));
-}
-
 /** Jungle / overgrowth leaves (ruins). */
 export function jungleMat(): THREE.MeshStandardMaterial {
   return cached('jungle', () => new THREE.MeshStandardMaterial({ color: '#3d6b2a', roughness: 0.95, flatShading: true, side: THREE.DoubleSide }));
-}
-
-export function barkMat(): THREE.MeshStandardMaterial {
-  return cached('bark', () => new THREE.MeshStandardMaterial({ color: '#4a3424', roughness: 0.95 }));
 }
 
 /** Clipped lawn / garden moss. */

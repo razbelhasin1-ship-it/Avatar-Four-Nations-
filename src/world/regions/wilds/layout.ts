@@ -196,12 +196,14 @@ export const BADGER = (() => {
 
 // ---------------------------------------------------------------------------
 // Road crossings (computed from the road/river runtimes, see tests/tools/wilds_probe.test.ts):
-//   northern_road × great_river  s ≈ 1030..1087  (114,-493)→(150,-447), water 11.6
+//   northern_road × great_river  s ≈ 898..955    (114,-493)→(150,-447), water 11.6
 //   western_road  × great_river  s ≈ 0..11.5     road starts in the river at (240,60)
+// Northern-road arc lengths start at Agna Qel'a's gate (the road's north end since the city was
+// rebuilt): re-routing that end moves every placement along the road, the bridge included.
 // ---------------------------------------------------------------------------
 
 export const BRIDGES = (() => {
-  const nA = roadPoint('northern_road', 1014), nC = roadPoint('northern_road', 1102);
+  const nA = roadPoint('northern_road', 882), nC = roadPoint('northern_road', 970);
   const wC = roadPoint('western_road', 24);
   // western_road extended backwards past its start (east bank).
   const w0 = ROADS.find((r) => r.id === 'western_road')!.points;
@@ -219,7 +221,7 @@ export const BRIDGES = (() => {
 // ---------------------------------------------------------------------------
 
 export const INNS = [
-  { id: 'north', name: 'Frostpine Inn', road: 'northern_road', s: 470, lat: -17 },
+  { id: 'north', name: 'Frostpine Inn', road: 'northern_road', s: 338, lat: -17 },
   { id: 'west', name: 'Willow Tea House', road: 'western_road', s: 380, lat: 16 },
   { id: 'south', name: 'Dusty Lantern Inn', road: 'southern_road', s: 520, lat: -16 },
 ].map((d) => {
@@ -230,7 +232,7 @@ export const INNS = [
 
 export const FARMS = [
   { id: 'west', road: 'western_road', s: 640, lat: -34, seed: 11 },
-  { id: 'north', road: 'northern_road', s: 1215, lat: 30, seed: 12 },
+  { id: 'north', road: 'northern_road', s: 1083, lat: 30, seed: 12 },
   { id: 'south', road: 'southern_road', s: 150, lat: 32, seed: 13 },
 ].map((d) => {
   const p = roadPoint(d.road, d.s, d.lat);
@@ -239,7 +241,7 @@ export const FARMS = [
 });
 
 export const SHRINES = [
-  { id: 'north', road: 'northern_road', s: 760, lat: 9 },
+  { id: 'north', road: 'northern_road', s: 628, lat: 9 },
   { id: 'west', road: 'western_road', s: 860, lat: -9 },
   { id: 'south', road: 'southern_road', s: 1180, lat: 9 },
 ].map((d) => {

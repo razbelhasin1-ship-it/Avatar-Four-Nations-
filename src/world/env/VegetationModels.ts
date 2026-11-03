@@ -132,17 +132,23 @@ class GeoBuilder {
     }
   }
 
-  /** Cone with a jittered, drooping rim (conifer tiers). */
-  cone(baseY: number, apexY: number, r: number, seg: number, cBase: THREE.Color, cTip: THREE.Color, w0: number, w1: number, rng: Random, droop = 0.25, snow: THREE.Color | null = null): void {
+  /**
+   * Cone with a jittered, drooping rim (conifer tiers). With `notch` < 1 the rim is a star: even
+   * vertices are branch tips (full radius, drooping, the lighter `cTip`), odd ones notches between
+   * the branches (`notch` × radius, tucked up, the darker `cBase`).
+   */
+  cone(baseY: number, apexY: number, r: number, seg: number, cBase: THREE.Color, cTip: THREE.Color, w0: number, w1: number, rng: Random, droop = 0.25, snow: THREE.Color | null = null, notch = 1): void {
     const base = this.pos.length / 3;
     const slope = r / (apexY - baseY);
+    const star = notch < 1;
     for (let s = 0; s < seg; s++) {
-      const ang = (s / seg) * Math.PI * 2 + rng.range(-0.15, 0.15);
-      const rr = r * rng.range(0.82, 1.12);
+      const point = !star || s % 2 === 0;
+      const ang = (s / seg) * Math.PI * 2 + rng.range(-0.15, 0.15) * (star ? 0.35 : 1);
+      const rr = point ? r * rng.range(0.82, 1.12) : r * notch * rng.range(0.9, 1.05);
       const dx = Math.cos(ang), dz = Math.sin(ang);
       const ny = slope;
-      const y = baseY - droop * rng.range(0.5, 1.2);
-      this.vertex(dx * rr, y, dz * rr, dx, ny, dz, cBase, w0, 1);
+      const y = point ? baseY - droop * rng.range(0.5, 1.2) : baseY + (apexY - baseY) * 0.14;
+      this.vertex(dx * rr, y, dz * rr, dx, ny, dz, star && point ? cTip : cBase, w0, 1);
     }
     const apex = this.vertex(0, apexY, 0, 0, 1, 0, snow ?? cTip, w1, snow ? 0.3 : 1);
     // Mid ring so snow can sit on the upper half.
@@ -159,8 +165,8 @@ class GeoBuilder {
       this.tri(base + s1, mid + s, mid + s1);
       this.tri(mid + s, apex, mid + s1);
     }
-    // Underside (dark) so tiers read from below.
-    const under = this.vertex(0, baseY + (apexY - baseY) * 0.15, 0, 0, -1, 0, tmpC.copy(cBase).multiplyScalar(0.45), w0, 1);
+    // Underside (darker) so tiers read from below.
+    const under = this.vertex(0, baseY + (apexY - baseY) * 0.15, 0, 0, -1, 0, tmpC.copy(cBase).multiplyScalar(star ? 0.62 : 0.45), w0, 1);
     for (let s = 0; s < seg; s++) this.tri(base + (s + 1) % seg, under, base + s);
   }
 
@@ -168,7 +174,7 @@ class GeoBuilder {
    * Noise-displaced icosphere blob. Normals point away from `nc` (canopy centre)
    * blended with the blob normal — the classic soft stylised foliage look.
    */
-  blob(center: THREE.Vector3, radii: THREE.Vector3, detail: number, seed: number, jitter: number, colorFn: (p: THREE.Vector3, n: THREE.Vector3) => THREE.Color, wind: number, tint: number, nc: THREE.Vector3 | null = null, flat = false): void {
+  blob(center: THREE.Vector3, radii: THREE.Vector3, detail: number, seed: number, jitter: number, colorFn: (p: THREE.Vector3, n: THREE.Vector3) => THREE.Color, wind: number, tint: number, nc: THREE.Vector3 | null = null, flat = false, upBias = 0): void {
     const geo = new THREE.IcosahedronGeometry(1, detail);
     const p = geo.getAttribute('position');
     const tmp = new THREE.Vector3();
@@ -203,6 +209,8 @@ class GeoBuilder {
           nrm.copy(v).sub(nc ?? center).normalize();
           const own = tmp.clone().normalize();
           nrm.lerp(own, nc ? 0.35 : 1).normalize();
+          // Leaf clumps: turn normals a little skyward so undersides catch sky light, not go black.
+          if (upBias) nrm.setY(nrm.y + upBias).normalize();
           const col = colorFn(v, nrm);
           id = this.vertex(v.x, v.y, v.z, nrm.x, nrm.y, nrm.z, col, wind, tint);
           map.set(key, id);
@@ -245,6 +253,17 @@ class GeoBuilder {
     }
   }
 
+  /** A two-sided triangle (a palm leaflet), its normal turned to face up. */
+  leaflet(a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, col: THREE.Color, wind: number): void {
+    const n = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).normalize();
+    if (n.y < 0) n.negate();
+    const ia = this.vertex(a.x, a.y, a.z, n.x, n.y, n.z, col, wind * 0.85, 1);
+    const ib = this.vertex(b.x, b.y, b.z, n.x, n.y, n.z, col, wind * 0.85, 1);
+    const ic = this.vertex(c.x, c.y, c.z, n.x, n.y, n.z, col, wind, 1);
+    this.tri(ia, ib, ic);
+    this.tri(ia, ic, ib);
+  }
+
   build(): THREE.BufferGeometry {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
@@ -276,131 +295,349 @@ function foliageColor(dark: THREE.Color, mid: THREE.Color, light: THREE.Color, t
 
 type LODs = [THREE.BufferGeometry, THREE.BufferGeometry, THREE.BufferGeometry | null];
 
-function broadleaf(): LODs {
-  const trunk0 = lin('#4f3a2b'), trunk1 = lin('#6f5642');
-  const dark = lin('#29421c'), mid = lin('#4c7a2c'), light = lin('#8bb64e');
-  const build = (lod: number): THREE.BufferGeometry => {
-    const g = new GeoBuilder();
-    const rng = new Random(11);
-    const seg = lod === 0 ? 7 : lod === 1 ? 5 : 4;
-    g.tube(V(0, -0.4, 0), V(0.15, 3.4, 0.05), 0.34, 0.17, seg, trunk0, trunk1, 0, 0.15, 0, lod === 0 ? 3 : 1);
-    if (lod === 0) {
-      g.tube(V(0.1, 2.6, 0), V(1.3, 4.0, 0.4), 0.12, 0.05, 5, trunk1, trunk1, 0.1, 0.45);
-      g.tube(V(0.1, 2.8, 0), V(-1.1, 4.2, -0.5), 0.11, 0.05, 5, trunk1, trunk1, 0.1, 0.45);
-      g.tube(V(0.1, 3.0, 0), V(0.2, 4.4, -1.2), 0.1, 0.05, 5, trunk1, trunk1, 0.1, 0.45);
-    }
-    const nc = V(0.1, 4.6, 0);
-    const col = foliageColor(dark, mid, light, 6.8, 2.6);
-    const blobs = lod === 2 ? [[0.1, 4.7, 0, 2.6]] : [[0.1, 4.9, 0, 2.1], [1.5, 4.3, 0.5, 1.5], [-1.4, 4.4, -0.4, 1.5], [0.3, 4.2, -1.5, 1.4], [-0.3, 4.0, 1.5, 1.4], [0.9, 5.7, -0.6, 1.3], [-0.8, 5.6, 0.7, 1.2]];
-    const det = lod === 0 ? 2 : 1;
-    for (const [x, y, z, r] of blobs) {
-      g.blob(V(x, y, z), V(r, r * 0.85, r), lod === 2 ? 1 : det, rng.range(0, 100), 0.18, col, 0.8, 1, nc);
-    }
-    return g.build();
+// ---------------------------------------------------------------------------
+// Trees: a branching skeleton (trunk with root flares, limbs, twigs) carrying a
+// crown of many small leaf clumps, each its own shade, with gaps between them,
+// so a tree reads as a tree near and far (LOD1/LOD2 keep the silhouette with
+// fewer, bigger clumps). The same builders make the region trees (treeModel).
+// ---------------------------------------------------------------------------
+
+const TAU = Math.PI * 2;
+
+interface Pal {
+  dark: THREE.Color;
+  mid: THREE.Color;
+  light: THREE.Color;
+  /** Some clumps lean toward this (sun-yellowed, paler or blushing leaves). */
+  accent: THREE.Color;
+  bark0: THREE.Color;
+  bark1: THREE.Color;
+}
+
+const pal = (dark: string, mid: string, light: string, accent: string, bark0: string, bark1: string): Pal => ({
+  dark: lin(dark),
+  mid: lin(mid),
+  light: lin(light),
+  accent: lin(accent),
+  bark0: lin(bark0),
+  bark1: lin(bark1),
+});
+
+const PALETTES = {
+  broadleaf: pal('#2c4a20', '#4b7d30', '#8fbf55', '#a9bb4c', '#5e4835', '#866c52'),
+  broadleaf_light: pal('#38592a', '#5d9140', '#a6cf6c', '#c4c95c', '#5a4533', '#806850'),
+  maple: pal('#7a2c16', '#c75a2a', '#f19445', '#e9b84f', '#4c392d', '#6a5243'),
+  jungle: pal('#1d3a1b', '#35672b', '#6f9f44', '#5f8f36', '#4d4936', '#6c6650'),
+  blossom: pal('#b45b80', '#ec9dbc', '#ffe1ec', '#fff3f6', '#4a3530', '#6a5149'),
+  acacia: pal('#3b4c20', '#667a30', '#a5b25a', '#b9aa50', '#5b4a37', '#7d6851'),
+  willow: pal('#30502a', '#5b893c', '#a0c66a', '#bcd27c', '#57483a', '#776351'),
+  banyan: pal('#22381b', '#3f5f2a', '#78983f', '#8a9a46', '#55503f', '#77705a'),
+  mangrove: pal('#253b1d', '#46652c', '#7f9d47', '#90a050', '#4f4436', '#6d5f4b'),
+  cypress: pal('#1d3523', '#2f5636', '#5c8a55', '#6e8f4e', '#4e3b2e', '#6a5240'),
+  bush: pal('#26401b', '#467130', '#86ad4c', '#9fb24a', '#4a3a2c', '#4a3a2c'),
+  bush_dry: pal('#4d4a2a', '#7c7440', '#a8a060', '#b4a254', '#4a3a2c', '#4a3a2c'),
+  bush_snow: pal('#27401b', '#4a7330', '#eef4f9', '#f4f8fb', '#4a3a2c', '#4a3a2c'),
+};
+
+const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
+
+/** A clump's colour: never black underneath, lit on top, mottled; `shade` and `accent` vary per clump. */
+function clumpColor(p: Pal, shade: number, accent: number, top: number, bottom: number) {
+  const out = new THREE.Color();
+  return (v: THREE.Vector3, n: THREE.Vector3): THREE.Color => {
+    const h = clamp01((v.y - bottom) / Math.max(0.01, top - bottom));
+    const up = Math.max(0, n.y);
+    const mott = noise3.noise3(v.x * 0.85, v.y * 0.85, v.z * 0.85);
+    out.copy(p.dark).lerp(p.mid, 0.4 + 0.6 * clamp01(h * 1.1 + up * 0.35 + mott * 0.15));
+    out.lerp(p.light, clamp01(up * 0.55 + h * 0.3 - 0.28 + mott * 0.12));
+    if (accent > 0) out.lerp(p.accent, accent);
+    return out.multiplyScalar(shade);
   };
-  return [build(0), build(1), build(2)];
+}
+
+/** Clumps scattered over an ellipsoidal crown (the first one crowns the top). */
+function crownClumps(g: GeoBuilder, rng: Random, p: Pal, c: THREE.Vector3, rad: number, h: number, count: number, r: [number, number], flat: number, det: number, wind = 0.65): void {
+  const top = c.y + h * 0.5 + r[1] * flat, bottom = c.y - h * 0.5 - r[1] * flat;
+  const nc = V(c.x, c.y - h * 0.3, c.z);
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * TAU + rng.range(-0.3, 0.3);
+    const d = i === 0 ? 0 : rad * Math.sqrt(rng.range(0.25, 1));
+    const pos = i === 0 ? V(c.x, c.y + h * 0.35, c.z) : V(c.x + Math.cos(a) * d, c.y + rng.range(-0.5, 0.5) * h, c.z + Math.sin(a) * d);
+    const rr = rng.range(r[0], r[1]);
+    const col = clumpColor(p, rng.range(0.88, 1.08), rng.next() < 0.25 ? rng.range(0.15, 0.3) : 0, top, bottom);
+    g.blob(pos, V(rr, rr * flat, rr), det, rng.range(0, 99), 0.28, col, wind, 1, nc, false, 0.3);
+  }
+}
+
+interface Limb {
+  a: THREE.Vector3;
+  b: THREE.Vector3;
+  twigs: Array<{ a: THREE.Vector3; b: THREE.Vector3 }>;
+}
+
+/** How a leafy tree grows. */
+interface Form {
+  trunkR: number;
+  /** Where the trunk divides into limbs. */
+  forkY: number;
+  limbs: number;
+  /** A leader limb carrying on straight up. */
+  leader: boolean;
+  /** Limb elevation above the horizontal (rad) and length (m). */
+  elev: [number, number];
+  len: [number, number];
+  /** Sub-branches per limb and their length. */
+  twigs: number;
+  twigLen: [number, number];
+  roots: number;
+  /** Leaf clump radius, flattening (height / width) and filler clumps between the tips. */
+  clump: [number, number];
+  flat: number;
+  fill: number;
+  /** Weeping: clumps hang below the branch tips. */
+  weep?: boolean;
+}
+
+const FORMS = {
+  broadleaf: { trunkR: 0.36, forkY: 2.6, limbs: 4, leader: true, elev: [0.55, 0.95], len: [2.0, 2.7], twigs: 3, twigLen: [0.9, 1.4], roots: 5, clump: [0.85, 1.25], flat: 0.8, fill: 5 },
+  maple: { trunkR: 0.32, forkY: 2.2, limbs: 4, leader: true, elev: [0.6, 1.0], len: [1.8, 2.4], twigs: 2, twigLen: [0.9, 1.3], roots: 4, clump: [0.95, 1.3], flat: 0.85, fill: 4 },
+  jungle: { trunkR: 0.42, forkY: 3.4, limbs: 5, leader: true, elev: [0.45, 0.85], len: [2.4, 3.1], twigs: 3, twigLen: [1.1, 1.6], roots: 6, clump: [1.05, 1.5], flat: 0.72, fill: 6 },
+  blossom: { trunkR: 0.27, forkY: 1.7, limbs: 3, leader: false, elev: [0.5, 0.95], len: [1.6, 2.2], twigs: 2, twigLen: [0.8, 1.2], roots: 4, clump: [0.85, 1.2], flat: 0.72, fill: 3 },
+  acacia: { trunkR: 0.26, forkY: 1.7, limbs: 4, leader: false, elev: [0.55, 0.85], len: [2.6, 3.3], twigs: 1, twigLen: [1.0, 1.5], roots: 3, clump: [1.1, 1.6], flat: 0.3, fill: 3 },
+  willow: { trunkR: 0.34, forkY: 2.4, limbs: 5, leader: true, elev: [0.35, 0.75], len: [2.2, 2.9], twigs: 2, twigLen: [1.0, 1.5], roots: 4, clump: [0.8, 1.15], flat: 0.85, fill: 3, weep: true },
+} satisfies Record<string, Form>;
+
+/** The branching (the same for every LOD, so the silhouettes match). */
+function skeleton(f: Form, rng: Random): { fork: THREE.Vector3; limbs: Limb[] } {
+  const fork = V(rng.range(-0.25, 0.25), f.forkY, rng.range(-0.25, 0.25));
+  const limbs: Limb[] = [];
+  const a0 = rng.range(0, TAU);
+  const n = f.limbs + (f.leader ? 1 : 0);
+  for (let i = 0; i < n; i++) {
+    const lead = f.leader && i === n - 1;
+    const yaw = a0 + (i / f.limbs) * TAU + rng.range(-0.35, 0.35);
+    const el = lead ? rng.range(1.25, 1.45) : rng.range(f.elev[0], f.elev[1]);
+    const len = rng.range(f.len[0], f.len[1]) * (lead ? 0.85 : 1);
+    const dir = V(Math.cos(el) * Math.cos(yaw), Math.sin(el), Math.cos(el) * Math.sin(yaw));
+    const a = fork.clone().add(V(0, lead ? 0 : -rng.range(0, f.forkY * 0.15), 0));
+    const b = a.clone().addScaledVector(dir, len);
+    const twigs: Limb['twigs'] = [];
+    for (let k = 0; k < f.twigs; k++) {
+      const s = a.clone().lerp(b, rng.range(0.5, 0.85));
+      const ty = yaw + (k % 2 ? 1 : -1) * rng.range(0.55, 1.0);
+      const te = Math.min(1.4, (f.weep ? -0.15 : el) + rng.range(0.05, 0.4));
+      const tl = rng.range(f.twigLen[0], f.twigLen[1]);
+      twigs.push({ a: s, b: s.clone().addScaledVector(V(Math.cos(te) * Math.cos(ty), Math.sin(te), Math.cos(te) * Math.sin(ty)), tl) });
+    }
+    limbs.push({ a, b, twigs });
+  }
+  return { fork, limbs };
+}
+
+/** A leafy tree (broadleaf, maple, blossom, acacia, willow...): skeleton + clump crown, by LOD. */
+function leafy(f: Form, p: Pal, seed: number, lod: number): THREE.BufferGeometry {
+  const g = new GeoBuilder();
+  const rng = new Random(seed);
+  const { fork, limbs } = skeleton(f, rng);
+  const seg = lod === 0 ? 7 : lod === 1 ? 5 : 4;
+  // Trunk (a little swell at the foot) and root flares.
+  g.tube(V(0, -0.4, 0), fork, f.trunkR, f.trunkR * 0.7, seg, p.bark0, p.bark1, 0, 0.12, 0, lod === 0 ? 3 : 1);
+  if (lod === 0) {
+    for (let i = 0; i < f.roots; i++) {
+      const a = (i / f.roots) * TAU + rng.range(-0.3, 0.3);
+      g.tube(V(Math.cos(a) * f.trunkR * 0.3, 0.8, Math.sin(a) * f.trunkR * 0.3), V(Math.cos(a) * f.trunkR * 2.5, -0.3, Math.sin(a) * f.trunkR * 2.5), f.trunkR * 0.55, f.trunkR * 0.16, 4, p.bark0, p.bark0, 0, 0);
+    }
+  }
+  // Limbs and twigs (by LOD); their ends carry the crown.
+  const tips: THREE.Vector3[] = [];
+  for (const l of limbs) {
+    if (lod < 2) g.tube(l.a, l.b, f.trunkR * 0.5, f.trunkR * 0.22, lod === 0 ? 5 : 4, p.bark1, p.bark1, 0.12, 0.42);
+    tips.push(l.b);
+    for (const t of l.twigs) {
+      if (lod === 0) g.tube(t.a, t.b, f.trunkR * 0.2, f.trunkR * 0.07, 4, p.bark1, p.bark1, 0.35, 0.6);
+      tips.push(t.b);
+    }
+  }
+  // The crown's envelope.
+  const c = V(0, 0, 0);
+  for (const t of tips) c.add(t);
+  c.multiplyScalar(1 / tips.length);
+  let top = -Infinity, bottom = Infinity, rad = 0;
+  for (const t of tips) {
+    top = Math.max(top, t.y);
+    bottom = Math.min(bottom, t.y);
+    rad = Math.max(rad, Math.hypot(t.x - c.x, t.z - c.z));
+  }
+  const rMax = f.clump[1];
+  top += rMax * f.flat;
+  bottom -= rMax * f.flat * (f.weep ? 2.2 : 1);
+  const clumps: Array<[THREE.Vector3, number]> = [];
+  if (lod === 0) {
+    for (const t of tips) clumps.push([t.clone(), rng.range(f.clump[0], f.clump[1])]);
+    for (let i = 0; i < f.fill; i++) {
+      const a = rng.range(0, TAU), up = rng.range(-0.2, 0.8);
+      clumps.push([V(c.x + Math.cos(a) * rad * 0.65, c.y + up * Math.max(0.5, top - c.y) * 0.6, c.z + Math.sin(a) * rad * 0.65), rng.range(f.clump[0], f.clump[1]) * 0.9]);
+    }
+  } else if (lod === 1) {
+    for (const l of limbs) {
+      const m = l.b.clone();
+      for (const t of l.twigs) m.add(t.b);
+      m.multiplyScalar(1 / (1 + l.twigs.length));
+      clumps.push([m, rMax * (l.twigs.length ? 1.45 : 1.1)]);
+    }
+  } else {
+    clumps.push([V(c.x, c.y + rMax * 0.2, c.z), rad + rMax * 0.9]);
+  }
+  const nc = V(c.x, c.y - rMax * 0.3, c.z);
+  for (const [pos, r] of clumps) {
+    const shade = rng.range(0.88, 1.08), acc = rng.next() < 0.25 ? rng.range(0.15, 0.35) : 0;
+    const ry = r * f.flat * (f.weep ? 1.6 : 1);
+    const centre = f.weep ? pos.clone().add(V(0, -ry * 0.55, 0)) : pos.clone().add(V(0, ry * 0.25, 0));
+    g.blob(centre, V(r, ry, r), lod === 2 ? 0 : 1, rng.range(0, 99), 0.28, clumpColor(p, shade, acc, top, bottom), 0.7, 1, nc, false, 0.3);
+  }
+  return g.build();
+}
+
+const leafyLods = (f: Form, p: Pal, seed: number): LODs => [leafy(f, p, seed, 0), leafy(f, p, seed, 1), leafy(f, p, seed, 2)];
+
+function broadleaf(): LODs {
+  return leafyLods(FORMS.broadleaf, PALETTES.broadleaf, 11);
+}
+
+function blossom(): LODs {
+  return leafyLods(FORMS.blossom, PALETTES.blossom, 51);
+}
+
+function acacia(): LODs {
+  return leafyLods(FORMS.acacia, PALETTES.acacia, 71);
+}
+
+/** A fir: a tapering trunk through tiers of drooping, star-edged branch whorls (snow on their tops). */
+function coniferLod(snow: boolean, lod: number, seed: number): THREE.BufferGeometry {
+  const trunk0 = lin('#4f3b2c'), trunk1 = lin('#6b5140');
+  const inner = snow ? lin('#22402e') : lin('#1e3f28'), tip = snow ? lin('#3c6b4a') : lin('#3d7a47');
+  const snowC = snow ? lin('#eef4fb') : null;
+  const g = new GeoBuilder();
+  const rng = new Random(seed);
+  g.tube(V(0, -0.4, 0), V(0, 10.4, 0), 0.3, 0.05, lod === 0 ? 7 : 5, trunk0, trunk1, 0, 0.3, 0, lod === 0 ? 2 : 1);
+  const tiers = lod === 0 ? 8 : lod === 1 ? 5 : 3;
+  const points = lod === 0 ? 9 : lod === 1 ? 7 : 6;
+  const stretch = Math.pow(8 / tiers, 0.4);
+  for (let i = 0; i < tiers; i++) {
+    const t = i / (tiers - 1);
+    const y0 = 1.3 + t * 7.2;
+    const shade = rng.range(0.92, 1.08);
+    g.cone(y0, y0 + (3.0 - t * 1.5) * stretch, 2.7 - t * 2.15, points * 2, inner.clone().multiplyScalar(shade), tip.clone().multiplyScalar(shade), 0.25 + t * 0.3, 0.5 + t * 0.4, rng, lod === 0 ? 0.55 : 0.35, snowC, 0.55);
+  }
+  return g.build();
 }
 
 function conifer(snow: boolean): LODs {
-  const trunk0 = lin('#4a372a'), trunk1 = lin('#5d4535');
-  const base = snow ? lin('#2f4b38') : lin('#2a4c34'), tip = snow ? lin('#46694c') : lin('#4c7d50');
-  const snowC = snow ? lin('#eef4fb') : null;
-  const build = (lod: number): THREE.BufferGeometry => {
-    const g = new GeoBuilder();
-    const rng = new Random(snow ? 23 : 21);
-    g.tube(V(0, -0.4, 0), V(0, 9.5, 0), 0.28, 0.06, lod === 0 ? 6 : 4, trunk0, trunk1, 0, 0.3, 0, 1);
-    const tiers = lod === 0 ? 5 : lod === 1 ? 3 : 1;
-    const seg = lod === 0 ? 9 : lod === 1 ? 7 : 6;
-    for (let i = 0; i < tiers; i++) {
-      const t = tiers === 1 ? 0 : i / (tiers - 1);
-      const y0 = tiers === 1 ? 1.6 : 1.6 + t * 6.2;
-      const h = tiers === 1 ? 9.6 : 3.4 - t * 1.4;
-      const r = tiers === 1 ? 2.3 : 2.5 - t * 1.75;
-      g.cone(y0, y0 + h, r, seg, base, tip, 0.25 + t * 0.3, 0.5 + t * 0.4, rng, lod === 0 ? 0.35 : 0.2, snowC);
+  const seed = snow ? 23 : 21;
+  return [coniferLod(snow, 0, seed), coniferLod(snow, 1, seed), coniferLod(snow, 2, seed)];
+}
+
+/** A palm: a ringed, curving trunk and arching fronds of leaflets combed out both sides. */
+function palmLod(lod: number, seed: number): THREE.BufferGeometry {
+  const ringA = lin('#8d7352'), ringB = lin('#a88d68');
+  const f0 = lin('#3a6d26'), f1 = lin('#82b648'), ribC = lin('#8f8a45');
+  const g = new GeoBuilder();
+  const rng = new Random(seed);
+  const n = lod === 0 ? 12 : lod === 1 ? 6 : 4;
+  const bend = rng.range(1.0, 1.5);
+  const pts: THREE.Vector3[] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    pts.push(V(Math.sin(t * 1.4) * bend, -0.3 + t * 7.4, 0));
+  }
+  for (let i = 0; i < n; i++) {
+    const c = lod === 0 && i % 2 ? ringB : ringA;
+    const r0 = 0.27 - (i / n) * 0.08 + (lod === 0 && i === 0 ? 0.08 : 0), r1 = 0.27 - ((i + 1) / n) * 0.08;
+    g.tube(pts[i], pts[i + 1], r0, r1, lod === 0 ? 7 : 5, c, lod === 0 ? c : ringB, (i / n) * 0.4, ((i + 1) / n) * 0.4, 0, 1);
+  }
+  const top = pts[n];
+  g.blob(top.clone().add(V(0, 0.1, 0)), V(0.34, 0.42, 0.34), 0, seed, 0.1, () => tmpC.copy(f0).multiplyScalar(0.8), 0.45, 0.6);
+  const fronds = lod === 0 ? 11 : lod === 1 ? 8 : 6;
+  const col = new THREE.Color();
+  for (let k = 0; k < fronds; k++) {
+    const a = (k / fronds) * TAU + rng.range(-0.2, 0.2);
+    const dir = V(Math.cos(a), 0, Math.sin(a));
+    const side = V(-dir.z, 0, dir.x);
+    const L = rng.range(3.2, 4.0), lift = rng.range(0.6, 1.1);
+    const m = lod === 0 ? 10 : 5;
+    const rib: THREE.Vector3[] = [];
+    for (let i = 0; i <= m; i++) {
+      const t = i / m;
+      rib.push(top.clone().addScaledVector(dir, t * L).add(V(0, lift * Math.sin(t * Math.PI * 0.55) - t * t * 2.3, 0)));
     }
-    return g.build();
-  };
-  return [build(0), build(1), build(2)];
+    if (lod === 2) {
+      g.strip(rib, rib.map((_, i) => 0.1 + 0.5 * Math.sin((i / m) * Math.PI) * (1 - (i / m) * 0.3)), side, f0, f1, 0.5, 1.0, 1, -0.2);
+      continue;
+    }
+    // The rib, then leaflets combed out both sides (longest mid-frond), drooping.
+    g.strip(rib, rib.map(() => 0.035), side, ribC, ribC, 0.5, 1.0, 1, 0);
+    for (let i = 1; i < m; i++) {
+      const t = i / m;
+      const q = rib[i];
+      const along = rib[i + 1].clone().sub(q).normalize();
+      const len = (0.25 + 0.85 * Math.sin(t * Math.PI)) * (1 - t * 0.25);
+      col.copy(f0).lerp(f1, t * 0.8 + rng.range(0, 0.2));
+      for (const sd of [-1, 1]) {
+        const tipP = q.clone().addScaledVector(side, sd * len).addScaledVector(along, len * 0.45).add(V(0, -len * 0.35, 0));
+        g.leaflet(q, q.clone().addScaledVector(along, 0.16), tipP, col, 0.5 + t * 0.5);
+      }
+    }
+  }
+  return g.build();
 }
 
 function palm(): LODs {
-  const trunk0 = lin('#7a6247'), trunk1 = lin('#9a845e');
-  const f0 = lin('#3f7428'), f1 = lin('#86b44a');
-  const build = (lod: number): THREE.BufferGeometry => {
-    const g = new GeoBuilder();
-    // Curved trunk.
-    const pts: THREE.Vector3[] = [];
-    const n = lod === 0 ? 7 : 4;
-    for (let i = 0; i <= n; i++) {
-      const t = i / n;
-      pts.push(V(Math.sin(t * 1.4) * 1.3, -0.3 + t * 7.4, 0));
-    }
-    for (let i = 0; i < n; i++) g.tube(pts[i], pts[i + 1], 0.24 - i * 0.012, 0.23 - (i + 1) * 0.012, lod === 0 ? 6 : 4, trunk0, trunk1, i / n * 0.4, (i + 1) / n * 0.4, 0, 1);
-    const top = pts[n];
-    const fronds = lod === 0 ? 9 : lod === 1 ? 6 : 5;
-    for (let k = 0; k < fronds; k++) {
-      const a = (k / fronds) * Math.PI * 2 + 0.3;
-      const dir = V(Math.cos(a), 0, Math.sin(a));
-      const side = V(-dir.z, 0, dir.x);
-      const segs = lod === 0 ? 6 : 3;
-      const fp: THREE.Vector3[] = [];
-      const ws: number[] = [];
-      for (let i = 0; i <= segs; i++) {
-        const t = i / segs;
-        fp.push(top.clone().addScaledVector(dir, t * 3.6).add(V(0, 0.6 * Math.sin(t * Math.PI * 0.6) - t * t * 2.2, 0)));
-        ws.push(0.08 + 0.42 * Math.sin(t * Math.PI) * (1 - t * 0.3));
-      }
-      g.strip(fp, ws, side, f0, f1, 0.5, 1.0, 1, -0.15);
-    }
-    if (lod === 0) {
-      const nut = lin('#5a4a2c');
-      for (let k = 0; k < 3; k++) g.blob(top.clone().add(V(Math.cos(k * 2.1) * 0.3, -0.35, Math.sin(k * 2.1) * 0.3)), V(0.2, 0.22, 0.2), 0, k, 0.05, () => nut, 0.4, 0);
-    }
-    return g.build();
-  };
-  return [build(0), build(1), build(2)];
+  return [palmLod(0, 31), palmLod(1, 31), palmLod(2, 31)];
 }
 
 function banyan(): LODs {
-  const bark0 = lin('#4b4636'), bark1 = lin('#6a6450');
-  const dark = lin('#22331a'), mid = lin('#3e5a28'), light = lin('#6f8f3c');
+  const P = PALETTES.banyan;
   const build = (lod: number): THREE.BufferGeometry => {
     const g = new GeoBuilder();
     const rng = new Random(31);
-    g.tube(V(0, -0.5, 0), V(0.3, 6.5, 0.2), 1.3, 0.75, lod === 0 ? 10 : 6, bark0, bark1, 0, 0.1, 0, lod === 0 ? 3 : 1);
+    g.tube(V(0, -0.5, 0), V(0.3, 6.5, 0.2), 1.3, 0.75, lod === 0 ? 10 : 6, P.bark0, P.bark1, 0, 0.1, 0, lod === 0 ? 3 : 1);
     // Buttress roots.
     const roots = lod === 0 ? 7 : lod === 1 ? 5 : 0;
     for (let i = 0; i < roots; i++) {
-      const a = (i / roots) * Math.PI * 2 + rng.range(-0.2, 0.2);
-      g.tube(V(Math.cos(a) * 0.6, 1.8, Math.sin(a) * 0.6), V(Math.cos(a) * 2.6, -0.4, Math.sin(a) * 2.6), 0.45, 0.15, 5, bark1, bark0, 0, 0);
+      const a = (i / roots) * TAU + rng.range(-0.2, 0.2);
+      g.tube(V(Math.cos(a) * 0.6, 1.8, Math.sin(a) * 0.6), V(Math.cos(a) * 2.6, -0.4, Math.sin(a) * 2.6), 0.45, 0.15, 5, P.bark1, P.bark0, 0, 0);
     }
-    // Aerial roots dropping from the canopy.
+    // Spreading limbs and aerial roots dropping from the canopy.
+    if (lod < 2) {
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * TAU + rng.range(-0.3, 0.3);
+        g.tube(V(0.3, 5.8, 0.2), V(Math.cos(a) * 4, 7.6 + rng.range(-0.3, 0.5), Math.sin(a) * 4), 0.45, 0.2, lod === 0 ? 6 : 4, P.bark1, P.bark1, 0.1, 0.35);
+      }
+    }
     const aerial = lod === 0 ? 12 : lod === 1 ? 6 : 0;
     for (let i = 0; i < aerial; i++) {
-      const a = rng.range(0, Math.PI * 2);
+      const a = rng.range(0, TAU);
       const r = rng.range(2.6, 5.2);
-      g.tube(V(Math.cos(a) * r, 7.4, Math.sin(a) * r), V(Math.cos(a) * r * 1.05, -0.3, Math.sin(a) * r * 1.05), 0.08, 0.12, 4, bark1, bark0, 0.25, 0.05);
+      g.tube(V(Math.cos(a) * r, 7.4, Math.sin(a) * r), V(Math.cos(a) * r * 1.05, -0.3, Math.sin(a) * r * 1.05), 0.08, 0.12, 4, P.bark1, P.bark0, 0.25, 0.05);
     }
-    const nc = V(0, 8, 0);
-    const col = foliageColor(dark, mid, light, 10.5, 6.5);
-    const blobs = lod === 2 ? [[0, 8.4, 0, 5.6]] : [[0, 8.8, 0, 3.4], [3.2, 8.0, 0.8, 2.8], [-3.0, 8.2, -0.6, 2.9], [0.6, 8.1, 3.1, 2.7], [-0.8, 8.0, -3.2, 2.7], [2.3, 9.4, -2.1, 2.2], [-2.2, 9.5, 2.0, 2.2]];
-    for (const [x, y, z, r] of blobs) g.blob(V(x, y, z), V(r, r * 0.55, r), lod === 0 ? 2 : 1, rng.range(0, 99), 0.2, col, 0.55, 1, nc);
+    if (lod === 0) crownClumps(g, rng, P, V(0, 8.6, 0), 4.6, 1.6, 17, [1.6, 2.3], 0.55, 1, 0.55);
+    else if (lod === 1) crownClumps(g, rng, P, V(0, 8.6, 0), 4.2, 1.4, 7, [2.4, 3.0], 0.55, 1, 0.55);
+    else crownClumps(g, rng, P, V(0, 8.4, 0), 0, 0, 1, [5.6, 5.6], 0.5, 1, 0.55);
     return g.build();
   };
   return [build(0), build(1), build(2)];
 }
 
 function mangrove(): LODs {
-  const bark0 = lin('#4a4034'), bark1 = lin('#655846');
-  const dark = lin('#26391d'), mid = lin('#46642b'), light = lin('#7c9a44');
+  const P = PALETTES.mangrove;
   const build = (lod: number): THREE.BufferGeometry => {
     const g = new GeoBuilder();
     const rng = new Random(37);
-    g.tube(V(0, 0.4, 0), V(0.1, 4.2, 0), 0.24, 0.13, lod === 0 ? 6 : 4, bark0, bark1, 0.0, 0.25);
+    g.tube(V(0, 0.4, 0), V(0.1, 4.2, 0), 0.24, 0.13, lod === 0 ? 6 : 4, P.bark0, P.bark1, 0.0, 0.25);
     // Arching prop roots springing from the lower trunk and curving down into the mud.
     const roots = lod === 0 ? 11 : lod === 1 ? 6 : 4;
     for (let i = 0; i < roots; i++) {
-      const a = (i / roots) * Math.PI * 2 + rng.range(-0.25, 0.25);
+      const a = (i / roots) * TAU + rng.range(-0.25, 0.25);
       const r = rng.range(0.95, 1.75);
       const y0 = rng.range(0.9, 2.1);
       const ca = Math.cos(a), sa = Math.sin(a);
@@ -409,19 +646,121 @@ function mangrove(): LODs {
       const p2 = V(ca * r * 0.88, y0 * 0.5, sa * r * 0.88);
       const p3 = V(ca * r * 1.02, -0.45, sa * r * 1.02);
       const seg = lod === 0 ? 4 : 3;
-      g.tube(p0, p1, 0.075, 0.06, seg, bark1, bark1, 0.02, 0.02);
+      g.tube(p0, p1, 0.075, 0.06, seg, P.bark1, P.bark1, 0.02, 0.02);
       if (lod < 2) {
-        g.tube(p1, p2, 0.06, 0.055, seg, bark1, bark0, 0.02, 0);
-        g.tube(p2, p3, 0.055, 0.05, seg, bark0, bark0, 0, 0);
-      } else g.tube(p1, p3, 0.06, 0.05, seg, bark1, bark0, 0.02, 0);
+        g.tube(p1, p2, 0.06, 0.055, seg, P.bark1, P.bark0, 0.02, 0);
+        g.tube(p2, p3, 0.055, 0.05, seg, P.bark0, P.bark0, 0, 0);
+      } else g.tube(p1, p3, 0.06, 0.05, seg, P.bark1, P.bark0, 0.02, 0);
     }
-    const nc = V(0, 4.8, 0);
-    const col = foliageColor(dark, mid, light, 6.5, 3.6);
-    const blobs = lod === 2 ? [[0, 4.9, 0, 2.2]] : [[0, 5.0, 0, 1.7], [1.2, 4.5, 0.4, 1.3], [-1.1, 4.6, -0.5, 1.3], [0.2, 4.4, -1.3, 1.2], [-0.3, 4.4, 1.2, 1.2]];
-    for (const [x, y, z, r] of blobs) g.blob(V(x, y, z), V(r, r * 0.7, r), lod === 0 ? 2 : 1, rng.range(0, 99), 0.18, col, 0.7, 1, nc);
+    if (lod === 0) crownClumps(g, rng, P, V(0, 4.9, 0), 1.7, 0.9, 9, [0.85, 1.25], 0.68, 1, 0.7);
+    else if (lod === 1) crownClumps(g, rng, P, V(0, 4.9, 0), 1.4, 0.7, 4, [1.3, 1.6], 0.68, 1, 0.7);
+    else crownClumps(g, rng, P, V(0, 4.9, 0), 0, 0, 1, [2.2, 2.2], 0.7, 0, 0.7);
     return g.build();
   };
   return [build(0), build(1), build(2)];
+}
+
+/** A bush: a mound of small leaf clumps (snowy ones white on top, dry ones straw-coloured). */
+function bush(kind: 'green' | 'snow' | 'dry'): LODs {
+  const P = kind === 'snow' ? PALETTES.bush_snow : kind === 'dry' ? PALETTES.bush_dry : PALETTES.bush;
+  const build = (lod: number): THREE.BufferGeometry => {
+    const g = new GeoBuilder();
+    const rng = new Random(kind === 'snow' ? 83 : kind === 'dry' ? 85 : 81);
+    if (lod === 0) crownClumps(g, rng, P, V(0, 0.48, 0), 0.5, 0.22, 6, [0.36, 0.55], 0.8, 1, 0.6);
+    else if (lod === 1) crownClumps(g, rng, P, V(0, 0.48, 0), 0.42, 0.2, 3, [0.55, 0.72], 0.8, 1, 0.6);
+    else crownClumps(g, rng, P, V(0, 0.5, 0), 0, 0, 1, [0.95, 0.95], 0.78, 0, 0.6);
+    return g.build();
+  };
+  return [build(0), build(1), build(2)];
+}
+
+/** An Italian-style cypress (region scenery): a short trunk and a tall, tapering column of clumps. */
+function cypressLod(seed: number): THREE.BufferGeometry {
+  const p = PALETTES.cypress;
+  const g = new GeoBuilder();
+  const rng = new Random(seed);
+  g.tube(V(0, -0.3, 0), V(0, 2.0, 0), 0.22, 0.16, 6, p.bark0, p.bark1, 0, 0.1);
+  const n = 11;
+  for (let k = 0; k < n; k++) {
+    const t = k / (n - 1);
+    const y = 1.6 + t * 6.2;
+    const r = 0.95 - t * 0.6;
+    const a = rng.range(0, TAU), off = r * 0.25;
+    g.blob(V(Math.cos(a) * off, y, Math.sin(a) * off), V(r, r * 1.35, r), 1, rng.range(0, 99), 0.22, clumpColor(p, rng.range(0.9, 1.06), 0, 8.4, 1.0), 0.5 + t * 0.4, 1, V(0, y, 0), false, 0.2);
+  }
+  return g.build();
+}
+
+/** Region tree looks (treeModel): the world's species plus city kinds. */
+export type TreeLook = 'broadleaf' | 'broadleaf_light' | 'maple' | 'jungle' | 'blossom' | 'willow' | 'acacia' | 'cypress' | 'conifer' | 'pine_snow' | 'palm';
+
+/**
+ * A tree for region scenery (city gardens, the Meditation Isle): vertex coloured, base at the
+ * origin, which the caller owns (and disposes). `variant` reseeds the branching for another shape.
+ * `lod` 0 is the near model; 1 is the lighter mid-distance build of the same tree, for places with
+ * hundreds of trees in view (region trees have no distance LOD). Returns it with its height at
+ * scale 1 (m).
+ */
+export function treeModel(look: TreeLook, variant = 0, lod: 0 | 1 = 0): { geo: THREE.BufferGeometry; height: number } {
+  const seed = 101 + variant * 977;
+  let geo: THREE.BufferGeometry;
+  switch (look) {
+    case 'conifer':
+    case 'pine_snow':
+      geo = coniferLod(look === 'pine_snow', lod, seed);
+      break;
+    case 'palm':
+      geo = palmLod(lod, seed);
+      break;
+    case 'cypress':
+      geo = cypressLod(seed);
+      break;
+    case 'broadleaf':
+    case 'broadleaf_light':
+      geo = leafy(FORMS.broadleaf, PALETTES[look], seed, lod);
+      break;
+    default:
+      geo = leafy(FORMS[look], PALETTES[look], seed, lod);
+  }
+  geo.computeBoundingBox();
+  return { geo, height: geo.boundingBox!.max.y };
+}
+
+const treeHeights = new Map<string, number>();
+
+/** A region tree's height at scale 1 (m), measured once per look and variant (to scale it to a wanted height). */
+export function treeHeight(look: TreeLook, variant = 0): number {
+  const k = `${look}:${variant}`;
+  let h = treeHeights.get(k);
+  if (h === undefined) {
+    const m = treeModel(look, variant);
+    h = m.height;
+    m.geo.dispose();
+    treeHeights.set(k, h);
+  }
+  return h;
+}
+
+let treeMat: THREE.MeshLambertMaterial | null = null;
+
+/**
+ * The shared material for region trees (vertex colours; leaves get a little sky fill like the
+ * world's vegetation). Shared by every region: never disposed by one.
+ */
+export function treeMaterial(): THREE.MeshLambertMaterial {
+  if (treeMat) return treeMat;
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true });
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec2 veg;\nvarying float vLeaf;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLeaf = veg.y;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vLeaf;')
+      .replace('#include <opaque_fragment>', '  outgoingLight += diffuseColor.rgb * ( 0.06 + vLeaf * 0.14 );\n#include <opaque_fragment>');
+  };
+  m.customProgramCacheKey = () => 'region-tree-v2';
+  treeMat = m;
+  return m;
 }
 
 function bamboo(): LODs {
@@ -458,27 +797,6 @@ function bamboo(): LODs {
   return [build(0), build(1), build(2)];
 }
 
-function blossom(): LODs {
-  const trunk0 = lin('#3f2c27'), trunk1 = lin('#58403a');
-  const dark = lin('#c46e8e'), mid = lin('#ef9fbc'), light = lin('#fde1ea');
-  const build = (lod: number): THREE.BufferGeometry => {
-    const g = new GeoBuilder();
-    const rng = new Random(51);
-    g.tube(V(0, -0.4, 0), V(0.4, 1.8, 0.1), 0.26, 0.2, lod === 0 ? 6 : 4, trunk0, trunk1, 0, 0.1);
-    g.tube(V(0.4, 1.8, 0.1), V(-0.2, 3.2, 0.3), 0.2, 0.13, lod === 0 ? 6 : 4, trunk1, trunk1, 0.1, 0.25);
-    if (lod === 0) {
-      g.tube(V(0.3, 2.2, 0.1), V(1.6, 3.4, -0.2), 0.1, 0.05, 4, trunk1, trunk1, 0.15, 0.5);
-      g.tube(V(0.0, 2.8, 0.2), V(-1.5, 3.6, 0.6), 0.09, 0.05, 4, trunk1, trunk1, 0.15, 0.5);
-    }
-    const nc = V(0, 3.9, 0);
-    const col = foliageColor(dark, mid, light, 5.4, 2.6);
-    const blobs = lod === 2 ? [[0, 3.9, 0, 2.3]] : [[-0.1, 4.1, 0.2, 1.7], [1.4, 3.6, -0.2, 1.3], [-1.4, 3.7, 0.6, 1.3], [0.3, 3.5, 1.4, 1.1], [0.2, 3.6, -1.3, 1.2], [0.4, 4.7, -0.4, 1.0]];
-    for (const [x, y, z, r] of blobs) g.blob(V(x, y, z), V(r, r * 0.75, r), lod === 0 ? 2 : 1, rng.range(0, 99), 0.22, col, 0.75, 1, nc);
-    return g.build();
-  };
-  return [build(0), build(1), build(2)];
-}
-
 function deadtree(): LODs {
   const c0 = lin('#211c1b'), c1 = lin('#3d3532');
   const build = (lod: number): THREE.BufferGeometry => {
@@ -500,43 +818,6 @@ function deadtree(): LODs {
         g.tube(e, e2, 0.03, 0.01, 3, c1, c1, 0.3, 0.4);
       }
     }
-    return g.build();
-  };
-  return [build(0), build(1), build(2)];
-}
-
-function acacia(): LODs {
-  const trunk0 = lin('#4c3d2e'), trunk1 = lin('#6a5640');
-  const dark = lin('#3c4a22'), mid = lin('#67792f'), light = lin('#a3ad52');
-  const build = (lod: number): THREE.BufferGeometry => {
-    const g = new GeoBuilder();
-    const rng = new Random(71);
-    g.tube(V(0, -0.4, 0), V(0.2, 2.4, 0), 0.26, 0.18, lod === 0 ? 6 : 4, trunk0, trunk1, 0, 0.1);
-    const arms: Array<[number, number, number]> = [[1.6, 4.4, 0.6], [-1.4, 4.6, -0.5], [0.2, 4.8, -1.5]];
-    for (const [x, y, z] of arms) g.tube(V(0.2, 2.3, 0), V(x, y, z), 0.15, 0.07, lod === 0 ? 5 : 3, trunk1, trunk1, 0.1, 0.35);
-    const col = foliageColor(dark, mid, light, 5.6, 4.3);
-    const blobs = lod === 2 ? [[0.1, 5.0, 0, 3.2]] : [[0.2, 5.1, 0, 2.6], [1.8, 4.9, 0.6, 1.9], [-1.6, 5.0, -0.5, 2.0]];
-    for (const [x, y, z, r] of blobs) g.blob(V(x, y, z), V(r, r * 0.28, r), lod === 0 ? 2 : 1, rng.range(0, 99), 0.18, col, 0.6, 1, V(0, 4.6, 0));
-    return g.build();
-  };
-  return [build(0), build(1), build(2)];
-}
-
-function bush(kind: 'green' | 'snow' | 'dry'): LODs {
-  const dark = kind === 'dry' ? lin('#4d4a2a') : lin('#27401b');
-  const mid = kind === 'dry' ? lin('#7c7440') : lin('#4a7330');
-  const light = kind === 'snow' ? lin('#eef4f9') : kind === 'dry' ? lin('#a8a060') : lin('#86ad4c');
-  const build = (lod: number): THREE.BufferGeometry => {
-    const g = new GeoBuilder();
-    const rng = new Random(kind === 'snow' ? 83 : kind === 'dry' ? 85 : 81);
-    const nc = V(0, 0.4, 0);
-    const base = foliageColor(dark, mid, light, 1.5, 0);
-    const col = kind === 'snow'
-      ? (p: THREE.Vector3, n: THREE.Vector3) => (n.y > 0.45 ? tmpC.copy(light) : base(p, n))
-      : base;
-    const blobs = lod === 2 ? [[0, 0.5, 0, 0.95]] : [[0, 0.55, 0, 0.8], [0.6, 0.45, 0.2, 0.6], [-0.5, 0.42, -0.25, 0.62], [0.1, 0.4, -0.6, 0.55]];
-    const jitter = kind === 'dry' ? 0.45 : 0.2;
-    for (const [x, y, z, r] of blobs) g.blob(V(x, y, z), V(r, r * 0.8, r), lod === 0 ? 2 : 1, rng.range(0, 99), jitter, col, 0.6, kind === 'snow' ? 0.4 : 1, nc);
     return g.build();
   };
   return [build(0), build(1), build(2)];

@@ -83,7 +83,7 @@ export interface HollowDome {
   tunnel: number;
   tw: number;
   th: number;
-  /** A small vestibule dome over the tunnel's middle. */
+  /** A porch dome over the tunnel's middle (open where the tunnel runs through it). */
   vestibule?: boolean;
 }
 
@@ -133,9 +133,21 @@ export function hollowDome(b: ContentBuilder, o: HollowDome): void {
   const pm = loc(0, z1);
   b.mesh(wtMat('ice_trim'), rim, { x: pm.x, y: o.y + sideH, z: pm.z, yaw: o.yaw });
   if (o.vestibule) {
-    const pv = loc(0, z0 + len * 0.62);
-    const vd = new THREE.SphereGeometry(vr + 0.85, 16, 5, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.9, 1);
-    b.mesh(wall, vd, { x: pv.x, y: o.y + 0.2, z: pv.z, yaw: o.yaw });
+    // A porch dome straddling the tunnel's middle: taller and wider than the vault, open front and
+    // back where the tunnel runs through it (a closed dome here would fill the passage).
+    const pr = vr + 1.0, ph = o.th + 0.65;
+    const crown = o.th + 0.4; // the vault's outer crown, with a margin
+    const tTop = Math.acos(Math.min(0.99, crown / ph));
+    const gate = Math.asin(Math.min(0.95, (vr + 0.4) / pr));
+    // SphereGeometry phi: π/2 points +Z, 3π/2 points −Z; the sides between are kept.
+    const porch = mergeParts([
+      new THREE.SphereGeometry(pr, 18, 3, 0, Math.PI * 2, 0, tTop),
+      new THREE.SphereGeometry(pr, 9, 5, Math.PI / 2 + gate, Math.PI - gate * 2, tTop, Math.PI / 2 - tTop),
+      new THREE.SphereGeometry(pr, 9, 5, Math.PI * 1.5 + gate, Math.PI - gate * 2, tTop, Math.PI / 2 - tTop),
+    ]);
+    porch.scale(1, ph / pr, 1);
+    const pv = loc(0, z0 + len * 0.5);
+    b.mesh(wall, porch, { x: pv.x, y: o.y, z: pv.z, yaw: o.yaw });
   }
   // Wall colliders round the dome (a gap where the tunnel joins).
   const n = Math.max(14, Math.round(o.r * 3.2));

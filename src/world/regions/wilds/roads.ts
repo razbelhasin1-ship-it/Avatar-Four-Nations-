@@ -52,7 +52,7 @@ export class RoadBridgeSite extends WildsSite {
 
 /** Junction signposts per road (placed at the road's start unless noted). */
 const JUNCTIONS: Array<{ road: string; s: number; lat: number; arms: Array<[SignName, number, number]> }> = [
-  { road: 'northern_road', s: 683, lat: 7.5, arms: [['OMASHU', -450, -650], ['NORTHERN WATER TRIBE', -220, -1600], ['RIVERBEND', 120, -560], ['BA SING SE', 430, -170]] },
+  { road: 'northern_road', s: 551, lat: 7.5, arms: [['OMASHU', -450, -650], ['NORTHERN WATER TRIBE', -220, -1600], ['RIVERBEND', 120, -560], ['BA SING SE', 430, -170]] },
   { road: 'omashu_road', s: 205, lat: 8, arms: [['OMASHU', -380, -680], ['RIVERBEND', -60, -800]] },
   { road: 'western_road', s: 705, lat: -8, arms: [['FOGGY SWAMP', -950, -60], ['FIRE NATION', -780, 700], ['BA SING SE', 240, 60]] },
   { road: 'western_road', s: 31, lat: 7.5, arms: [['GAOLING', 420, 300], ['BA SING SE', 430, -170], ['FOGGY SWAMP', -420, 260], ['FIRE NATION', -780, 700]] },

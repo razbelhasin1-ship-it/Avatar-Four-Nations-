@@ -352,39 +352,6 @@ export function igloo(r: number): THREE.BufferGeometry {
   return mergeParts(parts);
 }
 
-/** Simple conifer (stacked cones) for the isle and the Spirit Oasis; base at y = 0. Returns [trunk, foliage]. */
-export function conifer(seed: number, h: number): [THREE.BufferGeometry, THREE.BufferGeometry] {
-  const r = new Random(seed);
-  const trunk = new THREE.CylinderGeometry(h * 0.025, h * 0.04, h * 0.35, 6);
-  trunk.translate(0, h * 0.175, 0);
-  const fol: THREE.BufferGeometry[] = [];
-  const tiers = 4;
-  for (let i = 0; i < tiers; i++) {
-    const t = i / tiers;
-    const cr = h * (0.3 - t * 0.2) * r.range(0.9, 1.1);
-    const ch = h * 0.34;
-    const c = new THREE.ConeGeometry(cr, ch, 7, 1);
-    c.translate(0, h * 0.25 + t * h * 0.22 + ch / 2, 0);
-    c.rotateY(r.range(0, Math.PI));
-    fol.push(c);
-  }
-  return [trunk, mergeParts(fol)];
-}
-
-/** Round-crowned broadleaf tree (oasis); returns [trunk, foliage]. */
-export function roundTree(seed: number, h: number): [THREE.BufferGeometry, THREE.BufferGeometry] {
-  const r = new Random(seed);
-  const trunk = new THREE.CylinderGeometry(h * 0.035, h * 0.06, h * 0.55, 7);
-  trunk.translate(0, h * 0.275, 0);
-  const fol: THREE.BufferGeometry[] = [];
-  for (let i = 0; i < 5; i++) {
-    const s = new THREE.IcosahedronGeometry(h * r.range(0.16, 0.24), 1);
-    s.translate(r.range(-0.18, 0.18) * h, h * r.range(0.58, 0.85), r.range(-0.18, 0.18) * h);
-    fol.push(s);
-  }
-  return [trunk, mergeParts(fol)];
-}
-
 /**
  * Vertical waterfall sheet: `width` across local X, falls `height` along -Y
  * from y = 0, bulging out along +Z at the lip. UVs in metres (x across, y down).

@@ -164,8 +164,9 @@ function createVegMaterial(flex: number, push: number, crown: THREE.Vector2): TH
       .replace('#include <project_vertex>', VEG_PROJECT);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying float vFadeIn;\nvarying float vFadeOut;\nvarying float vLeaf;\nvarying float vSeeThrough;\nuniform vec3 uSkyHorizon;\nuniform vec3 uSunColor;\nuniform float uDaylight;\n' + ENV_DITHER_GLSL)
-      // Foliage scatters light: lift shadowed leaves with sky fill and a little sun translucency.
-      .replace('#include <opaque_fragment>', '  outgoingLight += diffuseColor.rgb * vLeaf * ( uSkyHorizon * 0.16 + uSunColor * 0.12 * uDaylight );\n#include <opaque_fragment>')
+      // Foliage scatters light: lift shadowed leaves with sky fill and a little sun translucency;
+      // bark and stems get a little sky fill too (a trunk under its own crown is shaded, not black).
+      .replace('#include <opaque_fragment>', '  outgoingLight += diffuseColor.rgb * ( uSkyHorizon * ( 0.07 + 0.16 * vLeaf ) + uSunColor * 0.12 * uDaylight * vLeaf );\n#include <opaque_fragment>')
       .replace(
         '#include <clipping_planes_fragment>',
         `#include <clipping_planes_fragment>
@@ -179,7 +180,7 @@ function createVegMaterial(flex: number, push: number, crown: THREE.Vector2): TH
   if ( vegNear < 1.0 && vegNear <= vegDither ) discard;`,
       );
   };
-  mat.customProgramCacheKey = () => 'veg-v5';
+  mat.customProgramCacheKey = () => 'veg-v6';
   return mat;
 }
 

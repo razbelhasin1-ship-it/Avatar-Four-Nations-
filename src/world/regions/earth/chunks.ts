@@ -29,6 +29,20 @@ interface HouseStamp {
   roof?: THREE.Color;
 }
 
+/**
+ * A tree mesh split by distance: trees within range draw the `near` model, the rest the lighter
+ * `far` build (a tree geometry carries it as userData.far). Region trees have hundreds of copies
+ * in view in Ba Sing Se, so only the close ones get the full model.
+ */
+interface TreeLod {
+  near: THREE.InstancedMesh;
+  far: THREE.InstancedMesh;
+  /** Every instance's matrix (16 floats each) and position, as built. */
+  mats: Float32Array;
+  xs: Float32Array;
+  zs: Float32Array;
+}
+
 export class Chunk {
   readonly group = new THREE.Group();
   readonly builder: ContentBuilder;
@@ -36,6 +50,10 @@ export class Chunk {
   /** Geometries / materials created outside the builder (disposed with the chunk). */
   readonly ownedGeos: THREE.BufferGeometry[] = [];
   readonly ownedMats: THREE.Material[] = [];
+  readonly trees: TreeLod[] = [];
+  /** Camera position (chunk-local) at the last near/far tree split. */
+  treeX = NaN;
+  treeZ = NaN;
   cx = 0;
   cz = 0;
   r = 0;
@@ -138,6 +156,7 @@ export class ChunkSet {
       if (c.finished) continue;
       c.finished = true;
       c.builder.finish();
+      addFarTrees(c);
       if (c.stamps.length) {
         const geo = mergeStamps(c.stamps);
         const mesh = new THREE.Mesh(geo, houseMaterial);
@@ -168,21 +187,20 @@ export class ChunkSet {
     this.root.visible = level !== 'hidden';
   }
 
-  /** Distance-based visibility; call a few times per second. */
+  /** Distance-based visibility (and near/far trees within r.detail); call a few times per second. */
   updateLod(cam: THREE.Vector3, r: LodRanges): void {
     const far = this.level !== 'full';
     for (const c of this.map.values()) {
       if (c.kind === 'major') {
         c.group.visible = true;
-        continue;
-      }
-      if (far) {
+      } else if (far) {
         c.group.visible = false;
-        continue;
+      } else {
+        const d = Math.max(0, Math.hypot(cam.x - c.cx, cam.z - c.cz) - c.r);
+        const range = c.kind === 'houses' ? r.houses : c.kind === 'props' ? r.props : r.detail;
+        c.group.visible = d < range;
       }
-      const d = Math.max(0, Math.hypot(cam.x - c.cx, cam.z - c.cz) - c.r);
-      const range = c.kind === 'houses' ? r.houses : c.kind === 'props' ? r.props : r.detail;
-      c.group.visible = d < range;
+      if (c.group.visible && c.trees.length) splitTrees(c, cam, r.detail);
     }
   }
 
@@ -198,6 +216,9 @@ export class ChunkSet {
 
   dispose(): void {
     for (const c of this.map.values()) {
+      // Far tree geometries go with their near ones (the builder's); the far meshes' buffers here.
+      for (const t of c.trees) t.far.dispose();
+      c.trees.length = 0;
       c.builder.dispose();
       for (const g of c.ownedGeos) g.dispose();
       for (const m of c.ownedMats) m.dispose();
@@ -205,6 +226,64 @@ export class ChunkSet {
       this.root.remove(c.group);
     }
     this.map.clear();
+  }
+}
+
+/** Give each tree mesh whose geometry carries a far build (userData.far) a far copy, empty until split. */
+function addFarTrees(c: Chunk): void {
+  for (const o of [...c.group.children]) {
+    if (!(o instanceof THREE.InstancedMesh)) continue;
+    const farGeo = o.geometry.userData.far as THREE.BufferGeometry | undefined;
+    if (!farGeo) continue;
+    const n = o.count;
+    const mats = new Float32Array(o.instanceMatrix.array);
+    const xs = new Float32Array(n), zs = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      xs[i] = mats[i * 16 + 12];
+      zs[i] = mats[i * 16 + 14];
+    }
+    const far = new THREE.InstancedMesh(farGeo, o.material, n);
+    far.name = `${o.name}:far`;
+    far.castShadow = o.castShadow;
+    far.receiveShadow = o.receiveShadow;
+    far.count = 0;
+    far.visible = false;
+    o.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    far.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    c.group.add(far);
+    c.trees.push({ near: o, far, mats, xs, zs });
+  }
+}
+
+const tmpCam = new THREE.Vector3();
+
+/** Split a chunk's trees between their near and far copies by distance from the camera (after moves of 4 m+). */
+function splitTrees(c: Chunk, cam: THREE.Vector3, range: number): void {
+  c.group.worldToLocal(tmpCam.copy(cam));
+  const mx = tmpCam.x - c.treeX, mz = tmpCam.z - c.treeZ;
+  if (mx * mx + mz * mz < 16) return;
+  c.treeX = tmpCam.x;
+  c.treeZ = tmpCam.z;
+  const r2 = range * range;
+  for (const t of c.trees) {
+    const near = t.near.instanceMatrix.array as Float32Array, far = t.far.instanceMatrix.array as Float32Array;
+    let a = 0, b = 0;
+    for (let i = 0; i < t.xs.length; i++) {
+      const dx = t.xs[i] - tmpCam.x, dz = t.zs[i] - tmpCam.z;
+      const m = t.mats.subarray(i * 16, i * 16 + 16);
+      if (dx * dx + dz * dz < r2) near.set(m, 16 * a++);
+      else far.set(m, 16 * b++);
+    }
+    t.near.count = a;
+    t.far.count = b;
+    // An empty copy would still cost a draw call.
+    t.near.visible = a > 0;
+    t.far.visible = b > 0;
+    t.near.instanceMatrix.needsUpdate = true;
+    t.far.instanceMatrix.needsUpdate = true;
+    // Bounds follow the new counts (recomputed on the next frustum test).
+    t.near.boundingSphere = null;
+    t.far.boundingSphere = null;
   }
 }
 

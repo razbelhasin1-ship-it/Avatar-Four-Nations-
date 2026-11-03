@@ -3,6 +3,7 @@ import type { Random } from '../../../core/Random';
 import { ContentBuilder, roofGeometry } from '../../kit/Builder';
 import type { KitMaterialName } from '../../kit/Materials';
 import type { EarthMaterials } from './materials';
+import { type TreeLook, treeHeight, treeMaterial, treeModel } from '../../env/VegetationModels';
 
 /**
  * Reusable Earth Kingdom props. Repeated small things go through
@@ -44,24 +45,6 @@ function canopyGeometry(kind: 'round' | 'blossom' | 'bush'): THREE.BufferGeometr
   return mergeAll(parts);
 }
 
-function pineGeometry(): THREE.BufferGeometry {
-  const parts: THREE.BufferGeometry[] = [];
-  const tiers: Array<[number, number, number]> = [[1.8, 2.6, 2.0], [1.4, 4.0, 1.8], [1.0, 5.3, 1.6], [0.6, 6.4, 1.3]];
-  for (const [r, y, h] of tiers) {
-    const g = new THREE.ConeGeometry(r, h, 7);
-    g.translate(0, y, 0);
-    parts.push(g);
-  }
-  return mergeAll(parts);
-}
-
-function cypressGeometry(): THREE.BufferGeometry {
-  const g = new THREE.SphereGeometry(1, 7, 6);
-  g.scale(0.9, 3.4, 0.9);
-  g.translate(0, 4.2, 0);
-  return g;
-}
-
 function mergeAll(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
   // Small local merge (avoids importing addons here).
   let nv = 0, ni = 0;
@@ -96,21 +79,37 @@ function mergeAll(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
 
 export type TreeKind = 'round' | 'pine' | 'blossom' | 'bush' | 'cypress';
 
-/** Stylised tree (instanced). Trunks get a thin collider so players don't walk through. */
-export function tree(b: ContentBuilder, m: EarthMaterials, x: number, y: number, z: number, s: number, kind: TreeKind, rot: number, collide = true): void {
-  const trunkH = kind === 'bush' ? 0 : kind === 'pine' ? 2.2 : kind === 'cypress' ? 1.4 : 2.8;
-  if (trunkH > 0) {
-    b.instance('tree_trunk', () => {
-      const g = new THREE.CylinderGeometry(0.16, 0.28, 1, 6);
-      g.translate(0, 0.5, 0);
-      return g;
-    }, m.bark, mat4(x, y, z, rot, s, trunkH * s, s));
-    if (collide) b.collider({ shape: 'cylinder', x, y: y + 1.5, z, r: 0.35 * s, hy: 1.5, walkable: false, solid: true });
+/**
+ * A tree's near model carrying its lighter build as userData.far (freed with it): Earth chunks
+ * draw the near model only for trees close to the camera (chunks.ts). Cypresses have one build.
+ */
+function nearFarTree(look: TreeLook, v: number): THREE.BufferGeometry {
+  const near = treeModel(look, v).geo;
+  if (look !== 'cypress') {
+    const far = treeModel(look, v, 1).geo;
+    near.userData.far = far;
+    near.addEventListener('dispose', () => far.dispose());
   }
-  const mat = kind === 'blossom' ? m.blossom : kind === 'pine' || kind === 'cypress' ? m.leafDark : kind === 'bush' ? m.hedge : rot > 3 ? m.leafLight : m.leaf;
-  const key = kind === 'blossom' ? 'tree_canopy_blossom' : kind === 'pine' ? 'tree_pine' : kind === 'cypress' ? 'tree_cypress' : kind === 'bush' ? 'tree_bush' : rot > 3 ? 'tree_canopy_light' : 'tree_canopy';
-  const factory = kind === 'pine' ? pineGeometry : kind === 'cypress' ? cypressGeometry : () => canopyGeometry(kind === 'bush' ? 'bush' : kind === 'blossom' ? 'blossom' : 'round');
-  b.instance(key, factory, mat, mat4(x, y, z, rot, s, s, s));
+  return near;
+}
+
+/** The old stylised trees' heights at scale 1 (m): the new models are scaled to match them. */
+const TREE_H: Record<Exclude<TreeKind, 'bush'>, number> = { round: 5.4, blossom: 5.4, pine: 7.05, cypress: 7.6 };
+
+/**
+ * A tree (instanced): the world's tree models (broadleaf, blossom, fir, cypress; two shapes each),
+ * or a hedge bush. Trunks get a thin collider so players don't walk through.
+ */
+export function tree(b: ContentBuilder, m: EarthMaterials, x: number, y: number, z: number, s: number, kind: TreeKind, rot: number, collide = true): void {
+  if (kind === 'bush') {
+    b.instance('tree_bush', () => canopyGeometry('bush'), m.hedge, mat4(x, y, z, rot, s, s, s));
+    return;
+  }
+  const look: TreeLook = kind === 'pine' ? 'conifer' : kind === 'cypress' ? 'cypress' : kind === 'blossom' ? 'blossom' : rot > 3 ? 'broadleaf_light' : 'broadleaf';
+  const v = Math.abs(Math.round(x * 7 + z * 3)) % 2;
+  const k = (TREE_H[kind] * s) / treeHeight(look, v);
+  b.instance(`earth_tree_${look}_${v}`, () => nearFarTree(look, v), treeMaterial(), mat4(x, y, z, rot, k, k, k));
+  if (collide) b.collider({ shape: 'cylinder', x, y: y + 1.5, z, r: 0.35 * s, hy: 1.5, walkable: false, solid: true });
 }
 
 // ---------------------------------------------------------------------------
