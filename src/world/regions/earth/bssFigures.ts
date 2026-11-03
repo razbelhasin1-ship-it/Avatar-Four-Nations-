@@ -4,7 +4,8 @@ import * as THREE from 'three';
  * Instanced low-poly people for Ba Sing Se crowds, guards, vendors, train
  * earthbenders and passengers. One merged body (robe, sash, head, hair, legs,
  * arms) is animated in the vertex shader per instance (walk, idle, sit,
- * earthbending push/stomp, talk, carry, sweep, raise, work), so hundreds of
+ * earthbending push/stomp, talk, carry, sweep, raise, work; a one-handed wave,
+ * a talk gesture that fades with `amount`, flowing waterbending forms), so hundreds of
  * figures cost a handful of draw calls. Two LODs (limbs near, a simple
  * silhouette far), blob shadows near, and instanced accessories (hats,
  * helmets, carts, shoulder poles, crates) follow the figure transform.
@@ -13,7 +14,7 @@ import * as THREE from 'three';
  * No allocation in push(); colours are packed 0xRRGGBB numbers.
  */
 
-export const Pose = { idle: 0, walk: 1, sit: 2, push: 3, talk: 4, carry: 5, sweep: 6, raise: 7, work: 8 } as const;
+export const Pose = { idle: 0, walk: 1, sit: 2, push: 3, talk: 4, carry: 5, sweep: 6, raise: 7, work: 8, wave: 9, chat: 10, flow: 11 } as const;
 export type PoseId = (typeof Pose)[keyof typeof Pose];
 
 export const Acc = { none: 0, daiLiHat: 1, guardHelm: 2, strawHat: 3, scholarCap: 4, bundle: 5, pole: 6, cart: 7, crate: 8, soldierHelm: 9, topknot: 10, parasol: 11 } as const;
@@ -167,10 +168,22 @@ void figPose(out mat3 Rl, out vec3 piv, out mat3 Ll, out vec3 off) {
     if (leg) az = side * 0.32;
     if (arm) ax = -0.35 - 1.3 * amt;
     dy = -0.1 * amt;
-  } else {                     // work (bent over: farming, washing)
+  } else if (pose < 8.5) {     // work (bent over: farming, washing)
     if (arm) ax = -0.9 - 0.3 * sin(ph + side);
     if (leg) az = side * 0.16;
     lean += 0.65;
+  } else if (pose < 9.5) {     // wave: the right hand raised (amt eases it up and down), waving
+    if (arm && side < 0.0) { ax = -2.5 * amt; az = (-0.25 + 0.3 * sin(ph * 9.0)) * amt; }
+    else if (arm) { ax = 0.05 * sin(ph * 0.5 + side); az = side * 0.06; }
+  } else if (pose < 10.5) {    // chat: the talk gesture scaled by amt (taking turns in a conversation)
+    if (arm && side > 0.0) ax = (-0.7 - 0.35 * sin(ph * 1.7)) * amt;
+    else if (arm) az = -0.05;
+  } else {                     // flow: waterbending forms, the hands circling in front of the chest out of step, soft stance
+    float fs = sin(ph * 1.3 + side * 1.2), fc = cos(ph * 1.3 + side * 1.2);
+    if (arm) { ax = (-1.0 - 0.4 * fs) * amt; az = side * (-0.06 + 0.14 * fc) * amt; }
+    if (leg) az = side * 0.14;
+    dy = -0.02 * amt;
+    lean += 0.06 * amt * sin(ph * 0.65);
   }
   Rl = figRotX(ax) * figRotZ(az);
   piv = leg ? vec3(side * 0.095, 0.88, 0.0) : vec3(side * 0.255, 1.42, 0.0);
@@ -380,7 +393,11 @@ function poseBody(pose: number, phase: number, amount: number, lean: number): { 
   else if (pose < 5.5) out.dy = 0.02 * amount * Math.abs(Math.cos(phase));
   else if (pose < 6.5) out.lean += 0.2;
   else if (pose < 7.5) out.dy = -0.1 * amount;
-  else out.lean += 0.65;
+  else if (pose < 8.5) out.lean += 0.65;
+  else if (pose > 10.5) {
+    out.dy = -0.02 * amount;
+    out.lean += 0.06 * amount * Math.sin(phase * 0.65);
+  }
   return out;
 }
 const poseOut = { dy: 0, lean: 0 };

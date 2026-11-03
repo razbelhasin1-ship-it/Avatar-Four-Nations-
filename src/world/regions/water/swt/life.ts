@@ -29,7 +29,9 @@ import type { WallInfo } from './wall';
  * Walking uses a graph (bssNav): a free-space grid between the dwellings (links checked against
  * every footprint, paths straightened by line of sight), the Great Igloo's tunnel and hall, the stair
  * ramps and the wall walk, and the gate ramp down to the shore, the hunting ice, the sled run and
- * the tundra. Figures near the player turn to greet them; the nearest can be talked to.
+ * the tundra. Villagers standing near the player turn to look at them and one at a time waves
+ * (walkers keep their way); the nearest can be talked to. Everyone keeps their own place: nobody
+ * stands inside anyone else. Fetching and carrying, they walk with the load on their backs.
  */
 
 export type SwtRole = 'hunter' | 'fisher' | 'warrior' | 'bender' | 'tanner' | 'carver' | 'mender' | 'cook' | 'storyteller' | 'elder' | 'kid' | 'villager';
@@ -105,11 +107,16 @@ interface Agent {
   acc: number;
   scale: number;
   greet: number;
+  /** Seconds left of a wave at the player, and when the last one began (life time, s). */
+  wave: number;
+  waved: number;
   /** Reserved seat (node) or −1. */
   seat: number;
   /** Standing offset at open places (unit disc). */
   ox: number;
   oz: number;
+  /** Sideways offset (m) at an exact place (a work spot) when someone else already holds it. */
+  slot: number;
   /** Distance down the sled run while riding; runs made today. */
   sled: number;
   runs: number;
@@ -130,6 +137,25 @@ export interface PetOwner {
 }
 
 const byDistance = (p: Agent, q: Agent): number => p.d - q.d;
+
+/** Room each villager keeps to themselves (m between two people standing). */
+const PERSONAL = 0.8;
+/** Places tried alongside an exact spot someone already holds (m along the spot's sideways axis). */
+const SLOTS = [0.8, -0.8, 1.6, -1.6, 2.4, -2.4, 3.2, -3.2];
+/** Bundles drawn on carriers' backs (the nearest ones), and how long a wave at the player lasts (s). */
+const LOADS = 32;
+const WAVE_S = 1.8;
+/** Cooks keeping the plaza fire at once, and how each stands to it (by cook). */
+const COOKS_AT_FIRE = 4;
+const COOK_POSES: readonly number[] = [Pose.work, Pose.sweep, Pose.idle];
+
+/** `yaw` turned by `k` (0..1) of the way toward facing (tx, tz) from (x, z). */
+function turnToward(yaw: number, x: number, z: number, tx: number, tz: number, k: number): number {
+  let d = Math.atan2(tx - x, tz - z) - yaw;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return yaw + d * k;
+}
 
 /** Fire Navy raiders holding the gate in the raided state: offsets from the gate, facing. */
 const RAIDERS: ReadonlyArray<[number, number, number]> = [
@@ -298,6 +324,12 @@ export class WolfCoveLife {
   private readonly sledMesh: THREE.InstancedMesh;
   private readonly sledGeo: THREE.BufferGeometry;
   private readonly sledMat: THREE.Material;
+  /** Bundles on the backs of villagers fetching and carrying (hides, the catch). */
+  private readonly loadMesh: THREE.InstancedMesh;
+  private readonly loadGeo: THREE.BufferGeometry;
+  /** The one villager waving at the player (one at a time), and the pause before the next may. */
+  private waver: Agent | null = null;
+  private waveGap = 0;
   private readonly tmpM = new THREE.Matrix4();
   private readonly tmpQ = new THREE.Quaternion();
   private readonly tmpV = new THREE.Vector3();
@@ -326,6 +358,12 @@ export class WolfCoveLife {
     this.sledMesh.frustumCulled = false;
     this.sledMesh.name = 'swt_kid_sleds';
     this.group.add(this.sledMesh);
+    this.loadGeo = loadGeometry();
+    this.loadMesh = new THREE.InstancedMesh(this.loadGeo, this.sledMat, LOADS);
+    this.loadMesh.count = 0;
+    this.loadMesh.frustumCulled = false;
+    this.loadMesh.name = 'swt_loads';
+    this.group.add(this.loadMesh);
     this.spawn(density);
   }
 
@@ -723,9 +761,12 @@ export class WolfCoveLife {
           acc,
           scale: role === 'kid' ? rnd.range(0.62, 0.76) : role === 'elder' ? rnd.range(0.9, 0.97) : rnd.range(0.95, 1.05),
           greet: 0,
+          wave: 0,
+          waved: -1e9,
           seat: -1,
           ox: Math.sin(ang) * rad,
           oz: Math.cos(ang) * rad,
+          slot: 0,
           sled: -1,
           runs: 0,
           k,
@@ -816,12 +857,16 @@ export class WolfCoveLife {
         if (a.role === 'mender' && h >= 11.5 && h < 13.5 && r.chance(0.4)) return { goal: this.pick(T.shore), act: 'work' };
         return { goal: r.chance(0.7) ? a.job : this.pick(mask), act: a.role === 'carver' && r.chance(0.4) ? 'sit' : 'work' };
       }
-      case 'cook':
+      case 'cook': {
         if (night) return home;
-        // Half the cooks serve in the Great Igloo (if there is room), the rest keep the plaza fires.
-        if (h >= 17 && h < 20.25) return a.k % 2 === 0 && this.standing(T.hall) < 16 ? { goal: this.pick(T.hall), act: 'work' } : { goal: this.pick(T.cook), act: 'work' };
-        if (dawn || (h >= 11 && h < 13)) return { goal: this.pick(T.cook), act: 'work' };
-        return r.chance(0.5) ? { goal: this.pick(T.storage), act: 'carry' } : { goal: this.pick(T.cook), act: 'work' };
+        // A few cooks keep the plaza fire at a time; the rest cook at home or fetch from the stores.
+        const fire = this.standing(T.cook) < COOKS_AT_FIRE ? { goal: this.pick(T.cook), act: 'work' as Activity } : null;
+        const elsewhere = r.chance(0.5) ? { goal: this.pick(T.storage), act: 'carry' as Activity } : home;
+        // Half the cooks serve in the Great Igloo (if there is room).
+        if (h >= 17 && h < 20.25) return a.k % 2 === 0 && this.standing(T.hall) < 16 ? { goal: this.pick(T.hall), act: 'work' } : (fire ?? elsewhere);
+        if (dawn || (h >= 11 && h < 13)) return fire ?? elsewhere;
+        return r.chance(0.5) || !fire ? { goal: this.pick(T.storage), act: 'carry' } : fire;
+      }
       case 'storyteller': {
         if (night || h < 7) return home;
         if (h >= 18.5 && h < 21.5) {
@@ -883,7 +928,72 @@ export class WolfCoveLife {
     const n = this.nav.nodes[node], j = this.jit[node];
     this.spotTmp.x = n.x + a.ox * j;
     this.spotTmp.z = n.z + a.oz * j;
+    if (a.slot !== 0) {
+      // Alongside whoever holds the place, facing the same way.
+      const yaw = n.yaw || 0;
+      this.spotTmp.x += Math.cos(yaw) * a.slot;
+      this.spotTmp.z -= Math.sin(yaw) * a.slot;
+    }
     return this.spotTmp;
+  }
+
+  /**
+   * Find the villager a place at `node` that nobody else holds or is heading for, so people never
+   * stand inside one another: first other spots round the node (open places), then places
+   * alongside, in a row (work spots too small for a crowd; two sentries sharing a post). Seats are
+   * reserved one each already.
+   */
+  private claimSpot(a: Agent, node: number): void {
+    a.slot = 0;
+    if (this.nav.nodes[node].tags & T.seat) return;
+    const j = this.jit[node], ox = a.ox, oz = a.oz, y = this.nodeY[node];
+    const rolls = j > 0.3 ? 5 : 0;
+    // Crowded everywhere: the roomiest place tried.
+    let best = -1, bestRoom = -1, bx = ox, bz = oz, bs = 0;
+    for (let k = 0; k <= rolls + SLOTS.length; k++) {
+      if (k > 0 && k <= rolls) {
+        const ang = Math.atan2(ox, oz) + k * 2.39996;
+        const rad = 0.3 + ((k * 0.618) % 0.7);
+        a.ox = Math.sin(ang) * rad;
+        a.oz = Math.cos(ang) * rad;
+      } else if (k > rolls) {
+        a.ox = ox;
+        a.oz = oz;
+        a.slot = SLOTS[k - rolls - 1];
+      }
+      const s = this.spot(a, node);
+      const sx = s.x, sz = s.z;
+      if (k > 0 && !this.obstacles.clear(sx, sz, 0.2)) continue;
+      const room = this.room(a, sx, y, sz);
+      if (room >= PERSONAL * PERSONAL) return;
+      if (room > bestRoom) {
+        best = k;
+        bestRoom = room;
+        bx = a.ox;
+        bz = a.oz;
+        bs = a.slot;
+      }
+    }
+    a.ox = best >= 0 ? bx : ox;
+    a.oz = best >= 0 ? bz : oz;
+    a.slot = best >= 0 ? bs : 0;
+  }
+
+  /** Squared distance from (x, z) to the nearest other villager standing there or on their way there (capped). */
+  private room(a: Agent, x: number, y: number, z: number): number {
+    let r2 = 4;
+    for (const b of this.agents) {
+      if (b === a || b.activity === 'home' || b.activity === 'sled') continue;
+      let bx = b.x, bz = b.z, by = b.y;
+      if (b.activity === 'walk') {
+        const t = this.spot(b, b.goal);
+        bx = t.x;
+        bz = t.z;
+        by = this.nodeY[b.goal];
+      }
+      if (Math.abs(by - y) < 1.5) r2 = Math.min(r2, (bx - x) ** 2 + (bz - z) ** 2);
+    }
+    return r2;
   }
 
   /** Face what the agent is doing: seats and posts their way, groups their centre. */
@@ -912,6 +1022,7 @@ export class WolfCoveLife {
     for (const a of this.agents) {
       const plan = this.plan(a);
       const goal = plan.act === 'sled' ? this.sledTop : plan.goal;
+      this.claimSpot(a, goal);
       const s = this.spot(a, goal);
       a.x = s.x;
       a.z = s.z;
@@ -963,6 +1074,7 @@ export class WolfCoveLife {
     }
     a.path = this.straighten(p);
     a.pi = a.path.length > 1 ? 1 : 0;
+    this.claimSpot(a, goal);
     a.activity = 'walk';
   }
 
@@ -1015,7 +1127,8 @@ export class WolfCoveLife {
       this.tick(a, step);
       if (player && a.activity !== 'home' && a.activity !== 'sled') {
         const d = Math.hypot(a.x - player.x, a.z - player.z);
-        if (d < 4.5 && Math.abs(a.y - player.y) < 2.5) a.greet = Math.min(1, a.greet + step * 2);
+        // Standing villagers notice the player close by (walkers keep their way).
+        if (d < 4.5 && Math.abs(a.y - player.y) < 2.5 && a.activity !== 'walk') a.greet = Math.min(1, a.greet + step * 2);
         else a.greet = Math.max(0, a.greet - step);
         if (d < bestD && Math.abs(a.y - player.y) < 2) {
           bestD = d;
@@ -1025,8 +1138,29 @@ export class WolfCoveLife {
         if (d < 12) this.nearBuf.push(a);
       }
     }
+    // One villager at a time waves at the player coming close (each at most once a minute).
+    if (this.waver) {
+      const w = this.waver;
+      w.wave -= dt;
+      if (w.wave <= 0 || w.activity === 'walk' || w.activity === 'home') {
+        w.wave = 0;
+        this.waver = null;
+        this.waveGap = 5;
+      }
+    } else this.waveGap -= dt;
     if (player) {
       this.nearBuf.sort(byDistance);
+      if (!this.waver && this.waveGap <= 0) {
+        for (const a of this.nearBuf) {
+          if (a.d > 4.5) break;
+          if ((a.activity === 'idle' || a.activity === 'talk' || a.activity === 'play') && a.greet > 0.5 && this.t - a.waved > 60) {
+            a.wave = WAVE_S;
+            a.waved = this.t;
+            this.waver = a;
+            break;
+          }
+        }
+      }
       this.breathN = Math.min(this.breathers.length, this.nearBuf.length);
       for (let i = 0; i < this.breathN; i++) {
         const a = this.nearBuf[i];
@@ -1045,7 +1179,7 @@ export class WolfCoveLife {
     const f = this.figures;
     f.begin(cam.position);
     f.view(cam);
-    let drawn = 0, walking = 0, home = 0, village = 0, shore = 0, hall = 0, wall = 0, sledding = 0, outside = 0, sleds = 0;
+    let drawn = 0, walking = 0, home = 0, village = 0, shore = 0, hall = 0, wall = 0, sledding = 0, outside = 0, sleds = 0, loads = 0;
     for (const a of this.agents) {
       if (a.activity === 'home') {
         home++;
@@ -1061,39 +1195,48 @@ export class WolfCoveLife {
       if (a.activity === 'sled') sledding++;
       if (!f.visible(a.x, a.y, a.z)) continue;
       let pose: number = Pose.idle, amt = 0.6, lean = 0, yaw = a.yaw, y = a.y;
+      // Fetching and carrying: an ordinary walk with the load on the back.
+      let load = false;
       switch (a.activity) {
         case 'walk':
-          pose = a.act === 'carry' ? Pose.carry : Pose.walk;
+          pose = Pose.walk;
           amt = 1;
+          load = a.act === 'carry';
           break;
         case 'work':
-          pose = a.role === 'carver' || a.role === 'mender' ? Pose.sweep : Pose.work;
+          // Cooks at a fire: one bends to tend it, one stirs, one stands warming their hands.
+          pose = a.role === 'carver' || a.role === 'mender' ? Pose.sweep : a.role === 'cook' ? COOK_POSES[a.k % 3] : Pose.work;
           break;
         case 'carry':
-          pose = Pose.carry;
-          amt = 0;
+          load = true;
           break;
         case 'talk':
-          pose = Pose.talk;
+        case 'play': {
+          // Taking turns in the conversation: each one's gesture comes and goes in its own time.
+          const c = Math.sin(a.phase * (a.activity === 'play' ? 0.9 : 0.55) + a.k * 1.7);
+          pose = Pose.chat;
+          amt = Math.max(0, Math.min(1, (c + 0.1) * 2.2));
           break;
+        }
         case 'sit':
           pose = Pose.sit;
           break;
-        case 'form': {
-          // Waterbending forms (or the warriors' drill): a slow raise, push and sweep, each at their own pace.
-          const k = (this.t * 0.42 + a.phase) % 3;
-          pose = k < 1 ? Pose.raise : k < 2 ? Pose.push : Pose.sweep;
-          amt = 0.8;
+        case 'form':
+          if (a.role === 'warrior') {
+            // The warriors' drill: thrusts, with a beat's rest between.
+            pose = (this.t * 0.5 + a.phase) % 2 < 1.2 ? Pose.push : Pose.idle;
+            amt = 0.8;
+          } else {
+            // Waterbending forms: slow arms circling out of step, a soft stance.
+            pose = Pose.flow;
+            amt = 1;
+          }
           break;
-        }
         case 'meditate':
           // Seated on a fur on the snow, still.
           pose = Pose.sit;
           y -= 0.38;
           amt = 0.2;
-          break;
-        case 'play':
-          pose = Pose.talk;
           break;
         case 'sled':
           pose = Pose.sit;
@@ -1107,18 +1250,27 @@ export class WolfCoveLife {
           }
           break;
       }
-      if (a.greet > 0.05 && player && a.activity !== 'form' && a.activity !== 'sit' && a.activity !== 'meditate') {
-        const want = Math.atan2(player.x - a.x, player.z - a.z);
-        let d = want - yaw;
-        while (d > Math.PI) d -= Math.PI * 2;
-        while (d < -Math.PI) d += Math.PI * 2;
-        yaw += d * a.greet;
-        if (a.activity !== 'walk') pose = a.greet > 0.6 ? Pose.raise : Pose.talk;
-        amt = a.activity === 'walk' ? 1 : 0.35;
-        lean = 0.05;
+      if (a.wave > 0 && player) {
+        // The one villager waving at the player: turned to them, the right hand up.
+        const up = Math.max(0, Math.min(1, a.wave * 3, (WAVE_S - a.wave) * 4));
+        yaw = turnToward(yaw, a.x, a.z, player.x, player.z, 0.6 * a.greet + 0.4 * up);
+        pose = Pose.wave;
+        amt = up;
+      } else if (a.greet > 0.05 && player && (a.activity === 'idle' || a.activity === 'talk' || a.activity === 'play')) {
+        // Standing villagers turn part-way to look at the player close by, and carry on.
+        yaw = turnToward(yaw, a.x, a.z, player.x, player.z, 0.6 * a.greet);
       }
       f.push(a.x, y, a.z, yaw, pose, a.phase, amt, lean, a.coat, a.pants, a.skin, a.acc, a.scale);
       drawn++;
+      if (load && loads < LOADS && (a.x - cam.position.x) ** 2 + (a.z - cam.position.z) ** 2 < SWT_LIFE.draw.near ** 2) {
+        // The bundle rides the walk's bob.
+        const s = a.scale, bob = pose === Pose.walk ? 0.035 * amt * Math.abs(Math.cos(a.phase)) : 0;
+        this.tmpQ.setFromAxisAngle(UP, yaw);
+        this.tmpV.set(a.x, y + bob * s, a.z);
+        this.one.set(s, s, s);
+        this.tmpM.compose(this.tmpV, this.tmpQ, this.one);
+        this.loadMesh.setMatrixAt(loads++, this.tmpM);
+      }
     }
     // Paddlers in the canoes and kayaks (wildlife.ts).
     for (let i = 0; i < riders.length; i++) {
@@ -1144,6 +1296,8 @@ export class WolfCoveLife {
     f.end();
     this.sledMesh.count = sleds;
     if (sleds) this.sledMesh.instanceMatrix.needsUpdate = true;
+    this.loadMesh.count = loads;
+    if (loads) this.loadMesh.instanceMatrix.needsUpdate = true;
     const st = this.stats;
     st.drawn = drawn;
     st.walking = walking;
@@ -1251,6 +1405,46 @@ export class WolfCoveLife {
     a.y = runY(a.x, a.z);
   }
 
+  /** Debug: villagers standing inside one another (pairs closer than 0.45 m), wavers, carriers and their bundles. */
+  debugCrowd(): { standing: number; overlaps: number; pairs: string[]; wavers: number; carriers: number; loads: number } {
+    const still = this.agents.filter((a) => a.activity !== 'walk' && a.activity !== 'home' && a.activity !== 'sled');
+    let overlaps = 0;
+    const pairs: string[] = [];
+    const tag = (a: Agent) => `${a.role}/${a.activity}@${a.node}(j${this.jit[a.node].toFixed(1)}${a.seat >= 0 ? ' seat' : ''}${this.nav.nodes[a.node].tags & T.seat ? ' S' : ''})`;
+    for (let i = 0; i < still.length; i++) {
+      for (let j = i + 1; j < still.length; j++) {
+        const a = still[i], b = still[j];
+        if (Math.abs(a.y - b.y) < 1.5 && (a.x - b.x) ** 2 + (a.z - b.z) ** 2 < 0.45 * 0.45) {
+          overlaps++;
+          if (pairs.length < 12) pairs.push(`${tag(a)} ~ ${tag(b)} ${Math.hypot(a.x - b.x, a.z - b.z).toFixed(2)}m`);
+        }
+      }
+    }
+    return {
+      standing: still.length,
+      overlaps,
+      pairs,
+      wavers: this.agents.filter((a) => a.wave > 0).length,
+      carriers: this.agents.filter((a) => a.activity === 'walk' && a.act === 'carry').length,
+      loads: this.loadMesh.count,
+    };
+  }
+
+  /** Debug: where the villager nearest (x, z) doing `kind` is (null when nobody is). */
+  debugFind(kind: 'carrier' | 'waver' | 'form' | 'talk' | 'work', x: number, z: number): { x: number; y: number; z: number; yaw: number; role: string } | null {
+    let best: Agent | null = null, bd = Infinity;
+    for (const a of this.agents) {
+      const ok = kind === 'carrier' ? a.activity === 'walk' && a.act === 'carry' : kind === 'waver' ? a.wave > 0 : a.activity === kind;
+      if (!ok) continue;
+      const d = (a.x - x) ** 2 + (a.z - z) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = a;
+      }
+    }
+    return best ? { x: best.x, y: best.y, z: best.z, yaw: best.yaw, role: best.role } : null;
+  }
+
   /** The nearest villager in talking range (null when none). */
   get nearest(): { name: string; role: SwtRole } | null {
     return this.talkTarget ? { name: this.talkTarget.name, role: this.talkTarget.role } : null;
@@ -1301,6 +1495,7 @@ export class WolfCoveLife {
   dispose(): void {
     this.figures.dispose();
     this.sledGeo.dispose();
+    this.loadGeo.dispose();
     this.sledMat.dispose();
     this.group.removeFromParent();
     this.group.clear();
@@ -1317,12 +1512,33 @@ function shade(c: number, k: number): number {
 
 /** A child's sled: two bone runners and a slatted wooden bed (vertex-coloured). */
 function sledGeometry(): THREE.BufferGeometry {
-  const parts: Array<[THREE.BufferGeometry, string]> = [
+  return mergeColored([
     [new THREE.BoxGeometry(0.5, 0.06, 1.05).translate(0, 0.13, 0), '#7a5634'],
     [new THREE.BoxGeometry(0.05, 0.09, 1.15).translate(0.2, 0.05, 0.02), '#e2d8c0'],
     [new THREE.BoxGeometry(0.05, 0.09, 1.15).translate(-0.2, 0.05, 0.02), '#e2d8c0'],
     [new THREE.BoxGeometry(0.46, 0.16, 0.05).translate(0, 0.2, 0.5), '#6a4a2c'],
-  ];
+  ]);
+}
+
+/**
+ * A load carried on the back, in a villager's own space (feet at the origin, facing +Z): a rolled
+ * hide tied with thongs across the shoulder blades, a fur sack of the catch on top, straps up over
+ * the shoulders (vertex-coloured).
+ */
+function loadGeometry(): THREE.BufferGeometry {
+  const roll = (g: THREE.BufferGeometry) => g.rotateZ(Math.PI / 2).translate(0, 1.2, -0.27);
+  return mergeColored([
+    [roll(new THREE.CylinderGeometry(0.13, 0.13, 0.5, 8)), '#8a6a48'],
+    [roll(new THREE.CylinderGeometry(0.137, 0.137, 0.04, 8)).translate(0.14, 0, 0), '#3b2b20'],
+    [roll(new THREE.CylinderGeometry(0.137, 0.137, 0.04, 8)).translate(-0.14, 0, 0), '#3b2b20'],
+    [new THREE.SphereGeometry(0.11, 8, 6).scale(1.25, 0.85, 0.9).translate(0.04, 1.37, -0.25), '#b8a68a'],
+    [new THREE.BoxGeometry(0.04, 0.3, 0.02).translate(0.11, 1.33, -0.135), '#3b2b20'],
+    [new THREE.BoxGeometry(0.04, 0.3, 0.02).translate(-0.11, 1.33, -0.135), '#3b2b20'],
+  ]);
+}
+
+/** Merge coloured parts into one vertex-coloured, non-indexed geometry (the parts are disposed). */
+function mergeColored(parts: Array<[THREE.BufferGeometry, string]>): THREE.BufferGeometry {
   const list = parts.map(([g]) => g.toNonIndexed());
   let n = 0;
   for (const g of list) n += g.getAttribute('position').count;

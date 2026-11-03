@@ -454,6 +454,8 @@ function installSwtDebug(): void {
       return current?.raidMode ?? null;
     },
     stairs: () => current?.life?.stairs() ?? null,
+    crowd: () => current?.life?.debugCrowd() ?? null,
+    find: (kind: 'carrier' | 'waver' | 'form' | 'talk' | 'work', x: number, z: number) => current?.life?.debugFind(kind, x, z) ?? null,
     places: () => (current?.life ? { stairs: current.life.stairs(), tents: current.life.tentClusters() } : null),
   };
 }

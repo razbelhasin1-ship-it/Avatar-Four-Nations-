@@ -184,6 +184,11 @@ try {
     assert.ok(s.life.drawn >= 30, `drawn ${s.life.drawn}`);
     assert.ok(s.wild.dogs > 0 && s.wild.seals > 0, 'dogs and seals');
     assert.ok(s.wild.boats >= 3 && s.wild.boatsOut >= 3, `boats out by day ${s.wild.boatsOut}/${s.wild.boats}`);
+    // Everyone keeps their own place (nobody stands inside anyone else); at most one villager waves.
+    const c = await ev((g) => g.debug.swt.crowd());
+    assert.ok(c.standing > 40, `villagers standing about ${c.standing}`);
+    assert.ok(c.overlaps <= 2, `villagers inside one another: ${c.overlaps} ${JSON.stringify(c.pairs)}`);
+    assert.ok(c.wavers <= 1, `wavers ${c.wavers}`);
     // A night without the festival (on clear evenings the village meditates outside until one).
     await ev((g) => {
       g.debug.swt.festival(false);

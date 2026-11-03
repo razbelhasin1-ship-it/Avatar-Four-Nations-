@@ -16,8 +16,8 @@ import { KAcc, KYOSHI_LOOK, registerKyoshiAccessories } from './figures';
  * at the harbor; dusk: lanterns lit, the communal kitchens busy; night: quiet, a few guards.
  *
  * Walking uses a graph over the island's roads, the harbor boardwalk and piers, the village plots
- * and the dojo yard (bssNav). Figures near the player turn to greet them; the nearest one can be
- * talked to (one line per archetype).
+ * and the dojo yard (bssNav). Villagers standing near the player turn to look at them (walkers keep
+ * their way); the nearest one can be talked to (one line per archetype).
  */
 
 export type Role = 'warrior' | 'farmer' | 'fisher' | 'cook' | 'trader' | 'elder' | 'girl' | 'villager';
@@ -402,7 +402,7 @@ export class KyoshiLife {
       if (Math.hypot(a.x - hC.x, a.z - hC.z) < 90) harbor++;
       if (player && a.activity !== 'home') {
         const d = Math.hypot(a.x - player.x, a.z - player.z);
-        if (d < 4.5) a.greet = Math.min(1, a.greet + step * 2);
+        if (d < 4.5 && a.activity !== 'walk') a.greet = Math.min(1, a.greet + step * 2);
         else a.greet = Math.max(0, a.greet - step);
         if (d < bestD) {
           bestD = d;
@@ -432,7 +432,8 @@ export class KyoshiLife {
           pose = a.role === 'farmer' ? Pose.work : a.role === 'cook' ? Pose.sweep : Pose.work;
           break;
         case 'carry':
-          pose = Pose.carry;
+          // Landing the catch: bent over the baskets (nothing held overhead).
+          pose = Pose.work;
           break;
         case 'talk':
           pose = Pose.talk;
@@ -445,16 +446,13 @@ export class KyoshiLife {
           amt = dp.amt;
           break;
       }
-      if (a.greet > 0.05 && player && a.activity !== 'drill') {
-        // Turn toward the traveller and greet.
+      if (a.greet > 0.05 && player && (a.activity === 'idle' || a.activity === 'talk')) {
+        // Standing villagers turn part-way to look at the traveller, and carry on.
         const want = Math.atan2(player.x - a.x, player.z - a.z);
         let d = want - yaw;
         while (d > Math.PI) d -= Math.PI * 2;
         while (d < -Math.PI) d += Math.PI * 2;
-        yaw += d * a.greet;
-        if (a.activity !== 'walk') pose = a.greet > 0.6 ? Pose.raise : Pose.talk;
-        amt = a.activity === 'walk' ? 1 : 0.35;
-        lean = 0.05;
+        yaw += d * a.greet * 0.6;
       }
       f.push(a.x, a.y, a.z, yaw, pose, a.phase, amt, lean, a.robe, a.skirt, a.paint, a.acc, a.scale);
       drawn++;
