@@ -6,7 +6,7 @@ Lavabending (Earth), Spiritual Projection (Air) and Bloodbending (Water). Rollba
 - [x] 1 read the systems (this file)
 - [x] 2 shared framework (data/subskills.ts, subskills/Moon.ts, subskills/SubSkills.ts, codex, setting, flags)
 - [x] 3 lavabending (subskills/lava/LavaSystem.ts, combat/techniques/sub/lava.ts, subskills/sounds.ts; probe ok: melt/spread/burn/cool/disc/pool/stream/moat/eruption)
-- [ ] 4 spiritual projection
+- [x] 4 spiritual projection (subskills/projection/Projection.ts, combat/techniques/sub/projection.ts; probe ok: gates, sight, return streak, body hit)
 - [ ] 5 bloodbending
 - [ ] 6 unlock quests and NPCs
 - [ ] 7 UI, audio and VFX polish
@@ -58,7 +58,13 @@ New code lives in `src/subskills/` (systems, fx, quests), `src/combat/techniques
 - src/combat/techniques/index.ts (import ./sub/lava ...)
 - src/ai/Enemy.ts (held bodies skip AI; Enemy.thinkHooks)
 - src/core/Debug.ts (cast() also sets player.aimPoint3)
+- src/world/Interactables.ts (focus override: Reach out from the spirit)
+- src/player/CameraRig.ts (follow override)
+- src/player/Player.ts (poseOverride for the meditating body)
+- src/combat/CombatSystem.ts (+castGates)
 
 ## Notes / gaps
+- User asked mid-task for 2 new moves per element (not sub-skills): Earth Grip (Lin), Stone Gloves (Lien), Fire Whip (Jeong), Dancing Dragon (Ahkon), Air Swipe (Tenzo), Air Suction (Pasang), Octopus Form (Siku), Ice Prison (Akka) — after phase 5.
+- e2e: hold the slot key (setVirtual) to meditate; move with setVirtual('forward').
 - avatar.fandom.com is not reachable from this session (DNS blocked): codex text from the brief + episodes.
 - Debug: __game.debug.subskills { unlock, lock, state, setMoonPhase, setHour, fullMoonNight, setStrain, vow, breakVow, korra }.

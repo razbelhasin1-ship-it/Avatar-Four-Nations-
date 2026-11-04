@@ -25,6 +25,11 @@ export class InteractionSystem implements GameSystem {
   private ctx!: GameContext;
   /** Current best candidate (for the HUD prompt). */
   current: Interactable | null = null;
+  /**
+   * [additive: sub-elements] Interact from somewhere else (a projected spirit): only items passing
+   * `filter` are offered, relabelled by `label`.
+   */
+  focus: { position: THREE.Vector3; yaw: number; filter: (i: Interactable) => boolean; label: (i: Interactable) => string } | null = null;
 
   init(ctx: GameContext): void {
     this.ctx = ctx;
@@ -72,7 +77,19 @@ export class InteractionSystem implements GameSystem {
       this.current = null;
       return;
     }
-    this.current = this.nearest(p.position, p.yaw);
+    const f = this.focus;
+    if (f) {
+      let best: Interactable | null = null;
+      let bd = Infinity;
+      for (const i of this.items.values()) {
+        if (!f.filter(i) || (i.enabled && !i.enabled())) continue;
+        const d = Math.hypot(i.position.x - f.position.x, i.position.z - f.position.z);
+        if (d > i.radius + 0.8 || Math.abs(i.position.y - f.position.y) > 3.5 || d >= bd) continue;
+        bd = d;
+        best = i;
+      }
+      this.current = best ? { ...best, label: f.label(best) } : null;
+    } else this.current = this.nearest(p.position, p.yaw);
     if (this.current && this.ctx.input.wasPressed('interact')) {
       this.ctx.input.consume('interact');
       try {

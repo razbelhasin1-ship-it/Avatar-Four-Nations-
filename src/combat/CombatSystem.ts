@@ -162,6 +162,8 @@ export class CombatSystem implements GameSystem {
   playerDamageDealtMul = 1;
   /** [additive: sub-elements] Multipliers on a cast's power (e.g. the moon for waterbending). */
   readonly powerMods: Array<(caster: Combatant, def: TechniqueDef) => number> = [];
+  /** [additive: sub-elements] Extra refusals (e.g. no bending while the spirit is projected). */
+  readonly castGates: Array<(caster: Combatant, def: TechniqueDef) => { reason: TechniqueFailReason; message: string } | null> = [];
 
   init(ctx: GameContext): void {
     this.ctx = ctx;
@@ -272,8 +274,12 @@ export class CombatSystem implements GameSystem {
     const s = this.state(caster);
     if (s.active && (s.active.phase === 'windup' || s.active.phase === 'channel')) return fail('busy');
     if (caster.stunned > 0 || caster.hasStatus('freeze')) return fail('state');
-    // [additive: sub-elements] A bloodbent body cannot bend.
+    // [additive: sub-elements] A bloodbent body cannot bend; other gates (projection).
     if (caster.held) return fail('state', 'Your body will not obey you.');
+    for (const g of this.castGates) {
+      const r = g(caster, def);
+      if (r) return fail(r.reason, r.message);
+    }
     const now = ctx.time.elapsed;
     if (!req.free && (s.cooldowns.get(id) ?? 0) > now) return fail('cooldown', `${def.name} is recovering.`);
     const chiCost = req.free ? 0 : def.chiCost * (caster.isPlayer ? (ctx.avatar?.boosts?.chiCost ?? 1) : 1);

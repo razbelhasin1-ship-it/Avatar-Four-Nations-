@@ -40,6 +40,9 @@ export class CameraRig implements GameSystem {
     });
   }
 
+  /** [additive: sub-elements] Follow this instead of the player (a projected spirit). */
+  follow: { position: THREE.Vector3; height: number } | null = null;
+
   setScripted(fn: ((dt: number, cam: THREE.PerspectiveCamera) => void) | null): void {
     this.scripted = fn;
     if (!fn) this.initialized = false;
@@ -64,7 +67,7 @@ export class CameraRig implements GameSystem {
       this.applyShake(dt, cam);
       return;
     }
-    const p = this.ctx.player;
+    const p = (this.follow ?? this.ctx.player) as { position: THREE.Vector3; height: number; body?: { horizontalSpeed: number } | null } | null;
     if (!p) return;
     const input = this.ctx.input;
     const ctl = this.ctx.settings.data.controls;

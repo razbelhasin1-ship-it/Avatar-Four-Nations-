@@ -18,6 +18,7 @@ import { TravelSystem } from './travel/TravelSystem';
 import { MoonSystem } from './subskills/Moon';
 import { SubSkillSystem } from './subskills/SubSkills';
 import { LavaSystem } from './subskills/lava/LavaSystem';
+import { ProjectionSystem } from './subskills/projection/Projection';
 
 /**
  * Feature modules plug into the game here without editing Game.ts.
@@ -76,4 +77,6 @@ export const MODULES: GameModule[] = [
   { name: 'subskills', order: 65, create: () => new SubSkillSystem() },
   // Lava patches, flows and cooling (lavabending + world lava), after combat and water (__game.debug.lava).
   { name: 'lava', order: 48, create: () => new LavaSystem() },
+  // Spiritual projection: meditation, the spirit's flight, camera follow, focus, return (__game.debug.projection). Before the player (body locked, posed).
+  { name: 'projection', order: 24, create: () => new ProjectionSystem() },
 ];

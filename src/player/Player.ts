@@ -94,6 +94,8 @@ export class Player extends Entity implements Combatant, Persistable {
   mountAnchor: THREE.Object3D | null = null;
   /** External systems can lock controls (cutscene/training intro). */
   controlLock = 0;
+  /** [additive: sub-elements] Held pose while the body is left behind (meditating for a spiritual projection). */
+  poseOverride: 'meditate' | 'kneel' | null = null;
   playTime = 0;
   /** Playful bending while exploring (held attack): water orb, lifted rock, palm flame. */
   readonly play: ElementPlay;
@@ -530,7 +532,7 @@ export class Player extends Entity implements Combatant, Persistable {
     anim.loco.mounted = !!this.mountAnchor;
     anim.loco.turnRate = turnRate;
     anim.loco.style = this.element;
-    anim.loco.idleVariant = ctx.avatar.sphereActive ? 'sphere' : ctx.avatar.active && !body.grounded ? 'float' : 'stand';
+    anim.loco.idleVariant = this.poseOverride ?? (ctx.avatar.sphereActive ? 'sphere' : ctx.avatar.active && !body.grounded ? 'float' : 'stand');
   }
 
   // ---------------------------------------------------------------------------
