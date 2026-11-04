@@ -224,8 +224,27 @@ export class SubskillQuestScripts implements GameSystem {
   // Frame
   // ---------------------------------------------------------------------------
 
+  /** Open what the save says is open (plug melted, flow bridged, prison opened), once per session/build. */
+  private syncedStamp = -1;
+  private syncSites(): void {
+    if (!SITES.built || this.syncedStamp === SITES.sessionStamp) return;
+    this.syncedStamp = SITES.sessionStamp;
+    const q = this.ctx.quests;
+    if (q.hasFlag('hm_melted')) this.removePlug(false);
+    if (q.hasFlag('hm_bridged') && SITES.heatBlock) {
+      this.ctx.world.collision.remove(SITES.heatBlock);
+      SITES.heatBlock = 0;
+    }
+    if (q.hasFlag('pm_freed') && SITES.slab?.col) {
+      this.ctx.world.collision.remove(SITES.slab.col);
+      SITES.slab.col = 0;
+      SITES.slab.mesh.visible = false;
+    }
+  }
+
   update(dt: number, ctx: GameContext): void {
     if (ctx.session.kind !== 'campaign' || !ctx.player) return;
+    this.syncSites();
     this.updateHeart(dt);
     this.updateSilent(dt);
     this.updatePuppet(dt);

@@ -247,7 +247,7 @@ export class BloodbendingSystem implements GameSystem {
       s?.noteUse('blood', 'blood_hold');
       s?.witnessHold(target.position.x, target.position.z);
       // Psychic holds need no gesture; otherwise the hands curl into rigid claws.
-      if (!hold.subdue) ctx.player!.humanoid.animator.play('blood_bend', { fadeIn: 0.15, hold: true });
+      if (!hold.subdue) (ctx.player as { humanoid?: { animator: { play(id: string, o?: object): unknown } } | null } | null)?.humanoid?.animator.play('blood_bend', { fadeIn: 0.15, hold: true });
     }
     ctx.audio.play('sub.blood.creak', { position: target.position, volume: 0.9 });
     if (!this.hum) this.hum = ctx.audio.loop('sub.blood.hum', { volume: 0.8 });
@@ -275,7 +275,7 @@ export class BloodbendingSystem implements GameSystem {
     this.stats.released[reason] = (this.stats.released[reason] ?? 0) + 1;
     const byPlayer = h.holder === ctx.player;
     if (byPlayer && !this.holds.some((x) => x.holder === ctx.player)) {
-      ctx.player?.humanoid.animator.stop('blood_bend', 0.3);
+      (ctx.player as { humanoid?: { animator: { stop(id?: string, f?: number): void } } | null } | null)?.humanoid?.animator.stop('blood_bend', 0.3);
       this.puppeting = false;
     }
     if (!this.holds.length) {

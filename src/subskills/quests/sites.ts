@@ -34,7 +34,9 @@ export const SITES: {
   slab: { mesh: THREE.Mesh; col: number } | null;
   heatBlock: number;
   vault: null;
-} = { built: false, tunnel: null, plug: null, slab: null, heatBlock: 0, vault: null };
+  /** Bumped at every session start (the scripts re-sync open/closed state from flags). */
+  sessionStamp: number;
+} = { built: false, tunnel: null, plug: null, slab: null, heatBlock: 0, vault: null, sessionStamp: 0 };
 
 const T = SUB_SITES.tunnels;
 
@@ -55,6 +57,7 @@ export class SubskillSites implements RegionContent {
     this.buildVillage(ctx, b);
     b.finish();
     SITES.built = true;
+    SITES.sessionStamp++;
   }
 
   // ---------------------------------------------------------------------------
@@ -185,6 +188,26 @@ export class SubskillSites implements RegionContent {
     this.group.add(slab);
     const slabCol = ctx.world.collision.add({ shape: 'box', x: slab.position.x, y: slab.position.y, z: slab.position.z, hx: 0.4, hy: 1.6, hz: 1.8, yaw: 0, solid: true, walkable: false, surface: 'rock', tag: 'subskill_slab' });
     SITES.slab = { mesh: slab, col: slabCol };
+  }
+
+  /**
+   * Region content outlives play sessions: put the plug, the heat barrier and the prison slab back
+   * at every session start (the quest scripts then open what the save says is open).
+   */
+  onSessionStart(ctx: GameContext): void {
+    const tf = SITES.tunnel;
+    if (SITES.plug && !SITES.plug.col) {
+      const pp = SITES.plug.mesh.position;
+      SITES.plug.col = ctx.world.collision.add({ shape: 'box', x: pp.x, y: pp.y, z: pp.z, hx: 1.9, hy: 2.1, hz: 2.5, yaw: 0, solid: true, walkable: false, surface: 'rock', tag: 'subskill_plug' });
+      SITES.plug.mesh.visible = true;
+    }
+    if (tf && !SITES.heatBlock) SITES.heatBlock = ctx.world.collision.add({ shape: 'box', x: tf.at(13.7, 0).x, y: tf.F + 2, z: T.z, hx: 1.3, hy: 2, hz: 2.5, yaw: 0, solid: true, walkable: false, tag: 'subskill_heat' });
+    if (SITES.slab && !SITES.slab.col) {
+      const sp = SITES.slab.mesh.position;
+      SITES.slab.col = ctx.world.collision.add({ shape: 'box', x: sp.x, y: sp.y, z: sp.z, hx: 0.4, hy: 1.6, hz: 1.8, yaw: 0, solid: true, walkable: false, surface: 'rock', tag: 'subskill_slab' });
+      SITES.slab.mesh.visible = true;
+    }
+    SITES.sessionStamp++;
   }
 
   dispose(ctx: GameContext): void {
