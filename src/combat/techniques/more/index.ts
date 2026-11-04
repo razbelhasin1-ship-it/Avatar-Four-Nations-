@@ -6,3 +6,4 @@ import './earth';
 import './fire';
 import './air';
 import './water';
+import './octopus';
