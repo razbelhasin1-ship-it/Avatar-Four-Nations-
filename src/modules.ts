@@ -19,6 +19,7 @@ import { MoonSystem } from './subskills/Moon';
 import { SubSkillSystem } from './subskills/SubSkills';
 import { LavaSystem } from './subskills/lava/LavaSystem';
 import { ProjectionSystem } from './subskills/projection/Projection';
+import { BloodbendingSystem } from './subskills/blood/Bloodbending';
 
 /**
  * Feature modules plug into the game here without editing Game.ts.
@@ -79,4 +80,6 @@ export const MODULES: GameModule[] = [
   { name: 'lava', order: 48, create: () => new LavaSystem() },
   // Spiritual projection: meditation, the spirit's flight, camera follow, focus, return (__game.debug.projection). Before the player (body locked, posed).
   { name: 'projection', order: 24, create: () => new ProjectionSystem() },
+  // Bloodbending holds (full moon, sunrise, resist, puppet, redirect, safe release) before bodies update (__game.debug.blood).
+  { name: 'bloodbending', order: 27, create: () => new BloodbendingSystem() },
 ];

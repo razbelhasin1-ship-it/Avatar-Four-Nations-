@@ -537,7 +537,7 @@ export class SubSkillSystem implements GameSystem, Persistable {
 }
 
 const CSS = `
-.strain-meter{position:absolute;top:44px;right:14px;width:132px;padding:4px 8px 6px;border-radius:8px;background:rgba(10,14,22,.55);
+.strain-meter{position:absolute;top:150px;left:16px;width:150px;padding:4px 8px 6px;border-radius:8px;background:rgba(10,14,22,.55);
   border:1px solid rgba(255,255,255,.1);color:#d9dbe6;font:11px var(--font-body,sans-serif);pointer-events:none;z-index:4}
 .strain-meter.hidden{display:none}
 .strain-meter .strain-top{display:flex;justify-content:space-between;letter-spacing:.06em;text-transform:uppercase;font-size:10px;color:#aab0c4}
@@ -548,7 +548,7 @@ const CSS = `
 .strain-meter .strain-bar i.t1{left:${STRAIN.unease}%} .strain-meter .strain-bar i.t2{left:${STRAIN.dark}%} .strain-meter .strain-bar i.t3{left:${STRAIN.breaking}%}
 .strain-meter[data-stage="dark"]{border-color:rgba(140,110,190,.45)}
 .strain-meter[data-stage="breaking"]{border-color:rgba(190,90,120,.6)}
-#ui.touch-on .strain-meter{top:calc(34px + env(safe-area-inset-top,0px));right:auto;left:50%;transform:translateX(-50%)}
+#ui.touch-on .strain-meter{top:calc(128px + env(safe-area-inset-top,0px));left:calc(12px + env(safe-area-inset-left,0px));width:120px}
 `;
 
 let injected = false;

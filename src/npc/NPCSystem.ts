@@ -158,7 +158,15 @@ export class NPC extends Entity {
     const b = this.def.behavior;
     let desiredSpeed = 0;
     const pos = this.root.position;
-    if (this.fleeTimer > 0 && !this.talking) {
+    if (this.held) {
+      // [additive: sub-elements] Bloodbent: the routine stops; only the hold moves the body.
+      const m = this.held.move;
+      const sp = Math.hypot(m.x, m.z);
+      if (sp > 0.05) {
+        this.target.set(pos.x + m.x * 2, pos.y, pos.z + m.z * 2);
+        desiredSpeed = sp;
+      } else this.target.copy(pos);
+    } else if (this.fleeTimer > 0 && !this.talking) {
       // [additive: NPC life] run away from danger, then walk back home.
       this.fleeTimer -= dt;
       const ax = pos.x - this.fleeFrom.x, az = pos.z - this.fleeFrom.z;
