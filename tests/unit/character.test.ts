@@ -330,4 +330,74 @@ describe('Animator feet planting', () => {
       for (let i = 0; i < 40; i++) an.update(1 / 30);
     }
   });
+
+  it('earth stance: deep square horse stance, fists up before the chest, feet planted through strikes and walks', async () => {
+    const { Animator, BONE_NAMES } = await import('../../src/character/Animator');
+    const { BONE_PARENT, rigLayout } = await import('../../src/character/CharShape');
+    await import('../../src/combat/techniques/earth/clips');
+    await import('../../src/character/combatClips');
+    const root = new THREE.Group();
+    const bones = {} as Record<string, THREE.Object3D>;
+    const rig = rigLayout('average');
+    for (const n of BONE_NAMES) {
+      bones[n] = new THREE.Object3D();
+      bones[n].position.set(...rig.offset[n]);
+    }
+    for (const n of BONE_NAMES) (BONE_PARENT[n] ? bones[BONE_PARENT[n]!] : root).add(bones[n]);
+    const an = new Animator(bones as never);
+    an.loco.style = 'earth';
+    const pos = (b: string) => {
+      root.updateMatrixWorld(true);
+      return bones[b].getWorldPosition(new THREE.Vector3());
+    };
+    const toeYaw = (f: 'footL' | 'footR'): number => {
+      const v = new THREE.Vector3(0, 0, 1).applyQuaternion(bones[f].getWorldQuaternion(new THREE.Quaternion()));
+      return Math.atan2(v.x, v.z);
+    };
+    for (let i = 0; i < 60; i++) an.update(1 / 30);
+    const L0 = pos('footL'), R0 = pos('footR');
+    for (const p of [L0, R0]) expect(p.y).toBeCloseTo(0.065, 2);
+    expect(L0.x).toBeGreaterThan(0.35); // twice shoulder-width
+    expect(R0.x).toBeLessThan(-0.35);
+    expect(Math.abs(L0.x + R0.x)).toBeLessThan(0.01); // square: symmetric, neither foot leads
+    expect(Math.abs(L0.z - R0.z)).toBeLessThan(0.01);
+    expect(bones.hips.position.y).toBeLessThan(0.95 - 0.17); // sunk deep
+    expect(Math.abs(bones.hips.rotation.y)).toBeLessThan(0.02);
+    expect(toeYaw('footL')).toBeGreaterThan(0.25); // toes turned out
+    expect(toeYaw('footR')).toBeLessThan(-0.25);
+    expect(an.fist).toEqual([1, 1]);
+    for (const s of ['L', 'R']) {
+      const hand = pos(`hand${s}`), elbow = pos(`foreArm${s}`);
+      expect(hand.z).toBeGreaterThan(0.25); // before the chest, not at the sides
+      expect(Math.abs(hand.x)).toBeLessThan(0.25);
+      expect(hand.y).toBeGreaterThan(elbow.y + 0.1); // forearms rise from low elbows
+    }
+    // The standing foot never leaves its stance spot; every move settles back into the stance.
+    const cases: Array<[string, Array<'L' | 'R'>]> = [['earth_strike_r', ['L']], ['earth_strike_l', ['R']], ['earth_slam', ['R']], ['earth_push', ['L', 'R']], ['push_two', ['L', 'R']]];
+    for (const [clip, standing] of cases) {
+      an.play(clip, { fadeIn: 0.08 });
+      let drift = 0;
+      for (let i = 0; i < 54; i++) {
+        an.update(1 / 60);
+        for (const s of standing) {
+          const p = pos(`foot${s}`), o = s === 'L' ? L0 : R0;
+          drift = Math.max(drift, Math.hypot(p.x - o.x, p.z - o.z));
+        }
+      }
+      expect(drift, clip).toBeLessThan(0.04);
+      for (let i = 0; i < 45; i++) an.update(1 / 30);
+      expect(pos('footL').distanceTo(L0), clip).toBeLessThan(0.01);
+      expect(pos('footR').distanceTo(R0), clip).toBeLessThan(0.01);
+      expect(bones.hips.position.y).toBeLessThan(0.95 - 0.17);
+    }
+    // Walking brings the feet under the body; stopping roots them again.
+    an.loco.speed = 2;
+    for (let i = 0; i < 45; i++) an.update(1 / 30);
+    expect(Math.abs(pos('footL').x)).toBeLessThan(0.26);
+    expect(Math.abs(pos('footR').x)).toBeLessThan(0.26);
+    an.loco.speed = 0;
+    for (let i = 0; i < 60; i++) an.update(1 / 30);
+    expect(pos('footL').distanceTo(L0)).toBeLessThan(0.01);
+    expect(pos('footR').distanceTo(R0)).toBeLessThan(0.01);
+  });
 });

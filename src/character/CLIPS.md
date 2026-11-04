@@ -94,6 +94,13 @@ Set `animator.loco` every frame; the Animator blends these automatically:
   stance — left foot and fist leading, rear fist chambered at the ribs, head square to the target —
   and breathes. Clips that drive the torso but not the hips square the hips into the strike (feet
   re-planted); clips that leave the legs planted never lift the hips out of the stance.
+- **Earth stance** (`EARTH_STANCE` in Animator.ts): standing still, `earth` takes a deep, square
+  horse stance — feet twice shoulder-width, toes and knees turned out, hips sunk — with both fists
+  up before the chest (forearms rising from low elbows, palms facing). A slow belly breath settles
+  it; now and then the head tips to listen through the feet. Earth clips start and end in it
+  (`STAND` in `combat/techniques/earth/clips.ts`) and keep standing feet on their stance spots
+  (`legAt(..., twist)`, `planted`, `standOn`, `plantedPaths`); like fire, clips that leave the legs
+  planted never lift the hips out of it.
 - **Air states**: `grounded`/`vy` (jump, fall, landing via `notifyLanding(speed)`), `gliding`,
   `swimming`, `mounted`.
 - **Idle variants**: `idleVariant` = `stand | meditate | sit | kneel | work | guard | float`.

@@ -341,6 +341,45 @@ const FIRE_STANCE = {
   breathRate: 1.85,
 };
 
+/**
+ * Earthbending ready stance (Hung Gar, the style earthbending is drawn from): a deep, square
+ * horse stance — "be like a rock: steady and strong". The feet stand twice shoulder-width apart
+ * with the toes turned a little out, the knees bend out over them, the hips sink low and sit
+ * back, and the back stays upright. Both fists stand up in a solid guard before the chest —
+ * forearms rising from low elbows, palms facing each other, the lead (left) fist a little higher
+ * and further out than the rear — so the body reads square, heavy and closed. Its idle motion is
+ * almost none: a slow belly breath settles the hips and presses the guard out on the exhale, and
+ * now and then the head tips to listen through the feet (neutral jing: wait and listen).
+ * Exported (mutable) for the character lab; earth clips start and end in it (earth/clips.ts).
+ */
+export const EARTH_STANCE = {
+  /** Feet beyond the hip joints (m): [out, forward]. */
+  feet: [0.31, 0.0] as [number, number],
+  /** Foot yaw (rad, toes out, each side). */
+  toes: 0.38,
+  /** Hips: drop (m) and backward sit (m). */
+  drop: 0.2,
+  sit: -0.02,
+  /** Torso: spine and chest forward bend (rad); shoulders down (rad). */
+  spine: 0.12,
+  chest: 0.04,
+  shoulders: 0.08,
+  /**
+   * Arms: [upperArm x, y, z, foreArm x, foreArm y (twist)] for the lead (left) and rear (right)
+   * fists — solved in the character lab for fists before the chest (lead ~0.4 m out, rear ~0.36 m),
+   * elbows low and a hand-width out from the ribs, the twist turning the palms to face each other.
+   */
+  lead: [-0.8, -0.42, 0.24, -1.47, 0.35] as [number, number, number, number, number],
+  rear: [-0.63, 0.43, -0.28, -1.59, -0.3] as [number, number, number, number, number],
+  /** Wrists [lead, rear] (x flex; 0 = the fist in line with the forearm). */
+  wrists: [0, 0] as [number, number],
+  /** Breath: angular rate (rad/s; ≈ 5.7 s a breath) and how far the exhale sinks the hips (m). */
+  breathRate: 1.1,
+  breathSink: 0.012,
+  /** Listening: how far the head tips (rad) when it does. */
+  listen: 0.16,
+};
+
 interface ActionLayer {
   clip: Clip;
   time: number;
@@ -375,6 +414,8 @@ export interface LegIK {
   shin: number;
   foot: number;
   reach: number;
+  /** False when the target was out of reach, or the thigh twist made it unreachable (the solve was clamped). */
+  exact?: boolean;
 }
 
 /**
@@ -398,7 +439,8 @@ export function solveLegIK(dx: number, dy: number, dz: number, a: number, b: num
   // component matches, then pitch in the sagittal plane.
   const ct = Math.cos(twist), st = Math.sin(twist);
   const den = uy * ct;
-  const Z = Math.asin(Math.max(-1, Math.min(1, den < -1e-4 ? (uz * st - nx) / den : nx)));
+  const zArg = den < -1e-4 ? (uz * st - nx) / den : nx;
+  const Z = Math.asin(Math.max(-1, Math.min(1, zArg)));
   const wx = -uy * Math.sin(Z), wy = uy * Math.cos(Z);
   const X = Math.atan2(nz, ny) - Math.atan2(-wx * st + uz * ct, wy);
   o.thighX = Math.atan2(Math.sin(X), Math.cos(X));
@@ -406,6 +448,7 @@ export function solveLegIK(dx: number, dy: number, dz: number, a: number, b: num
   o.shin = knee;
   o.foot = -(o.thighX + o.shin) + footPitch;
   o.reach = len / (a + b);
+  o.exact = Math.abs(zArg) <= 1 && len <= maxL;
   return o;
 }
 
@@ -630,14 +673,21 @@ export class Animator {
     _hip.z += hipsRest.z + hz;
     _v.set(tx - _hip.x, ty - _hip.y, tz - _hip.z).applyQuaternion(_q.invert());
     const n = side > 0 ? 'L' : 'R';
-    const ik = solveLegIK(_v.x, _v.y, _v.z, a, b, footPitch, this.ik, pose[`thigh${n}`][1]);
+    let tw = pose[`thigh${n}`][1];
+    let ik = solveLegIK(_v.x, _v.y, _v.z, a, b, footPitch, this.ik, tw);
+    // A deep squat cannot keep the thigh turned out this far with this joint order (the earth
+    // stance under a crouching clip): ease the twist off until the foot lands where it should.
+    for (let k = 0; !ik.exact && ik.reach < 0.999 && Math.abs(tw) > 1e-3 && k < 20; k++) {
+      tw = Math.sign(tw) * Math.max(0, Math.abs(tw) - 0.03);
+      ik = solveLegIK(_v.x, _v.y, _v.z, a, b, footPitch, this.ik, tw);
+    }
     const blend = (bone: string, x: number, y: number, z: number) => {
       const p = pose[bone];
       p[0] = lerp(p[0], x, w);
       p[1] = lerp(p[1], y, w);
       p[2] = lerp(p[2], z, w);
     };
-    blend(`thigh${n}`, ik.thighX, pose[`thigh${n}`][1], ik.thighZ);
+    blend(`thigh${n}`, ik.thighX, tw, ik.thighZ);
     blend(`shin${n}`, ik.shin, 0, 0);
     blend(`foot${n}`, ik.foot, 0, -ik.thighZ * 0.8);
   }
@@ -755,6 +805,37 @@ export class Animator {
       this.setLoco('thighR', 0, F.toes[1] - F.hipsYaw, 0);
       fist = 1;
     }
+    const earth = s === 'earth';
+    if (earth) {
+      const E = EARTH_STANCE;
+      // Breath from the belly: + inhale, − exhale (the exhale settles the hips and presses the guard).
+      const b = Math.sin(t * E.breathRate);
+      const exhale = (1 - b) * 0.5;
+      hipsY = -E.drop - exhale * E.breathSink;
+      hipsZ = E.sit;
+      hipsX = Math.sin(t * 0.31) * 0.003;
+      // Listening through the feet: now and then (irregularly) the head tips down and turns an ear.
+      const q = Math.sin(t * 0.29) * Math.sin(t * 0.17 + 1.3);
+      const lk = clamp01((q - 0.5) / 0.4);
+      const listen = lk * lk * (3 - 2 * lk);
+      const side = Math.max(-1, Math.min(1, Math.sin(t * 0.11) * 4)); // which ear (turns over smoothly)
+      this.setLoco('hips', 0, 0, 0);
+      this.setLoco('spine', E.spine, 0, 0);
+      this.setLoco('chest', E.chest + b * 0.012, 0, 0);
+      this.setLoco('neck', -(E.spine + E.chest) * 0.45 + listen * E.listen * 0.4, 0, 0);
+      this.setLoco('head', -(E.spine + E.chest) * 0.25 + listen * E.listen * 0.6, side * listen * E.listen, side * listen * E.listen * -0.5);
+      this.setLoco('shoulderL', 0, 0, -E.shoulders - b * 0.01);
+      this.setLoco('shoulderR', 0, 0, E.shoulders + b * 0.01);
+      this.setLoco('upperArmL', E.lead[0] - exhale * 0.025, E.lead[1], E.lead[2]);
+      this.setLoco('foreArmL', E.lead[3], E.lead[4], 0);
+      this.setLoco('upperArmR', E.rear[0] - exhale * 0.02, E.rear[1], E.rear[2]);
+      this.setLoco('foreArmR', E.rear[3], E.rear[4], 0);
+      this.setLoco('handL', E.wrists[0], 0, 0);
+      this.setLoco('handR', E.wrists[1], 0, 0);
+      this.setLoco('thighL', 0, E.toes, 0);
+      this.setLoco('thighR', 0, -E.toes, 0);
+      fist = 1;
+    }
 
     // ---- Gait (phase, stride synced to speed) ----
     const speed = Math.max(L.speed, turning * 0.6);
@@ -827,7 +908,7 @@ export class Animator {
         this.blendLoco('shoulderL', 0, 0, -0.06, m);
         this.blendLoco('shoulderR', 0, 0, 0.06, m);
       }
-      if (fire) {
+      if (fire || earth) {
         // Out of the stance: feet back to a natural toe-out for walking.
         this.blendLoco('thighL', 0, I.toeOut, 0, m);
         this.blendLoco('thighR', 0, -I.toeOut, 0, m);
@@ -845,8 +926,9 @@ export class Animator {
         const hipX = Math.abs(this.bones[side > 0 ? 'thighL' : 'thighR'].position.x) || 0.093;
         // Idle target.
         const fs = FIRE_STANCE.feet;
-        const ix = fire ? side * (hipX + (side > 0 ? fs[0] : fs[2])) : side * (hipX + I.width + 0.012);
-        const iz = fire ? (side > 0 ? fs[1] : -fs[3]) : (side > 0 ? 1 : -1) * I.stagger * 0.5 + 0.012;
+        const es = EARTH_STANCE.feet;
+        const ix = fire ? side * (hipX + (side > 0 ? fs[0] : fs[2])) : earth ? side * (hipX + es[0]) : side * (hipX + I.width + 0.012);
+        const iz = fire ? (side > 0 ? fs[1] : -fs[3]) : earth ? es[1] : (side > 0 ? 1 : -1) * I.stagger * 0.5 + 0.012;
         let tx = ix, ty = restAnkle, tz = iz, pitch = 0;
         if (m > 0.001) {
           const legPh = (this.phase + (side > 0 ? 0 : 0.5)) % 1;
@@ -1171,9 +1253,9 @@ export class Animator {
         fp[2] = lerp(fp[2], tmp[2], w);
       }
       const hy = this.sampleScalar(a.clip, ct, 'hipsY');
-      // Out of the low fire stance, a clip that leaves the legs planted only ever sinks the hips:
-      // rising out of the stance would over-reach the feet.
-      const stay = this.loco.style === 'fire' && !a.bones.has('thighL') && !a.bones.has('thighR');
+      // Out of the low fire and earth stances, a clip that leaves the legs planted only ever sinks
+      // the hips: rising out of the stance would over-reach the feet.
+      const stay = (this.loco.style === 'fire' || this.loco.style === 'earth') && !a.bones.has('thighL') && !a.bones.has('thighR');
       if (hy !== null) hipsY = lerp(hipsY, stay ? Math.min(hy, this.hipsY) : hy, w);
       const hz = this.sampleScalar(a.clip, ct, 'hipsZ');
       if (hz !== null) hipsZ = lerp(hipsZ, hz, w);

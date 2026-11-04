@@ -29,12 +29,22 @@ type Side = 'L' | 'R';
  * body centre line, outward positive) and forward offset `fwd`, for the given hips
  * offsets. `lift` raises the ankle, `pitch` tilts the foot (+ = toes down).
  */
-export function legAt(side: Side, out: number, fwd: number, hipsY: number, hipsZ = 0, lift = 0, pitch = 0, toeOut = 0.12, hipsX = 0): Pose {
+export function legAt(side: Side, out: number, fwd: number, hipsY: number, hipsZ = 0, lift = 0, pitch = 0, toeOut = 0.12, hipsX = 0, twist = 0): Pose {
   const s = side === 'L' ? 1 : -1;
-  const ik = solveLegIK(s * (out - HIP_X) - hipsX, ANKLE + lift - (HIP_Y + hipsY), fwd - hipsZ, THIGH, SHIN, pitch);
+  // `twist` (rad, outward): turn the whole leg out from the hip, so the knee bends out over the
+  // toes (horse stances) — the same leg twist the locomotion uses. Deep squats cannot keep the
+  // full twist with this joint order: it is eased off until the foot lands exactly.
+  const solve = (tw: number) => solveLegIK(s * (out - HIP_X) - hipsX, ANKLE + lift - (HIP_Y + hipsY), fwd - hipsZ, THIGH, SHIN, pitch, undefined, s * tw);
+  let tw = twist;
+  let ik = solve(tw);
+  while (tw > 0 && !ik.exact) {
+    tw = Math.max(0, tw - 0.02);
+    ik = solve(tw);
+  }
+  twist = tw;
   const p: Pose = {};
   // Toe-out is applied at the ankle so it never moves the solved ankle position.
-  p[`thigh${side}`] = [ik.thighX, 0, ik.thighZ];
+  p[`thigh${side}`] = [ik.thighX, s * twist, ik.thighZ];
   p[`shin${side}`] = [ik.shin, 0, 0];
   p[`foot${side}`] = [ik.foot, s * toeOut, -ik.thighZ * 0.8];
   return p;
