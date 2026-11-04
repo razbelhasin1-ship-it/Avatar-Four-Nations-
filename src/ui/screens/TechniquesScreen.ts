@@ -5,6 +5,8 @@ import { ELEMENT_INFO, ELEMENTS, type Element } from '../../core/types';
 import { AWAKENINGS, MASTERS } from '../../data/masters';
 import { QUESTS } from '../../data/quests';
 import { SLOT_COUNT, SPHERE_TECHNIQUES } from '../../progression/Progression';
+import { KORRA_TECHNIQUES, SUB_SKILL_IDS, SUB_SKILLS, type SubSkillDef } from '../../data/subskills';
+import type { SubSkillSystem } from '../../subskills/SubSkills';
 import { clear, h } from '../dom';
 import { ELEMENT_COLORS, emblem, iconHTML } from '../icons';
 import type { UIManager } from '../UIManager';
@@ -97,7 +99,8 @@ export class TechniquesScreen extends GameScreen {
     } else {
       wrap.append(this.loadout(e));
     }
-    const defs = allTechniques().filter((t) => t.element === e).sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name));
+    // [additive: sub-elements] Specialization moves live in their own branch below.
+    const defs = allTechniques().filter((t) => t.element === e && !t.subSkill).sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name));
     const known = defs.filter((d) => pr.knows(d.id));
     const slot = known.filter((d) => SLOTTABLE.has(d.kind));
     const core = known.filter((d) => !SLOTTABLE.has(d.kind));
@@ -113,7 +116,41 @@ export class TechniquesScreen extends GameScreen {
     section('Core forms & passives', 'always active — attack and heavy attack', core);
     section('Not yet learned', 'masters teach these', locked);
     if (!defs.length) wrap.append(empty('No techniques for this element.'));
+    const branch = SUB_SKILL_IDS.map((id) => SUB_SKILLS[id]).find((b) => b.parent === e);
+    if (branch) this.branch(wrap, branch);
     this.body.append(wrap);
+  }
+
+  /** [additive: sub-elements] A specialization branch (lavabending, spiritual projection, bloodbending). */
+  private branch(wrap: HTMLElement, b: SubSkillDef): void {
+    const ctx = this.ctx;
+    const pr = ctx.progression;
+    const subs = ctx.extra.get('subskills') as SubSkillSystem | undefined;
+    const unlocked = !!subs?.isUnlocked(b.id);
+    const mastered = !!pr.mastery[b.parent]?.mastered;
+    const quest = QUESTS.find((q) => q.id === b.unlockQuest);
+    const qState = ctx.quests.isComplete(b.unlockQuest) ? 'done' : ctx.quests.isActive(b.unlockQuest) ? 'active' : 'not started';
+    wrap.append(h('div.gs-sec', `Specialization — ${b.name}`, h('span.gs-sec-sub', unlocked ? 'unlocked' : 'locked')));
+    const lines = unlocked
+      ? [h('p', b.tagline), h('p.muted', b.tooltip)]
+      : [
+          h('p', b.tagline),
+          h('p', `${mastered ? '✓' : '✗'} Master ${ELEMENT_INFO[b.parent].name.toLowerCase()}bending${mastered ? '' : ' (lessons, proficiency and the grandmaster\'s trial)'}`),
+          h('p', `${qState === 'done' ? '✓' : '✗'} Quest “${quest?.title ?? b.unlockQuest}” — ${qState}`),
+          h('p.muted', b.questHint),
+        ];
+    wrap.append(h(`div.gs-card.tq-banner.tq-branch${unlocked ? '.awake' : '.locked'}`, { 'data-branch': b.id }, emblem(b.parent, 'emblem tq-banner-emblem'), h('div', h('h4', `${b.name}${unlocked ? '' : ' — sealed'}`), ...lines)));
+    const g = h('div.tq-grid');
+    const korra = Object.keys(KORRA_TECHNIQUES).filter((t) => getTechnique(t)?.subSkill === b.id && (subs?.korraAvailable(t) ?? false));
+    for (const id of [...b.abilities.map((a) => a.technique), ...korra]) {
+      const d = getTechnique(id);
+      if (!d) continue;
+      const card = this.card(d);
+      const lore = b.abilities.find((a) => a.technique === id)?.lore ?? (KORRA_TECHNIQUES[id] ? 'Legend of Korra extension (switched on).' : '');
+      if (lore) card.querySelector('.tq-usage')?.after(h('p.tq-lore', lore));
+      g.append(card);
+    }
+    wrap.append(g);
   }
 
   private loadout(e: Element): HTMLElement {

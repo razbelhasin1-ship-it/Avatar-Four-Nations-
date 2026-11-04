@@ -19,6 +19,7 @@ export type ProjectionState = 'idle' | 'meditating' | 'projecting' | 'returning'
 const SPIRIT_SENSITIVE = new Set(['monk', 'master', 'elder', 'healer']);
 const tmpA = new THREE.Vector3();
 const tmpB = new THREE.Vector3();
+const tmpW = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 
 /**
@@ -343,7 +344,7 @@ export class ProjectionSystem implements GameSystem {
       camF.normalize();
       const camR = tmpB.set(-camF.z, 0, camF.x);
       const mv = ctx.ui.blocksGameplay ? { x: 0, y: 0 } : input.move;
-      const wish = new THREE.Vector3().addScaledVector(camF, mv.y).addScaledVector(camR, mv.x);
+      const wish = tmpW.set(0, 0, 0).addScaledVector(camF, mv.y).addScaledVector(camR, mv.x);
       if (wish.lengthSq() > 1) wish.normalize();
       const speed = PROJECTION.spiritSpeed * (input.isDown('sprint') ? 1.6 : 1);
       const climb = (input.isDown('jump') ? 1 : 0) - (input.isDown('dodge') ? 1 : 0);

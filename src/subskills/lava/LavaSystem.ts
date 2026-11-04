@@ -123,6 +123,7 @@ const NOT_EARTH = new Set<SurfaceType>(['snow', 'packedsnow', 'ice', 'wood', 'wa
 const tmpV = new THREE.Vector3();
 const tmpV2 = new THREE.Vector3();
 const scratch: Entity[] = [];
+const tickHit = new Set<number>();
 
 const VERT = /* glsl */ `
 #include <common>
@@ -711,7 +712,8 @@ export class LavaSystem implements GameSystem {
     p.tickT = LAVA.tickEvery;
     p.ticks++;
     const ctx = this.ctx;
-    const hit = new Set<number>();
+    const hit = tickHit;
+    hit.clear();
     for (const c of p.cells) {
       tmpV.set(c.x, c.y, c.z);
       for (const e of ctx.entities.queryRadius(tmpV, c.r + 0.4, undefined, scratch)) {

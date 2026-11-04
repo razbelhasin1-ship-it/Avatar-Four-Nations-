@@ -10,7 +10,7 @@ Lavabending (Earth), Spiritual Projection (Air) and Bloodbending (Water). Rollba
 - [x] 5 bloodbending (subskills/blood/Bloodbending.ts + clips.ts, combat/techniques/sub/blood.ts; probe ok: moon gate, hold, no-bend, puppet, redirect, sunrise, resist, concentration, AS frees player, strain stages, elder, vow, korra off)
 - [x] extra: 8 new element moves (combat/techniques/more/*, lessons appended in data/masters.ts; Air Suction taught by Monk Iio, not Pasang) — probe ok
 - [x] 6 unlock quests and NPCs (data/quests_subskills.ts, data/dialogues_subskills.ts, subskills/quests/{sites,QuestScripts}.ts; all 3 quests + refusal/custody played in browser)
-- [ ] 7 UI, audio and VFX polish
+- [x] 7 UI, audio and VFX polish (TechniquesScreen branches + lore lines, element icons, no per-frame allocs; full-moon hint verified)
 - [ ] 8 balance and tests, screenshots, report
 
 ## What exists (phase 1 findings)
@@ -65,6 +65,7 @@ New code lives in `src/subskills/` (systems, fx, quests), `src/combat/techniques
 - src/combat/CombatSystem.ts (+castGates)
 - src/npc/NPCSystem.ts (held NPCs stop their routine)
 - src/data/masters.ts (8 lessons appended, MORE_LESSONS)
+- src/ui/screens/TechniquesScreen.ts (+ specialization branch section), src/ui/screens/screens.css (+.tq-lore)
 - src/data/quests.ts (+SUBSKILL_QUESTS), src/data/quests_props.ts (+2 clue props), src/world/regions/index.ts (+SubskillSites)
 
 ## Notes / gaps

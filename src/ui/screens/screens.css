@@ -2163,3 +2163,14 @@
     transform: none;
   }
 }
+
+/* [additive: sub-elements] Specialization branches in the Technique Library. */
+.tq-lore {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--gold-2, #e8c77a);
+  opacity: 0.9;
+}
+.tq-branch p { margin: 2px 0; }
+.tq-branch.locked { opacity: 0.92; }
