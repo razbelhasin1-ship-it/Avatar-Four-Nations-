@@ -92,4 +92,27 @@ export const QUEST_PROPS: QuestPropDef[] = [
   ...[{ dx: 12, dz: 4 }, { dx: -9, dz: 10 }, { dx: 4, dz: -12 }].map((o, i) => ({ id: `kyoshi_fan_${i}`, kind: 'pickup' as const, look: 'fan' as const, at: { spot: 'shrine_kyoshi', ...o }, label: 'Pick up the war fan', quest: 'sq_kyoshi_fans', step: 'gather', item: 'kyoshi_fan' })),
   // ---- sq_ember_script ----
   ...[{ dx: 10, dz: 3 }, { dx: -12, dz: 2 }, { dx: 4, dz: -9 }].map((o, i) => ({ id: `script_page_${i}`, kind: 'pickup' as const, look: 'page' as const, at: { spot: 'shrine_ember_theater', ...o }, label: 'Pick up the script page', quest: 'sq_ember_script', step: 'gather', item: 'script_page' })),
+  // ---- [additive: sub-elements] The Puppetmaster: clues in Hama's inn ----
+  {
+    id: 'pm_puppets',
+    kind: 'read',
+    look: 'bundle',
+    at: { x: -1794.5, z: 805.4 },
+    label: 'Look in the cupboard',
+    quest: 'sq_puppetmaster',
+    step: 'inn',
+    flag: 'pm_clue_puppets',
+    text: 'Behind the soup bowls, a cupboard full of handmade puppets — strings and all. Each one has a villager\'s face.',
+  },
+  {
+    id: 'pm_comb',
+    kind: 'read',
+    look: 'page',
+    at: { x: -1786, z: 805.6 },
+    label: 'Look at the carved comb',
+    quest: 'sq_puppetmaster',
+    step: 'inn',
+    flag: 'pm_clue_comb',
+    text: 'A comb carved from a whale\'s tooth, in the old style of the Southern Water Tribe. It is very, very old.',
+  },
 ];

@@ -6,6 +6,7 @@ import { KYOSHI_REGION_FACTORIES } from './kyoshi';
 import { TRAVEL_POINT_FACTORIES } from '../../travel/points';
 import { WATER_REGION_FACTORIES } from './water';
 import { WILDS_REGION_FACTORIES } from './wilds';
+import { SubskillSites } from '../../subskills/quests/sites';
 
 /**
  * Registry of region content modules (cities, temples, villages, bridges...).
@@ -19,4 +20,5 @@ export const REGION_FACTORIES: RegionFactory[] = [
   ...WILDS_REGION_FACTORIES, // Between the capitals: Omashu, Kyoshi, Misty Palms, Buried Library, Banyan Tree, north, caves, bridges, roadside, camps
   ...KYOSHI_REGION_FACTORIES, // Kyoshi Island: its own map (zone), reached only by the travel routes
   ...TRAVEL_POINT_FACTORIES, // Travel points to Kyoshi Island in the four cities (src/travel/points.ts)
+  () => new SubskillSites(), // [additive: sub-elements] lava tunnels under the volcano's foot, Hama's hamlet and cave prison
 ];

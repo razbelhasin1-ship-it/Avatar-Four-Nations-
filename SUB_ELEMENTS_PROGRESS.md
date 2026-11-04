@@ -9,7 +9,7 @@ Lavabending (Earth), Spiritual Projection (Air) and Bloodbending (Water). Rollba
 - [x] 4 spiritual projection (subskills/projection/Projection.ts, combat/techniques/sub/projection.ts; probe ok: gates, sight, return streak, body hit)
 - [x] 5 bloodbending (subskills/blood/Bloodbending.ts + clips.ts, combat/techniques/sub/blood.ts; probe ok: moon gate, hold, no-bend, puppet, redirect, sunrise, resist, concentration, AS frees player, strain stages, elder, vow, korra off)
 - [x] extra: 8 new element moves (combat/techniques/more/*, lessons appended in data/masters.ts; Air Suction taught by Monk Iio, not Pasang) — probe ok
-- [ ] 6 unlock quests and NPCs
+- [x] 6 unlock quests and NPCs (data/quests_subskills.ts, data/dialogues_subskills.ts, subskills/quests/{sites,QuestScripts}.ts; all 3 quests + refusal/custody played in browser)
 - [ ] 7 UI, audio and VFX polish
 - [ ] 8 balance and tests, screenshots, report
 
@@ -65,6 +65,7 @@ New code lives in `src/subskills/` (systems, fx, quests), `src/combat/techniques
 - src/combat/CombatSystem.ts (+castGates)
 - src/npc/NPCSystem.ts (held NPCs stop their routine)
 - src/data/masters.ts (8 lessons appended, MORE_LESSONS)
+- src/data/quests.ts (+SUBSKILL_QUESTS), src/data/quests_props.ts (+2 clue props), src/world/regions/index.ts (+SubskillSites)
 
 ## Notes / gaps
 - User asked mid-task for 2 new moves per element (not sub-skills): Earth Grip (Lin), Stone Gloves (Lien), Fire Whip (Jeong), Dancing Dragon (Ahkon), Air Swipe (Tenzo), Air Suction (Pasang), Octopus Form (Siku), Ice Prison (Akka) — after phase 5.

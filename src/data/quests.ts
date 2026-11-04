@@ -1,6 +1,7 @@
 import type { QuestDef } from '../quests/QuestTypes';
 import { MAIN_QUESTS } from './quests_main';
 import { SIDE_QUESTS } from './quests_side';
+import { SUBSKILL_QUESTS } from './quests_subskills';
 
 /**
  * Quest catalog. Opening quests auto-start based on the starting element.
@@ -81,4 +82,6 @@ export const QUESTS: QuestDef[] = [
   // [additive: training/quests] main line, element seek & mastery quests, hidden masters, side quests
   ...MAIN_QUESTS,
   ...SIDE_QUESTS,
+  // [additive: sub-elements] unlock quests for lavabending, spiritual projection and bloodbending.
+  ...SUBSKILL_QUESTS,
 ];

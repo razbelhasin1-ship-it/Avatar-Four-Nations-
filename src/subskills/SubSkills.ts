@@ -48,6 +48,8 @@ export class SubSkillSystem implements GameSystem, Persistable {
   readonly witnesses = new Set<string>();
   /** Legend of Korra extension: moonless bloodbending training finished (needs its flag too). */
   moonlessTrained = false;
+  /** Moves lent by a quest before its branch unlocks (the lava wave teaches Melt and Divert and Cool). */
+  readonly taught = new Set<string>();
   readonly uses: Record<SubSkillId, number> = { lava: 0, projection: 0, blood: 0 };
   private stageNow: StrainStage = 'calm';
   private lastHour = -1;
@@ -64,7 +66,13 @@ export class SubSkillSystem implements GameSystem, Persistable {
     this.ctx = ctx;
     ctx.events.on('mastery:achieved', () => this.checkEligibility());
     ctx.events.on('quest:completed', (e) => {
-      for (const id of SUB_SKILL_IDS) if (SUB_SKILLS[id].unlockQuest === e.questId) this.unlock(id, 'quest');
+      // Bloodbending: only the player who really bent Hama's blood leaves "The Puppetmaster" a
+      // bloodbender; refusing leaves it locked (Hama can still teach it in custody).
+      if (e.questId === 'sq_puppetmaster') {
+        if (ctx.quests.hasFlag('pm_bloodbender')) this.unlock('blood', 'quest');
+      } else if (e.questId === 'sq_hama_custody') this.unlock('blood', 'quest');
+      else if (e.questId === 'sq_tide_without_moon') this.moonlessTrained = true;
+      else for (const id of SUB_SKILL_IDS) if (SUB_SKILLS[id].unlockQuest === e.questId) this.unlock(id, 'quest');
       if (!e.questId.startsWith('mq_awakening')) this.relieve(STRAIN.goodDeed);
     });
     ctx.events.on('world:interact', (e) => {
@@ -104,7 +112,16 @@ export class SubSkillSystem implements GameSystem, Persistable {
 
   private checkEligibility(): void {
     if (this.ctx.session.kind !== 'campaign') return;
-    for (const id of SUB_SKILL_IDS) if (this.eligible(id)) this.ctx.quests.setFlag(`subskill_${id}_eligible`);
+    let any = false;
+    for (const id of SUB_SKILL_IDS) {
+      const f = `subskill_${id}_eligible`;
+      if (this.eligible(id) && !this.ctx.quests.hasFlag(f)) {
+        this.ctx.quests.setFlag(f);
+        any = true;
+      }
+    }
+    // Quest auto-start conditions are only re-checked at session start and on quest completion.
+    if (any) this.ctx.quests.checkAutoStart();
   }
 
   /** Unlock a branch: learn its moves (quests call this on completion; debug may force it). */
@@ -133,6 +150,12 @@ export class SubSkillSystem implements GameSystem, Persistable {
       for (const slots of Object.values(pr.equipped)) for (let i = 0; i < slots.length; i++) if (slots[i] === t) slots[i] = null;
     }
     this.ctx.quests.flags.delete(SUB_SKILLS[id].unlockedFlag);
+  }
+
+  /** A quest lends one move before the branch unlocks (learned and usable; kept after unlocking). */
+  teach(techniqueId: string): void {
+    this.taught.add(techniqueId);
+    this.ctx.progression.learn(techniqueId, 'quest', true);
   }
 
   korraFlag(name: FeatureName): boolean {
@@ -173,7 +196,7 @@ export class SubSkillSystem implements GameSystem, Persistable {
     if (!def.subSkill) return null;
     if (!this.korraAvailable(def.id)) return { reason: 'locked', message: 'A Legend of Korra extension that is switched off.' };
     if (!caster.isPlayer) return null;
-    if (!this.unlocked.has(def.subSkill)) return { reason: 'locked', message: `${SUB_SKILLS[def.subSkill].name} is not unlocked.` };
+    if (!this.unlocked.has(def.subSkill) && !this.taught.has(def.id)) return { reason: 'locked', message: `${SUB_SKILLS[def.subSkill].name} is not unlocked.` };
     return null;
   }
 
@@ -432,6 +455,7 @@ export class SubSkillSystem implements GameSystem, Persistable {
       breakingLock: this.breakingLock,
       witnesses: [...this.witnesses],
       moonlessTrained: this.moonlessTrained,
+      taught: [...this.taught],
       uses: { ...this.uses },
     };
   }
@@ -445,6 +469,7 @@ export class SubSkillSystem implements GameSystem, Persistable {
     this.breakingLock = d.breakingLock === true;
     if (Array.isArray(d.witnesses)) for (const w of d.witnesses) if (typeof w === 'string') this.witnesses.add(w);
     this.moonlessTrained = d.moonlessTrained === true;
+    if (Array.isArray(d.taught)) for (const t of d.taught) if (typeof t === 'string') this.taught.add(t);
     const u = d.uses as Record<string, unknown> | undefined;
     if (u) for (const id of SUB_SKILL_IDS) if (typeof u[id] === 'number') this.uses[id] = u[id] as number;
     this.stageNow = SubSkillSystem.stageOf(this.strain);
@@ -458,6 +483,7 @@ export class SubSkillSystem implements GameSystem, Persistable {
     this.breakingLock = false;
     this.witnesses.clear();
     this.moonlessTrained = false;
+    this.taught.clear();
     for (const id of SUB_SKILL_IDS) this.uses[id] = 0;
     this.stageNow = 'calm';
     this.emotionalMomentUntil = -1;
