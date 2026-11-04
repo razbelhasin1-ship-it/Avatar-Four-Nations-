@@ -856,3 +856,93 @@ export const GRANDMASTER: Record<Element, string> = {
   earth: 'master_bumo',
   fire: 'master_ahkon',
 };
+
+// ---------------------------------------------------------------------------------------------
+// [additive] Two more moves per element, each taught as one more lesson by a fitting master.
+// ---------------------------------------------------------------------------------------------
+const MORE_LESSONS: Record<string, LessonDef> = {
+  master_lin: {
+    id: 'lin_earth_grip',
+    title: 'Hold Them Where They Stand',
+    technique: 'earth_grip',
+    requires: ['lin_seismic_sense'],
+    intro: 'You don\'t have to knock a guy down to beat him. Grab his feet. The ground\'s right there — use it. Show me in a spar.',
+    demo: { cast: 'earth_grip', line: 'Stomp. Now he\'s stuck. Now he\'s sad.' },
+    challenge: { type: 'spar', rounds: 1, partner: 'student', element: 'earth', mustUse: 'earth_grip', level: 3 },
+    hint: 'Earth Grip: the ground closes around a foe\'s feet — they cannot step away for a few seconds, but can still swing.',
+  },
+  master_lien: {
+    id: 'lien_stone_gloves',
+    title: 'Fists of Stone',
+    technique: 'stone_gloves',
+    requires: ['lien_stone_guard'],
+    intro: 'The city\'s agents wear their stone like gloves and throw their fists across a room. Break the far targets — and pull them in.',
+    demo: { cast: 'stone_gloves', line: 'Strike — and bring it back to you.' },
+    challenge: { type: 'targets', count: 3, time: 70, layout: 'far', hp: 20, technique: 'stone_gloves' },
+    hint: 'Stone Gloves: two fists of stone fly from your hands, strike, and drag the target toward you.',
+  },
+  master_jeong: {
+    id: 'jeong_fire_whip',
+    title: 'The Lash',
+    technique: 'fire_whip',
+    requires: ['jeong_fire_dash'],
+    intro: 'A whip of fire reaches where your fists cannot. Crack it across the line of targets — several in one stroke.',
+    demo: { cast: 'fire_whip', line: 'Long, low, and fast. Feel the snap at the end.' },
+    challenge: { type: 'targets', count: 4, time: 60, layout: 'arc', dist: 6, hp: 16, technique: 'fire_whip' },
+    hint: 'Fire Whip: a long lash of flame that sweeps about nine metres ahead.',
+  },
+  master_ahkon: {
+    id: 'ahkon_dancing_dragon',
+    title: 'The Dancing Dragon',
+    technique: 'dancing_dragon',
+    requires: ['ahkon_explosive_finisher'],
+    intro: 'Fire is life, not destruction. Move as the dragons moved — turn with the flame, then send it out like two dragons dancing.',
+    demo: { cast: 'dancing_dragon', line: 'Breathe with the turn. Let it rise. Now — release.' },
+    challenge: { type: 'targets', count: 4, time: 70, layout: 'cluster', dist: 10, hp: 20, technique: 'dancing_dragon' },
+    hint: 'Dancing Dragon: a ring of fire around you, then twin dragons of flame weave forward.',
+  },
+  master_tenzo: {
+    id: 'tenzo_air_swipe',
+    title: 'The Crescent Wind',
+    technique: 'air_swipe',
+    requires: ['tenzo_air_jump'],
+    intro: 'Open your hand and slice the air. A thin blade of wind travels far and passes through what it meets. Break the line of targets.',
+    demo: { cast: 'air_swipe', line: 'Light hand, long reach. Let the wind finish the motion.' },
+    challenge: { type: 'targets', count: 3, time: 60, layout: 'line', dist: 12, hp: 14, technique: 'air_swipe' },
+    hint: 'Air Swipe: a crescent blade of air that pierces a line of foes and knocks them down.',
+  },
+  master_iio: {
+    id: 'iio_air_suction',
+    title: 'The Returning Breath',
+    technique: 'air_suction',
+    requires: ['iio_air_shield'],
+    intro: 'Every breath out is followed by a breath in. Pull the wind back to you, and what rides it comes too — your sparring partner included.',
+    demo: { cast: 'air_suction', line: 'In... and everything comes home.' },
+    challenge: { type: 'spar', rounds: 1, partner: 'student', element: 'fire', mustUse: 'air_suction', level: 3 },
+    hint: 'Air Suction: drag foes in a cone toward you, disarm them for a moment and swallow arrows and blasts in flight.',
+  },
+  master_siku: {
+    id: 'siku_octopus_form',
+    title: 'The Octopus',
+    technique: 'octopus_form',
+    requires: ['siku_freezing_strike'],
+    intro: 'Eight arms, one mind. Raise the water around you and let it fight for you — block what comes, strike what comes close. Spar with my student.',
+    demo: { cast: 'octopus_form', line: 'Do not chase. Let them come into reach.' },
+    challenge: { type: 'spar', rounds: 1, partner: 'student', element: 'water', mustUse: 'octopus_form', level: 3 },
+    hint: 'Octopus Form: eight tentacles of water swat away blasts and lash anyone within reach for a few seconds.',
+  },
+  master_akka: {
+    id: 'akka_ice_prison',
+    title: 'The Cold Embrace',
+    technique: 'ice_prison',
+    requires: ['akka_ice_shards'],
+    intro: 'A frozen foe is a quiet foe. Send the water to them and close it with cold — they will neither run nor bend until it cracks.',
+    demo: { cast: 'ice_prison', line: 'Quick, before the water knows it was water.' },
+    challenge: { type: 'spar', rounds: 1, partner: 'student', element: 'fire', mustUse: 'ice_prison', level: 3 },
+    hint: 'Ice Prison: freeze a foe where they stand — no moving, no bending — for about three seconds.',
+  },
+};
+for (const m of MASTERS) {
+  const l = MORE_LESSONS[m.id];
+  if (l && !m.lessons.some((x) => x.id === l.id)) m.lessons.push(l);
+}
