@@ -137,6 +137,7 @@ export function installDebug(game: Game): void {
       const origin = p.castOrigin('chest', new THREE.Vector3());
       const aimPoint = aim ? new THREE.Vector3(aim.x, aim.y, aim.z) : origin.clone().add(new THREE.Vector3(Math.sin(p.yaw), 0, Math.cos(p.yaw)).multiplyScalar(10));
       const def = getTechnique(id);
+      p.aimPoint3.copy(aimPoint); // prechecks that look at the player's aim see this one
       const res = ctx.combat.tryCast(p, id, { aimPoint, aimDir: aimPoint.clone().sub(origin).normalize(), charge, force: false });
       return { ok: res.ok, reason: res.reason ?? null, message: res.message ?? null, water: res.cast?.water ? { amount: res.cast.water.amount, source: res.cast.water.sourceType, from: res.cast.water.from ? res.cast.water.from.toArray() : null } : null, kind: def?.kind ?? null };
     },

@@ -8,3 +8,5 @@ import './water';
 import './earth';
 import './fire';
 import './avatar';
+// [additive: sub-elements] lavabending, spiritual projection, bloodbending (src/data/subskills.ts).
+import './sub/lava';

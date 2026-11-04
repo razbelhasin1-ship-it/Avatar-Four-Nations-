@@ -9,6 +9,7 @@ import type { TechniqueFailReason } from '../core/types';
 import { KORRA_TECHNIQUES, MOON, REACTIONS, STRAIN, STRAIN_STAGES, SUB_SKILL_IDS, SUB_SKILLS, type SubSkillId } from '../data/subskills';
 import { h } from '../ui/dom';
 import type { MoonSystem } from './Moon';
+import './sounds';
 
 export type StrainStage = 'calm' | 'unease' | 'dark' | 'breaking';
 export type VowState = 'none' | 'kept' | 'broken';

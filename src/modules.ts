@@ -17,6 +17,7 @@ import { MarkingPerks } from './combat/techniques/fire/combustion';
 import { TravelSystem } from './travel/TravelSystem';
 import { MoonSystem } from './subskills/Moon';
 import { SubSkillSystem } from './subskills/SubSkills';
+import { LavaSystem } from './subskills/lava/LavaSystem';
 
 /**
  * Feature modules plug into the game here without editing Game.ts.
@@ -73,4 +74,6 @@ export const MODULES: GameModule[] = [
   // waterbending boost, moon chip) and the branches' unlocks, Moral Strain and vow (__game.debug.subskills).
   { name: 'moon', order: 64, create: () => new MoonSystem() },
   { name: 'subskills', order: 65, create: () => new SubSkillSystem() },
+  // Lava patches, flows and cooling (lavabending + world lava), after combat and water (__game.debug.lava).
+  { name: 'lava', order: 48, create: () => new LavaSystem() },
 ];

@@ -80,6 +80,8 @@ const tmpC = new THREE.Vector3();
 const scratch: Entity[] = [];
 
 export class Enemy extends Entity implements Combatant {
+  /** [additive: sub-elements] Run after the brain thinks each frame (may override the motor goal). */
+  static readonly thinkHooks: Array<(e: Enemy, dt: number, ctx: GameContext) => void> = [];
   readonly kind = 'enemy' as const;
   readonly isPlayer = false;
   readonly humanoid: Humanoid | null = null;
@@ -442,8 +444,21 @@ export class Enemy extends Entity implements Combatant {
       this.guardT -= dt;
       if (this.guardT <= 0) this.setGuard(false);
     }
-    this.brain.update(dt, ctx);
-    this.updateAttack(dt, ctx);
+    if (this.held) {
+      // [additive: sub-elements] Bloodbent: no thinking and no attacks; the holder steers the body.
+      const m = this.held.move;
+      const sp = Math.hypot(m.x, m.z);
+      this.moveMode = sp > 0.05 ? 'seek' : 'stop';
+      this.moveGoal.set(this.root.position.x + m.x * 2, this.root.position.y, this.root.position.z + m.z * 2);
+      this.moveSpeed = sp;
+      this.faceTarget = null;
+      if (this.held.yaw !== null) this.yaw = this.held.yaw;
+    } else {
+      this.brain.update(dt, ctx);
+      // [additive: sub-elements] After-think hooks (lava avoidance, panic at a lava moat).
+      for (const hook of Enemy.thinkHooks) hook(this, dt, ctx);
+      this.updateAttack(dt, ctx);
+    }
     this.updateMotor(dt, ctx);
     const body = this.body!;
     body.step(dt, this.root.position, ctx.world);

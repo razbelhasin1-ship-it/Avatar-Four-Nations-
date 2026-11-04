@@ -5,7 +5,7 @@ Lavabending (Earth), Spiritual Projection (Air) and Bloodbending (Water). Rollba
 ## Phases
 - [x] 1 read the systems (this file)
 - [x] 2 shared framework (data/subskills.ts, subskills/Moon.ts, subskills/SubSkills.ts, codex, setting, flags)
-- [ ] 3 lavabending
+- [x] 3 lavabending (subskills/lava/LavaSystem.ts, combat/techniques/sub/lava.ts, subskills/sounds.ts; probe ok: melt/spread/burn/cool/disc/pool/stream/moat/eruption)
 - [ ] 4 spiritual projection
 - [ ] 5 bloodbending
 - [ ] 6 unlock quests and NPCs
@@ -54,7 +54,10 @@ New code lives in `src/subskills/` (systems, fx, quests), `src/combat/techniques
 - src/core/Settings.ts + src/ui/screens/SettingsScreen.ts (gameplay.reduceIntenseEffects)
 - src/world/Sky.ts (moon phase on the disc; default full = unchanged look)
 - src/data/lore.ts (Specialized Bending codex group)
-- src/modules.ts (moon, subskills modules)
+- src/modules.ts (moon, subskills, lava modules)
+- src/combat/techniques/index.ts (import ./sub/lava ...)
+- src/ai/Enemy.ts (held bodies skip AI; Enemy.thinkHooks)
+- src/core/Debug.ts (cast() also sets player.aimPoint3)
 
 ## Notes / gaps
 - avatar.fandom.com is not reachable from this session (DNS blocked): codex text from the brief + episodes.
