@@ -27,6 +27,7 @@ uniform vec3 uGround;
 uniform vec3 uSunDir;
 uniform vec3 uSunColor;
 uniform vec3 uMoonDir;
+uniform float uMoonPhase;
 uniform float uTime;
 uniform float uCloudCover;
 uniform float uOvercast;
@@ -56,10 +57,15 @@ void main() {
   // Sun disc.
   float disc = smoothstep(0.99955, 0.99978, sd);
   col += uSunColor * disc * 7.0 * day * (1.0 - uOvercast * 0.95);
-  // Moon disc with halo.
+  // Moon disc with halo, lit by its phase ([additive: sub-elements] uMoonPhase 0 new .. 0.5 full .. 1).
   float md = max(dot(d, uMoonDir), 0.0);
   float moon = smoothstep(0.99935, 0.9996, md);
-  col += vec3(0.85, 0.9, 1.0) * (moon * 1.6 + pow(md, 300.0) * 0.25) * uNight * (1.0 - uOvercast * 0.8);
+  vec3 mRight = normalize(cross(uMoonDir, vec3(0.0, 1.0, 0.0)));
+  vec2 mq = vec2(dot(d, mRight), dot(d, cross(mRight, uMoonDir))) / 0.0322;
+  float mPh = uMoonPhase * 6.2831853;
+  float mLit = smoothstep(-0.08, 0.12, dot(vec3(mq, sqrt(max(0.0, 1.0 - dot(mq, mq)))), vec3(sin(mPh), 0.0, -cos(mPh))));
+  float mIllum = 0.5 - 0.5 * cos(mPh);
+  col += vec3(0.85, 0.9, 1.0) * (moon * 1.6 * mix(0.05, 1.0, mLit) + pow(md, 300.0) * 0.25 * (0.3 + 0.7 * mIllum) + pow(md, 1400.0) * 0.5 * step(0.999, mIllum)) * uNight * (1.0 - uOvercast * 0.8);
   // Stars & milky way.
   if (uNight > 0.01 && h > -0.02) {
     float th = atan(d.z, d.x);
@@ -187,6 +193,8 @@ export class SkySystem {
   readonly horizonColor = new THREE.Color();
   readonly zenithColor = new THREE.Color();
   readonly moonDir = new THREE.Vector3(-0.3, 0.75, -0.4).normalize();
+  /** [additive: sub-elements] Lunar phase shown on the disc: 0 new, 0.5 full (set by the moon system). */
+  moonPhase = 0.5;
   /** 0 night .. 1 full day. */
   daylight = 1;
   /** Elevation of the sun (sin of angle above horizon, may be negative). */
@@ -209,6 +217,7 @@ export class SkySystem {
         uSunDir: { value: new THREE.Vector3(0, 1, 0) },
         uSunColor: { value: new THREE.Color() },
         uMoonDir: { value: this.moonDir },
+        uMoonPhase: { value: 0.5 },
         uTime: { value: 0 },
         uCloudCover: { value: 0.45 },
         uOvercast: { value: 0 },
@@ -318,6 +327,7 @@ export class SkySystem {
     u.uCloudCover.value = this.mood.cloudCover;
     u.uOvercast.value = overcast;
     u.uNight.value = night;
+    u.uMoonPhase.value = this.moonPhase;
     u.uCloudTint.value.copy(this.mood.cloudTint);
 
     const p = this.pipeline;

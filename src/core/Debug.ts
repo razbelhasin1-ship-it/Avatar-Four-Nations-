@@ -121,7 +121,8 @@ export function installDebug(game: Game): void {
       return ctx.progression.learn(id, 'debug');
     },
     learnAll() {
-      for (const t of allTechniques()) ctx.progression.learn(t.id, 'debug', true);
+      // Sub-skill moves come from their unlock quests (or debug.subskills.unlock).
+      for (const t of allTechniques()) if (!t.subSkill) ctx.progression.learn(t.id, 'debug', true);
     },
     masterAll() {
       ctx.progression.debugMasterAll();

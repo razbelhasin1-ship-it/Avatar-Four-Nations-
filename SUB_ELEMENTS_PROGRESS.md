@@ -4,7 +4,7 @@ Lavabending (Earth), Spiritual Projection (Air) and Bloodbending (Water). Rollba
 
 ## Phases
 - [x] 1 read the systems (this file)
-- [ ] 2 shared framework
+- [x] 2 shared framework (data/subskills.ts, subskills/Moon.ts, subskills/SubSkills.ts, codex, setting, flags)
 - [ ] 3 lavabending
 - [ ] 4 spiritual projection
 - [ ] 5 bloodbending
@@ -44,6 +44,18 @@ New code lives in `src/subskills/` (systems, fx, quests), `src/combat/techniques
 - Bloodbending: `Entity.held` hold state; Enemy think hook; release on sunrise/damage/zone/death/save-load.
 
 ## Existing files touched (keep this list current)
-(none yet)
+- src/combat/types.ts (TechniqueDef.subSkill)
+- src/progression/Progression.ts (sandbox / masterAll skip sub-skill moves)
+- src/core/Debug.ts (learnAll skips sub-skill moves)
+- src/combat/CombatSystem.ts (held caster cannot cast; powerMods hook)
+- src/entities/Entity.ts (Entity.held)
+- src/core/features.ts (3 Korra flags, default off)
+- src/core/events.ts (appended sub-element events)
+- src/core/Settings.ts + src/ui/screens/SettingsScreen.ts (gameplay.reduceIntenseEffects)
+- src/world/Sky.ts (moon phase on the disc; default full = unchanged look)
+- src/data/lore.ts (Specialized Bending codex group)
+- src/modules.ts (moon, subskills modules)
 
 ## Notes / gaps
+- avatar.fandom.com is not reachable from this session (DNS blocked): codex text from the brief + episodes.
+- Debug: __game.debug.subskills { unlock, lock, state, setMoonPhase, setHour, fullMoonNight, setStrain, vow, breakVow, korra }.

@@ -264,6 +264,7 @@ export class SettingsScreen implements Screen {
     this.rowSlider(g, 'UI scale', 'gameplay.hudScale', 0.75, 1.3, 0.05, (v) => `${Math.round(v * 100)}%`, 'Size of the HUD: vitals, techniques, quest tracker, compass');
     this.rowToggle(g, 'Damage numbers', 'gameplay.damageNumbers');
     this.rowToggle(g, 'Compass', 'gameplay.compass');
+    this.rowToggle(g, 'Reduce intense effects', 'gameplay.reduceIntenseEffects', 'No flashing lava, calmer glows and screen tints');
     if (fullscreen.supported) g.append(this.label('Fullscreen', this.ctx.settings.device.mobile ? 'Also locks landscape on phones and tablets' : ''), fullscreenButton('btn.small', () => this.ctx), h('span'));
     this.body.append(
       h('div.divider'),

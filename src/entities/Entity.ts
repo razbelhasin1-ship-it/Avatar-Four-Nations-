@@ -124,6 +124,12 @@ export abstract class Entity {
   distToPlayer = 0;
   /** True once dispose() has run. */
   disposed = false;
+  /**
+   * [additive: sub-elements] A bloodbending hold on this body (src/subskills/blood). While set the
+   * entity's own AI, movement and bending are suspended: `move` (m/s, world) steers it, `yaw`
+   * turns it, and the holder's system releases it in every case (sunrise, damage, zone change...).
+   */
+  held: { by: number; move: THREE.Vector3; yaw: number | null } | null = null;
 
   get position(): THREE.Vector3 {
     return this.root.position;

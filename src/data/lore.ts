@@ -1,4 +1,5 @@
 import type { Element } from '../core/types';
+import { SUB_SKILL_IDS, SUB_SKILLS } from './subskills';
 
 /**
  * Journal lore entries. Each unlocks from game state (an element you can bend,
@@ -10,10 +11,20 @@ export interface LoreEntry {
   id: string;
   title: string;
   /** Section heading in the journal. */
-  group: 'The Elements' | 'The Avatar' | 'Relics';
+  group: 'The Elements' | 'The Avatar' | 'Relics' | 'Specialized Bending';
   text: string;
   unlock: { element?: Element; item?: string; flag?: string; always?: boolean; mastered?: Element; sphere?: boolean };
 }
+
+// [additive: sub-elements] Codex entries for lavabending, spiritual projection and bloodbending
+// (text in data/subskills.ts): they open when the parent element is mastered.
+const SUB_SKILL_LORE: LoreEntry[] = SUB_SKILL_IDS.map((id) => ({
+  id: SUB_SKILLS[id].codex.id,
+  title: SUB_SKILLS[id].codex.title,
+  group: 'Specialized Bending' as const,
+  text: SUB_SKILLS[id].codex.text,
+  unlock: { flag: `subskill_${id}_eligible` },
+}));
 
 export const LORE: LoreEntry[] = [
   {
@@ -121,4 +132,5 @@ export const LORE: LoreEntry[] = [
     text: 'Drawn from the pool where the Moon and Ocean spirits circle each other. It glows faintly, and is said to heal what ordinary water cannot.',
     unlock: { item: 'spirit_water' },
   },
+  ...SUB_SKILL_LORE,
 ];

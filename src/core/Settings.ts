@@ -66,6 +66,8 @@ export interface GameplaySettings {
   damageNumbers: boolean;
   hudScale: number;
   compass: boolean;
+  /** [additive: sub-elements] Calmer effects: no flashing lava, softer glows, gentler screen tints. */
+  reduceIntenseEffects: boolean;
 }
 
 export interface SettingsData {
@@ -165,7 +167,7 @@ export function defaultSettings(): SettingsData {
       touchOpacity: 0.85,
       touchLeftHanded: false,
     },
-    gameplay: { difficulty: 'balanced', tutorialHints: true, damageNumbers: true, hudScale: 1, compass: true },
+    gameplay: { difficulty: 'balanced', tutorialHints: true, damageNumbers: true, hudScale: 1, compass: true, reduceIntenseEffects: false },
   };
 }
 

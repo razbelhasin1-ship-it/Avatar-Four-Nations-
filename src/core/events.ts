@@ -142,6 +142,21 @@ export interface GameEvents {
   'travel:started': { route: string; from: string; to: string; transport: string };
   'travel:arrived': { route: string; to: string };
   'travel:failed': { route: string; error: string };
+
+  // ---- sub-elements: lavabending, spiritual projection, bloodbending (src/subskills) ----
+  /** The moon rose (phase 0 new .. 4 full .. 7), and the night index it belongs to. */
+  'moon:rise': { phase: number; full: boolean; night: number };
+  /** The sun rose: every bloodbending hold ends. */
+  'moon:sunrise': { night: number };
+  'subskill:unlocked': { id: string };
+  /** A sub-skill move was used (techniqueId) by the player. */
+  'subskill:used': { id: string; technique: string };
+  'lava:formed': { x: number; z: number; radius: number; source: 'player' | 'world' };
+  'lava:cooled': { x: number; z: number; radius: number; byWater: boolean };
+  'projection:changed': { active: boolean; reason?: string };
+  'bloodbending:hold': { targetId: number; active: boolean; hostile: boolean; reason?: string; byPlayer: boolean };
+  'strain:changed': { value: number; stage: 'calm' | 'unease' | 'dark' | 'breaking' };
+  'subskill:vow': { state: 'kept' | 'broken' };
 }
 
 export type GameEventName = keyof GameEvents;

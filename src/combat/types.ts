@@ -68,6 +68,12 @@ export interface TechniqueDef {
   innate?: string;
   /** Only usable while the Avatar State / Elements Sphere is active. */
   requires?: 'avatarState' | 'elementsSphere';
+  /**
+   * [additive: sub-elements] Specialization branch this move belongs to (lavabending, spiritual
+   * projection, bloodbending: src/data/subskills.ts). Learned only through its unlock quest, never
+   * by the sandbox or "master everything" helpers.
+   */
+  subSkill?: 'lava' | 'projection' | 'blood';
   /** Number of chained steps for 'basic' combos (cast.comboIndex wraps). */
   comboLength?: number;
   /** Called when the cast starts (play animation, start gathering VFX). */

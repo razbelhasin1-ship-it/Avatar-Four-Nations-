@@ -160,6 +160,8 @@ export class CombatSystem implements GameSystem {
   /** Global damage multipliers (difficulty). */
   playerDamageTakenMul = 1;
   playerDamageDealtMul = 1;
+  /** [additive: sub-elements] Multipliers on a cast's power (e.g. the moon for waterbending). */
+  readonly powerMods: Array<(caster: Combatant, def: TechniqueDef) => number> = [];
 
   init(ctx: GameContext): void {
     this.ctx = ctx;
@@ -270,6 +272,8 @@ export class CombatSystem implements GameSystem {
     const s = this.state(caster);
     if (s.active && (s.active.phase === 'windup' || s.active.phase === 'channel')) return fail('busy');
     if (caster.stunned > 0 || caster.hasStatus('freeze')) return fail('state');
+    // [additive: sub-elements] A bloodbent body cannot bend.
+    if (caster.held) return fail('state', 'Your body will not obey you.');
     const now = ctx.time.elapsed;
     if (!req.free && (s.cooldowns.get(id) ?? 0) > now) return fail('cooldown', `${def.name} is recovering.`);
     const chiCost = req.free ? 0 : def.chiCost * (caster.isPlayer ? (ctx.avatar?.boosts?.chiCost ?? 1) : 1);
@@ -339,7 +343,9 @@ export class CombatSystem implements GameSystem {
       this.safeCall(() => s.active!.def.end?.(s.active!, false));
       s.active.phase = 'done';
     }
-    const power = caster.powerMultiplier() * (caster.isPlayer ? this.playerDamageDealtMul : 1) * flowMul;
+    let power = caster.powerMultiplier() * (caster.isPlayer ? this.playerDamageDealtMul : 1) * flowMul;
+    // [additive: sub-elements] Environmental power (waterbending under the moon).
+    for (const mod of this.powerMods) power *= mod(caster, def);
     const cast = new CastImpl(this, ctx, def, caster, origin, aimDir, aimPoint, target, Math.max(0, Math.min(1, req.charge ?? 0)), power, comboIndex, water);
     s.active = cast;
     this.casts.push(cast);

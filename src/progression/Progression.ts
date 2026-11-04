@@ -90,7 +90,8 @@ export class Progression implements Persistable, GameSystem {
     this.reset();
     this.sandbox = true;
     for (const e of ELEMENTS) this.unlockElement(e, true);
-    for (const def of allTechniques()) this.learn(def.id, 'debug', true);
+    // Sub-skill moves (lava, projection, bloodbending) come only from their unlock quests.
+    for (const def of allTechniques()) if (!def.subSkill) this.learn(def.id, 'debug', true);
     this.elementsSphereUnlocked = true;
   }
 
@@ -261,7 +262,7 @@ export class Progression implements Persistable, GameSystem {
       m.proficiency = Math.max(m.proficiency, MASTERY_REQUIREMENTS[e].proficiency);
       while (m.lessons.length < MASTERY_REQUIREMENTS[e].lessons) m.lessons.push(`debug_${e}_${m.lessons.length}`);
       m.trialComplete = true;
-      for (const def of allTechniques()) if (def.element === e) this.learn(def.id, 'debug', true);
+      for (const def of allTechniques()) if (def.element === e && !def.subSkill) this.learn(def.id, 'debug', true);
       this.checkMastery(e);
     }
   }
