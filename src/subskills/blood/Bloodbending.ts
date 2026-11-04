@@ -11,6 +11,7 @@ import type { MoonSystem } from '../Moon';
 import type { SubSkillSystem } from '../SubSkills';
 import { h } from '../../ui/dom';
 import './clips';
+import { guardHud } from '../hudGuard';
 
 /**
  * Bloodbending (Water sub-skill, The Last Airbender level).
@@ -583,6 +584,7 @@ export class BloodbendingSystem implements GameSystem {
     this.struggleText = h('div', 'Your body will not obey. Draw on the moon — press Attack, Aim and Jump to break free!');
     this.struggleEl = h('div.bb-struggle.hidden', this.struggleText, h('div.bb-bar', this.struggleFill));
     this.ctx.ui.layers.hud.appendChild(this.struggleEl);
+    guardHud(this.ctx, this.struggleEl);
   }
 
   private showStruggle(on: boolean): void {

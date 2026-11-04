@@ -7,6 +7,8 @@ import { QUESTS } from '../../data/quests';
 import { SLOT_COUNT, SPHERE_TECHNIQUES } from '../../progression/Progression';
 import { KORRA_TECHNIQUES, SUB_SKILL_IDS, SUB_SKILLS, type SubSkillDef } from '../../data/subskills';
 import type { SubSkillSystem } from '../../subskills/SubSkills';
+import { learnQuestId } from '../../data/quests_masters';
+import type { MasterGuide } from '../../training/MasterGuide';
 import { clear, h } from '../dom';
 import { ELEMENT_COLORS, emblem, iconHTML } from '../icons';
 import type { UIManager } from '../UIManager';
@@ -201,6 +203,29 @@ export class TechniquesScreen extends GameScreen {
     return bar;
   }
 
+  /** [master guide] "Find teacher": track the way to the master who teaches a locked technique. */
+  private teacherButton(d: TechniqueDef): HTMLElement | null {
+    const guide = this.ctx.extra.get('master_guide') as MasterGuide | undefined;
+    const t = guide?.lessonFor(d.id);
+    if (!guide || !t) return null;
+    const tracked = guide.isTracked(learnQuestId(t.lesson.id));
+    return h(
+      'button.btn.small.tq-teacher',
+      {
+        type: 'button',
+        'data-action': 'find-teacher',
+        'data-tech': d.id,
+        onclick: () => {
+          if (tracked) guide.stop();
+          else guide.trackLesson(t.lesson.id);
+          this.ctx.audio.play('ui_click', { bus: 'ui' });
+          this.refresh();
+        },
+      },
+      tracked ? '◆ Tracking' : '◆ Find teacher',
+    );
+  }
+
   private card(d: TechniqueDef): HTMLElement {
     const pr = this.ctx.progression;
     const known = d.element === 'avatar' ? pr.elementsSphereUnlocked || pr.knows(d.id) : pr.knows(d.id);
@@ -219,7 +244,7 @@ export class TechniquesScreen extends GameScreen {
     );
     const status = known
       ? h('div.tq-src', h('b', inSlot >= 0 ? `Equipped · slot ${inSlot + 1}` : SLOTTABLE.has(d.kind) ? 'Learned' : d.kind === 'passive' ? 'Always active' : d.kind === 'basic' ? `On ${this.ctx.input.label('attack')}` : d.kind === 'heavy' ? `On ${this.ctx.input.label('aim')}` : 'Learned'), learned ? ` — ${learned.source === 'start' ? 'innate' : src ?? learned.source}` : src ? ` — ${src}` : '')
-      : h('div.tq-src.locked', '🔒 ', src ?? (d.starter ? 'Awakens with the element' : 'Taught by a master'));
+      : h('div.tq-src.locked', '🔒 ', src ?? (d.starter ? 'Awakens with the element' : 'Taught by a master'), this.teacherButton(d));
     const card = h(
       `article.tq-card.kind-${d.kind}${known ? '' : '.locked'}${inSlot >= 0 ? '.equipped' : ''}${this.pick === d.id ? '.picking' : ''}${this.pickSlot !== null && slottable ? '.target' : ''}`,
       {

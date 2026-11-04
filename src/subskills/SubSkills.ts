@@ -10,6 +10,7 @@ import { KORRA_TECHNIQUES, MOON, REACTIONS, STRAIN, STRAIN_STAGES, SUB_SKILL_IDS
 import { h } from '../ui/dom';
 import type { MoonSystem } from './Moon';
 import './sounds';
+import { guardHud } from './hudGuard';
 
 export type StrainStage = 'calm' | 'unease' | 'dark' | 'breaking';
 export type VowState = 'none' | 'kept' | 'broken';
@@ -417,6 +418,7 @@ export class SubSkillSystem implements GameSystem, Persistable {
     this.meterLabel = h('span.strain-lb', 'Calm');
     this.meter = h('div.strain-meter.hidden', { title: 'Moral Strain — bloodbending weighs on the mind' }, h('div.strain-top', h('span', 'Strain'), this.meterLabel), h('div.strain-bar', this.meterFill, h('i.t1'), h('i.t2'), h('i.t3')));
     this.ctx.ui.layers.hud.appendChild(this.meter);
+    guardHud(this.ctx, this.meter);
   }
 
   private updateMeter(): void {

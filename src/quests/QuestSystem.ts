@@ -3,6 +3,7 @@ import type { GameContext, GameSystem } from '../core/GameContext';
 import type { GameEvents } from '../core/events';
 import type { Persistable } from '../core/Save';
 import { QUESTS } from '../data/quests';
+import { getSpot } from '../world/Spots';
 import { LANDMARKS } from '../world/WorldLayout';
 import type { ObjectiveDef, QuestAction, QuestDef, QuestProgress } from './QuestTypes';
 import { defaultOrigin } from '../data/starts';
@@ -105,7 +106,8 @@ export class QuestSystem implements GameSystem, Persistable {
     this.ctx.events.emit('dialogue:flag', { flag: f });
   }
 
-  start(id: string): boolean {
+  /** `silent` [additive: master guide]: no "New quest" toast (the caller announces it). */
+  start(id: string, opts: { silent?: boolean } = {}): boolean {
     const def = this.defs.get(id);
     if (!def || this.active.has(id) || this.completed.has(id)) return false;
     const prog: QuestProgress = { id, step: 0, counts: [], done: [], startedAt: this.ctx.time.elapsed };
@@ -113,7 +115,7 @@ export class QuestSystem implements GameSystem, Persistable {
     this.enterStep(def, prog);
     if (!this.tracked || def.category === 'main') this.track(id);
     this.ctx.events.emit('quest:started', { questId: id });
-    this.ctx.events.emit('ui:notify', { text: `New quest: ${def.title}`, kind: 'quest', duration: 4 });
+    if (!opts.silent) this.ctx.events.emit('ui:notify', { text: `New quest: ${def.title}`, kind: 'quest', duration: 4 });
     this.evaluateImmediate(def, prog);
     return true;
   }
@@ -163,14 +165,25 @@ export class QuestSystem implements GameSystem, Persistable {
     }
   }
 
+  /** [additive: master guide] A named spot (+ offset), once its region has published it. */
+  private spotPosition(spot: string, dx = 0, dz = 0): THREE.Vector3 | null {
+    const sp = getSpot(spot);
+    if (!sp) return null;
+    const x = sp.x + dx, z = sp.z + dz;
+    return new THREE.Vector3(x, sp.y ?? this.ctx.world.heightAt(x, z), z);
+  }
+
   private objectivePosition(o: ObjectiveDef): THREE.Vector3 | null {
     if (o.type === 'reach') {
       if (o.landmark) {
         const l = LANDMARKS.find((l) => l.id === o.landmark);
         if (l) return new THREE.Vector3(l.x, this.ctx.world.heightAt(l.x, l.z), l.z);
       }
+      const sp = o.spot ? this.spotPosition(o.spot, o.dx, o.dz) : null;
+      if (sp) return sp;
       if (o.x !== undefined && o.z !== undefined) return new THREE.Vector3(o.x, this.ctx.world.heightAt(o.x, o.z), o.z);
     }
+    if (o.type === 'flag' && o.spot) return this.spotPosition(o.spot, o.dx, o.dz);
     if (o.type === 'talk' || o.type === 'training') {
       const id = o.type === 'talk' ? o.npc : o.master;
       if (id) {
@@ -407,6 +420,21 @@ export class QuestSystem implements GameSystem, Persistable {
         return { text: o.text, done: prog.done[i], progress: need ? `${Math.min(prog.counts[i], need)}/${need}` : undefined };
       }),
     };
+  }
+
+  /** [additive: master guide] Where the tracked quest points now (its first unfinished located objective). */
+  trackedTarget(): THREE.Vector3 | null {
+    const id = this.tracked;
+    const def = id ? this.defs.get(id) : undefined;
+    const prog = id ? this.active.get(id) : undefined;
+    const step = def && prog ? def.steps[prog.step] : undefined;
+    if (!step || !prog) return null;
+    for (let i = 0; i < step.objectives.length; i++) {
+      if (prog.done[i]) continue;
+      const p = this.objectivePosition(step.objectives[i]);
+      if (p) return p;
+    }
+    return null;
   }
 
   /** World markers for the map/compass. */

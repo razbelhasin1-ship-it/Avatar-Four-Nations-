@@ -18,6 +18,7 @@ import type { MoonSystem } from '../Moon';
 import type { ProjectionSystem } from '../projection/Projection';
 import type { SubSkillSystem } from '../SubSkills';
 import { SITES } from './sites';
+import { guardHud } from '../hudGuard';
 
 /**
  * Scripts for the specialized-bending quests (data: data/quests_subskills.ts; places: sites.ts).
@@ -500,6 +501,7 @@ export class SubskillQuestScripts implements GameSystem {
     this.matBar.textContent = 'Focus — keep holding, keep still. Only quiet fills it.';
     this.matBar.appendChild(bar);
     this.ctx.ui.layers.hud.appendChild(this.matBar);
+    guardHud(this.ctx, this.matBar);
   }
 
   private showMat(on: boolean): void {

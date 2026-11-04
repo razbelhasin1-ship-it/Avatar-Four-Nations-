@@ -9,6 +9,7 @@ import { EncounterDirector } from './ai/EncounterDirector';
 import { TrainingSystem } from './training/TrainingSystem';
 import { ShopSystem } from './shop/ShopSystem';
 import { QuestWorld } from './training/QuestWorld';
+import { MasterGuide } from './training/MasterGuide';
 import { AmbienceDirector } from './audio/AmbienceDirector';
 import { WaterContainers } from './world/WaterContainers';
 import { MusicSystem } from './audio/MusicSystem';
@@ -61,6 +62,9 @@ export const MODULES: GameModule[] = [
   { name: 'shop', order: 76, create: () => new ShopSystem() },
   // Spot-placed quest givers & city life NPCs, quest props (pickups, clue tablets, bells, braziers) + their markers (__game.debug.quests).
   { name: 'quest_world', order: 77, create: () => new QuestWorld() },
+  // Finding the masters: "Seek <master>" / "Learn <ability>" guides you can track, the road route to the
+  // tracked place (map) and its next waypoint (compass) (__game.debug.guide).
+  { name: 'master_guide', order: 78, create: () => new MasterGuide() },
   // Audio (src/audio, SOUNDS.md): layered ambience by place/time/weather, region music + combat layer + stingers,
   // event→sound bindings and UI sounds. They tick on the audio engine (menu included) (__game.debug.audio).
   // Water jars and rain barrels beside town stalls and quest givers: small, finite waterbending sources.

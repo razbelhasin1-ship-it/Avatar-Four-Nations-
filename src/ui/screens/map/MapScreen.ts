@@ -3,6 +3,11 @@ import type { GameContext } from '../../../core/GameContext';
 import { HABITATS, speciesById } from '../../../data/creatures';
 import { DEFAULT_DANGER, REGION_DANGER } from '../../../data/enemies';
 import type { QuestMarker } from '../../../quests/QuestSystem';
+import { getTechnique } from '../../../combat/CombatSystem';
+import { ELEMENT_INFO } from '../../../core/types';
+import { masterById } from '../../../data/masters';
+import { learnQuestId, ROUTE_HINTS, seekQuestId } from '../../../data/quests_masters';
+import type { MasterGuide } from '../../../training/MasterGuide';
 import { heightAt } from '../../../world/Heightfield';
 import { LANDMARKS, MOUNTAIN_RANGES, REGIONS, RIVERS, ROADS, WORLD_HALF, type LandmarkDef, type LandmarkKind } from '../../../world/WorldLayout';
 import { clear, h } from '../../dom';
@@ -327,8 +332,22 @@ export class MapScreen extends GameScreen {
     ensureMapRaster();
     rasterListeners.add(this.onRaster);
     const focus = (arg as { focus?: { x: number; z: number } } | undefined)?.focus;
+    // [master guide] `fit`: frame a set of points (the road to what you track).
+    const fit = (arg as { fit?: Array<{ x: number; z: number }> } | undefined)?.fit;
     const p = ctx.player;
-    if (focus) {
+    if (fit && fit.length) {
+      let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (const q of fit) {
+        x0 = Math.min(x0, q.x);
+        x1 = Math.max(x1, q.x);
+        z0 = Math.min(z0, q.z);
+        z1 = Math.max(z1, q.z);
+      }
+      this.cx = (x0 + x1) / 2;
+      this.cz = (z0 + z1) / 2;
+      const span = Math.max(240, x1 - x0, z1 - z0);
+      this.zoom = Math.max(1, Math.min(6, (WORLD_HALF * 2) / (span * 1.3)));
+    } else if (focus) {
       this.cx = focus.x;
       this.cz = focus.z;
       this.zoom = Math.max(this.zoom, 2.4);
@@ -473,7 +492,7 @@ export class MapScreen extends GameScreen {
         best = p;
       }
     };
-    for (const m of this.ctx.quests.markers()) consider(m.position.x, m.position.z, { type: 'marker', m }, m.tracked ? 4 : 0);
+    for (const m of this.ctx.quests.markers()) if (!m.questId.startsWith('route:')) consider(m.position.x, m.position.z, { type: 'marker', m }, m.tracked ? 4 : 0);
     for (const hb of this.habitats()) consider(hb.x, hb.z, { type: 'habitat', ...hb });
     for (const l of LANDMARKS) if (this.landmarkVisible(l)) consider(l.x, l.z, { type: 'landmark', l }, l.fastTravel && this.ctx.world.discovered.has(l.id) ? 3 : 0);
     return best;
@@ -731,8 +750,10 @@ export class MapScreen extends GameScreen {
         row('paw', 'Companion habitat', '#cfe3b8'),
         row('quest', 'Tracked quest', '#ffcc33'),
         row('quest', 'Quest objective', '#e8e2d0'),
-        row('star', 'Master', '#9fd8ff'),
+        row('star', 'Master (colour = element)', '#9fd8ff'),
       ),
+      h('div.mp-leg-note', h('span.mp-rumour', '?'), ' rumour of a hidden master'),
+      h('div.mp-leg-note', h('span.mp-route', '- - -'), ' the road to what you track'),
       h('div.mp-leg-note', h('span.mp-ft', '⟡'), ' gold ring: fast travel point'),
       h('div.mp-leg-note', h('span.mp-danger', '●●●'), ' region danger (1–5)'),
     );
@@ -755,6 +776,16 @@ export class MapScreen extends GameScreen {
           ? 'Drag to pan, pinch to zoom. Tap a place for details; tap a discovered travel point (gold ring) again to travel — never while enemies are near.'
           : 'Select a place to see details. Discovered travel points (gold ring) can be travelled to — never while enemies are near.'),
       );
+      // [master guide] What you are following, and how far it is by road.
+      const guide = ctx.extra.get('master_guide') as MasterGuide | undefined;
+      const tq = ctx.quests.tracked ? ctx.quests.get(ctx.quests.tracked) : undefined;
+      const route = guide?.trackedRoute();
+      if (tq && route && route.length >= 2) {
+        let len = 0;
+        for (let i = 1; i < route.length; i++) len += Math.hypot(route[i].x - route[i - 1].x, route[i].z - route[i - 1].z);
+        const km = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
+        this.info.append(h('div.mp-follow', h('div.gs-kicker', '◆ Following'), h('b', tq.title), h('div.muted', `${km(len)} along the gold road${route.length > 2 ? ` (${km(Math.hypot(route[route.length - 1].x - route[0].x, route[route.length - 1].z - route[0].z))} as the crow flies)` : ''}`)));
+      }
       return;
     }
     if (sel.type === 'landmark') {
@@ -774,21 +805,58 @@ export class MapScreen extends GameScreen {
           : h('p.muted', 'No travel point here.'),
         l.fastTravel && block ? h('p.mp-block', block) : null,
       ));
+    } else if (sel.type === 'marker' && (sel.m.questId.startsWith('master:') || sel.m.questId.startsWith('rumour:'))) {
+      this.masterInfo(sel.m, dist);
     } else if (sel.type === 'marker') {
       const m = sel.m;
-      const master = m.questId.startsWith('master:');
       this.info.append(h(
         'div.mp-sel',
-        h('div.gs-kicker', master ? 'Master' : m.tracked ? 'Tracked quest' : 'Quest'),
+        h('div.gs-kicker', m.tracked ? 'Tracked quest' : 'Quest'),
         h('h3.gs-h', m.title),
         h('p', m.text),
         h('div.mp-status', dist(m.position.x, m.position.z)),
-        !master && ctx.quests.active.has(m.questId) ? h(`button.btn${m.tracked ? '' : '.primary'}`, { type: 'button', 'data-action': 'track', onclick: () => (ctx.quests.track(m.tracked ? null : m.questId), this.select(null)) }, m.tracked ? 'Stop Tracking' : 'Track Quest') : null,
+        ctx.quests.active.has(m.questId) ? h(`button.btn${m.tracked ? '' : '.primary'}`, { type: 'button', 'data-action': 'track', onclick: () => (ctx.quests.track(m.tracked ? null : m.questId), this.select(null)) }, m.tracked ? 'Stop Tracking' : 'Track Quest') : null,
       ));
     } else {
       const s = speciesById(sel.species);
       this.info.append(h('div.gs-kicker', 'Companion habitat'), h('h3.gs-h', sel.name), h('p', s ? `${s.name}. ${s.habitatText}` : ''), h('div.mp-status', dist(sel.x, sel.z)));
     }
+  }
+
+  /** [master guide] A master (or a hidden master's rumour): where, the way there, what they teach, Track. */
+  private masterInfo(mk: QuestMarker, dist: (x: number, z: number) => string): void {
+    const ctx = this.ctx;
+    const rumour = mk.questId.startsWith('rumour:');
+    const m = masterById(mk.questId.slice(mk.questId.indexOf(':') + 1));
+    const guide = ctx.extra.get('master_guide') as MasterGuide | undefined;
+    if (!m || !guide) {
+      this.info.append(h('div.mp-sel', h('h3.gs-h', mk.title), h('p', mk.text), h('div.mp-status', dist(mk.position.x, mk.position.z))));
+      return;
+    }
+    const seek = seekQuestId(m.id);
+    const tracked = guide.isTracked(seek);
+    const met = ctx.quests.hasFlag(`met_${m.id}`);
+    const lessons = rumour
+      ? [h('p.muted', `Teaches ${m.lessons.length} ${ELEMENT_INFO[m.element].name.toLowerCase()} techniques — find them to learn more.`)]
+      : m.lessons.map((l) => {
+          const st = guide.abilityStatus(l);
+          const lt = guide.isTracked(learnQuestId(l.id));
+          return h(
+            `div.mp-ab.${st}`,
+            h('span', `${st === 'learned' ? '✓' : lt ? '◆' : st === 'locked' ? '🔒' : '◇'} ${getTechnique(l.technique)?.name ?? l.technique}`),
+            st === 'learned' ? null : h('button.btn.small', { type: 'button', 'data-action': 'track-ability', 'data-lesson': l.id, onclick: () => (lt ? guide.stop() : guide.trackLesson(l.id), this.renderInfo(), (this.dirty = true)) }, lt ? 'Stop' : 'Track'),
+          );
+        });
+    this.info.append(h(
+      'div.mp-sel',
+      h('div.gs-kicker', rumour ? 'Rumour of a hidden master' : `${ELEMENT_INFO[m.element].name} master${met ? ' · met' : ''}`),
+      h('h3.gs-h', rumour ? mk.title : `${m.name}`),
+      h('p', rumour ? mk.text.replace(/^Rumour: /, '') : `${m.title}. ${m.location}.`),
+      h('p.muted', ROUTE_HINTS[m.region] ?? ''),
+      h('div.mp-status', dist(mk.position.x, mk.position.z)),
+      ...lessons,
+      h(`button.btn${tracked ? '' : '.primary'}`, { type: 'button', 'data-action': 'track-master', onclick: () => (tracked ? guide.stop() : guide.trackMaster(m.id), this.renderInfo(), (this.dirty = true)) }, tracked ? 'Stop Tracking' : rumour ? '◆ Follow the Rumour' : `◆ Track ${m.name}`),
+    ));
   }
 
   // ---------------------------------------------------------------------------
@@ -991,9 +1059,27 @@ export class MapScreen extends GameScreen {
     const p = ctx.player;
     let tracked: QuestMarker | null = null;
     for (const m of ctx.quests.markers()) {
+      if (m.questId.startsWith('route:')) continue;
       const s = this.toScreen(m.position.x, m.position.z, v);
       if (m.questId.startsWith('master:')) {
         glyph(g, 'star', s.x, s.y, 7 + this.zoom * 0.5, m.color ?? '#ffffff');
+        continue;
+      }
+      if (m.questId.startsWith('rumour:')) {
+        // A hidden master's rumour: a "?" seal at the clue.
+        const r = 7 + this.zoom * 0.4;
+        g.beginPath();
+        g.arc(s.x, s.y, r, 0, Math.PI * 2);
+        g.fillStyle = 'rgba(40,28,16,0.72)';
+        g.fill();
+        g.strokeStyle = m.color ?? '#ffffff';
+        g.lineWidth = 1.6;
+        g.stroke();
+        g.font = `700 ${Math.round(r * 1.5)}px Cinzel, serif`;
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillStyle = m.color ?? '#ffffff';
+        g.fillText('?', s.x, s.y + 0.5);
         continue;
       }
       if (m.tracked) {
@@ -1010,15 +1096,31 @@ export class MapScreen extends GameScreen {
     if (p) {
       const s = this.toScreen(p.position.x, p.position.z, v);
       if (tracked) {
-        const e = this.toScreen(tracked.position.x, tracked.position.z, v);
-        g.setLineDash([3, 5]);
-        g.strokeStyle = 'rgba(255,204,51,0.75)';
-        g.lineWidth = 2;
-        g.beginPath();
-        g.moveTo(s.x, s.y);
-        g.lineTo(e.x, e.y);
+        // [master guide] The way there along the roads (straight when no road helps).
+        const guide = ctx.extra.get('master_guide') as MasterGuide | undefined;
+        const route = guide?.route(tracked.position) ?? [{ x: p.position.x, z: p.position.z }, { x: tracked.position.x, z: tracked.position.z }];
+        const path = () => {
+          g.beginPath();
+          route.forEach((pt, i) => {
+            const q = this.toScreen(pt.x, pt.z, v);
+            if (i === 0) g.moveTo(q.x, q.y);
+            else g.lineTo(q.x, q.y);
+          });
+        };
+        g.lineCap = 'round';
+        g.lineJoin = 'round';
+        g.strokeStyle = 'rgba(46,30,14,0.55)';
+        g.lineWidth = 5;
+        path();
+        g.stroke();
+        g.setLineDash([6, 5]);
+        g.lineDashOffset = -t * 18;
+        g.strokeStyle = 'rgba(255,204,51,0.95)';
+        g.lineWidth = 2.6;
+        path();
         g.stroke();
         g.setLineDash([]);
+        g.lineDashOffset = 0;
       }
       drawArrow(g, s.x, s.y, p.yaw, 1 + Math.min(0.6, this.zoom * 0.05), t);
     }

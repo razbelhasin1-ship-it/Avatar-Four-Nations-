@@ -16,6 +16,8 @@ import { getSpot } from '../world/Spots';
 import { LANDMARKS } from '../world/WorldLayout';
 import { challengeKind, createChallenge, TrainingTarget, type Challenge, type ChallengeEnv } from './challenges';
 import { ChallengeHUD, injectTrainingCSS } from './hud';
+import type { MasterGuide } from './MasterGuide';
+import { MASTERS_JOURNAL_CSS, renderMastersJournal } from './mastersJournal';
 
 /**
  * Masters & training (module `training`, ctx.extra.get('training')).
@@ -290,8 +292,15 @@ export class TrainingSystem implements GameSystem {
     if (!ctx.session.active || ctx.session.kind !== 'campaign') return [];
     const p = ctx.player;
     const out: QuestMarker[] = [];
+    const guide = ctx.extra.get('master_guide') as MasterGuide | undefined;
+    // [master guide] Every master is on the map (the compass shows the near ones); a hidden master
+    // not yet found is a "?" rumour at the clue that reveals them.
     for (const m of MASTERS) {
-      if (!this.isKnown(m)) continue;
+      if (m.hidden && !ctx.quests.hasFlag(m.hidden.flag) && !ctx.quests.hasFlag(`met_${m.id}`)) {
+        const cp = guide?.cluePosition(m);
+        if (cp) out.push({ questId: `rumour:${m.id}`, title: `A hidden master of ${ELEMENT_INFO[m.element].name.toLowerCase()}`, text: `Rumour: ${m.hidden.hint}`, position: cp, tracked: false, icon: '?', color: ELEMENT_INFO[m.element].glow, compass: false });
+        continue;
+      }
       const d = ctx.npcs.getDef(m.id);
       if (!d) continue;
       if (m.condition && !ctx.npcs.checkCondition(m.condition)) continue;
@@ -837,39 +846,17 @@ export class TrainingSystem implements GameSystem {
 
   renderJournal(el: HTMLElement): void {
     const ctx = this.ctx;
-    const pr = ctx.progression;
-    const wrap = h('div.trn-journal');
-    if (ctx.quests.hasFlag('note_sphere'))
-      wrap.append(h('div.trn-note', h('h4', { style: { margin: '0 0 4px' } }, '✦ The Elements Sphere'), h('div', `In a spirit vision the past Avatars spoke: all four elements now answer as one. Press ${ctx.input.label('avatarState')} to enter the Avatar State — it now summons the Elements Sphere, with Hurricane, Tsunami, Earthquake, Fire Tornado and the Avatar Cataclysm on slots 1–5.`)));
-    let shown = 0;
-    for (const e of ELEMENTS) {
-      const list = MASTERS.filter((m) => m.element === e);
-      const known = list.filter((m) => this.isKnown(m));
-      const hiddenCount = list.filter((m) => m.hidden && !this.isKnown(m)).length;
-      wrap.append(h('h3', { style: { margin: '14px 0 6px', color: ELEMENT_INFO[e].glow } }, `${ELEMENT_INFO[e].name} — ${pr.mastery[e].mastered ? 'mastered' : pr.canBend(e) ? `${pr.mastery[e].lessons.length}/${MASTERY_REQUIREMENTS[e].lessons} lessons` : 'not yet awakened'}`));
-      for (const m of known) {
-        shown++;
-        const lessons = m.lessons.map((l) => {
-          const done = this.lessonDone(l.id);
-          const missing = this.missingRequirements(l);
-          const tn = getTechnique(l.technique)?.name ?? l.technique;
-          return h(`div.trn-l${done ? '.done' : missing.length ? '.locked' : ''}`, `${done ? '✓' : missing.length ? '🔒' : '◇'} ${l.title} — ${tn}${missing.length && !done ? ` (after ${missing.map((r) => this.describeLesson(r)).join(', ')})` : ''}`);
-        });
-        if (m.trial) lessons.push(h(`div.trn-l${pr.mastery[e].trialComplete ? '.done' : pr.trialAvailable(e) ? '' : '.locked'}`, `${pr.mastery[e].trialComplete ? '✓' : pr.trialAvailable(e) ? '◇' : '🔒'} ${MASTERY_REQUIREMENTS[e].trialName}${pr.trialAvailable(e) ? ' — ready!' : ''}`));
-        if (!pr.canBend(e)) lessons.unshift(h('div.trn-l', `◇ Can awaken ${ELEMENT_INFO[e].name.toLowerCase()}bending in you`));
-        wrap.append(
-          h(
-            'div.card',
-            { style: { marginBottom: '8px' } },
-            h('div.trn-m', h('div', { style: { fontSize: '26px', color: ELEMENT_INFO[e].glow } }, '✦'), h('div', { style: { flex: '1' } }, h('h4', `${m.name} — ${m.title}${m.grandmaster ? ' (grandmaster)' : ''}`), h('div.muted', { style: { marginBottom: '4px' } }, m.location), ...lessons)),
-          ),
-        );
-      }
-      if (hiddenCount) wrap.append(h('div.muted', { style: { fontStyle: 'italic', margin: '2px 0 6px' } }, `${hiddenCount} master${hiddenCount > 1 ? 's' : ''} of ${ELEMENT_INFO[e].name.toLowerCase()} remain${hiddenCount > 1 ? '' : 's'} hidden. ${list.filter((m) => m.hidden && !this.isKnown(m)).map((m) => m.hidden!.hint).join(' ')}`));
+    if (typeof document !== 'undefined' && !document.getElementById('mg-css')) document.head.append(h('style', { id: 'mg-css' }, MASTERS_JOURNAL_CSS));
+    const note = ctx.quests.hasFlag('note_sphere')
+      ? h('div.trn-note', h('h4', { style: { margin: '0 0 4px' } }, '✦ The Elements Sphere'), h('div', `In a spirit vision the past Avatars spoke: all four elements now answer as one. Press ${ctx.input.label('avatarState')} to enter the Avatar State — it now summons the Elements Sphere, with Hurricane, Tsunami, Earthquake, Fire Tornado and the Avatar Cataclysm on slots 1–5.`))
+      : null;
+    const guide = ctx.extra.get('master_guide') as MasterGuide | undefined;
+    if (guide) {
+      renderMastersJournal(ctx, this, guide, el, note);
+      return;
     }
-    if (!shown) wrap.prepend(h('p.muted', 'No masters known yet. Visit the great cities and temples — masters are marked ✦.'));
     clear(el);
-    el.append(wrap);
+    el.append(h('p.muted', 'Masters are marked ✦ on your map.'));
   }
 
   // ---------------------------------------------------------------------------

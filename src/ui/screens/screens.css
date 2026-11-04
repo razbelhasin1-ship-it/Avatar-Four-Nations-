@@ -2174,3 +2174,11 @@
 }
 .tq-branch p { margin: 2px 0; }
 .tq-branch.locked { opacity: 0.92; }
+
+/* ---------- Map: master guide (rumours, route, master panel) ---------- */
+.mp-rumour { display: inline-block; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid #e8d8b0; text-align: center; line-height: 14px; font-weight: 700; font-size: 11px; }
+.mp-route { color: #ffcc33; font-weight: 700; letter-spacing: 1px; }
+.mp-ab { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 0; font-size: 14px; }
+.mp-ab.learned { opacity: 0.62; }
+.tq-teacher { margin-left: 8px; vertical-align: middle; }
+.mp-follow { margin-top: 10px; padding: 8px 10px; border: 1px solid rgba(255, 204, 51, 0.45); border-radius: 8px; background: rgba(255, 204, 51, 0.07); }

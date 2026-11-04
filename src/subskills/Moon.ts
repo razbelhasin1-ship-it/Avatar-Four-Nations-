@@ -2,6 +2,7 @@ import type { GameContext, GameSystem } from '../core/GameContext';
 import type { Persistable } from '../core/Save';
 import { MOON, MOON_PHASES } from '../data/subskills';
 import { h } from '../ui/dom';
+import { guardHud } from './hudGuard';
 
 /**
  * Lunar cycle tied to the game clock (world.sky.timeOfDay): a day counter, 8 phases, one
@@ -157,6 +158,7 @@ export class MoonSystem implements GameSystem, Persistable {
     this.chipText = h('span.moon-tx');
     this.chip = h('div.moon-chip.hidden', { title: 'Moon and time of day' }, this.chipIcon, this.chipText);
     this.ctx.ui.layers.hud.appendChild(this.chip);
+    guardHud(this.ctx, this.chip);
   }
 
   private updateChip(): void {

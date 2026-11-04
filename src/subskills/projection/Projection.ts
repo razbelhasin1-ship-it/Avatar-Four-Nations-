@@ -12,6 +12,7 @@ import type { MoonSystem } from '../Moon';
 import { getSpot } from '../../world/Spots';
 import { LANDMARKS } from '../../world/WorldLayout';
 import { BSS, GROUND } from '../../world/regions/earth/bssLayout';
+import { guardHud } from '../hudGuard';
 
 export type ProjectionState = 'idle' | 'meditating' | 'projecting' | 'returning';
 
@@ -673,6 +674,8 @@ export class ProjectionSystem implements GameSystem {
     this.hudKeys = h('div.proj-keys');
     this.hud = h('div.proj-hud.hidden', h('div.proj-title', 'Spiritual Projection'), h('div.proj-bar', this.hudFocus), this.hudInfo, this.hudKeys);
     this.ctx.ui.layers.hud.append(this.overlay, this.hud);
+    guardHud(this.ctx, this.overlay);
+    guardHud(this.ctx, this.hud);
   }
 
   private showOverlay(on: boolean): void {

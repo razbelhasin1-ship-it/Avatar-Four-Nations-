@@ -5,6 +5,8 @@ import { bondLevelName, HABITATS, SPECIES, speciesById } from '../../data/creatu
 import { itemById } from '../../data/items';
 import { LORE } from '../../data/lore';
 import { MASTERS } from '../../data/masters';
+import { isGuideQuest } from '../../data/quests_masters';
+import type { MasterGuide } from '../../training/MasterGuide';
 import type { QuestCategory, QuestDef, QuestProgress } from '../../quests/QuestTypes';
 import { MASTERY_REQUIREMENTS } from '../../progression/Progression';
 import { LANDMARKS, REGIONS, regionById } from '../../world/WorldLayout';
@@ -232,6 +234,10 @@ export class JournalScreen extends GameScreen {
           'div.gs-actions',
           h(`button.btn${tracked ? '' : '.primary'}`, { type: 'button', 'data-action': 'track', onclick: () => this.toggleTrack(def.id) }, tracked ? 'Stop Tracking' : 'Track Quest'),
           h('button.btn', { type: 'button', 'data-action': 'show-on-map', onclick: () => this.showOnMap(def.id) }, 'Show on Map'),
+          // [master guide] Guides are bookmarks: remove one any time (the Masters page can track it again).
+          isGuideQuest(def.id)
+            ? h('button.btn', { type: 'button', 'data-action': 'remove-guide', onclick: () => ((ctx.extra.get('master_guide') as MasterGuide | undefined)?.drop(def.id), (this.sel = null), this.refresh()) }, 'Remove')
+            : null,
         ),
       );
     } else el.append(h('div.jr-stamp', 'Completed'));

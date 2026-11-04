@@ -9,7 +9,7 @@ import type { Element } from '../core/types';
 
 export type ObjectiveDef =
   /** Get within radius of a landmark or point. */
-  | { type: 'reach'; text: string; landmark?: string; x?: number; z?: number; radius?: number }
+  | { type: 'reach'; text: string; landmark?: string; x?: number; z?: number; radius?: number; /** [additive: master guide] a named spot (+ offset), resolved when regions publish it. */ spot?: string; dx?: number; dz?: number }
   /** Talk to an NPC (npc:interact). */
   | { type: 'talk'; text: string; npc: string }
   /** Any game event, optionally filtered by payload fields (exact match), counted. */
@@ -31,7 +31,7 @@ export type ObjectiveDef =
   /** Complete a training lesson (optionally specific). */
   | { type: 'training'; text: string; master?: string; lesson?: string }
   /** A story flag set by dialogue or scripts. */
-  | { type: 'flag'; text: string; flag: string }
+  | { type: 'flag'; text: string; flag: string; /** [additive: master guide] where the flag is found (a clue to read): a named spot + offset. */ spot?: string; dx?: number; dz?: number }
   /** Use a technique N times (technique:cast by player). */
   | { type: 'cast'; text: string; technique?: string; element?: Element | 'avatar'; count: number }
   /** Activate the Avatar State (or Elements Sphere). */
