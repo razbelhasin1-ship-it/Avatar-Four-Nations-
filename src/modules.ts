@@ -12,6 +12,7 @@ import { QuestWorld } from './training/QuestWorld';
 import { MasterGuide } from './training/MasterGuide';
 import { AmbienceDirector } from './audio/AmbienceDirector';
 import { WaterContainers } from './world/WaterContainers';
+import { WaterLife } from './world/WaterLife';
 import { MusicSystem } from './audio/MusicSystem';
 import { AudioEvents } from './audio/AudioEvents';
 import { MarkingPerks } from './combat/techniques/fire/combustion';
@@ -69,6 +70,7 @@ export const MODULES: GameModule[] = [
   // event→sound bindings and UI sounds. They tick on the audio engine (menu included) (__game.debug.audio).
   // Water jars and rain barrels beside town stalls and quest givers: small, finite waterbending sources.
   { name: 'water_containers', order: 47, create: () => new WaterContainers() },
+  { name: 'water_life', order: 47.5, create: () => new WaterLife() },
   { name: 'audio_ambience', order: 970, create: () => new AmbienceDirector() },
   { name: 'audio_music', order: 971, create: () => new MusicSystem() },
   { name: 'audio_events', order: 972, create: () => new AudioEvents() },

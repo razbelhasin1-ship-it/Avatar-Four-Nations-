@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Random } from '../../../core/Random';
-import { emblemBanner, flagstones } from '../../kit/Textures';
+import { pavingMaterial, pavingSet, repave, setPavingRelief, type PavingKind } from '../../kit/Paving';
+import { emblemBanner } from '../../kit/Textures';
 
 /**
  * Earth-region materials that the shared kit does not provide: planar ground
@@ -116,7 +117,34 @@ function ground(tex: THREE.Texture, tint: string, offset = -2): THREE.MeshStanda
   return m;
 }
 
-function create(): EarthMaterials {
+/** Paving detail per graphics quality: the plaza flagstones and street setts get the big textures. */
+type Detail = 'low' | 'medium' | 'high';
+// One neutral, light texture set per kind (shared by every ring); each ring tints it.
+const PAVING_BASE = '#e2d8c6';
+const pavingSeed = (kind: PavingKind) => (kind === 'cobble' ? 17 : 7);
+const pavingSize = (detail: Detail, main: boolean) => (main && detail === 'high' ? 1024 : detail === 'low' ? 256 : 512);
+/** The paving materials of the live set and how they were made (a quality change re-paves them). */
+let pavings: Array<{ m: THREE.MeshStandardMaterial; kind: PavingKind; main: boolean; moss: number }> = [];
+let pavingDetail: Detail = 'medium';
+
+function paved(kind: PavingKind, tint: string, detail: Detail, main: boolean, offset = -2, moss = 0): THREE.MeshStandardMaterial {
+  const m = pavingMaterial(pavingSet(kind, PAVING_BASE, pavingSeed(kind), pavingSize(detail, main), moss), { tint, offset });
+  // Low effects: painted stones without the relief (no normal-map work per pixel).
+  if (detail === 'low') setPavingRelief(m, false);
+  pavings.push({ m, kind, main, moss });
+  return m;
+}
+
+/** Graphics quality changed: the paving swaps to textures of the new resolution (built progressively). */
+export function setEarthPavingDetail(detail: Detail): void {
+  if (!shared || detail === pavingDetail) return;
+  pavingDetail = detail;
+  for (const p of pavings) repave(p.m, pavingSet(p.kind, PAVING_BASE, pavingSeed(p.kind), pavingSize(detail, p.main), p.moss), detail !== 'low');
+}
+
+function create(detail: Detail): EarthMaterials {
+  pavings = [];
+  pavingDetail = detail;
   const textures: THREE.Texture[] = [];
   const own = (t: THREE.CanvasTexture) => {
     textures.push(t);
@@ -166,11 +194,13 @@ function create(): EarthMaterials {
     }, 1),
   );
   const m: Omit<EarthMaterials, 'all' | 'textures'> = {
-    groundLower: ground(flagstones('#8f8370', 71), '#ffffff'),
-    groundMiddle: ground(flagstones('#b5a88c', 72), '#ffffff'),
-    groundUpper: ground(flagstones('#cfc4ac', 73), '#ffffff'),
-    groundDirt: ground(flagstones('#8a7458', 74), '#e8dcc8'),
-    road: ground(flagstones('#a0937a', 75), '#ffffff', -4),
+    // Lower Ring: old worn setts, moss in the joints. Middle Ring plazas: running-bond flagstones.
+    // Upper Ring: pale cut slabs. Lanes and yards: packed earth. Streets: setts.
+    groundLower: paved('cobble', '#a4967f', detail, true, -2, 0.6),
+    groundMiddle: paved('flag', '#d8c9aa', detail, true),
+    groundUpper: paved('slab', '#f0e6d2', detail, false),
+    groundDirt: paved('earth', '#b49a76', detail, false),
+    road: paved('cobble', '#c4b498', detail, true, -4),
     leaf: new THREE.MeshStandardMaterial({ color: '#4f7f3a', roughness: 0.85, flatShading: true }),
     leafDark: new THREE.MeshStandardMaterial({ color: '#33592c', roughness: 0.85, flatShading: true }),
     leafLight: new THREE.MeshStandardMaterial({ color: '#7a9e48', roughness: 0.85, flatShading: true }),
@@ -187,7 +217,7 @@ function create(): EarthMaterials {
     trainWindow: new THREE.MeshStandardMaterial({ color: '#2a2a22', emissive: '#ffc070', emissiveIntensity: 0.3, roughness: 0.3 }),
     crops,
     paddy,
-    sand: ground(flagstones('#c8b48a', 76), '#efe4cc'),
+    sand: paved('earth', '#ead9b4', detail, false),
     water: new THREE.MeshStandardMaterial({ color: '#3f8fa8', roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.85 }),
   };
   const all: THREE.Material[] = [];
@@ -201,8 +231,8 @@ function create(): EarthMaterials {
   return { ...m, all, textures };
 }
 
-export function acquireEarthMaterials(): EarthMaterials {
-  if (!shared) shared = create();
+export function acquireEarthMaterials(detail: Detail = 'medium'): EarthMaterials {
+  if (!shared) shared = create(detail);
   refs++;
   return shared;
 }
@@ -213,5 +243,6 @@ export function releaseEarthMaterials(): void {
     for (const m of shared.all) m.dispose();
     for (const t of shared.textures) t.dispose();
     shared = null;
+    pavings = [];
   }
 }

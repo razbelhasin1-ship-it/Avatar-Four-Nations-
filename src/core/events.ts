@@ -157,6 +157,10 @@ export interface GameEvents {
   'bloodbending:hold': { targetId: number; active: boolean; hostile: boolean; reason?: string; byPlayer: boolean };
   'strain:changed': { value: number; stage: 'calm' | 'unease' | 'dark' | 'breaking' };
   'subskill:vow': { state: 'kept' | 'broken' };
+
+  // ---- water surfaces (src/world/WaterLife) ----
+  /** Spent water fell back to the world at (x, z): into a source it refills, open water, or a puddle (sourceId). */
+  'water:released': { x: number; y: number; z: number; amount: number; sourceId: string | null };
 }
 
 export type GameEventName = keyof GameEvents;

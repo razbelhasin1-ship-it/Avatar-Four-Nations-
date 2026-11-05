@@ -9,7 +9,7 @@ import { buildArchetypes } from './archetypes';
 import { acquireHouseAtlas, releaseHouseAtlas } from './atlas';
 import { ChunkSet, type LodRanges } from './chunks';
 import { Exclusions, type BuildEnv } from './env';
-import { acquireEarthMaterials, releaseEarthMaterials } from './materials';
+import { acquireEarthMaterials, releaseEarthMaterials, setEarthPavingDetail } from './materials';
 import { EARTH_SPOTS } from './spots';
 
 /**
@@ -96,7 +96,7 @@ export abstract class EarthRegion implements RegionContent {
 
   private *allSteps(): Generator<unknown, void, unknown> {
     const ctx = this.ctx;
-    const mats = acquireEarthMaterials();
+    const mats = acquireEarthMaterials(ctx.settings.data.graphics.effectsQuality);
     const atlas = acquireHouseAtlas();
     this.built = true;
     yield;
@@ -212,6 +212,7 @@ export abstract class EarthRegion implements RegionContent {
     };
     this.applyShadows();
     this.updateLod(true);
+    setEarthPavingDetail(g.effectsQuality);
   }
 
   private updateLod(_force = false): void {

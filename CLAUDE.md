@@ -40,6 +40,8 @@ Screenshots are how you judge visuals — take them, open them with the Read too
 | `world/Terrain.ts` `Water.ts` `Sky.ts` | Chunked LOD terrain, water surfaces, sky/time-of-day |
 | `world/World.ts` | Facade: ground/water/surface/region queries, raycast, region content streaming, `world.fx` env hooks, discoveries |
 | `world/Collision.ts` | Static/dynamic colliders (Y-rotated boxes, cylinders, spheres; walkable tops, ramps) |
+| `world/env/WaterShared.ts` `WaterLook.ts` `WaterLife.ts` | What every water surface shares (tones per kind of water, the ripple field, lighting); basin/vessel water material (fountains, ponds, canals, puddles, jars); `water_life` system (basin levels follow their source, wakes, draw/splash rings, bent-water tone) |
+| `world/kit/Paving.ts` | Procedural paving (flagstones, setts, slabs, packed earth): albedo + normal + roughness, world-space mapped, built progressively between frames |
 | `world/LiftableRocks.ts` | `ctx.world.rocks`: region-placed rocks earthbenders can lift (registered by `ContentBuilder.rock()` / `rockInstance()`) |
 | `world/RegionContent.ts` + `world/regions/` | Cities/temples/villages; register factories in `world/regions/index.ts` |
 | `world/Interactables.ts` | E-prompt interactions (`ctx.interactions.register(...)`) |
@@ -66,6 +68,7 @@ Screenshots are how you judge visuals — take them, open them with the Read too
 - Techniques: `registerTechnique({...})` in `combat/techniques/<file>.ts`, import the file from `combat/techniques/index.ts`. Water techniques declare `water: { amount }` — water comes only from `ctx.water.acquire` (reserve → nearby real source). Snow and ice are real sources too: waterbenders melt them into water (open water within reach is preferred). Never conjure water except `canConjure` ultimates. The player carries water (`waterReserve`, the orbiting reserve) only while Water is the active element: any other element lets it fall and splash into a puddle (`WaterbendingSystem.updateLetGo`), and Draw Water switches to Water.
 - New systems: implement `GameSystem`, add to `src/modules.ts`. Persistent state: also implement `Persistable` (Game auto-registers modules with `saveKey`). Tolerate `undefined`/partial data in `deserialize`.
 - New regions: implement `RegionContent`, add the factory to `world/regions/index.ts`. Static geometry/colliders/water sources in `build()`; session entities (NPCs, creatures, interactables) in `onSessionStart()` and clean up in `onSessionEnd()`.
+- Water surfaces in regions: `ContentBuilder.waterSurface()` (registers the source and gives it basin water in its source's tone) or `createBasinWaterMaterial()` for decorative water — never a flat `MeshStandardMaterial`, so every surface looks like the water bent out of it and rings when disturbed.
 - Loose rocks and boulders in regions: place them with `ContentBuilder.rock()` / `rockInstance()` (not `mesh()` / `instance()`) so earthbenders can lift them; anything too big to lift (cliff pieces, house-sized boulders) is merged automatically.
 - New events: add to `core/events.ts` (append; never rename existing keys).
 - Data (quests, NPCs, dialogues, cosmetics, items) lives in `src/data/`. Prefer data over code.

@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { createBasinWaterMaterial, type BasinWaterOptions } from '../WaterLook';
+import { trackBasin, untrackBasin } from '../WaterLife';
+import { toneForSource } from '../env/WaterShared';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { GameContext } from '../../core/GameContext';
 import type { SurfaceType } from '../../core/types';
@@ -113,6 +116,9 @@ export class ContentBuilder {
   readonly colliderIds: number[] = [];
   readonly meshes: THREE.Object3D[] = [];
   private readonly ownedGeometries: THREE.BufferGeometry[] = [];
+  /** Per-surface materials this builder made (basin water) and the basins it tracks. */
+  private readonly ownedMaterials: THREE.Material[] = [];
+  private readonly basinIds: string[] = [];
   /** Liftable instanced rocks, registered once their InstancedMesh exists (finish). */
   private pendingRocks: Array<{ key: string; index: number; collider?: ColliderDef }> = [];
 
@@ -421,9 +427,10 @@ export class ContentBuilder {
 
   /** Flat water surface (pond, canal, fountain basin) that also registers a water source. */
   waterSurface(o: { id: string; label: string; x: number; z: number; y: number; w: number; d: number; yaw?: number; circle?: boolean; capacity?: number; regen?: number; type?: 'pond' | 'canal' | 'fountain' | 'puddle' | 'lake'; material?: THREE.Material }): THREE.Mesh {
-    const geo = o.circle ? new THREE.CircleGeometry(o.w / 2, 40) : new THREE.PlaneGeometry(o.w, o.d, 8, 8);
+    const geo = o.circle ? new THREE.CircleGeometry(o.w / 2, 48) : new THREE.PlaneGeometry(o.w, o.d, 8, 8);
     geo.rotateX(-Math.PI / 2);
-    const mat = o.material ?? this.defaultWaterMaterial();
+    const type = o.type ?? 'pond';
+    const mat = o.material ?? this.basinMaterial(o, type);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(o.x, o.y, o.z);
     mesh.rotation.y = o.yaw ?? 0;
@@ -443,15 +450,44 @@ export class ContentBuilder {
       capacity: o.capacity ?? 120,
       regen: o.regen ?? 3,
     });
+    if (!o.material) {
+      // The basin's surface follows its source: drawn down it sinks a little, then refills.
+      const r = o.circle ? o.w / 2 : Math.min(o.w, o.d) / 2;
+      const drop = type === 'canal' || type === 'lake' || type === 'puddle' ? 0 : Math.min(0.16, Math.max(0.05, r * 0.05));
+      trackBasin(o.id, mesh, o.y, r, drop);
+      this.basinIds.push(o.id);
+    }
     return mesh;
   }
 
-  private static waterMat: THREE.MeshStandardMaterial | null = null;
-  private defaultWaterMaterial(): THREE.Material {
-    if (!ContentBuilder.waterMat) {
-      ContentBuilder.waterMat = new THREE.MeshStandardMaterial({ color: '#3a8fb5', roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.82 });
+  /**
+   * Basin water (WaterLook) shaped to the surface: depth and motion by the kind of basin, and the
+   * tone its source gives bent water (toneForSource), so a whip pulled from it looks like it.
+   */
+  private basinMaterial(o: { w: number; d: number; yaw?: number; circle?: boolean; label: string }, type: string): THREE.Material {
+    const size: [number, number] = o.circle ? [o.w, o.w] : [o.w, o.d];
+    const tone = toneForSource(type, o.label);
+    const look: BasinWaterOptions =
+      type === 'fountain'
+        ? { tone, depth: 0.55, fountain: Math.max(o.w, o.d) > 2.6 ? 0.75 : 0, size, circle: o.circle }
+        : type === 'canal'
+          ? { tone, depth: 1.3, size, circle: o.circle, rim: 0.7 }
+          : type === 'puddle'
+            ? { tone, depth: 0.05, size, circle: o.circle, rim: 0, reflect: 2.5, feather: 0.2 }
+            : type === 'lake'
+              ? { tone, depth: 3, size, circle: o.circle, rim: 0.6 }
+              : /paddy|paddies/i.test(o.label)
+                ? { tone, depth: 0.14, size, circle: o.circle, rim: 0.25 }
+                : { tone, depth: tone === 'clear' ? 1.1 : Math.max(o.w, o.d) > 14 ? 2.2 : 1.1, size, circle: o.circle };
+    if (type === 'canal') {
+      // A slow current along the canal's length (local x is its width axis before the yaw).
+      const yaw = o.yaw ?? 0;
+      const along = o.w >= o.d ? [Math.cos(yaw), -Math.sin(yaw)] : [Math.sin(yaw), Math.cos(yaw)];
+      look.flow = [along[0] * 0.28, along[1] * 0.28];
     }
-    return ContentBuilder.waterMat;
+    const m = createBasinWaterMaterial(look);
+    this.ownedMaterials.push(m);
+    return m;
   }
 
   /** Merge all batches into meshes and add instanced meshes. Call once after building. */
@@ -515,6 +551,10 @@ export class ContentBuilder {
     this.meshes.length = 0;
     for (const g of this.ownedGeometries) g.dispose();
     this.ownedGeometries.length = 0;
+    for (const m of this.ownedMaterials) m.dispose();
+    this.ownedMaterials.length = 0;
+    for (const id of this.basinIds) untrackBasin(id);
+    this.basinIds.length = 0;
   }
 }
 

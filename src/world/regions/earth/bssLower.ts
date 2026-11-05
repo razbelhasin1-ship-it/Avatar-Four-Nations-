@@ -585,7 +585,7 @@ function dressLower(site: DistrictSite, houses: PlacedHouse[], lanes: Lane[]): v
     const r = rings[i % rings.length] + (hash01(i, 510) - 0.5) * 2;
     const p = polar(t, r);
     if (nearAvenue(t, r, 2)) continue;
-    const g = new THREE.CircleGeometry(0.6 + hash01(i, 511) * 1.1, 10);
+    const g = new THREE.CircleGeometry(0.6 + hash01(i, 511) * 1.1, 20);
     g.rotateX(-Math.PI / 2);
     g.scale(1, 1, 0.55 + hash01(i, 512) * 0.5);
     pb.mesh(bm.puddle, g, { x: p.x, y: GROUND + 0.07, z: p.z, yaw: t }, { castShadow: false });

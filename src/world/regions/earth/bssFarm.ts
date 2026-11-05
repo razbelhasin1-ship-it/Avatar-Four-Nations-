@@ -147,6 +147,9 @@ export function* buildFarmland(site: DistrictSite): Generator<unknown, void, unk
     }
     env.excl.polyline(pts, CANAL.w / 2 + 0.8);
     const wg = stripGeometry(pts, CANAL.w / 2 + 0.05, GROUND + 0.12, 4);
+    // Water shader UVs: v 0..1 across the canal (its depth falls off toward both banks).
+    const wuv = wg.getAttribute('uv') as THREE.BufferAttribute;
+    for (let i = 0; i < wuv.count; i++) wuv.setXY(i, 0.5, i % 2);
     gb.mesh(bm.canal, wg, { x: 0, y: 0, z: 0 }, { castShadow: false });
     wg.dispose();
     // Real water in straight segments of ~12 m (each a source for waterbenders; drawn by the strip above).

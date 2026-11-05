@@ -854,14 +854,21 @@ export class WaterSourceSystem implements GameSystem {
     if (!(amount > 0)) return null;
     for (const s of this.sources.values()) {
       if (s.frozen || !Number.isFinite(s.capacity) || s.amount >= s.capacity || s.type === 'puddle') continue;
-      if (Math.hypot(s.x - pos.x, s.z - pos.z) < s.r + 6) {
+      const d = Math.hypot(s.x - pos.x, s.z - pos.z);
+      if (d < s.r + 6) {
         s.amount = Math.min(s.capacity, s.amount + amount * 0.7);
         this.notifyChange(s);
+        // It lands on the source's surface (pulled in from the bank).
+        const k = d > s.r * 0.85 ? (s.r * 0.85) / d : 1;
+        this.released(s.x + (pos.x - s.x) * k, s.y, s.z + (pos.z - s.z) * k, amount, s.id);
         return s.id;
       }
     }
-    if (amount < 6) return null;
-    if (waterAt(pos.x, pos.z)) return null; // falls back into open water
+    if (amount < 6 || waterAt(pos.x, pos.z)) {
+      // Too little to pool, or it falls back into open water.
+      this.released(pos.x, pos.y, pos.z, amount, null);
+      return null;
+    }
     const world = this.ctx?.world;
     if (!world) return null;
     const g = world.groundAt(pos.x, pos.z, pos.y + 1);
@@ -876,6 +883,7 @@ export class WaterSourceSystem implements GameSystem {
         s.r = Math.min(2.6, 0.8 + Math.sqrt(s.capacity) * 0.25);
         s.ttl = Math.max(s.ttl ?? 0, 45);
         this.notifyChange(s, true);
+        this.released(pos.x, g.y, pos.z, amount, s.id);
         return s.id;
       }
     }
@@ -886,7 +894,14 @@ export class WaterSourceSystem implements GameSystem {
       this.unregister(puddles[0].id);
     }
     const capacity = Math.min(25, add);
-    return this.registerDynamic({ type: 'puddle', label: 'Puddle', x: pos.x, y: g.y + 0.02, z: pos.z, r: Math.min(2.6, 0.8 + Math.sqrt(capacity) * 0.25), capacity, regen: 0, ttl: 45, size: 'small' });
+    const id = this.registerDynamic({ type: 'puddle', label: 'Puddle', x: pos.x, y: g.y + 0.02, z: pos.z, r: Math.min(2.6, 0.8 + Math.sqrt(capacity) * 0.25), capacity, regen: 0, ttl: 45, size: 'small' });
+    this.released(pos.x, g.y, pos.z, amount, id);
+    return id;
+  }
+
+  /** Spent water reached the world at (x, z): water surfaces ring there (WaterLife). */
+  private released(x: number, y: number, z: number, amount: number, sourceId: string | null): void {
+    this.ctx?.events.emit('water:released', { x, y, z, amount, sourceId });
   }
 
   /**

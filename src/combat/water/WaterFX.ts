@@ -5,7 +5,7 @@ import { biomeWeights } from '../../world/Heightfield';
 import type { Cast, Combatant } from '../types';
 import { clamp01, PathSampler } from './Curve';
 import { capTaper, FlowTube, TubePool, type Quality } from './FlowTube';
-import { createWaterMaterial, WATER_SUN, WATER_TIME, type WaterLook } from './WaterMaterials';
+import { createWaterMaterial, tickBendTone, WATER_SUN, WATER_TIME, type WaterLook } from './WaterMaterials';
 
 /**
  * Per-game water effects runtime: owns pooled tubes, the reserve orbit visuals
@@ -111,6 +111,7 @@ export class WaterFX {
   update(dt: number): void {
     this.time += dt;
     WATER_TIME.value = this.time;
+    tickBendTone(dt);
     const sun = (this.ctx.render as unknown as { sunDir?: THREE.Vector3 }).sunDir;
     if (sun && sun.lengthSq() > 0) WATER_SUN.value.copy(sun).normalize();
     const alive: WaterEffect[] = [];

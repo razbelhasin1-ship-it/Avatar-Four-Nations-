@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { GameContext, GameSystem } from '../core/GameContext';
 import { allSpots, type Spot } from './Spots';
+import { createBasinWaterMaterial } from './WaterLook';
 
 /**
  * Water jars and rain barrels beside market stalls and quest givers in the
@@ -85,7 +86,8 @@ export class WaterContainers implements GameSystem {
     const clay = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.85 });
     const wood = new THREE.MeshStandardMaterial({ color: '#6e4b2c', roughness: 0.9 });
     const iron = new THREE.MeshStandardMaterial({ color: '#3a3836', roughness: 0.6, metalness: 0.4 });
-    const water = new THREE.MeshStandardMaterial({ color: '#2d6f95', roughness: 0.08, metalness: 0.1, emissive: '#0b2b3d', transparent: true, opacity: 0.92 });
+    // The same water as every basin in town, deep inside the vessel (dark, glassy, catching the sky).
+    const water = createBasinWaterMaterial({ tone: 'clear', depth: 1.6, circle: true, size: [0.56, 0.56], rim: 0.55, scale: 0.4 });
     this.jars = new THREE.InstancedMesh(jarGeometry(), clay, MAX);
     this.barrels = new THREE.InstancedMesh(barrelGeometry(), wood, MAX);
     const hoop = new THREE.TorusGeometry(0.39, 0.018, 4, 18).rotateX(Math.PI / 2);

@@ -6,6 +6,7 @@ import type { P2 } from '../../WorldLayout';
 import { archBlockGeometry, spandrelGeometry } from './geom';
 import { prismGeometry } from './walls';
 import { polar, radiusOf, thetaOf, wrapAngle } from './bssLayout';
+import { createBasinWaterMaterial } from '../../WaterLook';
 
 /**
  * Ba Sing Se building kit: owned materials (emblem medallions, CJK signs,
@@ -403,7 +404,8 @@ export class BssMats {
   readonly mud: THREE.MeshStandardMaterial;
   /** Trodden mud for Lower Ring streets and lanes (darker, wetter). */
   readonly mudTrack: THREE.MeshStandardMaterial;
-  readonly puddle: THREE.MeshStandardMaterial;
+  /** Rain puddles on the Lower Ring lanes (merged discs; edge depth from each disc's UVs). */
+  readonly puddle: THREE.ShaderMaterial;
   readonly glow: THREE.MeshStandardMaterial;
   /** Garden lawn between the flagstone streets of the Middle and Upper Rings. */
   readonly lawn: THREE.MeshStandardMaterial;
@@ -411,8 +413,8 @@ export class BssMats {
   readonly warMap: THREE.MeshStandardMaterial;
   /** Agrarian Zone fields; paddies are glossy standing water over rice shoots. */
   readonly fields: Record<'paddy' | 'cabbage' | 'grain' | 'pasture' | 'fallow', THREE.MeshStandardMaterial>;
-  /** Open water for canals (the lake and real sources render their own surfaces). */
-  readonly canal: THREE.MeshStandardMaterial;
+  /** The farm's irrigation canal ring (a strip: UV v runs 0..1 across it, see bssFarm). */
+  readonly canal: THREE.ShaderMaterial;
   /** Invisible surface for water sources whose water is drawn as merged geometry. */
   readonly hiddenWater: THREE.MeshBasicMaterial;
   /** Natural rock for hills and the Laogai hill. */
@@ -445,8 +447,9 @@ export class BssMats {
     this.mud.name = 'bss_mud';
     this.mudTrack = this.own(new THREE.MeshStandardMaterial({ map: this.mud.map, roughness: 0.82, color: '#a89580' }));
     this.mudTrack.name = 'bss_mud_track';
-    this.puddle = this.own(new THREE.MeshStandardMaterial({ color: '#4a4034', roughness: 0.06, metalness: 0.1, transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
-    this.puddle.name = 'bss_puddle';
+    this.puddle = this.own(createBasinWaterMaterial({ tone: 'mud', depth: 0.08, circle: true, size: [2.2, 2.2], rim: 0, scale: 0.6, reflect: 3.2, opacity: 1.45, feather: 0.3 }));
+    this.puddle.polygonOffset = true;
+    this.puddle.polygonOffsetFactor = -2;
     this.glow = this.own(new THREE.MeshStandardMaterial({ color: '#ffd28a', emissive: '#ffb050', emissiveIntensity: 1.6, roughness: 0.6 }));
     this.glow.name = 'bss_glow';
     this.lawn = this.own(new THREE.MeshStandardMaterial({ map: this.tex(lawnTexture()), roughness: 0.95, color: '#ffffff' }));
@@ -459,8 +462,7 @@ export class BssMats {
       return m;
     };
     this.fields = { paddy: field('paddy', 0.25, 0.05), cabbage: field('cabbage', 0.95), grain: field('grain', 0.9), pasture: field('pasture', 0.95), fallow: field('fallow', 1) };
-    this.canal = this.own(new THREE.MeshStandardMaterial({ color: '#4d7480', roughness: 0.12, metalness: 0.1, transparent: true, opacity: 0.88 }));
-    this.canal.name = 'bss_canal';
+    this.canal = this.own(createBasinWaterMaterial({ tone: 'river', depth: 0.9, size: [1e4, 2.7], rim: 0.6 }));
     this.hiddenWater = this.own(new THREE.MeshBasicMaterial({ visible: false }));
     this.rock = this.own(new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.96, map: this.tex(rockTexture()) }));
     applyTriplanar(this.rock, 7);

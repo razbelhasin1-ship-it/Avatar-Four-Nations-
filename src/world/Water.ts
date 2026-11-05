@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { attachEnvUniforms, ENV_NOISE_GLSL, ENV_PARS_GLSL } from './env/EnvShared';
 import { Field, pfbm, worley } from './env/ProcTex';
 import { getLakeRuntime, getRiverRuntime, MARSH, type RiverFall } from './Heightfield';
+import { attachRippleUniforms, WATER_RIPPLE_GLSL, WATER_SKY_GLSL, WATER_TONES } from './env/WaterShared';
 import { ICE_TOP } from './Terrain';
 import { SEA_LEVEL } from './WorldLayout';
 
@@ -79,6 +80,8 @@ const waterFragment = /* glsl */ `
 #include <fog_pars_fragment>
 ${ENV_PARS_GLSL}
 ${ENV_NOISE_GLSL}
+${WATER_RIPPLE_GLSL}
+${WATER_SKY_GLSL}
 uniform vec3 uShallow;
 uniform vec3 uDeep;
 uniform float uAbsorb;
@@ -121,7 +124,11 @@ void main() {
   float detailFade = smoothstep(260.0, 20.0, camDist);
   // Inland water (rivers, lakes, marsh) has no swell: stronger ripple normals carry its texture.
   float inland = 1.0 - uFarOpaque;
-  vec3 n = normalize(vWaveN + vec3(-g.x, 0.0, -g.y) * mix(0.2, 0.36, inland) * detailFade);
+  // Rings where the water is disturbed (drawn from, waded, splashed) and raindrop rings.
+  vec3 rip = waterRipples(p);
+  vec3 rainR = waterRain(p, uRainWet * detailFade);
+  vec2 rg = (rip.xy + rainR.xy) * detailFade;
+  vec3 n = normalize(vWaveN + vec3(-g.x, 0.0, -g.y) * mix(0.2, 0.36, inland) * detailFade + vec3(-rg.x, 0.0, -rg.y));
   vec3 V = normalize(cameraPosition - vWorld);
   float ndv = max(dot(n, V), 0.0);
   float fres = 0.02 + 0.98 * pow(1.0 - ndv, 5.0);
@@ -137,7 +144,7 @@ void main() {
   float sss = pow(max(dot(-V, uSunDir), 0.0), 3.0) * vCrest * 0.35;
   body += shallow * sss * uDaylight;
   vec3 R = reflect(-V, n);
-  vec3 refl = envSkyColor(R) * mix(1.0, 0.55, uMarsh);
+  vec3 refl = waterSky(R) * mix(1.0, 0.55, uMarsh);
   // Inland water mirrors its darker banks and tree lines near the horizon, so
   // ripples read as light / dark flecks instead of a flat sky tint.
   refl *= mix(1.0, mix(0.42, 1.0, smoothstep(0.02, 0.32, R.y)), inland);
@@ -146,7 +153,12 @@ void main() {
   vec3 col = mix(body, refl, fres * mix(0.85, 0.45, uMarsh));
   vec3 H = normalize(uSunDir + V);
   float nh = max(dot(n, H), 0.0);
-  col += uSunColor * (pow(nh, 500.0) * 0.9 + pow(nh, 60.0) * 0.06) * (1.0 - uMarsh * 0.6);
+  // Sun glitter: a sharp core plus wave facets that flicker as they tilt into the sun (the same
+  // glints as basin and bent water), rather than one smeared highlight.
+  vec2 gc = floor(p * 3.0);
+  float gh = fract(sin(dot(gc, vec2(12.9898, 78.233)) + floor(t * 5.0 + fract(gc.x * 0.173) * 5.0)) * 43758.5453);
+  float glint = step(0.9, gh) * detailFade;
+  col += uSunColor * (pow(nh, 900.0) * (1.1 + glint * 2.2) + pow(nh, 110.0) * 0.05) * (1.0 - uMarsh * 0.6);
   // Foam: shoreline band, wave crests, river banks, rapids and falls.
   float fn = n1.b * 0.55 + n2.b * 0.45;
   // Shore foam only where the bed actually rises toward a shore (flat shallow lagoons stay clear).
@@ -172,7 +184,7 @@ void main() {
     float bankB = texture2D(uWaterTex, vec2(vUv.x * 2.0 + 0.5, vUv.y * 0.12 - t * flowSpd * 0.03)).b;
     riverFoam += smoothstep(0.75, 0.12, depth) * smoothstep(0.35, 0.7, bankB) * 0.55;
   }
-  float foam = clamp((shore + crest) * uFoam + riverFoam, 0.0, 1.0);
+  float foam = clamp((shore + crest) * uFoam + riverFoam + (rip.z * 0.3 + rainR.z * 0.15) * detailFade, 0.0, 1.0);
   // Marsh: duckweed and floating algae.
   float weed = 0.0;
   if (uMarsh > 0.0) {
@@ -273,6 +285,7 @@ export function createWaterMaterial(o: Partial<WaterMaterialOptions> = {}): THRE
   // Shared texture assigned after merge (merge would clone it).
   uniforms.uWaterTex = { value: waterTexture() };
   attachEnvUniforms({ uniforms });
+  attachRippleUniforms({ uniforms });
   return new THREE.ShaderMaterial({
     uniforms,
     vertexShader: waterVertex,
@@ -370,7 +383,7 @@ export class WaterRenderer {
 
   constructor() {
     this.group.name = 'water';
-    this.oceanMat = createWaterMaterial({ shallow: '#3fb7c0', deep: '#0b3d63', absorb: 0.16, opacity: 0.82, waveAmp: 0.85, foam: 1, farOpaque: 1 });
+    this.oceanMat = createWaterMaterial({ shallow: WATER_TONES.sea.shallow, deep: WATER_TONES.sea.deep, absorb: 0.16, opacity: 0.82, waveAmp: 0.85, foam: 1, farOpaque: 1 });
     this.materials.push(this.oceanMat);
     this.oceanMat.uniforms.uInland.value.set(MARSH.x, MARSH.z, MARSH.r * 0.86, 1);
     this.ocean = new THREE.Mesh(buildOceanGeometry(72, 96, 3, 3600), this.oceanMat);
@@ -389,10 +402,10 @@ export class WaterRenderer {
   }
 
   private buildRivers(): void {
-    const flowMat = createWaterMaterial({ shallow: '#4c9d92', deep: '#164c58', absorb: 0.42, opacity: 0.8, waveAmp: 0, flowSpeed: 1.6, foam: 0.5 });
+    const flowMat = createWaterMaterial({ shallow: WATER_TONES.river.shallow, deep: WATER_TONES.river.deep, absorb: 0.42, opacity: 0.8, waveAmp: 0, flowSpeed: 1.6, foam: 0.5 });
     this.materials.push(flowMat);
     // Slow, tea-dark channels with duckweed through the swamp (match the marsh).
-    const swampFlowMat = createWaterMaterial({ shallow: '#5d6a37', deep: '#1f2a17', absorb: 0.9, opacity: 0.9, waveAmp: 0, flowSpeed: 0.35, foam: 0.1, marsh: 1 });
+    const swampFlowMat = createWaterMaterial({ shallow: WATER_TONES.swamp.shallow, deep: WATER_TONES.swamp.deep, absorb: 0.9, opacity: 0.9, waveAmp: 0, flowSpeed: 0.35, foam: 0.1, marsh: 1 });
     this.materials.push(swampFlowMat);
     for (const r of getRiverRuntime()) {
       const mid = r.line.pointAt(r.line.length * 0.5);
@@ -464,9 +477,9 @@ export class WaterRenderer {
   }
 
   private buildLakes(): void {
-    const lakeMat = createWaterMaterial({ shallow: '#46aab4', deep: '#0f4f70', absorb: 0.3, opacity: 0.84, waveAmp: 0, foam: 0.35 });
+    const lakeMat = createWaterMaterial({ shallow: WATER_TONES.lake.shallow, deep: WATER_TONES.lake.deep, absorb: 0.3, opacity: 0.84, waveAmp: 0, foam: 0.35 });
     this.materials.push(lakeMat);
-    const hotMat = createWaterMaterial({ shallow: '#7fd8cf', deep: '#2b8f96', absorb: 0.5, opacity: 0.8, waveAmp: 0, foam: 0.2, hot: 1 });
+    const hotMat = createWaterMaterial({ shallow: WATER_TONES.hot.shallow, deep: WATER_TONES.hot.deep, absorb: 0.5, opacity: 0.8, waveAmp: 0, foam: 0.2, hot: 1 });
     this.materials.push(hotMat);
     for (const l of getLakeRuntime()) {
       const geo = new THREE.CircleGeometry(l.def.r + 4, 64);
@@ -483,7 +496,7 @@ export class WaterRenderer {
       this.group.add(mesh);
       if (l.def.kind === 'hotspring') this.hotSprings.push(new THREE.Vector3(l.def.x, l.level, l.def.z));
     }
-    const marshMat = createWaterMaterial({ shallow: '#5d6a37', deep: '#1f2a17', absorb: 0.9, opacity: 0.9, waveAmp: 0, foam: 0.15, marsh: 1 });
+    const marshMat = createWaterMaterial({ shallow: WATER_TONES.swamp.shallow, deep: WATER_TONES.swamp.deep, absorb: 0.9, opacity: 0.9, waveAmp: 0, foam: 0.15, marsh: 1 });
     this.materials.push(marshMat);
     const mg = new THREE.CircleGeometry(MARSH.r * 0.86, 96);
     mg.rotateX(-Math.PI / 2);

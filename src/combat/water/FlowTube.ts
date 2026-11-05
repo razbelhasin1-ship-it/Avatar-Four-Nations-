@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { PathSampler } from './Curve';
-import { createWaterMaterial, DEEP, SHALLOW, setLook, type WaterLook } from './WaterMaterials';
+import { createWaterMaterial, setLook, useBendPalette, type WaterLook } from './WaterMaterials';
 
 /**
  * A tube of water swept along a PathSampler: fixed-size, pre-allocated
@@ -202,7 +202,9 @@ export class TubePool {
       this.all.add(t);
     }
     t.inUse = true;
-    t.setLook({ opacity: 0.92, ice: 0, glow: 0, flow: 3, foam: 0.8, deep: DEEP, shallow: SHALLOW, ...look });
+    // Pooled tubes start from the shared, source-tinted palette unless the technique sets colours.
+    useBendPalette(t.material);
+    t.setLook({ opacity: 0.92, ice: 0, glow: 0, flow: 3, foam: 0.8, ...look });
     t.mesh.renderOrder = 12;
     return t;
   }
