@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { heightAt } from '../../Heightfield';
-import { A, KI, yawOutward } from '../../landforms/kyoshiIsland';
+import { A, KI, KI_ROADS, yawOutward } from '../../landforms/kyoshiIsland';
 import type { P2 } from '../../WorldLayout';
 import type { BuildEnv } from '../earth/env';
 import { barrel, fence, house, laundry, off, type Mat } from './kit';
@@ -36,6 +36,70 @@ const gate = A(V.u, V.gateR);
 /** Point in the street frame: `s` metres up the street from the entrance, `lat` to the right. */
 export function streetPt(s: number, lat: number): P2 {
   return off(gate, STREET_YAW, lat, s);
+}
+
+/**
+ * Paths that cross the village's plots: the dojo path leaves the street between the houses and the
+ * coast road passes the entrance plaza. Houses, fences, fields, laundry and stalls keep off them.
+ */
+const CROSSINGS = KI_ROADS.filter((r) => r.id === 'ki_dojo_path' || r.id === 'ki_coast_road').map((r) => {
+  const pts: P2[] = [];
+  for (let i = 0; i < r.points.length - 1; i++) {
+    const a = r.points[i], c = r.points[i + 1];
+    const L = Math.hypot(c.x - a.x, c.z - a.z);
+    for (let t = 0; t < L; t += 1) pts.push({ x: a.x + ((c.x - a.x) * t) / L, z: a.z + ((c.z - a.z) * t) / L });
+  }
+  pts.push(r.points[r.points.length - 1]);
+  return { half: r.width / 2, pts };
+});
+
+/**
+ * True when a footprint (centre, `w` across × `d` along `yaw`, the kit's off() frame) comes within
+ * `margin` of the edge of a path crossing the village. w = d = 0 tests a point.
+ */
+export function onVillagePath(c: P2, yaw: number, w: number, d: number, margin: number): boolean {
+  const sn = Math.sin(yaw), cs = Math.cos(yaw);
+  for (const r of CROSSINGS) {
+    const reach = r.half + margin;
+    const far = reach + Math.hypot(w, d) / 2 + 1;
+    for (const p of r.pts) {
+      const dx = p.x - c.x, dz = p.z - c.z;
+      if (Math.abs(dx) > far || Math.abs(dz) > far) continue;
+      // off(o, yaw, right, fwd): right runs along (−cos yaw, sin yaw), forward along (sin yaw, cos yaw).
+      const right = -dx * cs + dz * sn, fwd = dx * sn + dz * cs;
+      const ex = Math.max(0, Math.abs(right) - w / 2), ez = Math.max(0, Math.abs(fwd) - d / 2);
+      if (ex * ex + ez * ez < reach * reach) return true;
+    }
+  }
+  return false;
+}
+
+/** The runs of a polyline (fence line, washing line) that stay clear of the paths, as polylines. */
+function clearRuns(pts: P2[], margin: number): P2[][] {
+  const runs: P2[][] = [];
+  let cur: P2[] | null = null;
+  let last: P2 | null = null;
+  const close = () => {
+    if (cur && last && cur[cur.length - 1] !== last) cur.push(last);
+    if (cur && cur.length > 1) runs.push(cur);
+    cur = null;
+  };
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], c = pts[i + 1];
+    const n = Math.max(1, Math.ceil(Math.hypot(c.x - a.x, c.z - a.z) / 0.5));
+    for (let k = i === 0 ? 0 : 1; k <= n; k++) {
+      const p = k === n ? c : { x: a.x + ((c.x - a.x) * k) / n, z: a.z + ((c.z - a.z) * k) / n };
+      if (onVillagePath(p, 0, 0, 0, margin)) {
+        close();
+        continue;
+      }
+      if (!cur) cur = [p];
+      else if (k === n) cur.push(p);
+      last = p;
+    }
+  }
+  close();
+  return runs;
 }
 
 /** Fan face with 京 or 士 brushed in red-brown on gold (no fonts: drawn as strokes). */
@@ -209,6 +273,8 @@ function meetingHall(env: BuildEnv, out: VillageOut): void {
 
 /** Rice paddies / vegetable plots: flat beds terraced into the slope with earth bunds. */
 function field(env: BuildEnv, c: P2, yaw: number, w: number, d: number, kind: 'paddy' | 'veg', out: VillageOut): void {
+  // The raised bed stays off the paths through the plots.
+  if (onVillagePath(c, yaw, w + 0.8, d + 0.8, 0.8)) return;
   const b = env.chunks.at('props', c.x, c.z).builder;
   let maxY = -Infinity, minY = Infinity;
   for (const r of [-1, 0, 1]) for (const f of [-1, 0, 1]) {
@@ -345,7 +411,7 @@ export function* buildVillage(env: BuildEnv, out: VillageOut): Generator<unknown
       const floor = Math.max(0.5, ground + rnd.range(0.55, 0.9) - ground) + Math.max(0, ground - gy) * 0.5;
       const tiled = rnd.chance(0.35);
       let finish = 0;
-      house(env.chunks.at('houses', c.x, c.z).builder, {
+      const opts: Parameters<typeof house>[1] = {
         x: c.x,
         z: c.z,
         y: ground,
@@ -362,7 +428,11 @@ export function* buildVillage(env: BuildEnv, out: VillageOut): Generator<unknown
         trim: finish < 0.4 ? 'wood_dark' : 'wood',
         stairs: rnd.chance(0.5) ? 'front' : 'side',
         porch: rnd.chance(0.4),
-      });
+      };
+      // A lane where the dojo path leaves the street (its plot stays open; the dice still roll so
+      // every other house keeps its look).
+      if (onVillagePath(c, yaw, w, d, 2)) continue;
+      house(env.chunks.at('houses', c.x, c.z).builder, opts);
       out.doors.push({ ...off(c, yaw, 0, d / 2 + 1.6), yaw });
     }
     if (i % 2 === 0) yield;
@@ -380,7 +450,8 @@ export function* buildVillage(env: BuildEnv, out: VillageOut): Generator<unknown
   }
   for (const side of [-1, 1]) {
     const pts = [streetPt(14, side * 17), streetPt(50, side * 18), streetPt(96, side * 16)];
-    fence(env.chunks.at('props', pts[1].x, pts[1].z).builder, pts, H);
+    // A gap where the dojo path goes through.
+    for (const run of clearRuns(pts, 0.6)) fence(env.chunks.at('props', pts[1].x, pts[1].z).builder, run, H);
   }
   yield;
   // Rice paddies terraced on the west (left) slope, vegetable plots on the east.
@@ -398,8 +469,12 @@ export function* buildVillage(env: BuildEnv, out: VillageOut): Generator<unknown
     }
   }
   yield;
-  // Market at the entrance plaza (east side), communal kitchens either side lower down, wells.
-  for (let i = 0; i < 4; i++) stall(env, streetPt(2 + i * 4.2, 8.2), STREET_YAW - Math.PI / 2, out, i);
+  // Market at the entrance plaza (east side, up the street from the coast road through the
+  // entrance), communal kitchens either side lower down, wells.
+  for (let i = 0; i < 3; i++) {
+    const c = streetPt(7 + i * 4.2, 8.2);
+    if (!onVillagePath(c, STREET_YAW - Math.PI / 2, 2.6, 1.1, 0.5)) stall(env, c, STREET_YAW - Math.PI / 2, out, i);
+  }
   kitchen(env, streetPt(24, 13), STREET_YAW - Math.PI / 2, out);
   kitchen(env, streetPt(62, -13.5), STREET_YAW + Math.PI / 2, out);
   well(env, streetPt(8, -5.2), out);
@@ -411,7 +486,10 @@ export function* buildVillage(env: BuildEnv, out: VillageOut): Generator<unknown
     const y = H(q.x, q.z);
     barrel(env.chunks.at('detail', q.x, q.z).builder, q.x, y, q.z, 0.9);
     const lq = streetPt(30 + i * 12.4, side * 14.5), lq2 = streetPt(35 + i * 12.4, side * 14.5);
-    laundry(env.chunks.at('detail', lq.x, lq.z).builder, lq, lq2, H(lq.x, lq.z));
+    // No washing line across the dojo path.
+    if (clearRuns([lq, lq2], 0.6).length === 1 && !onVillagePath(lq, 0, 0, 0, 0.6) && !onVillagePath(lq2, 0, 0, 0, 0.6)) {
+      laundry(env.chunks.at('detail', lq.x, lq.z).builder, lq, lq2, H(lq.x, lq.z));
+    }
     const cb = streetPt(21 + i * 12.4, side * 11.4);
     const cy = H(cb.x, cb.z);
     env.chunks.at('detail', cb.x, cb.z).builder.cylinder('wood', { x: cb.x, y: cy, z: cb.z, r: 0.4, h: 0.55, segments: 10 }, { collide: true, solid: true });

@@ -203,6 +203,45 @@ try {
     assert.ok(ok, 'fn_feed_turtleducks');
   });
 
+  await check('Western Causeway landing: the bridge and the avenue into Harbor City are clear and walkable both ways', async () => {
+    // Bridge end B (deck y 11.2), the avenue on to the ring street at J (WorldLayout 'fire_causeway_road').
+    const A = { x: -772, z: 691 }, B = { x: -940, z: 960 }, J = { x: -956.1, z: 981 };
+    const blocked = await h.eval((g, A, B, J) => {
+      const len = Math.hypot(B.x - A.x, B.z - A.z);
+      const pts = [];
+      for (let s = len - 80; s <= len; s += 2) pts.push({ x: A.x + ((B.x - A.x) * s) / len, z: A.z + ((B.z - A.z) * s) / len });
+      const L = Math.hypot(J.x - B.x, J.z - B.z);
+      for (let d = 0; d <= L; d += 2) pts.push({ x: B.x + ((J.x - B.x) * d) / L, z: B.z + ((J.z - B.z) * d) / L });
+      const out = new Map();
+      for (const p of pts) {
+        g.ctx.world.collision.query(p.x, p.z, 8, (c) => {
+          if (c.tag !== 'fire_capital' || c.shape !== 'box' || !c.solid || c.hy < 1) return;
+          const dx = p.x - c.x, dz = p.z - c.z;
+          const lx = dx * c.c - dz * c.s, lz = dx * c.s + dz * c.c;
+          const d = Math.hypot(Math.max(0, Math.abs(lx) - c.hx), Math.max(0, Math.abs(lz) - c.hz));
+          // Anything standing within the deck's / avenue's half-width (5 m) of the centreline.
+          if (d < 5) out.set(c, { x: Math.round(c.x), z: Math.round(c.z), top: +(c.y + c.hy).toFixed(1), d: +d.toFixed(1) });
+        });
+      }
+      return [...out.values()];
+    }, A, B, J);
+    assert.equal(blocked.length, 0, `capital structures on the bridge or the avenue: ${JSON.stringify(blocked)}`);
+    // Off the bridge onto the avenue, on to the ring street, and back up onto the deck (no step to jump).
+    const len = Math.hypot(B.x - A.x, B.z - A.z);
+    const at = (s) => [A.x + ((B.x - A.x) * s) / len, A.z + ((B.z - A.z) * s) / len];
+    await h.eval((g, p) => g.teleport(p[0], p[1]), at(len - 24));
+    await h.step(10);
+    const ends = [];
+    for (const [x, z] of [B, J].map((p) => [p.x, p.z])) {
+      const r = await walkTo(x, z, { tol: 1.4 });
+      assert.ok(r.dist < 2, `walked to (${x}, ${z}): ${JSON.stringify(r)}`);
+      ends.push(+r.y.toFixed(2));
+    }
+    assert.ok(Math.abs(ends[0] - 11.2) < 0.4 && Math.abs(ends[1] - 11.1) < 0.6, `level landing and avenue: ${JSON.stringify(ends)}`);
+    const r = await walkTo(...at(len - 14), { tol: 1.4 });
+    assert.ok(r.dist < 2 && r.y > 10.8, `back up onto the deck: ${JSON.stringify(r)}`);
+  });
+
   await check('walk: the Western Causeway end to end over the strait (no falling)', async () => {
     await h.eval((g) => g.teleport(-938, 957));
     const pts = [];

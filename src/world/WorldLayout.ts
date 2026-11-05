@@ -390,14 +390,15 @@ export const ROADS: RoadDef[] = [
     surface: 'dirt',
   },
   {
-    // From the Western Causeway's island end through Harbor City's east gate.
+    // From the Western Causeway's island end straight on into Harbor City, to the ring street
+    // (r 344) where the −1.5° spoke crosses it (fire/fnc/layout.ts). The houses keep off it and
+    // off the bridge (fire/fnc/city.ts); the landing plateau puts it level with the deck's end.
     id: 'fire_causeway_road',
     points: [
       { x: -940, z: 960 },
-      { x: -968, z: 968 },
-      { x: -996, z: 978 },
+      { x: -956.1, z: 981 },
     ],
-    width: 9,
+    width: 10,
     surface: 'stone',
   },
   {
@@ -447,6 +448,8 @@ export const PLATEAUS: PlateauDef[] = [
   { id: 'ember_resort', x: -1690, z: 1760, r: 60, blend: 40, height: 4 },
   // Grazing shelf around Cloudmirror Tarn so the sky bison herd has open, level ground on the steep massif.
   { id: 'bison_meadow', x: 1368, z: 1052, r: 36, blend: 26, height: 132 },
+  // The Western Causeway's landing in Harbor City: the ground meets the end of the bridge deck (y 11.2).
+  { id: 'fn_causeway_landing', x: -943, z: 964, r: 7, blend: 12, height: 11.15 },
 ];
 
 // ---------------------------------------------------------------------------

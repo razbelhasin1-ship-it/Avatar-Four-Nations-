@@ -1270,15 +1270,16 @@ export function sampleTerrain(x: number, z: number, h: number, slope: number, ou
   out.soil[0] = sr; out.soil[1] = sg; out.soil[2] = sb;
   out.litter = forestFactor(x, z, b) * out.w[0] * (1 - b.cold) * (1 - b.desert);
   const road = roadAt(x, z, roadMargin, roadScratch);
-  if (road) {
-    out.roadLat = road.lat;
-    out.roadHalf = road.half;
-    out.roadType = road.type === ROAD_TYPE.dirt && b.cold > 0.5 ? ROAD_TYPE.snow : road.type;
-  } else if (capitalPaved(x, z, h)) {
-    // The Fire Nation capital's streets, plaza, quays and crater floor are paved.
+  if (capitalPaved(x, z, h)) {
+    // The Fire Nation capital's streets, plaza, quays and crater floor are paved (a road running
+    // into the city, the Western Causeway's avenue, must not bring its grassy verge along).
     out.roadLat = 0;
     out.roadHalf = 60;
     out.roadType = ROAD_TYPE.stone;
+  } else if (road) {
+    out.roadLat = road.lat;
+    out.roadHalf = road.half;
+    out.roadType = road.type === ROAD_TYPE.dirt && b.cold > 0.5 ? ROAD_TYPE.snow : road.type;
   } else if (inKyoshiZone(x, z) && kyoshiPaved(x, z)) {
     // Kyoshi Island's paved plazas (shrine, dojo, village entrance).
     out.roadLat = 0;

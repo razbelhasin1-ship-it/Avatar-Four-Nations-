@@ -188,7 +188,8 @@ export const POINTS = {
   stables: ax(44, 500),
   roadStart: ax(0, FNC.road.s0 + 10),
   craterGate: ax(0, FNC.road.gateS),
-  eastGate: pol(-4.6, 340),
+  /** Where the Western Causeway lands (the start of WorldLayout's 'fire_causeway_road'). */
+  eastGate: { x: -940, z: 960 },
   palaceGate: ax(0, FNC.ringR + 1),
   square: ax(0, 60),
   garden: pol(CALDERA.garden.phi, CALDERA.garden.r),

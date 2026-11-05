@@ -106,7 +106,39 @@ try {
     return g.debug.kyoshi?.life?.() ?? null;
   });
   ok(!!walking && walking.walking > 0, 'islanders walk about after settling', JSON.stringify(walking));
-  const saved = await h.eval((g) => g.ctx.game.saveGame('slot3'));
+  // The dojo path leaves the village street between the houses (KI_ROADS 'ki_dojo_path', its first
+  // leg): walk it from the street with no house, fence or washing line in the way.
+  const dojoWalk = await h.eval((g) => {
+    const a = { x: 7261.2, z: -330.4 }, b = { x: 7325.4, z: -326.8 };
+    const R = g.ctx.render;
+    const render = R.render;
+    R.render = () => {};
+    try {
+      g.teleport(a.x, a.z);
+      for (let i = 0; i < 10; i++) g.step(1);
+      let p = g.state().player, stuck = 0, last = Infinity;
+      for (let steps = 0; steps < 1500; steps += 3) {
+        p = g.state().player;
+        const d = Math.hypot(b.x - p.x, b.z - p.z);
+        if (d < 2) break;
+        if (steps % 30 === 0) {
+          stuck = last - d < 0.3 ? stuck + 1 : 0;
+          last = d;
+          if (stuck >= 3) break;
+        }
+        g.faceTowards(b.x, b.z);
+        g.move(0, 1);
+        g.step(3);
+      }
+      g.move(0, 0);
+      p = g.state().player;
+      return { d: +Math.hypot(b.x - p.x, b.z - p.z).toFixed(1), x: +p.x.toFixed(1), z: +p.z.toFixed(1) };
+    } finally {
+      R.render = render;
+    }
+  });
+  ok(dojoWalk.d < 3, 'the dojo path is open from the village street', JSON.stringify(dojoWalk));
+  const saved =await h.eval((g) => g.ctx.game.saveGame('slot3'));
   const loaded = await h.eval(async (g) => g.ctx.game.loadGame('slot3'));
   await h.step(20);
   const after = await h.eval((g) => ({ s: g.debug.travel.status(), region: g.ctx.world.regionAt(g.state().player.x, g.state().player.z)?.name }));

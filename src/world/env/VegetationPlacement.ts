@@ -289,10 +289,11 @@ export function* generateCellMain(cx: number, cz: number, exclusions: readonly V
         if (k >= VEG_MAX_DENSITY) continue;
         if (n1.y < 0.55) continue;
         sampleTerrain(x, z, h, slope, s);
-        if (onRoad(s, 1.2)) continue;
-        if (s.waterRel < -0.5) continue;
         const big = bigR < 0.12 + 0.15 * sstep(0.1, 0.3, slope);
         const sc = big ? 1.7 + scaleR * 1.6 : 0.35 + scaleR * 0.9;
+        // The whole rock stays off the road (its collider radius is 0.78 × scale, see Vegetation).
+        if (onRoad(s, 1.2 + 0.78 * sc)) continue;
+        if (s.waterRel < -0.5) continue;
         // Rock colour follows the soil tint (red-brown volcanic, sandstone desert, cool polar).
         tint3[0] = s.soil[0] * (0.92 + rng.next() * 0.16);
         tint3[1] = s.soil[1] * (0.92 + rng.next() * 0.16);

@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { heightAt } from '../../../Heightfield';
 import { capitalGreen } from '../../../landforms/fireCapital';
-import type { P2 } from '../../../WorldLayout';
+import { ROADS, type P2 } from '../../../WorldLayout';
 import type { ArchetypeId } from '../../earth/archetypes';
+import { CAUSEWAY, causewayPoint } from '../causeway';
 import { crimsonMat, emberGlowMat } from '../materials';
 import { bannerPole, brazier, hall, roof, stall, tree } from '../parts';
 import type { Cap } from './FireCapital';
@@ -47,6 +48,62 @@ export function spokePolyline(a: number): P2[] {
   return pts;
 }
 
+/** The avenue from the Western Causeway's island end into the city (WorldLayout 'fire_causeway_road'). */
+const AVENUE = ROADS.find((r) => r.id === 'fire_causeway_road')!;
+/** Half-width of the ground kept clear along the bridge and the avenue (deck 10 m, the island gate's towers, a walk). */
+const CORRIDOR_HALF = 10;
+let corridorPts: P2[] | null = null;
+let corridorBox = { x0: 0, x1: 0, z0: 0, z1: 0 };
+
+/** Centreline of the bridge over the island (from well out over the strait) and the avenue, every 1.5 m. */
+function corridor(): P2[] {
+  if (corridorPts) return corridorPts;
+  const pts: P2[] = [];
+  for (let s = CAUSEWAY.len - 170; s < CAUSEWAY.len; s += 1.5) {
+    const p = causewayPoint(s);
+    pts.push({ x: p.x, z: p.z });
+  }
+  const av = AVENUE.points;
+  for (let i = 0; i < av.length - 1; i++) {
+    const a = av[i], b = av[i + 1];
+    const L = Math.hypot(b.x - a.x, b.z - a.z);
+    for (let d = 0; d < L; d += 1.5) pts.push({ x: a.x + ((b.x - a.x) * d) / L, z: a.z + ((b.z - a.z) * d) / L });
+  }
+  pts.push(av[av.length - 1]);
+  corridorBox = { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity };
+  for (const p of pts) {
+    corridorBox.x0 = Math.min(corridorBox.x0, p.x);
+    corridorBox.x1 = Math.max(corridorBox.x1, p.x);
+    corridorBox.z0 = Math.min(corridorBox.z0, p.z);
+    corridorBox.z1 = Math.max(corridorBox.z1, p.z);
+  }
+  corridorPts = pts;
+  return pts;
+}
+
+/**
+ * True when a footprint (centre, width × depth, yaw as the houses use it) comes within `half` of the
+ * Western Causeway's landing: the bridge deck over the island and the avenue on from its end. The
+ * bridge lands inside Harbor City's outer rings, so the rows of houses must leave its way open.
+ */
+export function onCausewayLanding(x: number, z: number, w: number, d: number, yaw: number, half = CORRIDOR_HALF): boolean {
+  const pts = corridor();
+  const hw = w / 2, hd = d / 2;
+  const reach = half + Math.hypot(hw, hd);
+  const B = corridorBox;
+  if (x < B.x0 - reach || x > B.x1 + reach || z < B.z0 - reach || z > B.z1 + reach) return false;
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  for (const p of pts) {
+    const dx = p.x - x, dz = p.z - z;
+    if (Math.abs(dx) > reach || Math.abs(dz) > reach) continue;
+    // Into the footprint's frame: width along (cos yaw, −sin yaw), depth along (sin yaw, cos yaw).
+    const lx = dx * c - dz * s, lz = dx * s + dz * c;
+    const ex = Math.max(0, Math.abs(lx) - hw), ez = Math.max(0, Math.abs(lz) - hd);
+    if (ex * ex + ez * ez < half * half) return true;
+  }
+  return false;
+}
+
 const inFoundries = (phi: number, r: number): boolean => {
   const D = DISTRICTS.foundries;
   return phi > D.phi0 && phi < D.phi1 && r > footR(phi) + 14 && r < footR(phi) + 214;
@@ -86,11 +143,13 @@ export function* buildCity(cap: Cap): Generator<unknown, void, unknown> {
     const top = atAxis(0, FNC.road.s0 + 8);
     cap.mark('royalWayTop', top.x, heightAt(top.x, top.z), top.z);
   }
-  // East gate road.
+  // The avenue from the Western Causeway's end (Harbor City's east gate) to the ring street; it sits
+  // a touch above the street it joins so the two pavings never fight.
   {
     const b = env.chunks.named('major', 'fnc_east_road').builder;
-    drapedStrip(b, pave, [{ x: -940, z: 960 }, { x: -968, z: 968 }, { x: -996, z: 978 }], 8, { tile: 4 });
-    cap.mark('eastGate', -968, heightAt(-968, 968), 968);
+    drapedStrip(b, pave, AVENUE.points, AVENUE.width, { tile: 4, lift: 0.09 });
+    const g = AVENUE.points[0];
+    cap.mark('eastGate', g.x, heightAt(g.x, g.z), g.z);
   }
   yield* houses(cap);
   yield* rimQuarters(cap);
@@ -125,6 +184,8 @@ function* houses(cap: Cap): Generator<unknown, void, unknown> {
     const p = atPolar(phi, r);
     // Front faces the street the row lines.
     const yaw = inward ? Math.atan2(FNC.V.x - p.x, FNC.V.z - p.z) : Math.atan2(p.x - FNC.V.x, p.z - FNC.V.z);
+    // The Western Causeway lands among the outer rows: its bridge and avenue stay open.
+    if (onCausewayLanding(p.x, p.z, arch.spanW, arch.spanD, yaw)) return arch.spanW;
     const span = groundSpan(p.x, p.z, arch.spanW, arch.spanD, yaw);
     if (span.max - span.min > 4.5) return arch.spanW;
     for (const [lx, lz] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5], [0, 0]] as const) {

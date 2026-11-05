@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { GameContext } from '../../../core/GameContext';
+import { heightAt } from '../../Heightfield';
 import type { ContentBuilder } from '../../kit/Builder';
 import { FireRegion } from './FireRegion';
 import { smooth01 } from './geom';
@@ -124,9 +125,11 @@ export class WesternCauseway extends FireRegion {
       lanternPost(d, { x: lp.x, y: lp.y, z: lp.z, yaw: yaw + (lat > 0 ? Math.PI / 2 : -Math.PI / 2), h: 3.6 });
     }
 
-    // --- Toll towers at mid-span (gateway over the road) and the mainland gate.
+    // --- Toll towers at mid-span (gateway over the road), the mainland gate and, where the bridge
+    // lands in Harbor City, the city's east gate.
     this.tollGate(s, d, c.len * 0.5, yaw, true);
     this.tollGate(s, d, 9, yaw, false);
+    this.tollGate(s, d, c.len - 9, yaw, false);
   }
 
   private rampCollider(b: ContentBuilder, x: number, y: number, z: number, hx: number, hy: number, hz: number, yaw: number, slopeRise: number): void {
@@ -142,7 +145,8 @@ export class WesternCauseway extends FireRegion {
     const off = W / 2 + tw / 2 + (big ? 0.4 : 0.2);
     for (const side of [-1, 1]) {
       const t = local(p.x, p.z, yaw, 0, side * off);
-      const base = big ? -18 : p.y - 3;
+      // Small gates stand on the ground beside the deck (down the slope where it falls away).
+      const base = big ? -18 : Math.min(p.y - 3, heightAt(t.x, t.z) - 1.5);
       s.block(basaltMat(), { x: t.x, y: base, z: t.z, sx: tw + 1, sy: p.y - base + 0.8, sz: tw + 1, yaw }, { collide: true, walkable: true });
       s.block(crimsonMat(), { x: t.x, y: p.y + 0.8, z: t.z, sx: tw, sy: th, sz: tw, yaw }, { collide: true, walkable: false });
       s.box(goldMat(), { x: t.x, y: p.y + th * 0.6, z: t.z, sx: tw + 0.12, sy: 0.16, sz: tw + 0.12, yaw }, { castShadow: false });
