@@ -13,6 +13,8 @@ export class WorldHeightTexture {
   readonly data: Uint16Array;
   readonly texture: THREE.DataTexture;
   private dirtyRows = new Map<number, [number, number]>();
+  /** The next upload must send the whole map (first use, window moved): partial ranges would leave the rest unset. */
+  private wholePending = true;
   static readonly UNFILLED = -60;
   /** World position of the window's corner (−WORLD_HALF on the mainland; re-centred on a far zone's map). */
   ox = -WORLD_HALF;
@@ -30,6 +32,10 @@ export class WorldHeightTexture {
     this.texture.wrapS = THREE.ClampToEdgeWrapping;
     this.texture.wrapT = THREE.ClampToEdgeWrapping;
     this.texture.needsUpdate = true;
+    // three.js calls this once it has uploaded the texture.
+    this.texture.onUpdate = () => {
+      this.wholePending = false;
+    };
   }
 
   /**
@@ -76,13 +82,23 @@ export class WorldHeightTexture {
     this.data.fill(THREE.DataUtils.toHalfFloat(WorldHeightTexture.UNFILLED));
     this.dirtyRows.clear();
     this.texture.clearUpdateRanges();
+    this.wholePending = true;
     this.texture.needsUpdate = true;
   }
 
   /** Upload dirty rows (call once per frame). */
   flush(): void {
     if (!this.dirtyRows.size) return;
-    for (const [j, [a, b]] of this.dirtyRows) this.texture.addUpdateRange(j * this.res + a, b - a + 1);
+    if (this.wholePending) {
+      // Not uploaded yet (or the window moved): send it whole; ranges would upload only themselves.
+      this.texture.clearUpdateRanges();
+    } else {
+      // three.js counts texture update ranges in RGBA components (start / 4 = first texel, count / 4
+      // = texels), whatever the format. This map has one channel, so its texel indices go in times
+      // four; passed as plain texel indices they landed a quarter of the way in, a quarter as long,
+      // and the water shaders read stale heights (deep water right up to every shore).
+      for (const [j, [a, b]] of this.dirtyRows) this.texture.addUpdateRange((j * this.res + a) * 4, (b - a + 1) * 4);
+    }
     this.dirtyRows.clear();
     this.texture.needsUpdate = true;
   }

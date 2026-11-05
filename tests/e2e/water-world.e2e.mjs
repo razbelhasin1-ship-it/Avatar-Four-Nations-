@@ -97,6 +97,53 @@ try {
     assert.ok(r.worldWater >= 1 && r.worldShared === r.worldWater, `sea/river shaders share the ripple field: ${r.worldShared}/${r.worldWater}`);
   });
 
+  await check('the water sees the real ground: the GPU height map matches the terrain (shallows stay clear)', async () => {
+    // Stream a stretch of land after the first upload, render, then read the height map back from the GPU.
+    await ev((g) => g.teleport(-205, -300));
+    await step(120);
+    await h.step(2);
+    const r = await h.page.evaluate(async () => {
+      const g = window.__game;
+      // The app's own three.js module (same instance as the renderer).
+      const url = performance.getEntriesByType('resource').map((e) => e.name).find((n) => /\/deps\/three(\.module)?\.js/.test(n));
+      const THREE = await import(url);
+      const T = g.ctx.world.terrain.heightTex;
+      const ti0 = Math.floor((-226 - T.ox) / T.texel), tj = Math.floor((-298 - T.oz) / T.texel);
+      const rt = new THREE.WebGLRenderTarget(8, 1, { type: THREE.FloatType });
+      // Sample texel centres exactly (the filter then returns the texel itself).
+      const mat = new THREE.ShaderMaterial({
+        uniforms: { t: { value: T.texture }, o: { value: new THREE.Vector3(ti0, tj, T.res) } },
+        vertexShader: 'void main(){ gl_Position = vec4(position.xy * 2.0, 0.0, 1.0); }',
+        fragmentShader: 'uniform sampler2D t; uniform vec3 o; void main(){ vec2 uv = (vec2(o.x + floor(gl_FragCoord.x), o.y) + 0.5) / o.z; gl_FragColor = vec4(texture2D(t, uv).r, 0.0, 0.0, 1.0); }',
+        depthTest: false,
+        depthWrite: false,
+      });
+      const geo = new THREE.PlaneGeometry(1, 1);
+      const sc = new THREE.Scene();
+      sc.add(new THREE.Mesh(geo, mat));
+      const R = g.ctx.render.renderer;
+      const prev = R.getRenderTarget();
+      R.setRenderTarget(rt);
+      R.render(sc, new THREE.Camera());
+      R.setRenderTarget(prev);
+      const buf = new Float32Array(32);
+      R.readRenderTargetPixels(rt, 0, 0, 8, 1, buf);
+      rt.dispose();
+      geo.dispose();
+      mat.dispose();
+      const out = [];
+      for (let i = 0; i < 8; i++) {
+        const u = T.data[tj * T.res + ti0 + i];
+        const e = (u >> 10) & 31, m = u & 1023;
+        const cpu = (u >> 15 ? -1 : 1) * (e ? (1 + m / 1024) * 2 ** (e - 15) : m * 2 ** -24);
+        out.push({ x: T.ox + (ti0 + i + 0.5) * T.texel, gpu: +buf[i * 4].toFixed(2), cpu: +cpu.toFixed(2) });
+      }
+      return out;
+    });
+    assert.ok(r.some((p) => p.cpu > 10), `the height map holds the shore: ${JSON.stringify(r.map((p) => p.cpu))}`);
+    for (const p of r) assert.ok(Math.abs(p.gpu - p.cpu) < 0.02, `height map on the GPU at x=${p.x}: ${p.gpu} vs ${p.cpu}`);
+  });
+
   await check('drawing water rings the surface and lowers the basin; it rises again as it refills', async () => {
     await ev((g, f) => { g.unlockAllElements(); g.learnAll(); g.setElement('water'); g.teleport(f.x + f.r + 1.6, f.z + 0.4); }, F);
     await step(20);

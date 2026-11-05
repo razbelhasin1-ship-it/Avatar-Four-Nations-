@@ -87,7 +87,9 @@ attribute vec3 tint;
 attribute vec3 soil;
 attribute vec4 vcol;
 attribute float mainLayer;
+attribute float shoreDist;
 flat varying float vMainLayer;
+varying float vShoreDist;
 varying vec4 vSplatA;
 varying vec4 vSplatB;
 varying vec4 vSplatC;
@@ -130,6 +132,7 @@ varying vec3 vSoil;
 varying vec4 vVCol;
 flat varying float vMainLayer;
 varying vec3 vTerrWorld;
+varying float vShoreDist;
 ${ENV_PARS_GLSL}
 ${ENV_NOISE_GLSL}
 float terrH = 0.5;
@@ -283,18 +286,39 @@ ${splatGLSL()}
   col *= mix(vec3(1.0), vec3(1.06, 1.02, 0.9), smoothstep(0.55, 0.85, macro2) * 0.6 * w0);
 #endif
 
-  // Wet shorelines & rain wetness; underwater absorption.
+  // Shorelines. waterRel is the ground's height above its local water (sea, lake, river...) and
+  // vShoreDist the signed distance (m along the ground) to its waterline, both per vertex. Bands
+  // keyed to the interpolated height would trace the mesh's straight triangle edges and go metres
+  // wide on gentle banks; the distance keeps the waterline round and every band its real width.
+  // The ground's own relief (pebbles, sand ripples) and a slow meander nudge the line so it wanders
+  // like a real one (less on steep banks, where a sideways nudge would climb the bank).
   float waterRel = vSplatC.z;
   float kind = floor(vSplatC.w + 0.5);
-  float shoreWet = waterRel > 0.0 ? smoothstep(0.9, 0.0, waterRel) : 1.0;
+  bool seaShore = kind < 0.5;
+  vec3 shoreN = normalize((vec4(vNormal, 0.0) * viewMatrix).xyz);
+  float shoreSlope = sqrt(max(1.0 - shoreN.y * shoreN.y, 0.0)) / max(shoreN.y, 0.05);
+  float nudge = ((H - 0.5) * 0.35 + (envNoise(wp.xz * 0.23) - 0.5) * 1.1 + (envNoise(wp.xz * 0.9 + 7.0) - 0.5) * 0.35) / (1.0 + shoreSlope * 1.5);
+  float shoreD = vShoreDist + nudge;
+  // Height above the water here, consistent with the nudged line.
+  float relH = waterRel + nudge * shoreSlope;
+  // Damp ground: darkest at the water, drying over ~1 m (the sea's run-up wets a wider band), no
+  // higher than the splash reaches; under the water the bed stays a little dark, soaked.
+  float wetW = (seaShore ? 2.6 : kind > 4.5 ? 0.35 : 1.0) * (0.75 + 0.5 * envNoise(wp.xz * 0.7 + 3.1));
+  float shoreWet = shoreD > 0.0
+    ? (1.0 - smoothstep(0.0, wetW, shoreD)) * smoothstep(seaShore ? 1.4 : 0.55, 0.0, relH)
+    : 1.0 - 0.7 * smoothstep(0.0, 0.7, -shoreD);
   if (kind > 4.5) shoreWet *= 0.3;
   float rainWet = uRainWet * (1.0 - snowW) * (0.55 + 0.45 * smoothstep(0.6, 0.2, H));
   terrWet = clamp(max(shoreWet * (1.0 - snowW * 0.8), rainWet), 0.0, 1.0);
   col *= mix(1.0, 0.6, terrWet);
   rough = mix(rough, 0.16, terrWet * 0.9);
   terrGloss = max(terrWet * 0.65, iceW * 0.9);
-  if (waterRel < 0.0) {
-    float depth = -waterRel;
+  if (shoreD < 0.0) {
+    float depth = max(-relH, 0.0);
+    // Seen through the water, the bed takes on the water's own colour: its light shallow tone
+    // first (as the surface above it does), then the deep absorption further out.
+    vec3 shallowT = kind < 0.5 ? vec3(0.05, 0.47, 0.53) : kind < 1.5 ? vec3(0.07, 0.34, 0.29) : kind < 2.5 ? vec3(0.06, 0.4, 0.46) : kind < 3.5 ? vec3(0.11, 0.14, 0.04) : kind < 4.5 ? vec3(0.21, 0.69, 0.62) : vec3(0.2, 0.42, 0.48);
+    col = mix(col, shallowT * 0.75, smoothstep(0.0, 0.5, depth) * 0.22 + smoothstep(0.4, 2.0, depth) * 0.3);
     vec3 absorb = kind < 0.5 ? vec3(0.02, 0.16, 0.2) : kind < 1.5 ? vec3(0.05, 0.17, 0.15) : kind < 2.5 ? vec3(0.03, 0.15, 0.18) : kind < 3.5 ? vec3(0.08, 0.09, 0.04) : kind < 4.5 ? vec3(0.1, 0.32, 0.32) : vec3(0.03, 0.12, 0.18);
     col = mix(col, absorb, (1.0 - exp(-depth * 0.32)) * 0.85);
 #if TERRAIN_DETAIL > 0
@@ -305,13 +329,31 @@ ${splatGLSL()}
 #endif
   }
 #if TERRAIN_DETAIL > 0
-  // Lapping foam line where the sea or a lake meets the shore.
-  if (abs(waterRel) < 1.3 && (kind < 0.5 || (kind > 1.5 && kind < 2.5))) {
-    float d = -waterRel;
-    float lap = sin(uEnvTime * 1.15 + macro * 25.0) * 0.14;
-    float line = smoothstep(0.22, 0.0, abs(d - 0.06 + lap)) * smoothstep(1.2, 0.0, abs(waterRel));
-    float ft = smoothstep(0.3, 0.75, envNoise(wp.xz * 2.4 + vec2(uEnvTime * 0.21, -uEnvTime * 0.13)));
-    col = mix(col, vec3(0.88, 0.93, 0.95), line * ft * 0.8);
+  // Foam where the water meets the shore: a thin line breathing in and out on lakes and ponds;
+  // on the sea, each wave washing up the beach (foamy swash behind its edge) and the lace it
+  // leaves on the wet sand as it slides back.
+  if (abs(shoreD) < 4.0 && abs(relH) < 1.6 && (seaShore || (kind > 1.5 && kind < 2.5))) {
+    float t = uEnvTime;
+    float ph = envNoise(wp.xz * 0.045) * 6.2832;
+    float w = seaShore ? 0.85 : 1.2;
+    float lapA = seaShore ? 0.8 : 0.07;
+    float wave = sin(t * w + ph);
+    float vel = cos(t * w + ph);
+    float e = shoreD - wave * lapA;
+    // Never thinner than a pixel or so, or the line would shimmer in the distance.
+    float lineW = (seaShore ? 0.3 : 0.11) + camDist * 0.0012;
+    float line = exp(-(e * e) / (lineW * lineW));
+    float laceN = envNoise(wp.xz * 2.7 + vec2(t * 0.19, -t * 0.11)) * 0.65 + envNoise(wp.xz * 6.9 - vec2(t * 0.23, t * 0.17)) * 0.35;
+    // Lace: sea foam is mostly whole with holes; on still water only scraps of froth and glints.
+    float lace = seaShore ? smoothstep(0.3, 0.72, laceN) : smoothstep(0.45, 0.8, laceN);
+    float foam = line * (seaShore ? mix(0.45, 1.0, lace) : 0.12 + 0.88 * lace) * (seaShore ? 0.9 : 0.34);
+    if (seaShore) {
+      float swash = smoothstep(0.0, -0.35, e) * smoothstep(-2.4, -0.6, e) * max(vel, 0.0);
+      float remnant = smoothstep(0.0, 0.2, e) * smoothstep(lapA * (1.0 - wave) + 0.3, 0.0, e) * max(-vel, 0.0);
+      foam = max(foam, (swash * 0.5 + remnant * 0.4) * lace);
+    }
+    foam *= smoothstep(170.0, 70.0, camDist);
+    col = mix(col, vec3(0.9, 0.94, 0.96) * (0.4 + 0.6 * max(uDaylight, 0.15)), clamp(foam, 0.0, 0.9));
   }
   // Snow & ice sparkle (view dependent glints).
   if (snowW + iceW > 0.05 && camDist < 60.0) {
@@ -388,6 +430,7 @@ export function createTerrainMaterial(opts: TerrainMaterialOptions = { detail: 1
 vSplatA = splatA;
 vSplatB = splatB;
 vSplatC = splatC;
+vShoreDist = shoreDist;
 vRoad = roadInfo;
 vTint = tint;
 vSoil = soil;
@@ -526,6 +569,7 @@ export function* buildChunkJob(cx: number, cz: number, lod: number, cachedHeight
   const soil = new Float32Array(vCount * 3);
   const vcol = new Float32Array(vCount * 4);
   const mainL = new Float32Array(vCount);
+  const shore = new Float32Array(vCount);
   const lm = layerMeans ?? (layerMeans = terrainLayerMeans());
   const iceF = new Float32Array(n * n);
   const polar = polarSeaFactor(x0 + CHUNK_SIZE / 2, z0 + CHUNK_SIZE / 2) > 0 || polarSeaFactor(x0, z0) > 0 || polarSeaFactor(x0 + CHUNK_SIZE, z0 + CHUNK_SIZE) > 0;
@@ -556,6 +600,12 @@ export function* buildChunkJob(cx: number, cz: number, lod: number, cachedHeight
     spA[vi * 4] = w[0]; spA[vi * 4 + 1] = w[1]; spA[vi * 4 + 2] = w[2]; spA[vi * 4 + 3] = w[3];
     spB[vi * 4] = w[4]; spB[vi * 4 + 1] = w[5]; spB[vi * 4 + 2] = w[6]; spB[vi * 4 + 3] = w[7];
     spC[vi * 4] = w[8]; spC[vi * 4 + 1] = s.litter; spC[vi * 4 + 2] = s.waterRel; spC[vi * 4 + 3] = s.waterKind;
+    // Signed distance (m along the ground) to the local waterline: the height above the water
+    // over the slope, from exact heights at this vertex. Interpolated across a triangle it traces
+    // the real shoreline closely, where the interpolated height does not (on a gentle bank a few
+    // centimetres of error move the line sideways by metres, in straight triangle-edge segments).
+    const grad = Math.hypot(hl - hr, hd - hu) / (2 * spacing);
+    shore[vi] = Math.max(-40, Math.min(40, s.waterRel / Math.max(grad, 0.02)));
     road[vi * 4] = s.roadType ? s.roadLat : 99; road[vi * 4 + 1] = s.roadHalf; road[vi * 4 + 2] = s.roadType; road[vi * 4 + 3] = s.roadType ? 1 : 0;
     const tr = srgbToLinear(s.tint[0]), tg = srgbToLinear(s.tint[1]), tb = srgbToLinear(s.tint[2]);
     tint[vi * 3] = tr; tint[vi * 3 + 1] = tg; tint[vi * 3 + 2] = tb;
@@ -624,6 +674,7 @@ export function* buildChunkJob(cx: number, cz: number, lod: number, cachedHeight
       soil[dst * 3 + c] = soil[src * 3 + c];
     }
     mainL[dst] = mainL[src];
+    shore[dst] = shore[src];
     for (let c = 0; c < 4; c++) {
       vcol[dst * 4 + c] = vcol[src * 4 + c];
       spA[dst * 4 + c] = spA[src * 4 + c];
@@ -649,6 +700,7 @@ export function* buildChunkJob(cx: number, cz: number, lod: number, cachedHeight
   geo.setAttribute('soil', new THREE.BufferAttribute(soil, 3));
   geo.setAttribute('vcol', new THREE.BufferAttribute(vcol, 4));
   geo.setAttribute('mainLayer', new THREE.BufferAttribute(mainL, 1));
+  geo.setAttribute('shoreDist', new THREE.BufferAttribute(shore, 1));
   geo.setIndex(new THREE.BufferAttribute(indicesFor(n).slice(), 1));
   geo.computeBoundingSphere();
   geo.computeBoundingBox();

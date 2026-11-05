@@ -159,13 +159,17 @@ void main() {
   float gh = fract(sin(dot(gc, vec2(12.9898, 78.233)) + floor(t * 5.0 + fract(gc.x * 0.173) * 5.0)) * 43758.5453);
   float glint = step(0.9, gh) * detailFade;
   col += uSunColor * (pow(nh, 900.0) * (1.1 + glint * 2.2) + pow(nh, 110.0) * 0.05) * (1.0 - uMarsh * 0.6);
-  // Foam: shoreline band, wave crests, river banks, rapids and falls.
+  // Foam: surf on the open sea, wave crests, river banks, rapids and falls.
   float fn = n1.b * 0.55 + n2.b * 0.45;
-  // Shore foam only where the bed actually rises toward a shore (flat shallow lagoons stay clear).
-  float wpx = length(vec2(dFdx(p.x), dFdy(p.x))) + length(vec2(dFdx(p.y), dFdy(p.y)));
-  float bedSlope = length(vec2(dFdx(ground), dFdy(ground))) / max(wpx, 1e-4);
-  float shoreK = smoothstep(0.004, 0.035, bedSlope);
-  float shore = smoothstep(0.9, 0.0, depth) * smoothstep(0.3, 0.7, fn + 0.25 * sin(depth * 7.0 - t * 2.2)) * shoreK;
+  // The edge where water meets ground (its lapping line, the damp band, the swash on beaches) is
+  // drawn by the terrain, exactly where the ground goes under: the bed height here comes from a
+  // 4 m texture, too coarse for a crisp line. On the sea, broken surf rolls in over the shallows a
+  // little offshore, in soft patches that need no precision.
+  float shore = 0.0;
+  if (uFarOpaque > 0.5) {
+    float surfN = envNoise(p * 0.8 + vec2(t * 0.3, -t * 0.2)) * 0.6 + envNoise(p * 2.1 - vec2(t * 0.25, t * 0.4)) * 0.4;
+    shore = smoothstep(1.4, 0.55, depth) * smoothstep(0.15, 0.5, depth) * smoothstep(0.5, 0.78, surfN + 0.28 * sin(depth * 4.0 - t * 1.6)) * 0.75;
+  }
   // Whitecaps: fewer and finer in sheltered polar water between the ice floes.
   float crest = smoothstep(0.78, 1.0, vCrest) * smoothstep(0.5, 0.8, fn) * 0.55 * (1.0 - 0.75 * polar);
   float riverFoam = 0.0;
@@ -200,7 +204,9 @@ void main() {
   col = mix(col, foamCol, foam);
   // Hot spring: milky turquoise with drifting steam sheen.
   if (uHot > 0.0) col = mix(col, vec3(0.55, 0.85, 0.82), 0.25 * uHot * n1.a);
-  float alpha = uOpacity * smoothstep(0.0, 1.4, depth) + fres * 0.25;
+  // Clear at the very edge (no sheen, no step where the ground goes under), filling in with depth.
+  // A thin film over the shallows (so the bed there still reads as under water), deepening further out.
+  float alpha = uOpacity * (0.18 * smoothstep(0.03, 0.35, depth) + 0.82 * smoothstep(0.3, 1.6, depth)) + fres * 0.25 * smoothstep(0.03, 0.6, depth);
   alpha = max(alpha, foam * 0.9);
   alpha = max(alpha, weed * uMarsh);
   alpha = max(alpha, uFarOpaque * smoothstep(250.0, 700.0, camDist));

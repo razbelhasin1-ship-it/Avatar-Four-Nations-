@@ -73,6 +73,7 @@ Screenshots are how you judge visuals — take them, open them with the Read too
 - New events: add to `core/events.ts` (append; never rename existing keys).
 - Data (quests, NPCs, dialogues, cosmetics, items) lives in `src/data/`. Prefer data over code.
 - Settings must affect real behaviour and apply live. Graphics-heavy features read `ctx.settings.data.graphics` and scale (Low must stay playable; never disable gameplay — collision, water detection, damage — to save performance).
+- Partial texture uploads: three.js counts `texture.addUpdateRange(start, count)` in RGBA components whatever the format, so a single-channel `DataTexture` passes texel offsets ×4 (see `WorldHeightTexture.flush`), and the first upload must be whole.
 - Dispose geometries/materials/textures you create (`dispose()` / `onSessionEnd`). No leaks across travel, Avatar State toggles, companion switching or session restarts.
 - Keep `npm run typecheck` at zero errors. Match surrounding style (2-space indent, single quotes, semicolons, explicit types on public APIs).
 - Debug hooks: expose test helpers on `(window as any).__game.debug.<feature>` or extend `core/Debug.ts`.

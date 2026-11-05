@@ -552,27 +552,53 @@ function applyTrailsRoads(x: number, z: number, h: number, cell: Cell): number {
   return h;
 }
 
+/** Lake shore slopes (rise per metre): the shelf under the water and the bank above it. */
+const LAKE_SHELF = 0.18;
+const LAKE_BANK = 0.16;
+
 function applyLakes(x: number, z: number, h: number, cell: Cell): number {
   const ll = cell.lakes;
+  // Under the water every lake whose disc holds the point carves its bed (touching basins, like
+  // Hari Bulkan's Royal Lake, share their water); above it only the nearest shore's bank shapes the
+  // ground, so two banks never stack into a lip between basins.
+  let near = -1;
+  let nearU = Infinity;
   for (let k = 0; k < ll.length; k++) {
     const l = lakes[ll[k]];
     const dx = x - l.def.x, dz = z - l.def.z;
-    const outer = l.def.r + l.shore;
-    const d2 = dx * dx + dz * dz;
-    if (d2 > outer * outer) continue;
-    const d = Math.sqrt(d2);
-    if (d < l.def.r) {
+    const d = Math.sqrt(dx * dx + dz * dz);
+    const u = d - l.def.r;
+    if (u < nearU) {
+      nearU = u;
+      near = k;
+    }
+    if (u < 0) {
+      // The ground crosses the water level smoothly at the lake's radius: a shelf sloping gently
+      // into the bowl. (A step at the edge, rendered by the 2 m terrain grid, made the waterline a
+      // staircase of grid cells.)
       const t = d / l.def.r;
-      const bed = l.level - 0.35 - l.depth * (1 - t * t);
+      const bed = Math.max(l.level - 0.35 - l.depth * (1 - t * t), l.level + u * LAKE_SHELF);
       h = Math.min(h, bed);
-      if (t > 0.85) h = mix(h, l.level - 0.35, sstep(0.85, 1, t));
-    } else {
-      const t = sstep(l.def.r, outer, d);
-      h = mix(l.level + 0.35, h, t);
+      if (t > 0.85) h = mix(h, l.level + u * LAKE_SHELF, sstep(0.85, 1, t));
+    }
+  }
+  if (near >= 0 && nearU >= 0) {
+    const l = lakes[ll[near]];
+    const outer = l.def.r + l.shore;
+    if (nearU < l.shore) {
+      // ...and a bank rising gently out of the water into the land around.
+      const t = sstep(l.def.r, outer, l.def.r + nearU);
+      h = mix(l.level + nearU * LAKE_BANK, h, t);
+      // Never dips back under the water right by the shore.
+      h = Math.max(h, l.level + Math.min(nearU, 1) * 0.04 * (1 - t));
     }
   }
   return h;
 }
+
+/** River bank slopes (rise per metre) under and above the water at the channel's edge. */
+const RIVER_SHELF = 0.45;
+const RIVER_BANK = 0.4;
 
 function applyRivers(x: number, z: number, h: number, cell: Cell): number {
   const rl = cell.rivers;
@@ -585,13 +611,18 @@ function applyRivers(x: number, z: number, h: number, cell: Cell): number {
     const edge = half + r.bank;
     if (d >= edge) continue;
     const surf = r.surface.at(s);
+    // Like lake shores, the banks cross the water level smoothly at the channel's edge (steeper
+    // than a lake's: a river cuts a channel), so the waterline follows the river, not grid cells.
     if (d < half) {
       const t = d / half;
-      const bed = surf - r.depth * (1 - t * t) - 0.25;
+      const bed = Math.max(surf - r.depth * (1 - t * t) - 0.25, surf + (d - half) * RIVER_SHELF);
       h = Math.min(h, bed);
+      // Lower ground (a river mouth on a beach) is lifted to the shelf at the very edge, where the
+      // levee outside starts.
+      if (t > 0.8) h = mix(h, surf + (d - half) * RIVER_SHELF, sstep(0.8, 1, t));
     } else {
       const t = sstep(half, edge, d);
-      const bankTop = surf + 0.5;
+      const bankTop = surf + Math.min((d - half) * RIVER_BANK, 0.5);
       h = h > bankTop ? mix(bankTop, h, t) : mix(bankTop, h, t * t);
     }
   }
