@@ -31,7 +31,10 @@ npm run site:dev       # work on the site (its Play button uses the game dev ser
 
 Every push builds it (`.github/workflows/website.yml`). Once GitHub Pages is switched on (Settings → Pages →
 Source: GitHub Actions) each push also publishes it at https://razbelhasin1-ship-it.github.io/Avatar-Four-Nations-/.
-`dist-site/` is a plain static folder, so it can also go on any static host. The feature lists live in
+`dist-site/` is a plain static folder, so it can also go on any static host. Every push also publishes it
+as a ready-to-upload zip next to the APK:
+https://github.com/razbelhasin1-ship-it/Avatar-Four-Nations-/releases/latest/download/avatar-four-nations-website.zip
+(unzip and upload everything in it; `site/HOW-TO-PUBLISH.txt`, included in the zip, explains how). The feature lists live in
 `site/src/data/catalogue.ts` and are checked against the game's own data by `tests/unit/site.catalogue.test.ts`;
 the pictures are screenshots from the game, built by `site/scripts/build-media.py`.
 

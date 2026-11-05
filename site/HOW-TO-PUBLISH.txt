@@ -1,0 +1,25 @@
+Avatar: The Four Nations - the website
+======================================
+
+This zip is the complete website, with the game inside it (the play/ folder).
+It is a static site: plain files, no server code and no database.
+
+PUBLISH IT
+Upload everything in this zip (index.html at the top level) to any static web host:
+
+  - Netlify: open https://app.netlify.com/drop and drop the unzipped folder on the page.
+  - Cloudflare Pages: create a project, choose "Direct Upload", and upload the folder.
+  - GitHub Pages: put the files in a repository and turn on Pages for it.
+  - itch.io: create an HTML game, upload this zip, and tick
+    "This file will be played in the browser".
+
+TRY IT ON YOUR OWN COMPUTER
+The site has to be opened through a web server. Double-clicking index.html will not
+work, because browsers block the game's scripts on pages opened straight from disk.
+Open a terminal in the unzipped folder and run one of these:
+
+  npx serve .                      (needs Node.js)
+  python3 -m http.server 8080      (needs Python), then visit http://localhost:8080
+
+Avatar: The Last Airbender belongs to its owners. This is an unofficial,
+non-commercial fan project.
