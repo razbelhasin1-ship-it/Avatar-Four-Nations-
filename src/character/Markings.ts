@@ -52,6 +52,9 @@ export interface FacePaintDef {
   colors: [string, string, string];
 }
 
+/** The near-black navy ink the Southern Water Tribe's rite marks are painted in. */
+const MARK_INK = '#1c2133';
+
 export const FACE_PAINTS: FacePaintDef[] = [
   { id: 'none', name: 'None', nation: 'any', desc: 'A bare face.', colors: ['#000000', '#000000', '#000000'] },
   {
@@ -72,22 +75,22 @@ export const FACE_PAINTS: FacePaintDef[] = [
     id: 'water_mark_wise',
     name: 'Mark of the Wise',
     nation: 'water',
-    desc: 'Painted on the brow after the ice-dodging rite, for the one who steered the boat with wisdom.',
-    colors: ['#22406b', '#000000', '#000000'],
+    desc: 'An arc with a dot centred beneath it, painted on the brow after the ice-dodging rite and given for wise leadership under pressure. Sokka earned it steering the boat through the rocks and calling the crew.',
+    colors: [MARK_INK, '#000000', '#000000'],
   },
   {
     id: 'water_mark_brave',
     name: 'Mark of the Brave',
     nation: 'water',
-    desc: 'Painted on the brow after the ice-dodging rite, for the one who faced the ice without fear.',
-    colors: ['#22406b', '#000000', '#000000'],
+    desc: 'A crescent moon painted on the brow after the ice-dodging rite and given for courage. Katara earned it manning the mainsail.',
+    colors: [MARK_INK, '#000000', '#000000'],
   },
   {
     id: 'water_mark_trusted',
     name: 'Mark of the Trusted',
     nation: 'water',
-    desc: 'Painted on the brow after the ice-dodging rite, for the one the crew could rely on.',
-    colors: ['#22406b', '#000000', '#000000'],
+    desc: 'An arc painted on the brow, the Mark of the Wise without its dot, given after the ice-dodging rite to one the whole crew can rely on. Aang earned it working the jib.',
+    colors: [MARK_INK, '#000000', '#000000'],
   },
   {
     id: 'earth_kyoshi',
@@ -502,6 +505,69 @@ const ARROW_SHAFT: Record<ArrowDesign, Painter> = {
 
 const mirror = (pts: Array<[number, number]>): Array<[number, number]> => pts.map(([x, y]) => [-x, y]);
 
+/**
+ * A brushed arch (∩) of half width `halfW`, crown at (cx, crownY), tips `rise` lower: an elliptical
+ * arc whose ends turn down, thick through the middle and tapering to points like a brush stroke.
+ */
+const archStroke = (c: Ctx, m: Map2, cx: number, crownY: number, halfW: number, rise: number, thick: number): void => {
+  const a0 = 0.32;
+  const rx = halfW / Math.cos(a0);
+  const ry = rise / (1 - Math.sin(a0));
+  const cy = crownY - ry;
+  const outer: Array<[number, number]> = [];
+  const inner: Array<[number, number]> = [];
+  const N = 40;
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    const a = a0 + (Math.PI - 2 * a0) * t;
+    const x = cx + Math.cos(a) * rx, y = cy + Math.sin(a) * ry;
+    let nx = Math.cos(a) / rx, ny = Math.sin(a) / ry;
+    const nl = Math.hypot(nx, ny);
+    nx /= nl;
+    ny /= nl;
+    const w = 0.5 * thick * Math.pow(Math.sin(Math.PI * t), 0.5) + 0.003;
+    outer.push([x + nx * w, y + ny * w]);
+    inner.push([x - nx * w, y - ny * w]);
+  }
+  poly(c, m, [...outer, ...inner.reverse()]);
+  c.fill();
+};
+
+/** The arc of the Trusted (and of the Wise, over its dot). */
+const riteArc = (c: Ctx, m: Map2): void => archStroke(c, m, 0, 1.4, 0.66, 0.29, 0.15);
+
+/**
+ * A crescent moon path: a disc of radius r at (cx, cy) with a smaller disc bitten out of it toward
+ * `open` (radians, 0 = +x, y up), so the horns face that way and the body is thickest opposite.
+ */
+const crescent = (c: Ctx, m: Map2, cx: number, cy: number, r: number, open: number, bite = 0.82, offset = 0.42): void => {
+  const ux = Math.cos(open), uy = Math.sin(open);
+  const d = r * offset, br = r * bite;
+  const bx = cx + ux * d, by = cy + uy * d;
+  // Where the rims cross (the horn tips).
+  const along = (d * d + r * r - br * br) / (2 * d);
+  const h = Math.sqrt(Math.max(0, r * r - along * along));
+  const tip1: [number, number] = [cx + ux * along - uy * h, cy + uy * along + ux * h];
+  const tip2: [number, number] = [cx + ux * along + uy * h, cy + uy * along - ux * h];
+  // An arc of the circle at (ox, oy) from one tip to the other, the long way round through the side
+  // facing away from `open` (the moon's back for the outer rim, the bite's far wall for the inner).
+  const sweep = (ox: number, oy: number, rr: number, from: [number, number], to: [number, number]): Array<[number, number]> => {
+    const a1 = Math.atan2(from[1] - oy, from[0] - ox);
+    let da = Math.atan2(to[1] - oy, to[0] - ox) - a1;
+    while (da <= 0) da += Math.PI * 2;
+    // Going counter-clockwise, does the arc pass the back (open + π)? If not, go the other way.
+    if (Math.cos(a1 + da / 2 - (open + Math.PI)) < 0) da -= Math.PI * 2;
+    const pts: Array<[number, number]> = [];
+    const n = 32;
+    for (let i = 0; i <= n; i++) {
+      const a = a1 + (da * i) / n;
+      pts.push([ox + Math.cos(a) * rr, oy + Math.sin(a) * rr]);
+    }
+    return pts;
+  };
+  poly(c, m, [...sweep(cx, cy, r, tip1, tip2), ...sweep(bx, by, br, tip2, tip1)]);
+};
+
 const FACE: Record<Exclude<FacePaint, 'none'>, Painter> = {
   air_painted_arrow: (c, m, layer) => {
     if (layer !== 0) return;
@@ -548,27 +614,28 @@ const FACE: Record<Exclude<FacePaint, 'none'>, Painter> = {
       c.fill();
     }
   },
-  water_mark_wise: (c, m, layer, px) => {
+  // The ice-dodging rite marks, as Bato painted them (Sokka, Katara and Aang): an arc for the
+  // Trusted, the same arc over a dot for the Wise, a crescent moon for the Brave. In the show they sit
+  // on a tall cartoon forehead; here the band between brows (+0.78) and hairline (+1.55) is lower, so
+  // the shapes keep their proportions but sit lower.
+  water_mark_wise: (c, m, layer) => {
     if (layer !== 0) return;
-    // A crescent cupping a point.
-    const pts: Array<[number, number]> = [];
-    for (let a = 0; a <= Math.PI + 1e-6; a += Math.PI / 24) pts.push([-Math.cos(a) * 0.5, 1.72 - Math.sin(a) * 0.46]);
-    line(c, m, pts, 0.14, px);
-    circle(c, m, 0, 1.78, 0.11, px);
+    riteArc(c, m);
+    const [cx, cy] = m(0, 0.97);
+    const [, ry] = m(0, 0.97 - 0.1);
+    c.beginPath();
+    c.arc(cx, cy, Math.abs(ry - cy), 0, Math.PI * 2);
+    c.fill();
   },
-  water_mark_brave: (c, m, layer, px) => {
+  water_mark_brave: (c, m, layer) => {
     if (layer !== 0) return;
-    // Two rising chevrons over a short stroke.
-    line(c, m, [[-0.5, 1.28], [0, 1.78], [0.5, 1.28]], 0.14, px);
-    line(c, m, [[-0.34, 1.62], [0, 1.98], [0.34, 1.62]], 0.11, px);
-    line(c, m, [[0, 1.35], [0, 1.02]], 0.12, px);
+    // Thick at the lower left, its horns open to the upper right (as on Katara's brow).
+    crescent(c, m, 0, 1.1, 0.32, (52 * Math.PI) / 180);
+    c.fill();
   },
-  water_mark_trusted: (c, m, layer, px) => {
+  water_mark_trusted: (c, m, layer) => {
     if (layer !== 0) return;
-    // Two hooks reaching for each other round a shared point.
-    line(c, m, curl(-0.26, 1.5, 0.34, 1, Math.PI, 0.7), 0.13, px);
-    line(c, m, curl(0.26, 1.5, 0.34, 1, 0, 0.7), 0.13, px);
-    circle(c, m, 0, 1.5, 0.08, px);
+    riteArc(c, m);
   },
   earth_kyoshi: (c, m, layer, px) => {
     if (layer === 0) {
@@ -715,6 +782,14 @@ const FACE: Record<Exclude<FacePaint, 'none'>, Painter> = {
     }
   },
 };
+
+/**
+ * Draw one layer of a face paint into a 2D context through `map` (face units → pixels; `px` =
+ * pixels per face unit). The atlas uses it; tests record the shapes with a fake context.
+ */
+export function drawFacePaint(id: Exclude<FacePaint, 'none'>, c: CanvasRenderingContext2D, map: (x: number, y: number) => [number, number], layer: 0 | 1 | 2, px: number): void {
+  FACE[id](c, map, layer, px);
+}
 
 // -----------------------------------------------------------------------------
 // Atlas
