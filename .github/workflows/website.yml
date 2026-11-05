@@ -1,0 +1,51 @@
+# Builds the website (site/, with the game under play/) and publishes it with GitHub Pages:
+#   https://razbelhasin1-ship-it.github.io/Avatar-Four-Nations-/
+# One-time setup: repository Settings → Pages → Build and deployment → Source: "GitHub Actions".
+# Until then the build job still runs on every push (so a broken site is caught) and the deploy
+# job is allowed to fail without marking the run red.
+name: Website
+
+on:
+  push:
+    branches: [ccr-bee3c9ee-5j48is, main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: website
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build the website and the game
+        run: |
+          npm ci
+          npm run site:build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

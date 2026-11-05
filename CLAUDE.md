@@ -15,6 +15,7 @@ npm run build        # typecheck + production build
 node tests/e2e/smoke.e2e.mjs                 # browser smoke test (headless Chromium, SwiftShader)
 node scripts/shot.mjs --element water --out /path/a.png [--eval "g => g.teleport(x,z)"] [--wait ms] [--hideui]
 MAP_OUT=/path/map.png npx vitest run tests/tools/worldmap.test.ts   # top-down world render
+npm run site:build   # the website (site/) with the game under play/ → dist-site/; npm run site:preview serves it
 ```
 
 Headless WebGL is software-rendered (SwiftShader): ~5-15 fps at 960×540 on the `low` preset. The
@@ -58,6 +59,7 @@ Screenshots are how you judge visuals — take them, open them with the Read too
 | `avatar/` | Avatar State / Elements Sphere |
 | `inventory/` + `data/items.ts` `data/cosmetics.ts` | Items, currency, cosmetic unlocks |
 | `ui/` | DOM UI: `UIManager` (screens, toasts, dialogue, loading, confirm), `hud/HUD.ts`, `screens/*`, `styles.css` |
+| `site/` (repo root) | The website: landing, features, about, the game played inside the site (`play/`). Feature lists in `site/src/data/catalogue.ts`, checked against the game by `tests/unit/site.catalogue.test.ts`: when you add or rename a technique, master, companion, quest or enemy, update the catalogue too |
 
 ### Key conventions
 - Units: metres, seconds, radians. **Y up, north = −Z, east = +X.** Sea level y = 0. World spans ±2048.

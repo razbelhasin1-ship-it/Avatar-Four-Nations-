@@ -18,6 +18,23 @@ npm run build      # typecheck + production build in dist/
 npm run preview    # serve the production build
 ```
 
+### Website
+
+`site/` is the game's website: a landing page with a live painting of the four nations, every feature by
+category, an About page, and the game itself, playable inside the site (it runs the game build from `play/`).
+
+```bash
+npm run site:build     # dist-site/: the website, with the game in dist-site/play/
+npm run site:preview   # serve it at http://127.0.0.1:4180/
+npm run site:dev       # work on the site (its Play button uses the game dev server from npm run dev)
+```
+
+Every push builds it (`.github/workflows/website.yml`). Once GitHub Pages is switched on (Settings → Pages →
+Source: GitHub Actions) each push also publishes it at https://razbelhasin1-ship-it.github.io/Avatar-Four-Nations-/.
+`dist-site/` is a plain static folder, so it can also go on any static host. The feature lists live in
+`site/src/data/catalogue.ts` and are checked against the game's own data by `tests/unit/site.catalogue.test.ts`;
+the pictures are screenshots from the game, built by `site/scripts/build-media.py`.
+
 ### Android app
 
 Download the latest APK on your phone:
