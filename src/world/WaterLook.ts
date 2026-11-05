@@ -68,7 +68,18 @@ void main() {
   #include <fog_vertex>
 }`;
 
+/** Surface wetness (envUniforms.uRainWet) above which rain puddles start to fill: rain, not fog. */
+export const RAIN_PUDDLE_WET = 0.45;
+const rainPuddles = new Set<THREE.ShaderMaterial>();
+
+/** Rain puddles are not drawn at all while the ground is dry (water life, every frame). */
+export function updateRainPuddles(): void {
+  const show = envUniforms.uRainWet.value > RAIN_PUDDLE_WET + 0.005;
+  for (const m of rainPuddles) m.visible = show;
+}
+
 const FRAG = /* glsl */ `
+#define RAIN_PUDDLE_WET ${RAIN_PUDDLE_WET.toFixed(3)}
 #include <common>
 #include <fog_pars_fragment>
 ${ENV_PARS_GLSL}
@@ -89,6 +100,7 @@ uniform float uRim;
 uniform float uOpacity;
 uniform float uReflect;
 uniform float uFeather;
+uniform float uRainOnly;
 uniform float uDetail;
 uniform float uScale;
 varying vec3 vWorld;
@@ -149,6 +161,13 @@ void main() {
   alpha = clamp(max(alpha, foam) * uOpacity, 0.0, 1.0);
   // Rimless water (puddles) thins out to nothing at its edge.
   if (uFeather > 0.0) alpha *= smoothstep(0.0, uFeather, edge);
+  // A rain puddle holds water only while the ground is soaked: it fills from its deepest middle as
+  // the rain wets the street and shrinks away as it dries (a damp, foggy day never fills it).
+  if (uRainOnly > 0.5) {
+    float fill = smoothstep(RAIN_PUDDLE_WET, 0.95, uRainWet);
+    float dry = (1.0 - fill) * 0.5 * uSize.x;
+    alpha *= smoothstep(dry, dry + max(uFeather, 0.05), edge) * step(0.001, fill);
+  }
   gl_FragColor = vec4(col, alpha);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -176,6 +195,11 @@ export interface BasinWaterOptions {
   reflect?: number;
   /** Rimless water: the surface fades out over this many metres from its edge (0 = hard edge). */
   feather?: number;
+  /**
+   * A rain puddle: no water in dry weather; it fills from the middle while it rains and dries up
+   * after (circle surfaces).
+   */
+  rainOnly?: boolean;
   /** Ripple / caustic scale (1 = city basins; smaller for jars and barrels). */
   scale?: number;
 }
@@ -199,6 +223,7 @@ export function createBasinWaterMaterial(o: BasinWaterOptions): THREE.ShaderMate
         uOpacity: { value: o.opacity ?? 1 },
         uReflect: { value: o.reflect ?? 0.95 },
         uFeather: { value: o.feather ?? 0 },
+        uRainOnly: { value: o.rainOnly ? 1 : 0 },
         uScale: { value: o.scale ?? 1 },
       },
     ]),
@@ -215,5 +240,10 @@ export function createBasinWaterMaterial(o: BasinWaterOptions): THREE.ShaderMate
   m.uniforms.uCaustic = { value: causticTexture() };
   m.uniforms.uDetail = waterDetail;
   m.name = 'basin_water';
+  if (o.rainOnly) {
+    rainPuddles.add(m);
+    m.addEventListener('dispose', () => rainPuddles.delete(m));
+    m.visible = envUniforms.uRainWet.value > RAIN_PUDDLE_WET + 0.005;
+  }
   return m;
 }

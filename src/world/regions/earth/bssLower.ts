@@ -15,7 +15,7 @@ import type { WallSite } from './bssWalls';
  * alleys cut by radial lanes; small one-to-three storey plaster houses with
  * black and dark-brown tile roofs packed shoulder to shoulder (also under the
  * outer loop arches against the Inner Wall); laundry lines, tarps, crates,
- * puddles; workshops, noodle stalls, tea houses, the Pao Family Tea House, a
+ * rain puddles; workshops, noodle stalls, tea houses, the Pao Family Tea House, a
  * factory with smoking chimneys beside the trunk viaducts, the market street,
  * a stable, and the Firelight Fountain square (the Earth start).
  */
@@ -577,7 +577,7 @@ function dressLower(site: DistrictSite, houses: PlacedHouse[], lanes: Lane[]): v
     if (hash01(Math.round(l.theta * 1000), 508) < 0.6) laundry(env.chunks.at('detail', a.x, a.z).builder, env.mats, new THREE.Vector3(a.x, y, a.z), new THREE.Vector3(c.x, y, c.z), rnd);
     else lanternString(env.chunks.at('detail', a.x, a.z).builder, env.mats, new THREE.Vector3(a.x, y + 0.5, a.z), new THREE.Vector3(c.x, y + 0.5, c.z), 0.4, 4, 'red');
   }
-  // Puddles on lanes and streets.
+  // Rain puddles on lanes and streets: they only hold water while it rains (WaterLook rainOnly).
   const pb = env.chunks.named('detail', 'lower_puddles').builder;
   for (let i = 0; i < 140; i++) {
     const t = hash01(i, 509) * Math.PI * 2;

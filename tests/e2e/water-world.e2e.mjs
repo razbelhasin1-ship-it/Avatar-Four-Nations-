@@ -208,6 +208,43 @@ try {
     assert.ok(r.dist <= F.r, `the splash lands on the water (${r.dist.toFixed(2)} m from the centre, r ${F.r})`);
   });
 
+  await check('street puddles hold water only while it rains, and dry up after', async () => {
+    const puddles = () =>
+      ev((g) => {
+        const out = { mats: 0, visible: 0, meshes: 0 };
+        const seen = new Set();
+        g.ctx.scene.traverse((o) => {
+          const m = o.isMesh ? o.material : null;
+          if (!m || !m.uniforms || m.uniforms.uRainOnly?.value !== 1) return;
+          out.meshes++;
+          if (!seen.has(m)) {
+            seen.add(m);
+            out.mats++;
+            if (m.visible) out.visible++;
+          }
+        });
+        return out;
+      });
+    await ev((g, f) => g.teleport(f.x + 8, f.z + 8), F);
+    await ev((g) => g.debug.env.weather('clear', true));
+    await step(20);
+    let p = await puddles();
+    assert.ok(p.meshes >= 1, `the Lower Ring has rain puddles: ${JSON.stringify(p)}`);
+    assert.equal(p.visible, 0, 'clear weather: no puddles');
+    await ev((g) => g.debug.env.weather('fog', true));
+    await step(60);
+    assert.equal((await puddles()).visible, 0, 'fog: damp, but no puddles');
+    await ev((g) => g.debug.env.weather('rain', true));
+    await step(60);
+    p = await puddles();
+    assert.equal(p.visible, p.mats, 'rain: the puddles fill');
+    // The rain stops: the street dries and the puddles go.
+    await ev((g) => g.debug.env.weather('clear', false));
+    await step(30 * 75);
+    const st = await ev((g) => g.debug.env.weatherState());
+    assert.equal((await puddles()).visible, 0, `dried after the rain (wetness ${st.wet})`);
+  });
+
   await check('the paving is real stone: albedo + normal maps in world space, full size once generated', async () => {
     assert.ok(await pavingDone(), 'paving generation finished');
     const p = await paving();

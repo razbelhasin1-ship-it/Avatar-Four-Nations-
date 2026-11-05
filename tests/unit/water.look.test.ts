@@ -6,7 +6,7 @@ import { envUniforms } from '../../src/world/env/EnvShared';
 import { activeWaterRipples, addWaterRipple, clearWaterRipples, MAX_RIPPLES, toneForSource, WATER_TONES, waterRippleUniforms, type WaterTone } from '../../src/world/env/WaterShared';
 import { pavingMaterial, pavingPending, pavingSet, repave } from '../../src/world/kit/Paving';
 import { trackBasin, untrackBasin, WaterLife } from '../../src/world/WaterLife';
-import { createBasinWaterMaterial, waterDetail } from '../../src/world/WaterLook';
+import { createBasinWaterMaterial, updateRainPuddles, waterDetail } from '../../src/world/WaterLook';
 
 /** A tiny event bus with the GameContext events API used here. */
 function bus() {
@@ -109,6 +109,32 @@ describe('basin water material', () => {
     expect(a.fragmentShader).toContain('waterLight(');
     a.dispose();
     b.dispose();
+  });
+});
+
+describe('rain puddles', () => {
+  it('hold water only while it rains, not in dry weather or fog', () => {
+    envUniforms.uRainWet.value = 0;
+    const m = createBasinWaterMaterial({ size: [2, 2], circle: true, feather: 0.3, rainOnly: true });
+    const pond = createBasinWaterMaterial({ size: [4, 4], circle: true });
+    expect(m.uniforms.uRainOnly.value).toBe(1);
+    expect(pond.uniforms.uRainOnly.value).toBe(0);
+    expect(m.visible).toBe(false);
+    envUniforms.uRainWet.value = 1;
+    updateRainPuddles();
+    expect(m.visible).toBe(true);
+    // Fog dampens the ground (wetness 0.35) but fills no puddles.
+    envUniforms.uRainWet.value = 0.35;
+    updateRainPuddles();
+    expect(m.visible).toBe(false);
+    expect(pond.visible).toBe(true);
+    expect(m.fragmentShader).toContain('uRainOnly');
+    m.dispose();
+    pond.dispose();
+    envUniforms.uRainWet.value = 1;
+    updateRainPuddles();
+    expect(m.visible).toBe(false); // disposed: no longer tracked
+    envUniforms.uRainWet.value = 0;
   });
 });
 

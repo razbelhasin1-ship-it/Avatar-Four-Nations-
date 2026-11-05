@@ -404,7 +404,7 @@ export class BssMats {
   readonly mud: THREE.MeshStandardMaterial;
   /** Trodden mud for Lower Ring streets and lanes (darker, wetter). */
   readonly mudTrack: THREE.MeshStandardMaterial;
-  /** Rain puddles on the Lower Ring lanes (merged discs; edge depth from each disc's UVs). */
+  /** Rain puddles on the Lower Ring lanes: water only while it rains (merged discs; edge depth from each disc's UVs). */
   readonly puddle: THREE.ShaderMaterial;
   readonly glow: THREE.MeshStandardMaterial;
   /** Garden lawn between the flagstone streets of the Middle and Upper Rings. */
@@ -447,7 +447,7 @@ export class BssMats {
     this.mud.name = 'bss_mud';
     this.mudTrack = this.own(new THREE.MeshStandardMaterial({ map: this.mud.map, roughness: 0.82, color: '#a89580' }));
     this.mudTrack.name = 'bss_mud_track';
-    this.puddle = this.own(createBasinWaterMaterial({ tone: 'mud', depth: 0.08, circle: true, size: [2.2, 2.2], rim: 0, scale: 0.6, reflect: 3.2, opacity: 1.45, feather: 0.3 }));
+    this.puddle = this.own(createBasinWaterMaterial({ tone: 'mud', depth: 0.08, circle: true, size: [2.2, 2.2], rim: 0, scale: 0.6, reflect: 3.2, opacity: 1.45, feather: 0.3, rainOnly: true }));
     this.puddle.polygonOffset = true;
     this.puddle.polygonOffsetFactor = -2;
     this.glow = this.own(new THREE.MeshStandardMaterial({ color: '#ffd28a', emissive: '#ffb050', emissiveIntensity: 1.6, roughness: 0.6 }));

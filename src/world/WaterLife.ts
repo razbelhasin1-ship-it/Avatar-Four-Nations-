@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { setBendTone } from '../combat/water/WaterMaterials';
 import type { GameContext, GameSystem } from '../core/GameContext';
 import { activeWaterRipples, addWaterRipple, clearWaterRipples, polarSeaAt, toneForSource } from './env/WaterShared';
-import { waterDetail } from './WaterLook';
+import { updateRainPuddles, waterDetail } from './WaterLook';
 
 /**
  * Water that responds (module `water_life`):
@@ -14,6 +14,7 @@ import { waterDetail } from './WaterLook';
  *    (WaterLife.splash, e.g. spent water returned to a source).
  *  - Bent water takes the colour of the source the player last drew from (WaterShared tones).
  *  - The graphics settings set the water detail level (caustics, rain rings, second ripple layer).
+ *  - Rain puddles (WaterLook `rainOnly`) are drawn only while the ground is soaked by rain.
  *
  * Debug: window.__game.debug.waterLife = { ripples(), basins(), splash(x, z, s) }.
  */
@@ -86,6 +87,7 @@ export class WaterLife implements GameSystem {
   }
 
   update(dt: number): void {
+    updateRainPuddles();
     this.basinT -= dt;
     if (this.basinT <= 0) {
       this.basinT = 0.1;
