@@ -24,9 +24,9 @@ export interface GraphicsSettings {
   foliageDensity: number;
   postProcessing: boolean;
   bloom: boolean;
-  /** Clouds, weather particles, ambient motes, footprints. */
+  /** Weather particles, ambient motes and leaves, footprints. */
   ambientEffects: boolean;
-  /** 'low' | 'high' complexity for bending effects (geometry detail, layered shaders). */
+  /** Complexity of bending effects (geometry detail, layered shaders) and of the sky's cloud march. */
   effectsQuality: 'low' | 'medium' | 'high';
   /** Expensive extras: point lights from fire, water reflections, volumetric-looking clouds. */
   dynamicLights: boolean;

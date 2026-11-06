@@ -198,9 +198,9 @@ export class SettingsScreen implements Screen {
     this.rowSlider(g, 'Grass density', 'graphics.grassDensity', 0, 1.5, 0.05, (v) => (v === 0 ? 'Off' : `${Math.round(v * 100)}%`));
     this.rowSlider(g, 'Foliage & props', 'graphics.foliageDensity', 0.3, 1.5, 0.05, (v) => `${Math.round(v * 100)}%`);
     g = this.grid('Effects');
-    this.rowSelect(g, 'Bending effects', 'graphics.effectsQuality', [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']]);
+    this.rowSelect(g, 'Effects quality', 'graphics.effectsQuality', [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']], 'Bending effects and the clouds in the sky');
     this.rowSlider(g, 'Particle density', 'graphics.particleDensity', 0.2, 1.5, 0.05, (v) => `${Math.round(v * 100)}%`);
-    this.rowToggle(g, 'Ambient effects', 'graphics.ambientEffects', 'Clouds, weather particles, footprints');
+    this.rowToggle(g, 'Ambient effects', 'graphics.ambientEffects', 'Weather particles, drifting motes and leaves, footprints');
     this.rowToggle(g, 'Show FPS', 'graphics.showFps');
   }
 

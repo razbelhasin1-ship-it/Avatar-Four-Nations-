@@ -207,6 +207,7 @@ void main() {
       bool cheap = uCloudLight < 1.5;
       int nHalve = cheap ? 4 : 5;
       float grow = cheap ? 1.09 : 1.07;
+      float envPrev = -1.0; // how far under a dome top the last search sample was
       // From below, a ray enters through the flat bases: look just above the entry first. Toward a
       // cloud's rim the base is too thin for the even search to land in, which cut a hard outline.
       if (ro.y < CL_BASE && clInside(ro + d * (t0 + 0.009 * (CL_TOP - CL_BASE) / max(d.y, 1e-3)))) {
@@ -224,7 +225,20 @@ void main() {
           // along distant clouds).
           float tn = min(t + dtC * (nS < 0.5 ? max(jit, 0.05) : 1.0), t1);
           nS += 1.0;
-          if (clInside(ro + d * tn)) {
+          vec3 pn = ro + d * tn;
+          float hn = (pn.y - CL_BASE) * CL_INV;
+          float en = clTop(pn.xz) - hn;
+          bool hit = hn > 0.006 && hn < 1.0 && en > 0.01;
+          // A near miss (the ray skims just over a dome): look between the steps as well, so a thin
+          // sliver of cloud is found in every pixel alike, not in some (speckle along the tops).
+          if (!hit && max(en, envPrev) > -0.06 && hn > -0.02 && hn < 1.02) {
+            for (int q = 1; q <= 3; q++) {
+              float tq = t + (tn - t) * float(q) * 0.25;
+              if (clInside(ro + d * tq)) { tn = tq; hit = true; break; }
+            }
+          }
+          envPrev = en;
+          if (hit) {
             float a = t, b = tn;
             for (int k = 0; k < 5; k++) {
               if (k >= nHalve) break;
@@ -259,7 +273,10 @@ void main() {
           }
           // Out of the dome for two steps: back to searching.
           outside = (env < 0.0 || hN < 0.0 || hN > 1.0) ? outside + 1.0 : 0.0;
-          if (outside >= 2.0) inCloud = false;
+          if (outside >= 2.0) {
+            inCloud = false;
+            envPrev = env;
+          }
           t += dtF;
           dtF *= grow;
         }
