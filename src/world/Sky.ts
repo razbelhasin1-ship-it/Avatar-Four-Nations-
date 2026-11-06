@@ -1,15 +1,18 @@
 import * as THREE from 'three';
 import { clamp01, lerp, smoothstep } from '../core/MathUtil';
 import type { RenderPipeline } from '../render/Renderer';
-import { envUniforms } from './env/EnvShared';
+import { CLOUD_FIELD, envUniforms } from './env/EnvShared';
 import { pfbm, worley } from './env/ProcTex';
 
 /**
- * Sky dome with an atmospheric gradient, sun and moon discs with glow, two
- * drifting cloud layers (lit cumulus + high cirrus) from a tileable noise
- * texture, stars with a milky-way band, and time-of-day lighting that drives
- * the global sun/hemisphere lights, the fog colour and the shared environment
- * uniforms. Region "mood" (weather: cloud cover, tint, fog) blends smoothly.
+ * Sky dome with an atmospheric gradient, sun and moon discs with glow, stars with a milky-way band,
+ * and the clouds: a cumulus layer in world space (1150–2450 m) ray-marched per pixel — domed clouds
+ * with flat bases, lit through their own bulk toward the sun or the moon, silver-lined when backlit,
+ * painted from below by the afterglow at dusk, sinking into the haze with distance — under wind-combed
+ * cirrus. The same cloud field casts drifting shadows on the ground (EnvShared envCloudSun) and dims
+ * the sun around the camera when a cloud passes over it. Time-of-day lighting drives the global
+ * sun/hemisphere lights, the fog colour and the shared environment uniforms; region "mood" (weather:
+ * cloud cover, tint, fog) blends smoothly.
  */
 
 const skyVertex = /* glsl */ `
@@ -36,14 +39,78 @@ uniform vec3 uCloudTint;
 uniform vec2 uCloudOffset;
 uniform float uHaze;
 uniform sampler2D uNoiseTex;
+uniform float uCloudSearch;
+uniform float uCloudFine;
+uniform float uCloudLight;
 varying vec3 vDir;
+
+// The cumulus layer, in world metres: flat bases at the condensation level, towers up to the top.
+const float CL_BASE = ${CLOUD_FIELD.base.toFixed(1)};
+const float CL_TOP = ${CLOUD_FIELD.top.toFixed(1)};
+const float CL_INV = 1.0 / (CL_TOP - CL_BASE);
+const float CL_SCALE = 1.0 / ${CLOUD_FIELD.scale.toFixed(1)}; // one tile of the cumulus field
+const float CL_DETAIL = 1.0 / 1250.0; // the billows on their surface
+const float CL_FAR = 46000.0; // beyond this the haze has them
+
 float sHash(vec2 p) { p = fract(p * vec2(443.897, 441.423)); p += dot(p, p.yx + 19.19); return fract((p.x + p.y) * p.x); }
-float cloudField(vec2 uv) {
-  float a = texture2D(uNoiseTex, uv * 0.11 + uCloudOffset).r;
-  float b = texture2D(uNoiseTex, uv * 0.37 - uCloudOffset * 1.6 + 0.3).g;
-  float c = texture2D(uNoiseTex, uv * 1.3 + uCloudOffset * 2.3).r;
-  return a * 0.62 + b * 0.3 + c * 0.14;
+
+// Height of the cloud over a point (0..1 of the layer). The field is made of domed cells, so the top
+// rises gently from a cloud's edge to its crown: every cloud is a dome whose cross-section shrinks as
+// it climbs (never an extruded wall), and its rim thins out to nothing (k² / (k + c) is flat at the
+// rim) so edges feather instead of ending in a hard, aliased step. More cover: more clouds, taller.
+float clTop(vec2 xz) {
+  float c = textureLod(uNoiseTex, xz * CL_SCALE + uCloudOffset * ${CLOUD_FIELD.drift.toFixed(3)}, 0.0).a;
+  float thr = ${CLOUD_FIELD.thr0.toFixed(3)} - uCloudCover * ${CLOUD_FIELD.thrK.toFixed(3)};
+  float k = clamp((c - thr) / (1.0 - thr), 0.0, 1.0);
+  return k * k / (k + 0.08) * (0.33 + 0.46 * uCloudCover);
 }
+
+// Density at p: a flat soft base, a rounded top, billows eating into the surface (more toward the top).
+// env = how far under its dome top p lies (layer fraction; negative above it).
+float clDensity(vec3 p, float lod, out float hN, out float env) {
+  hN = (p.y - CL_BASE) * CL_INV;
+  float top = clTop(p.xz);
+  env = top - hN;
+  float body = smoothstep(0.0, 0.05, hN) * smoothstep(0.0, 0.06, env);
+  if (body < 0.002) return 0.0;
+  // The billows lean as they climb, so they read as heaped lobes rather than straight columns.
+  float det = textureLod(uNoiseTex, p.xz * CL_DETAIL + uCloudOffset * 2.9 + vec2(hN * 0.23, -hN * 0.17), lod).g;
+  return clamp(body - (1.0 - det) * (0.13 + 0.36 * hN), 0.0, 1.0);
+}
+
+// Is p inside a dome? (A hair of margin skips grazing slivers too thin to show, the same in every pixel.)
+bool clInside(vec3 p) {
+  float hN = (p.y - CL_BASE) * CL_INV;
+  return hN > 0.006 && hN < 1.0 && clTop(p.xz) > hN + 0.01;
+}
+
+// Cloud between p and the light (metres of cloud). With more than one sample the first reads the
+// billows themselves, so each lobe shades the one behind it (the cauliflower look); the rest read the
+// domes in growing steps, so towers shade their neighbours and thick clouds keep dark bases.
+float clOptical(vec3 p, vec3 L, float lod) {
+  float hq, eq;
+  if (uCloudLight < 1.5) {
+    vec3 q = p + L * 130.0;
+    hq = (q.y - CL_BASE) * CL_INV;
+    return smoothstep(0.0, 0.11, clTop(q.xz) - hq) * smoothstep(-0.02, 0.05, hq) * 130.0;
+  }
+  float od = clDensity(p + L * 80.0, lod, hq, eq) * 240.0;
+  for (int k = 2; k <= 3; k++) {
+    if (float(k) > uCloudLight) break;
+    vec3 q = p + L * (130.0 * float(k * k));
+    hq = (q.y - CL_BASE) * CL_INV;
+    if (hq > 1.0 || hq < -0.05) break;
+    od += smoothstep(0.0, 0.11, clTop(q.xz) - hq) * smoothstep(-0.02, 0.05, hq) * 130.0 * float(2 * k - 1);
+  }
+  return od;
+}
+
+// Henyey-Greenstein, scaled so isotropic scattering is 1.
+float hg(float c, float g) {
+  float g2 = g * g;
+  return (1.0 - g2) / pow(1.0 + g2 - 2.0 * g * c, 1.5);
+}
+
 void main() {
   vec3 d = normalize(vDir);
   float h = d.y;
@@ -80,30 +147,130 @@ void main() {
     float mw = band * (0.5 + 0.5 * texture2D(uNoiseTex, vec2(th * 0.6, ph * 1.4)).r);
     col += (vec3(star) * 1.3 + vec3(0.32, 0.36, 0.5) * mw * 0.35) * uNight * smoothstep(0.0, 0.25, h) * (1.0 - uOvercast);
   }
-  // Cloud layers projected on a dome-shaped plane.
+  // Clouds: high cirrus behind a ray-marched cumulus layer, lit by the sun (or the moon).
   if (h > -0.02) {
-    vec2 uv = d.xz / (h + 0.12);
-    float f = cloudField(uv);
-    float cover = clamp(uCloudCover, 0.0, 1.0);
-    float dens = smoothstep(1.0 - cover * 0.9 - 0.08, 1.0 - cover * 0.9 + 0.28, f);
-    // Fake volumetric light: density toward the sun shadows the cloud body.
-    vec2 toSun = normalize(uSunDir.xz + 1e-4) * 0.16;
-    float fl = cloudField(uv + toSun);
-    float lit = clamp(1.0 - (fl - f) * 3.2, 0.0, 1.0);
-    float rim = pow(sd, 8.0) * (1.0 - dens) * 2.0;
-    vec3 shadowCol = mix(uZenith * 0.55 + uHorizon * 0.3, vec3(0.42, 0.44, 0.5), 0.5) * mix(1.0, 0.55, uOvercast);
-    vec3 litCol = uCloudTint * (uSunColor * 0.5 + uHorizon * 0.55 + 0.12);
-    vec3 cloudCol = mix(shadowCol, litCol, lit * (0.55 + 0.45 * (1.0 - uOvercast)));
-    cloudCol += uSunColor * (rim * 0.6 + pow(sd, 12.0) * 0.25) * day;
-    cloudCol = mix(cloudCol, uHorizon, smoothstep(0.35, 0.0, h) * 0.55);
-    cloudCol *= mix(1.0, 0.16, uNight);
-    float fade = smoothstep(-0.02, 0.2, h);
-    col = mix(col, cloudCol, dens * fade * 0.94);
-    // High cirrus streaks.
-    vec2 cuv = d.xz / (h + 0.35) * vec2(0.18, 0.7) + uCloudOffset * 0.6;
-    float ci = texture2D(uNoiseTex, cuv).g * texture2D(uNoiseTex, cuv * 3.1 + 0.5).r;
-    float cirrus = smoothstep(0.25, 0.55, ci) * (0.35 + 0.4 * (1.0 - cover)) * fade * (1.0 - dens);
-    col = mix(col, uCloudTint * (uSunColor * 0.4 + uHorizon * 0.7) * mix(1.0, 0.2, uNight), cirrus * 0.45);
+    vec3 ro = cameraPosition;
+    float nightL = smoothstep(0.3, 0.9, uNight);
+    vec3 L = normalize(mix(uSunDir, uMoonDir, nightL));
+    float cosT = dot(d, L);
+    // Strong forward scattering (silver linings toward the light), softened for multiple scattering.
+    float phase = mix(1.0, 0.72 * hg(cosT, 0.62) + 0.28 * hg(cosT, -0.22), 0.4);
+    vec3 sunCol = uSunColor * (1.0 - uOvercast * 0.82) * (1.0 - nightL);
+    vec3 moonCol = vec3(0.52, 0.6, 0.8) * (0.08 + 0.3 * mIllum) * nightL * (1.0 - uOvercast * 0.6);
+    vec3 Lcol = (sunCol + moonCol) * uCloudTint;
+    vec3 ambTop = (mix(uZenith, uHorizon, 0.4) * 0.95 + vec3(0.025) * day) * uCloudTint;
+    vec3 ambBot = mix(uHorizon, uGround, 0.55) * 0.46 * uCloudTint;
+    // Dusk: a sun under the horizon still paints the cloud bases from below, brightest toward it.
+    float glow = smoothstep(-0.34, -0.05, uSunDir.y) * smoothstep(0.12, -0.02, uSunDir.y);
+    float towardSun = max(dot(normalize(d.xz + 1e-4), normalize(uSunDir.xz + 1e-4)), 0.0);
+    vec3 glowCol = uHorizon * 1.3 * glow * (0.45 + 0.55 * towardSun);
+
+    // Cirrus at 8 km: long soft bands combed into fine fibres along the wind, thinning as the sky
+    // fills with lower cloud.
+    if (d.y > 0.0) {
+      float tc = (8200.0 - ro.y) / max(d.y, 0.02);
+      vec2 cq = (ro.xz + d.xz * tc) / 30000.0 + uCloudOffset * 0.42;
+      // (Low quality skips the warp: two lookups on every sky pixel.)
+      vec2 warp = uCloudLight < 1.5 ? vec2(0.0) : (vec2(textureLod(uNoiseTex, cq * 0.6, 0.0).r, textureLod(uNoiseTex, cq * 0.6 + 0.43, 0.0).b) - 0.5) * 0.35;
+      float band = textureLod(uNoiseTex, cq * vec2(0.9, 0.22) + warp, 0.0).r;
+      float fib = textureLod(uNoiseTex, cq * vec2(5.0, 0.6) + warp * 1.6, 0.0).b;
+      float cir = smoothstep(0.56, 0.8, band) * (0.45 + 0.55 * smoothstep(0.35, 0.75, fib));
+      cir *= smoothstep(0.0, 0.1, d.y) * exp(-tc / 90000.0) * (0.25 + 0.5 * (1.0 - uOvercast)) * (0.45 + 0.55 * (1.0 - uCloudCover));
+      vec3 cirCol = sunCol * (0.65 + 0.9 * pow(max(cosT, 0.0), 6.0)) + ambTop * 0.9 + glowCol * 0.8 + moonCol * 0.8;
+      col = mix(col, cirCol * uCloudTint, cir * 0.55);
+    }
+
+    // Cumulus: march the layer from where the ray enters it.
+    float t0 = -1.0, t1 = -1.0;
+    if (ro.y < CL_BASE) {
+      if (d.y > 0.0) { t0 = (CL_BASE - ro.y) / d.y; t1 = (CL_TOP - ro.y) / d.y; }
+    } else if (ro.y < CL_TOP) {
+      t0 = 0.0;
+      t1 = d.y > 0.0 ? (CL_TOP - ro.y) / d.y : (d.y < 0.0 ? (CL_BASE - ro.y) / d.y : 9000.0);
+    } else if (d.y < 0.0) {
+      t0 = (CL_TOP - ro.y) / d.y;
+      t1 = (CL_BASE - ro.y) / d.y;
+    }
+    if (t0 >= 0.0 && t0 < CL_FAR) {
+      t1 = min(t1, t0 + 9000.0);
+      // Search the layer in even steps on the dome tops alone (one lookup each). On finding a cloud,
+      // halve back to its edge and march into it in fine steps that lengthen as they go, then search
+      // on past it. Every pixel enters at the cloud's true surface, so silhouettes stay clean (no
+      // dither fringe from an evenly stepped march) and the steps are spent inside the clouds.
+      float dtC = (t1 - t0) / uCloudSearch;
+      float jit = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+      vec3 acc = vec3(0.0);
+      float tr = 1.0, tHit = 0.0;
+      float t = t0, dtF = 0.0, lod = 0.0, nS = 0.0, nF = 0.0, outside = 0.0;
+      bool inCloud = false;
+      // Low quality: fewer halvings to the edge, and fine steps that lengthen faster.
+      bool cheap = uCloudLight < 1.5;
+      int nHalve = cheap ? 4 : 5;
+      float grow = cheap ? 1.09 : 1.07;
+      // From below, a ray enters through the flat bases: look just above the entry first. Toward a
+      // cloud's rim the base is too thin for the even search to land in, which cut a hard outline.
+      if (ro.y < CL_BASE && clInside(ro + d * (t0 + 0.009 * (CL_TOP - CL_BASE) / max(d.y, 1e-3)))) {
+        dtF = clamp(t0 * 0.004, 28.0, 140.0);
+        lod = clamp(log2(max(t0, 1.0) * 0.0011), 0.0, 4.0);
+        t = t0 + dtF * jit;
+        inCloud = true;
+      }
+      for (int i = 0; i < 64; i++) {
+        if (tr < 0.02 || t >= t1) break;
+        if (!inCloud) {
+          if (nS > uCloudSearch) break;
+          // The first step is dithered per pixel: a sliver of cloud thinner than a step is then found
+          // in some pixels and not their neighbours (soft fuzz), not in whole rows (horizontal combs
+          // along distant clouds).
+          float tn = min(t + dtC * (nS < 0.5 ? max(jit, 0.05) : 1.0), t1);
+          nS += 1.0;
+          if (clInside(ro + d * tn)) {
+            float a = t, b = tn;
+            for (int k = 0; k < 5; k++) {
+              if (k >= nHalve) break;
+              float m = 0.5 * (a + b);
+              if (clInside(ro + d * m)) b = m; else a = m;
+            }
+            dtF = clamp(a * 0.004, 28.0, 140.0);
+            lod = clamp(log2(max(a, 1.0) * 0.0011), 0.0, 4.0);
+            // Dither the first fine step over a whole step: the fine steps are short enough that this
+            // reads as faint grain, where a fixed offset draws contour rings through thin cloud.
+            t = a + dtF * jit;
+            inCloud = true;
+            outside = 0.0;
+          } else {
+            t = tn;
+          }
+        } else {
+          if (nF >= uCloudFine) break;
+          nF += 1.0;
+          vec3 p = ro + d * t;
+          float hN, env;
+          float den = clDensity(p, lod, hN, env);
+          if (den > 0.003) {
+            if (tHit == 0.0) tHit = t;
+            float sT = exp(-clOptical(p, L, lod) * 0.0042);
+            // Skylight reaches deep inside less (under a tall crown, in a thick base).
+            float occ = 0.62 + 0.38 * exp(-max(env, 0.0) * 3.5);
+            vec3 S = Lcol * sT * phase + mix(ambBot, ambTop, smoothstep(0.0, 0.7, hN)) * occ + glowCol * (1.0 - hN) * 0.9;
+            float a = 1.0 - exp(-den * 0.006 * dtF);
+            acc += tr * a * S;
+            tr *= 1.0 - a;
+          }
+          // Out of the dome for two steps: back to searching.
+          outside = (env < 0.0 || hN < 0.0 || hN > 1.0) ? outside + 1.0 : 0.0;
+          if (outside >= 2.0) inCloud = false;
+          t += dtF;
+          dtF *= grow;
+        }
+      }
+      if (tHit > 0.0) {
+        // Aerial perspective: distant clouds sink into the sky behind them.
+        float fade = exp(-tHit / 26000.0) * smoothstep(CL_FAR, CL_FAR * 0.55, tHit) * smoothstep(-0.005, 0.06, d.y);
+        acc = mix(col * (1.0 - tr), acc, fade);
+        col = col * tr + acc;
+      }
+    }
   }
   // Weather haze (fog banks, sandstorms, blizzards): the sky melts toward the fog colour, most near the horizon.
   col = mix(col, uGround, uHaze * (1.0 - 0.4 * smoothstep(0.0, 0.9, hh)));
@@ -139,6 +306,17 @@ const KEYS: SkyKey[] = [
   { t: 24, zenith: '#050a1a', horizon: '#18233f', sun: '#9fb4ec', sunI: 0.95, hemiSky: '#5b6fa6', hemiGround: '#2c3048', hemiI: 1.45 },
 ];
 
+/**
+ * Graphics effects quality → the cloud march: search steps through the layer, fine steps inside a
+ * cloud, and light samples toward the sun (from 2 on, the first one reads the billows).
+ */
+export type CloudQuality = 'low' | 'medium' | 'high';
+const CLOUD_QUALITY: Record<CloudQuality, { search: number; fine: number; light: number }> = {
+  low: { search: 10, fine: 8, light: 1 },
+  medium: { search: 22, fine: 16, light: 2 },
+  high: { search: 30, fine: 24, light: 3 },
+};
+
 export interface SkyMood {
   /** Multiplies horizon/fog colour. */
   tint: THREE.Color;
@@ -151,10 +329,19 @@ export interface SkyMood {
   overcast: number;
 }
 
-/** Tileable cloud noise (R = fbm, G = billowy cells), shared by sky, cloud billboards and the cloud sea. */
+/**
+ * Tileable cloud noise, shared by the sky and the cloud sea: R = fbm, G = billowy cells, B = fine
+ * fbm, A = the cumulus field (rounded billow cells gathered by a broad fbm into fields of cloud and
+ * patches of clear sky, normalised to 0..1 so cover thresholds behave the same everywhere).
+ */
 export function createCloudNoiseTexture(size = 256): THREE.DataTexture {
   const data = new Uint8Array(size * size * 4);
+  const cum = new Float32Array(size * size);
   const w = { f1: 0, f2: 0, id: 0, dx: 0, dy: 0 };
+  const dome = (f1: number) => {
+    const t = Math.min(1, f1);
+    return 1 - t * t;
+  };
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const u = (x + 0.5) / size, v = (y + 0.5) / size;
@@ -164,13 +351,25 @@ export function createCloudNoiseTexture(size = 256): THREE.DataTexture {
       worley(u, v, 13, 778, 0.9, w);
       const cell2 = 1 - Math.min(1, w.f1 / 0.75);
       const billow = Math.min(1, Math.max(0, cell * 0.6 + cell2 * 0.3 + 0.25 * pfbm(u, v, 8, 3, 502)));
+      // Cumulus: domed cells at three sizes (a cloud is a heap of rounded towers), weighted by a broad fbm.
+      worley(u, v, 5, 611, 0.85, w);
+      const c1 = dome(w.f1);
+      worley(u, v, 11, 612, 0.85, w);
+      const c2 = dome(w.f1 * 1.05);
+      worley(u, v, 23, 613, 0.85, w);
+      const c3 = dome(w.f1 * 1.1);
+      const field = 0.5 + 0.5 * pfbm(u, v, 3, 4, 601);
+      cum[y * size + x] = (c1 * 0.5 + c2 * 0.33 + c3 * 0.17) * (0.35 + 0.65 * field) + 0.3 * field;
       const o = (y * size + x) * 4;
       data[o] = Math.round(Math.min(1, Math.max(0, f)) * 255);
       data[o + 1] = Math.round(billow * 255);
       data[o + 2] = Math.round((0.5 + 0.5 * pfbm(u, v, 16, 3, 503)) * 255);
-      data[o + 3] = 255;
     }
   }
+  // Normalise the cumulus field between its 2nd and 99.5th percentiles.
+  const sorted = Float32Array.from(cum).sort();
+  const lo = sorted[Math.floor(sorted.length * 0.02)], hi = sorted[Math.floor(sorted.length * 0.995)];
+  for (let i = 0; i < cum.length; i++) data[i * 4 + 3] = Math.round(Math.min(1, Math.max(0, (cum[i] - lo) / (hi - lo))) * 255);
   const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat, THREE.UnsignedByteType);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
@@ -203,6 +402,8 @@ export class SkySystem {
   private readonly targetMood: SkyMood = { tint: new THREE.Color(1, 1, 1), cloudCover: 0.45, fogScale: 1, cloudTint: new THREE.Color('#ffffff'), overcast: 0 };
   /** Cloud drift (UV offset), advanced by wind. */
   readonly cloudOffset = new THREE.Vector2();
+  /** Eased sun multiplier from the cloud over the camera (cloud shadows). */
+  private localSun = 1;
   private c1 = new THREE.Color();
   private c2 = new THREE.Color();
   private readonly camDir = new THREE.Vector3();
@@ -226,6 +427,9 @@ export class SkySystem {
         uCloudOffset: { value: this.cloudOffset },
         uNoiseTex: { value: this.noiseTexture },
         uHaze: { value: 0 },
+        uCloudSearch: { value: CLOUD_QUALITY.medium.search },
+        uCloudFine: { value: CLOUD_QUALITY.medium.fine },
+        uCloudLight: { value: CLOUD_QUALITY.medium.light },
       },
       vertexShader: skyVertex,
       fragmentShader: skyFragment,
@@ -282,7 +486,11 @@ export class SkySystem {
     return this.timeOfDay < 5.5 || this.timeOfDay > 20.5;
   }
 
-  update(dt: number, camera: THREE.Camera, drawDistance: number): void {
+  update(dt: number, camera: THREE.Camera, drawDistance: number, quality: CloudQuality = 'medium'): void {
+    const q = CLOUD_QUALITY[quality] ?? CLOUD_QUALITY.medium;
+    this.mat.uniforms.uCloudSearch.value = q.search;
+    this.mat.uniforms.uCloudFine.value = q.fine;
+    this.mat.uniforms.uCloudLight.value = q.light;
     if (this.secondsPerHour > 0) {
       this.timeOfDay = (this.timeOfDay + dt / this.secondsPerHour) % 24;
     }
@@ -330,10 +538,21 @@ export class SkySystem {
     u.uMoonPhase.value = this.moonPhase;
     u.uCloudTint.value.copy(this.mood.cloudTint);
 
+    // Cloud shadows: the ground shades itself per pixel (envCloudSun); a cloud between the camera and
+    // the sun dims the sun for everything around it, eased so a passing shadow sweeps over gently.
+    const shadow = 0.55 * this.daylight * (1 - overcast) * (elev > 0.02 ? 1 : 0);
+    const cam = camera.position;
+    const here = this.cloudSunAt(cam.x, cam.y, cam.z, sunDir, this.mood.cloudCover, shadow);
+    this.localSun += (here - this.localSun) * (1 - Math.exp(-dt * 1.6));
+    const e = envUniforms;
+    e.uCloudTex.value = this.noiseTexture;
+    e.uCloudShade.value.set(this.cloudOffset.x * CLOUD_FIELD.drift, this.cloudOffset.y * CLOUD_FIELD.drift, this.mood.cloudCover, shadow);
+    e.uCloudSunScale.value = this.localSun;
+
     const p = this.pipeline;
     p.daylight = this.daylight;
     p.sun.color.copy(this.sunColor);
-    p.sun.intensity = this.sampleNum(hour, 'sunI') * (1 - this.mood.cloudCover * 0.25) * (1 - overcast * 0.72);
+    p.sun.intensity = this.sampleNum(hour, 'sunI') * (1 - this.mood.cloudCover * 0.1) * (1 - overcast * 0.72) * this.localSun;
     this.sample(hour, 'hemiSky', p.hemi.color);
     this.sample(hour, 'hemiGround', p.hemi.groundColor);
     p.hemi.color.lerp(this.c1.set('#b4bcc6').multiplyScalar(lerp(1, 0.3, night)), overcast * 0.5);
@@ -350,9 +569,8 @@ export class SkySystem {
     fog.near = Math.min(fog.far * 0.25, 220 / this.mood.fogScale);
 
     // Shared environment uniforms.
-    const e = envUniforms;
     e.uSunDir.value.copy(sunDir);
-    e.uSunColor.value.copy(this.sunColor).multiplyScalar((elev > -0.05 ? 1 : 0.35) * (1 - overcast * 0.6));
+    e.uSunColor.value.copy(this.sunColor).multiplyScalar((elev > -0.05 ? 1 : 0.35) * (1 - overcast * 0.6) * this.localSun);
     e.uSkyZenith.value.copy(this.zenithColor);
     e.uSkyHorizon.value.copy(this.horizonColor);
     e.uDaylight.value = this.daylight;
@@ -361,6 +579,35 @@ export class SkySystem {
     e.envFogSunDir.value.copy(trueSun);
 
     this.dome.position.copy(camera.position);
+  }
+
+  /** The cumulus field (texture alpha, 0..1) at world (x, z), bilinear like the GPU's lookup. */
+  private cumulusAt(x: number, z: number): number {
+    const img = this.noiseTexture.image as { data: Uint8Array; width: number };
+    const n = img.width;
+    const fx = (x / CLOUD_FIELD.scale + this.cloudOffset.x * CLOUD_FIELD.drift) * n - 0.5;
+    const fz = (z / CLOUD_FIELD.scale + this.cloudOffset.y * CLOUD_FIELD.drift) * n - 0.5;
+    const x0 = Math.floor(fx), z0 = Math.floor(fz);
+    const tx = fx - x0, tz = fz - z0;
+    const at = (i: number, j: number) => img.data[((((j % n) + n) % n) * n + (((i % n) + n) % n)) * 4 + 3] / 255;
+    const a = at(x0, z0) * (1 - tx) + at(x0 + 1, z0) * tx;
+    const b = at(x0, z0 + 1) * (1 - tx) + at(x0 + 1, z0 + 1) * tx;
+    return a * (1 - tz) + b * tz;
+  }
+
+  /** Direct sun reaching (x, y, z) through the cumulus layer: the CPU twin of EnvShared's envCloudSun. */
+  cloudSunAt(x: number, y: number, z: number, sun: THREE.Vector3, cover: number, strength: number): number {
+    if (strength <= 0) return 1;
+    const t = (CLOUD_FIELD.mid - y) / Math.max(sun.y, 0.25);
+    const c = this.cumulusAt(x + sun.x * t, z + sun.z * t);
+    const thr = CLOUD_FIELD.thr0 - cover * CLOUD_FIELD.thrK;
+    const k = clamp01((c - thr) / (1 - thr));
+    return 1 - smoothstep(0.04, 0.3, k) * strength;
+  }
+
+  /** Sun dimming around the camera from the cloud over it (1 = in the sun). */
+  get cloudSun(): number {
+    return this.localSun;
   }
 
   /** Advance cloud drift (called by the weather/wind system). */

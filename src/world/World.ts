@@ -34,6 +34,9 @@ export interface EnvironmentFX {
   crack(pos: THREE.Vector3, radius: number, yaw?: number): void;
 }
 
+/** Longest a preload phase (terrain, then vegetation) may hold a loading screen (ms). */
+const PRELOAD_PHASE_MS = 20000;
+
 const noopFX: EnvironmentFX = {
   disturb() {},
   footprint() {},
@@ -80,6 +83,12 @@ export class World implements PhysicsWorld, Persistable {
   private ctx!: GameContext;
   readonly focus = new THREE.Vector3();
   private readonly tmpN = { x: 0, y: 1, z: 0 };
+  /**
+   * Where a preload in progress is streaming the world in (fast travel's loading screen). Frames that
+   * run meanwhile stream there too: streaming around the player's old position instead evicted the
+   * destination's terrain and vegetation as fast as the preload built them, and fast travel hung.
+   */
+  private preloadFocus: THREE.Vector3 | null = null;
 
   // Persistent state
   readonly discovered = new Set<string>();
@@ -160,37 +169,47 @@ export class World implements PhysicsWorld, Persistable {
    * screens). Calls onProgress with 0..1. Yields to the browser between batches.
    */
   async preload(p: THREE.Vector3, onProgress?: (f: number, label: string) => void): Promise<void> {
-    this.focus.copy(p);
-    onProgress?.(0.05, 'Shaping the land…');
-    let pending = this.terrain.update(p, 25);
-    const total = Math.max(1, pending + this.terrain.chunkCount);
-    let guard = 0;
-    while (pending > 0 && guard++ < 2000) {
-      pending = this.terrain.update(p, 30);
-      onProgress?.(0.05 + 0.55 * (1 - pending / total), 'Shaping the land…');
-      await new Promise((r) => setTimeout(r, 0));
-    }
-    onProgress?.(0.62, 'Raising cities and temples…');
-    await new Promise((r) => setTimeout(r, 0));
-    this.syncHeightWindow();
-    this.unloadFarRegions(p);
-    this.ensureRegionsAround(p);
-    // Environment systems (vegetation, grass...) populate around the spawn.
-    const pre = this.updatables.filter((u) => u.preload);
-    if (pre.length) {
-      let envPending = 0;
-      for (const u of pre) envPending += u.preload!(p, 25);
-      const envTotal = Math.max(1, envPending);
-      guard = 0;
-      while (envPending > 0 && guard++ < 2000) {
-        envPending = 0;
-        for (const u of pre) envPending += u.preload!(p, 30);
-        onProgress?.(0.66 + 0.28 * (1 - envPending / envTotal), 'Growing forests and meadows…');
+    const target = p.clone();
+    this.preloadFocus = target;
+    try {
+      this.focus.copy(target);
+      onProgress?.(0.05, 'Shaping the land…');
+      let pending = this.terrain.update(target, 25);
+      const total = Math.max(1, pending + this.terrain.chunkCount);
+      // Each phase has a time limit too: whatever is left streams in after arrival, but the loading
+      // screen never hangs.
+      let until = performance.now() + PRELOAD_PHASE_MS;
+      let guard = 0;
+      while (pending > 0 && guard++ < 2000 && performance.now() < until) {
+        pending = this.terrain.update(target, 30);
+        onProgress?.(0.05 + 0.55 * (1 - pending / total), 'Shaping the land…');
         await new Promise((r) => setTimeout(r, 0));
       }
+      onProgress?.(0.62, 'Raising cities and temples…');
+      await new Promise((r) => setTimeout(r, 0));
+      this.syncHeightWindow();
+      this.unloadFarRegions(target);
+      this.ensureRegionsAround(target);
+      // Environment systems (vegetation, grass...) populate around the spawn.
+      const pre = this.updatables.filter((u) => u.preload);
+      if (pre.length) {
+        let envPending = 0;
+        for (const u of pre) envPending += u.preload!(target, 25);
+        const envTotal = Math.max(1, envPending);
+        until = performance.now() + PRELOAD_PHASE_MS;
+        guard = 0;
+        while (envPending > 0 && guard++ < 2000 && performance.now() < until) {
+          envPending = 0;
+          for (const u of pre) envPending += u.preload!(target, 30);
+          onProgress?.(0.66 + 0.28 * (1 - envPending / envTotal), 'Growing forests and meadows…');
+          await new Promise((r) => setTimeout(r, 0));
+        }
+      }
+      onProgress?.(0.95, 'Breathing life into the world…');
+      await new Promise((r) => setTimeout(r, 0));
+    } finally {
+      if (this.preloadFocus === target) this.preloadFocus = null;
     }
-    onProgress?.(0.95, 'Breathing life into the world…');
-    await new Promise((r) => setTimeout(r, 0));
   }
 
   onSessionStart(): void {
@@ -226,35 +245,38 @@ export class World implements PhysicsWorld, Persistable {
   }
 
   update(dt: number, focus: THREE.Vector3): void {
-    this.focus.copy(focus);
+    // A preload in progress owns the streaming focus (see preloadFocus); discovery stays with the player.
+    const f = this.preloadFocus ?? focus;
+    this.focus.copy(f);
     envUniforms.uEnvTime.value = (envUniforms.uEnvTime.value + dt) % 3600;
-    this.terrain.update(focus, 3);
+    this.terrain.update(f, 3);
     this.syncHeightWindow();
-    this.unloadFarRegions(focus);
-    this.ensureRegionsAround(focus);
+    this.unloadFarRegions(f);
+    this.ensureRegionsAround(f);
     const cam = this.ctx.camera;
-    this.sky.update(dt, cam, this.ctx.settings.data.graphics.drawDistance);
+    this.sky.update(dt, cam, this.ctx.settings.data.graphics.drawDistance, this.ctx.settings.data.graphics.effectsQuality);
     this.water.update(dt, cam, this.ctx.render.sunDir, this.sky.horizonColor, this.sky.sunColor);
     for (const r of this.regions) {
       if (!this.builtRegions.has(r.id)) continue;
-      const d = Math.hypot(focus.x - r.center.x, focus.z - r.center.z);
+      const d = Math.hypot(f.x - r.center.x, f.z - r.center.z);
       r.setDetail?.(d < r.loadRadius ? 'full' : d < r.loadRadius * 3 ? 'far' : 'hidden');
       if (d < r.loadRadius * 1.5) r.update?.(dt, this.ctx);
     }
-    for (const u of this.updatables) u.update(dt, this.ctx, focus);
+    for (const u of this.updatables) u.update(dt, this.ctx, f);
     if (this.ctx.session.active) this.updateDiscovery(focus);
   }
 
   /** Update while in menus (sky/water animation only). */
   updateAmbient(dt: number, focus: THREE.Vector3): void {
-    this.focus.copy(focus);
+    const f = this.preloadFocus ?? focus;
+    this.focus.copy(f);
     envUniforms.uEnvTime.value = (envUniforms.uEnvTime.value + dt) % 3600;
-    this.terrain.update(focus, 2);
+    this.terrain.update(f, 2);
     this.syncHeightWindow();
     const cam = this.ctx.camera;
-    this.sky.update(dt, cam, this.ctx.settings.data.graphics.drawDistance);
+    this.sky.update(dt, cam, this.ctx.settings.data.graphics.drawDistance, this.ctx.settings.data.graphics.effectsQuality);
     this.water.update(dt, cam, this.ctx.render.sunDir, this.sky.horizonColor, this.sky.sunColor);
-    for (const u of this.updatables) u.update(dt, this.ctx, focus);
+    for (const u of this.updatables) u.update(dt, this.ctx, f);
   }
 
   private discoveryTimer = 0;

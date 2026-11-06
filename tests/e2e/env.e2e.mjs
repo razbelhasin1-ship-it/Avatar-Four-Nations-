@@ -1,7 +1,7 @@
 /**
  * World environment E2E: vegetation streaming + colliders + live density,
  * grass, footprints and combat decals (world.fx), weather (rain → water
- * source, events), ambient systems. Run: node tests/e2e/env.e2e.mjs
+ * source, events), cloud shadows, ambient systems. Run: node tests/e2e/env.e2e.mjs
  */
 import assert from 'node:assert/strict';
 import { launch } from '../../scripts/harness.mjs';
@@ -211,6 +211,55 @@ try {
     });
     assert.ok(r.above.visible && r.above.above > 0.5 && r.above.mist < 0.1, JSON.stringify(r));
     assert.ok(r.inside.mist > 0.5, JSON.stringify(r));
+  });
+
+  await check('cloud shadows: the sun dims under a cloud and comes back in the gaps between them', async () => {
+    const r = await h.page.evaluate(async () => {
+      const g = window.__game;
+      const sky = g.ctx.world.sky;
+      g.debug.env.weather('cloudy', true);
+      g.setTime(13);
+      g.freezeTime(true);
+      g.step(4);
+      // Hold the clouds still (the test is about the shade, not the wind).
+      const drift = sky.drift;
+      sky.drift = () => {};
+      try {
+        // Near the player: the spot deepest inside a cloud's shade and the one widest in the open
+        // (scored over a 120 m neighbourhood, so the camera's offset from the player does not matter).
+        const p = g.state().player;
+        const sun = g.ctx.render.sunDir;
+        const cover = sky.mood.cloudCover;
+        const around = (x, z) => [[0, 0], [120, 0], [-120, 0], [0, 120], [0, -120]].map(([ox, oz]) => sky.cloudSunAt(x + ox, 40, z + oz, sun, cover, 1));
+        let shade = null;
+        let open = null;
+        for (let dx = -900; dx <= 900; dx += 60) {
+          for (let dz = -900; dz <= 900; dz += 60) {
+            const x = p.x + dx, z = p.z + dz;
+            const vs = around(x, z);
+            const hi = Math.max(...vs), lo = Math.min(...vs);
+            if (!shade || hi < shade.v) shade = { x, z, v: hi };
+            if (!open || lo > open.v) open = { x, z, v: lo };
+          }
+        }
+        const visit = async (s) => {
+          await g.debug.env.preload(s.x, s.z);
+          g.teleport(s.x, s.z);
+          g.step(150, 1 / 30); // 5 s: the eased dimming settles
+          return { cloudSun: sky.cloudSun, sunI: g.ctx.render.sun.intensity };
+        };
+        const inShade = await visit(shade);
+        const inSun = await visit(open);
+        return { shade, open, inShade, inSun };
+      } finally {
+        sky.drift = drift;
+        g.freezeTime(false);
+        g.debug.env.weather(null);
+      }
+    });
+    assert.ok(r.shade.v < 0.3 && r.open.v === 1, JSON.stringify(r));
+    assert.ok(r.inShade.cloudSun < 0.75 && r.inSun.cloudSun > 0.95, JSON.stringify(r));
+    assert.ok(r.inShade.sunI < r.inSun.sunI * 0.8, JSON.stringify(r));
   });
 
   await check('no console errors', async () => {

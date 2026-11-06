@@ -148,9 +148,9 @@ export class UIManager {
     return this.stack.some((s) => s.modal) || !!this.dialogueEl || !!this.loadingEl || !!this.confirmEl;
   }
 
-  /** True when the simulation should freeze (menus open). */
+  /** True when the simulation should freeze (menus open, or a loading screen such as fast travel's). */
   get freezesSim(): boolean {
-    return this.stack.some((s) => s.pausesGame);
+    return this.stack.some((s) => s.pausesGame) || !!this.loadingEl;
   }
 
   open(id: string, arg?: unknown): Screen | null {

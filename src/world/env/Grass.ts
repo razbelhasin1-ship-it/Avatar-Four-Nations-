@@ -4,7 +4,7 @@ import type { Entity } from '../../entities/Entity';
 import { getPlateauRuntime } from '../Heightfield';
 import { CHUNK_SIZE, LOD_SPACING, type ChunkDetail } from '../Terrain';
 import type { WorldUpdatable } from '../World';
-import { attachEnvUniforms, ENV_NOISE_GLSL, ENV_PARS_GLSL, envUniforms, MAX_INTERACTORS } from './EnvShared';
+import { attachEnvUniforms, cloudShadowedLightsChunk, ENV_NOISE_GLSL, ENV_PARS_GLSL, envUniforms, MAX_INTERACTORS } from './EnvShared';
 
 /**
  * Instanced grass near the camera.
@@ -99,6 +99,7 @@ attribute vec4 aColor;
 uniform float uRadius;
 uniform float uKeep;
 varying float vGrassH;
+varying float vCloudSun;
 ${ENV_PARS_GLSL}
 ${ENV_NOISE_GLSL}
 `;
@@ -124,7 +125,11 @@ float gPl = min( length( gPush ), 1.2 );
 transformed.xz += gPush * gFlex * 0.65 * aColor.w;
 transformed.y -= gPl * gFlex * 0.42 * aColor.w;
 vGrassH = gH;
+// The cloud shadow over this clump, as the ground under it gets (see Terrain).
+vCloudSun = envCloudSun( aOffset.xyz ) / max( uCloudSunScale, 0.05 );
 `;
+
+const GRASS_CLOUD_LIGHTS = cloudShadowedLightsChunk('vCloudSun');
 
 const GRASS_PROJECT = /* glsl */ `
 vec4 mvPosition = viewMatrix * vec4( transformed, 1.0 );
@@ -145,12 +150,13 @@ function createGrassMaterial(radius: { value: number }, keep: { value: number })
       .replace('#include <project_vertex>', GRASS_PROJECT)
       .replace('#include <worldpos_vertex>', 'vec4 worldPosition = vec4( transformed, 1.0 );');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vGrassH;')
+      .replace('#include <common>', '#include <common>\nvarying float vGrassH;\nvarying float vCloudSun;')
       // Both blade faces are lit like the ground (no flipped, black back faces).
       .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n  normal = normalize( vNormal );')
+      .replace('#include <lights_fragment_begin>', GRASS_CLOUD_LIGHTS)
       .replace('#include <opaque_fragment>', '  outgoingLight += diffuseColor.rgb * vGrassH * 0.12;\n#include <opaque_fragment>');
   };
-  mat.customProgramCacheKey = () => 'grass-v2';
+  mat.customProgramCacheKey = () => 'grass-v3';
   return mat;
 }
 

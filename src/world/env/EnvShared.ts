@@ -10,6 +10,14 @@ import * as THREE from 'three';
 export const MAX_INTERACTORS = 8;
 export const MAX_IMPULSES = 8;
 
+/**
+ * The cumulus layer the sky draws (world metres), shared with the cloud shadows on the ground so
+ * both see the same clouds: the field tile size, the coverage threshold (thr0 − cover × thrK on the
+ * normalised field), the height the shadows are cast from, and how much of the sky's drift offset
+ * the field follows (a breezy day moves the clouds and their shadows at about 10 m/s).
+ */
+export const CLOUD_FIELD = { base: 1150, top: 2450, mid: 1500, scale: 7200, thr0: 0.62, thrK: 0.45, drift: 0.4 } as const;
+
 export interface EnvUniforms {
   [k: string]: THREE.IUniform;
   uEnvTime: THREE.IUniform<number>;
@@ -34,6 +42,12 @@ export interface EnvUniforms {
   uHeightTex: THREE.IUniform<THREE.Texture | null>;
   /** x = origin x, y = origin z, z = 1 / world size covered, w = height of unfilled texels. */
   uHeightTexInfo: THREE.IUniform<THREE.Vector4>;
+  /** The sky's cloud noise (A = the cumulus field) for cloud shadows on the ground. */
+  uCloudTex: THREE.IUniform<THREE.Texture | null>;
+  /** Cloud shadows: xy = cloud drift (field UV), z = cover 0..1, w = shadow strength (0 = none). */
+  uCloudShade: THREE.IUniform<THREE.Vector4>;
+  /** The sun dimming already applied around the camera (1 = none): ground shading divides it out. */
+  uCloudSunScale: THREE.IUniform<number>;
 }
 
 export const envUniforms: EnvUniforms = {
@@ -51,7 +65,22 @@ export const envUniforms: EnvUniforms = {
   envFogSunDir: { value: new THREE.Vector3(0, 1, 0) },
   uHeightTex: { value: null },
   uHeightTexInfo: { value: new THREE.Vector4(-2048, -2048, 1 / 4096, -60) },
+  uCloudTex: { value: null },
+  uCloudShade: { value: new THREE.Vector4(0, 0, 0, 0) },
+  uCloudSunScale: { value: 1 },
 };
+
+/**
+ * three's lights_fragment_begin chunk with the sun (the directional light) scaled by `factor`, a GLSL
+ * float for this fragment: normally its cloud shadow, envCloudSun at its world position divided by
+ * uCloudSunScale (the light's intensity already carries the cloud over the camera). Only the sun is
+ * shaded, so fires and lamps keep their own light under a passing cloud.
+ */
+export function cloudShadowedLightsChunk(factor: string): string {
+  const chunk = THREE.ShaderChunk.lights_fragment_begin;
+  const at = 'getDirectionalLightInfo( directionalLight, directLight );';
+  return chunk.includes(at) ? chunk.replace(at, `${at}\n\t\tdirectLight.color *= ${factor};`) : chunk;
+}
 
 /** Attach the shared uniforms to a compiled shader (onBeforeCompile helper). */
 export function attachEnvUniforms(shader: { uniforms: Record<string, THREE.IUniform> }): void {
@@ -72,6 +101,9 @@ uniform vec4 uInteract[${MAX_INTERACTORS}];
 uniform vec4 uImpulse[${MAX_IMPULSES}];
 uniform sampler2D uHeightTex;
 uniform vec4 uHeightTexInfo;
+uniform sampler2D uCloudTex;
+uniform vec4 uCloudShade;
+uniform float uCloudSunScale;
 `;
 
 /** Small GLSL noise / helper library shared by environment shaders. */
@@ -88,6 +120,19 @@ float envFbm(vec2 p) { float s = 0.0, a = 0.5; for (int i = 0; i < 4; i++) { s +
 float envTerrainHeight(vec2 xz) {
   vec2 uv = (xz - uHeightTexInfo.xy) * uHeightTexInfo.z;
   return texture2D(uHeightTex, uv).r;
+}
+/**
+ * Direct sunlight reaching ground at wp through the cumulus layer (1 = clear, down to 1 − strength
+ * under a cloud): the sky's own cloud field, looked up where the sun ray from wp crosses the layer.
+ */
+float envCloudSun(vec3 wp) {
+  if (uCloudShade.w <= 0.0) return 1.0;
+  float t = (${CLOUD_FIELD.mid.toFixed(1)} - wp.y) / max(uSunDir.y, 0.25);
+  vec2 xz = wp.xz + uSunDir.xz * t;
+  float c = texture2D(uCloudTex, xz * ${(1 / CLOUD_FIELD.scale).toFixed(9)} + uCloudShade.xy).a;
+  float thr = ${CLOUD_FIELD.thr0.toFixed(3)} - uCloudShade.z * ${CLOUD_FIELD.thrK.toFixed(3)};
+  float k = clamp((c - thr) / (1.0 - thr), 0.0, 1.0);
+  return 1.0 - smoothstep(0.04, 0.3, k) * uCloudShade.w;
 }
 /** Sky colour in a direction (cheap gradient used for fake reflections). */
 vec3 envSkyColor(vec3 dir) {

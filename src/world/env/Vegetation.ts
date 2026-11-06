@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { GameContext } from '../../core/GameContext';
 import { allSpots } from '../Spots';
 import type { WorldUpdatable } from '../World';
-import { attachEnvUniforms, ENV_DITHER_GLSL, ENV_NOISE_GLSL, ENV_PARS_GLSL } from './EnvShared';
+import { attachEnvUniforms, cloudShadowedLightsChunk, ENV_DITHER_GLSL, ENV_NOISE_GLSL, ENV_PARS_GLSL } from './EnvShared';
 import { SPECIES, SPECIES_IDS, speciesGeometries, type SpeciesCategory } from './VegetationModels';
 import { generateCellBushes, generateCellMain, generateCellSmall, SPECIES_CATEGORY, VEG_CELL, VEG_STRIDE, type VegCellData, type VegCircle } from './VegetationPlacement';
 
@@ -108,9 +108,13 @@ varying float vFadeIn;
 varying float vFadeOut;
 varying float vLeaf;
 varying float vSeeThrough;
+varying float vCloudSun;
 ${ENV_PARS_GLSL}
 ${ENV_NOISE_GLSL}
 `;
+
+/** Sunlight on plants dimmed by the cloud over each one, as the ground under it is (see Terrain). */
+const VEG_CLOUD_LIGHTS = cloudShadowedLightsChunk('vCloudSun');
 
 const VEG_PROJECT = /* glsl */ `
 vec4 mvPosition = vec4( transformed, 1.0 );
@@ -119,6 +123,7 @@ vec3 instPos = vec3( 0.0 );
   mvPosition = instanceMatrix * mvPosition;
   instPos = instanceMatrix[ 3 ].xyz;
 #endif
+vCloudSun = envCloudSun( instPos ) / max( uCloudSunScale, 0.05 );
 float vegW = veg.x;
 vLeaf = veg.y;
 if ( vegW > 0.0 ) {
@@ -163,10 +168,11 @@ function createVegMaterial(flex: number, push: number, crown: THREE.Vector2): TH
       .replace('#include <color_vertex>', '#include <color_vertex>\n  vColor.rgb *= mix( vec3( 1.0 ), aTint.rgb, veg.y );')
       .replace('#include <project_vertex>', VEG_PROJECT);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vFadeIn;\nvarying float vFadeOut;\nvarying float vLeaf;\nvarying float vSeeThrough;\nuniform vec3 uSkyHorizon;\nuniform vec3 uSunColor;\nuniform float uDaylight;\n' + ENV_DITHER_GLSL)
+      .replace('#include <common>', '#include <common>\nvarying float vFadeIn;\nvarying float vFadeOut;\nvarying float vLeaf;\nvarying float vSeeThrough;\nvarying float vCloudSun;\nuniform vec3 uSkyHorizon;\nuniform vec3 uSunColor;\nuniform float uDaylight;\n' + ENV_DITHER_GLSL)
+      .replace('#include <lights_fragment_begin>', VEG_CLOUD_LIGHTS)
       // Foliage scatters light: lift shadowed leaves with sky fill and a little sun translucency;
       // bark and stems get a little sky fill too (a trunk under its own crown is shaded, not black).
-      .replace('#include <opaque_fragment>', '  outgoingLight += diffuseColor.rgb * ( uSkyHorizon * ( 0.07 + 0.16 * vLeaf ) + uSunColor * 0.12 * uDaylight * vLeaf );\n#include <opaque_fragment>')
+      .replace('#include <opaque_fragment>', '  outgoingLight += diffuseColor.rgb * ( uSkyHorizon * ( 0.07 + 0.16 * vLeaf ) + uSunColor * 0.12 * uDaylight * vLeaf * vCloudSun );\n#include <opaque_fragment>')
       .replace(
         '#include <clipping_planes_fragment>',
         `#include <clipping_planes_fragment>
@@ -180,7 +186,7 @@ function createVegMaterial(flex: number, push: number, crown: THREE.Vector2): TH
   if ( vegNear < 1.0 && vegNear <= vegDither ) discard;`,
       );
   };
-  mat.customProgramCacheKey = () => 'veg-v6';
+  mat.customProgramCacheKey = () => 'veg-v7';
   return mat;
 }
 

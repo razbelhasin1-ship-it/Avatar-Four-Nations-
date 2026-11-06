@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { AIR_SPIRES, createTerrainSample, heightAt, polarSeaFactor, sampleTerrain, seaIceField } from './Heightfield';
-import { attachEnvUniforms, ENV_NOISE_GLSL, ENV_PARS_GLSL } from './env/EnvShared';
+import { attachEnvUniforms, cloudShadowedLightsChunk, ENV_NOISE_GLSL, ENV_PARS_GLSL } from './env/EnvShared';
 import { createTerrainTexture, TERRAIN_LAYER_SCALE, terrainLayerMeans } from './env/TerrainTextures';
 import { WorldHeightTexture } from './env/WorldHeightTexture';
 import { WORLD_HALF } from './WorldLayout';
@@ -382,6 +382,13 @@ const TERRAIN_NORMAL = /* glsl */ `
 #endif
 `;
 
+/**
+ * Cloud shadows drifting over the land: sunlight dimmed where a cloud of the sky's cumulus layer
+ * stands between this ground and the sun. The sun is already dimmed around the camera by the cloud
+ * over it (uCloudSunScale), so the ground divides that back out and gets its own shade exactly.
+ */
+const TERRAIN_CLOUD_LIGHTS = cloudShadowedLightsChunk('envCloudSun( vTerrWorld ) / max( uCloudSunScale, 0.05 )');
+
 const TERRAIN_OUTPUT = /* glsl */ `
 // Painterly sky fill: shadowed and back-lit ground keeps its colour (dark rock
 // and ash would otherwise crush to black when the sun is behind the slope).
@@ -443,9 +450,10 @@ vTerrWorld = (modelMatrix * vec4(position, 1.0)).xyz;`,
       .replace('#include <color_fragment>', `#include <color_fragment>\n${TERRAIN_COLOR}`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\nroughnessFactor = terrRough;`)
       .replace('#include <normal_fragment_maps>', TERRAIN_NORMAL)
+      .replace('#include <lights_fragment_begin>', TERRAIN_CLOUD_LIGHTS)
       .replace('#include <opaque_fragment>', TERRAIN_OUTPUT);
   };
-  mat.customProgramCacheKey = () => 'terrain-v2-' + opts.detail;
+  mat.customProgramCacheKey = () => 'terrain-v4-' + opts.detail;
   return mat;
 }
 
@@ -839,7 +847,7 @@ export class TerrainManager {
     if (detail === this.quality.detail && anisotropy === this.quality.anisotropy) return;
     this.quality = { detail, anisotropy };
     this.material.defines = { TERRAIN_DETAIL: detail };
-    this.material.customProgramCacheKey = () => 'terrain-v2-' + detail;
+    this.material.customProgramCacheKey = () => 'terrain-v4-' + detail;
     this.material.needsUpdate = true;
     const tex = this.material.userData.texture as THREE.Texture;
     if (tex.anisotropy !== anisotropy) {
@@ -1018,6 +1026,11 @@ export class TerrainManager {
 
   get chunkCount(): number {
     return this.chunks.size;
+  }
+
+  /** True when the terrain chunk under (x, z) is built (tests: no hole where the player lands). */
+  hasChunkAt(x: number, z: number): boolean {
+    return this.chunks.has(chunkKey(Math.floor(x / CHUNK_SIZE), Math.floor(z / CHUNK_SIZE)));
   }
 
   get pendingJobs(): number {
