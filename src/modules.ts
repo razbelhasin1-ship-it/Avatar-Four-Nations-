@@ -23,6 +23,7 @@ import { LavaSystem } from './subskills/lava/LavaSystem';
 import { ProjectionSystem } from './subskills/projection/Projection';
 import { BloodbendingSystem } from './subskills/blood/Bloodbending';
 import { SubskillQuestScripts } from './subskills/quests/QuestScripts';
+import { TimeSkipSystem } from './world/TimeSkip';
 
 /**
  * Feature modules plug into the game here without editing Game.ts.
@@ -91,4 +92,6 @@ export const MODULES: GameModule[] = [
   { name: 'bloodbending', order: 27, create: () => new BloodbendingSystem() },
   // Scripts of the three unlock quests (+ Hama in custody, the Korra moonless training) (__game.debug.subquests).
   { name: 'subskill_quests', order: 79, create: () => new SubskillQuestScripts() },
+  // [additive: time] Pass Time from the pause menu (before the moon, which counts the days it crosses).
+  { name: 'timeskip', order: 63, create: () => new TimeSkipSystem() },
 ];

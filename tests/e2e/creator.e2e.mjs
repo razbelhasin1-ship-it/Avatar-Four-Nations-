@@ -154,10 +154,13 @@ async function run(width, height, tag) {
       const st = await h.state();
       assert.equal(st.player.name, 'Tenzin');
       assert.equal(st.player.element, 'air');
-      const got = await h.eval((g) => g.game.player.humanoid.appearance);
+      const got = await h.eval((g) => g.game.player.appearance);
       assert.equal(got.hair.style, want.hair.style);
       assert.deepEqual(got.outfit, want.outfit);
       assert.equal(got.body, 'female');
+      assert.equal(await h.eval((g) => g.game.player.humanoid.appearance.body), 'female');
+      // A carried glider staff is a prop of its own (it opens into wings), not part of the body mesh.
+      if (want.outfit.accessory === 'air_glider') assert.equal(await h.eval((g) => !!g.game.player.staff), true, 'the glider staff is carried');
     });
   } finally {
     if (h.errors.length) console.log(`[${tag}] CONSOLE ERRORS:\n` + h.errors.slice(0, 15).join('\n'));

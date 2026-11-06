@@ -2182,3 +2182,76 @@
 .mp-ab.learned { opacity: 0.62; }
 .tq-teacher { margin-left: 8px; vertical-align: middle; }
 .mp-follow { margin-top: 10px; padding: 8px 10px; border: 1px solid rgba(255, 204, 51, 0.45); border-radius: 8px; background: rgba(255, 204, 51, 0.07); }
+
+/* Pause → Pass Time: the day dial, the slider and the quick choices. */
+.ts-panel {
+  display: grid;
+  grid-template-columns: minmax(170px, 230px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+  margin: 10px 0 12px;
+}
+.ts-dial {
+  aspect-ratio: 1;
+  width: 100%;
+  touch-action: none;
+  cursor: pointer;
+}
+.ts-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.ts-now {
+  color: var(--muted);
+}
+.ts-wait {
+  font-family: var(--font-title);
+  color: var(--gold);
+  letter-spacing: 0.04em;
+}
+.ts-slider {
+  width: 100%;
+  accent-color: #f2d38a;
+  min-height: 32px;
+}
+.ts-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ts-preset b {
+  font-weight: 600;
+}
+.ts-block {
+  color: #f0a77c;
+  margin: 0 0 10px;
+}
+.ts-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ts-actions .ps-btn {
+  flex: 1 1 180px;
+}
+@media (max-width: 720px), (max-height: 520px) {
+  .ts-panel {
+    grid-template-columns: minmax(120px, 160px) minmax(0, 1fr);
+    gap: 12px;
+  }
+}
+/* Short windows (mouse): the pause menu's buttons tighten so the whole column, Pass Time included, fits without scrolling. */
+@media (max-height: 600px) and (pointer: fine) {
+  .ps-col {
+    gap: 6px;
+  }
+  .ps-col > .ps-btn {
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+  .ps-col > .divider {
+    margin: 4px 0;
+  }
+}

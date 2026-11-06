@@ -196,7 +196,8 @@ export const DEFAULT_APPEARANCE: Record<Element, Appearance> = {
       belt: 'air_sash',
       headwear: 'none',
       necklace: 'air_prayer_beads',
-      accessory: 'none',
+      // An Air Nomad carries the glider staff (on the back; it opens into wings to fly).
+      accessory: 'air_glider',
     },
     colors: { primary: '#e8a33a', secondary: '#c8642a', accent: '#f4d48a', trim: '#7a3a1a' },
   },

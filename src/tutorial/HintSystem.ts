@@ -21,6 +21,7 @@ const HINTS: Record<string, HintDef> = {
   near_water: { id: 'near_water', text: 'Water nearby! Hold {drawWater} to draw it to you — waterbending needs real water.', touch: 'Water nearby! Hold DRAW to pull it into your hands — waterbending needs real water.' },
   no_water: { id: 'no_water', text: 'No water within reach. Find a river, the sea, a pond or ice — or draw water beforehand and carry it with you.' },
   glide: { id: 'glide', text: 'Hold {jump} while falling to glide on the wind.', touch: 'Hold JUMP while falling to glide on the wind.' },
+  glider: { id: 'glider', text: 'Glider open! Steer with the stick. Tap {jump} to bend a gust under the wings, hold {sprint} to dive for speed (let go to swoop back up), {dodge} to fold it. Updrafts by the temple cliffs lift you for free.', touch: 'Glider open! Steer with the stick. Tap JUMP to bend a gust under the wings, hold SPRINT to dive for speed (let go to swoop back up), DODGE to fold it.' },
   new_element: { id: 'new_element', text: 'You can bend a new element! Press {elementNext} or scroll to switch elements.', touch: 'You can bend a new element! Tap the element button on the left to switch.' },
   master: { id: 'master', text: 'Masters (✦) teach techniques you cannot learn anywhere else. Press {interact} to speak with them.', touch: 'Masters (✦) teach techniques you cannot learn anywhere else. Walk up and tap the speech button to talk to them.' },
   combat: { id: 'combat', text: 'Under attack! {dodge} to dodge, {lockOn} to lock on, hold {aim} to charge a heavy technique.', touch: 'Under attack! Tap DODGE to dodge, LOCK to lock on, and hold HEAVY to charge a heavy technique.' },
@@ -115,6 +116,7 @@ export class HintSystem implements GameSystem, Persistable {
       if (hit && !hit.frozen) this.trigger('near_water');
     }
     if (p.element === 'air' && p.body && !p.body.grounded && p.body.velocity.y < -8 && !p.gliding) this.trigger('glide');
+    if (p.glider) this.trigger('glider');
     // Playful bending: once something to play with has been in view for a moment.
     if (p.element !== 'air' && !this.seen.has('play_' + p.element)) {
       const k = p.play.hintFor();

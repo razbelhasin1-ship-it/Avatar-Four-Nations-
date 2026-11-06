@@ -151,6 +151,10 @@ export interface LocomotionState {
   sprinting: boolean;
   swimming: boolean;
   gliding: boolean;
+  /** Gliding under an open glider (hanging from its shaft) rather than on spread arms. */
+  glider?: boolean;
+  /** How steeply the glider dives (0 level .. 1 full dive): the flier tucks and tips forward. */
+  glideDive?: number;
   sliding: boolean;
   mounted: boolean;
   /** Seated/kneeling/meditating idle (overrides locomotion). 'sphere' = suspended in the Elements Sphere. */
@@ -472,6 +476,8 @@ export class Animator {
   };
   /** Hand closure 0 (open) .. 1 (fist), [left, right] — read by Humanoid each frame. */
   readonly fist: [number, number] = [0.25, 0.25];
+  /** Least hand closure, [left, right], set by whoever puts something in the hands (a staff's grip). */
+  readonly grip: [number, number] = [0, 0];
   /** Footstep callback (foot plant during locomotion). */
   onFootstep: ((foot: 'L' | 'R') => void) | null = null;
 
@@ -979,7 +985,33 @@ export class Animator {
 
     // ---- Glide (airbender) ----
     const g = this.glideBlend;
-    if (g > 0.001) {
+    if (g > 0.001 && L.glider) {
+      // Hanging from an open glider (the show's pose): body stretched out flat beneath the shaft,
+      // both arms up over the head gripping it, legs together and trailing, eyes ahead. A dive
+      // tips the body down and tucks the knees a little; a turn banks the whole body.
+      const dive = clamp01(L.glideDive ?? 0);
+      const sway = Math.sin(t * 2.3) * 0.03;
+      this.blendLoco('hips', 1.32 + dive * 0.22, 0, this.lean * 1.5, g);
+      this.blendLoco('spine', -0.1, 0, 0, g);
+      this.blendLoco('chest', -0.12 - dive * 0.06, 0, 0, g);
+      this.blendLoco('neck', -0.42, 0, 0, g);
+      this.blendLoco('head', -0.62 + dive * 0.15, 0, 0, g);
+      this.blendLoco('upperArmL', -3.0 + sway, 0, -0.16, g);
+      this.blendLoco('upperArmR', -3.0 - sway, 0, 0.16, g);
+      this.blendLoco('foreArmL', -0.32, 0, 0, g);
+      this.blendLoco('foreArmR', -0.32, 0, 0, g);
+      this.blendLoco('handL', 0.25, 0, 0, g);
+      this.blendLoco('handR', 0.25, 0, 0, g);
+      this.blendLoco('thighL', 0.08 - dive * 0.25, 0, 0.03, g);
+      this.blendLoco('thighR', 0.12 - dive * 0.25, 0, -0.03, g);
+      this.blendLoco('shinL', 0.18 + dive * 0.45, 0, 0, g);
+      this.blendLoco('shinR', 0.12 + dive * 0.45, 0, 0, g);
+      this.blendLoco('footL', 0.75, 0, 0, g);
+      this.blendLoco('footR', 0.75, 0, 0, g);
+      this.hipsY = lerp(this.hipsY, 0, g);
+      this.hipsZ = lerp(this.hipsZ, 0, g);
+      fist = lerp(fist, 1, g);
+    } else if (g > 0.001) {
       const flutter = Math.sin(t * 7) * 0.04;
       this.blendLoco('hips', 1.15, 0, this.lean * 1.2, g);
       this.blendLoco('spine', -0.15, 0, 0, g);
@@ -1294,8 +1326,8 @@ export class Animator {
       hipsZ -= f * 0.035;
     }
 
-    this.fist[0] = clamp01(fistL);
-    this.fist[1] = clamp01(fistR);
+    this.fist[0] = Math.max(clamp01(fistL), this.grip[0]);
+    this.fist[1] = Math.max(clamp01(fistR), this.grip[1]);
 
     // Planted feet stay planted when clips move the hips but not the legs.
     // Mid-spin the legs follow the hips (pivot) instead of being re-planted.

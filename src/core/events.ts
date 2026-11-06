@@ -161,6 +161,13 @@ export interface GameEvents {
   // ---- water surfaces (src/world/WaterLife) ----
   /** Spent water fell back to the world at (x, z): into a source it refills, open water, or a puddle (sourceId). */
   'water:released': { x: number; y: number; z: number; amount: number; sourceId: string | null };
+
+  // ---- glider staff (src/player/glider) ----
+  /** The player bent a gust of wind under an open glider (chi left after it). */
+  'glider:gust': { chi: number };
+  // ---- time of day (src/world/TimeSkip) ----
+  /** Time was passed from the pause menu: from/to are hours of day, `hours` how long it waited. */
+  'time:skipped': { from: number; to: number; hours: number };
 }
 
 export type GameEventName = keyof GameEvents;

@@ -11,6 +11,10 @@ import { Entity, Health, type HitInfo, type HitResult } from '../entities/Entity
 import { KinematicBody } from '../entities/KinematicBody';
 import { originStart } from '../data/starts';
 import { cosmeticById } from '../data/cosmetics';
+import { windRing } from '../vfx/effects/wind';
+import { GLIDER, gust, newGliderState, stepGlider, type GliderState } from './glider/flight';
+import { GliderStaff } from './glider/GliderStaff';
+import { UpdraftField } from './glider/Updrafts';
 import { ElementPlay } from './play/ElementPlay';
 
 /** Movement profile per element (the Avatar moves in the style of the active element). */
@@ -51,9 +55,17 @@ const SURFACE_SOUND: Partial<Record<SurfaceType, string>> = {
 
 const DEFORMABLE: ReadonlySet<SurfaceType> = new Set<SurfaceType>(['snow', 'packedsnow', 'sand', 'mud', 'ash']);
 
+/** Air techniques bent with empty hands (the glider staff stays on the back). */
+const FREE_HANDS: ReadonlySet<string> = new Set(['air_scooter']);
+/** Airbending bent through the glider staff (the wind leaves from its head) hits this much harder. */
+export const STAFF_AIR_POWER = 1.1;
+
 const tmpA = new THREE.Vector3();
 const tmpB = new THREE.Vector3();
 const tmpC = new THREE.Vector3();
+/** Glider effects' scratch point (tmpC holds the steering wish while the glider flies). */
+const tmpFx = new THREE.Vector3();
+const UP: Readonly<THREE.Vector3> = new THREE.Vector3(0, 1, 0);
 
 export class Player extends Entity implements Combatant, Persistable {
   readonly kind = 'player' as const;
@@ -80,6 +92,22 @@ export class Player extends Entity implements Combatant, Persistable {
   private dodgeCooldown = 0;
   invuln = 0;
   gliding = false;
+  /** The glider staff (a prop of its own while the Glider Staff accessory is worn). */
+  staff: GliderStaff | null = null;
+  /** The open glider's flight (null while folded). */
+  glider: GliderState | null = null;
+  /** Seconds before the glider may open again (just folded). */
+  private gliderWait = 0;
+  /** Seconds the glider has been flying into something solid (it stalls and folds). */
+  private gliderBlocked = 0;
+  /** Folded against a wall: Jump must be let go before it can snap open again (no open-shut flapping). */
+  private gliderRearm = false;
+  /** Updraft columns: their lift, and the wisps that show them. */
+  private updraftField: UpdraftField;
+  /** Seconds the staff stays in the hands after airbending. */
+  private staffLinger = 0;
+  /** Camera pull-back applied for flight (eased; mounts own the camera offsets otherwise). */
+  private camFlight = 0;
   private airJumps = 0;
   private chargeId: string | null = null;
   private chargeTime = 0;
@@ -106,7 +134,7 @@ export class Player extends Entity implements Combatant, Persistable {
     this.team = 'player';
     this.tags.add('player');
     this.appearance = structuredClone(DEFAULT_APPEARANCE.air);
-    this.humanoid = new Humanoid(this.appearance, { castShadow: true });
+    this.humanoid = new Humanoid(this.meshAppearance(this.appearance), { castShadow: true });
     this.root.add(this.humanoid.root);
     this.height = this.humanoid.height;
     this.radius = 0.36;
@@ -114,11 +142,33 @@ export class Player extends Entity implements Combatant, Persistable {
     this.health = new Health(120, 60, 20);
     this.humanoid.animator.onFootstep = (foot) => this.onFootstep(foot);
     this.play = new ElementPlay(ctx, this);
+    this.updraftField = new UpdraftField(ctx);
+    this.syncStaff();
+    // The glider staff channels airbending: a little stronger through its head.
+    ctx.combat.powerMods.push((c, def) => (c === this && this.staff && def.element === 'air' && !FREE_HANDS.has(def.id) ? STAFF_AIR_POWER : 1));
+  }
+
+  /** The look the body mesh is built from: a worn glider staff is a prop of its own (it moves), not part of the mesh. */
+  private meshAppearance(a: Appearance): Appearance {
+    if (cosmeticById(a.outfit.accessory)?.effect !== 'glider') return a;
+    return { ...a, outfit: { ...a.outfit, accessory: 'none_acc' } };
+  }
+
+  /** Create or drop the glider staff prop to match the worn accessory. */
+  private syncStaff(): void {
+    const want = this.hasAccessoryEffect('glider');
+    if (want && !this.staff) this.staff = new GliderStaff(this.humanoid);
+    else if (!want && this.staff) {
+      this.closeGlider(false);
+      this.staff.dispose();
+      this.staff = null;
+    }
   }
 
   setAppearance(a: Appearance): void {
     this.appearance = a;
-    this.humanoid.setAppearance(a);
+    this.humanoid.setAppearance(this.meshAppearance(a));
+    this.syncStaff();
     this.height = this.humanoid.height;
     if (this.body) this.body.height = this.height;
     this.maxWaterReserve = this.hasAccessoryEffect('water_flask') ? 60 : 60;
@@ -136,6 +186,10 @@ export class Player extends Entity implements Combatant, Persistable {
   castOrigin(which: 'handL' | 'handR' | 'hands' | 'chest' | 'feet', out: THREE.Vector3): THREE.Vector3 {
     const h = this.humanoid;
     h.root.updateWorldMatrix(true, true);
+    // Airbending with the staff in hand: the wind leaves from its head.
+    if (this.staff && this.staff.mode === 'hand' && this.element === 'air' && (which === 'handL' || which === 'handR' || which === 'hands')) {
+      return this.staff.tipWorld(out);
+    }
     switch (which) {
       case 'handL':
         return h.anchors.handL.getWorldPosition(out);
@@ -401,7 +455,8 @@ export class Player extends Entity implements Combatant, Persistable {
 
     // Dodge
     this.dodgeCooldown = Math.max(0, this.dodgeCooldown - dt);
-    if (!locked && input.wasPressed('dodge') && this.dodgeCooldown <= 0 && this.chi >= st.dodgeCost && !body.swimming) {
+    // (With the glider open, Dodge folds it instead — see updateGlider.)
+    if (!locked && !this.glider && input.wasPressed('dodge') && this.dodgeCooldown <= 0 && this.chi >= st.dodgeCost && !body.swimming) {
       if (ctx.combat.isCommitted(this)) ctx.combat.interrupt(this, false);
       this.chi -= st.dodgeCost;
       this.dodgeTimer = st.dodgeTime;
@@ -445,10 +500,11 @@ export class Player extends Entity implements Combatant, Persistable {
     } else if (moving && this.dodgeTimer <= 0) {
       desiredYaw = Math.atan2(body.move.x, body.move.z);
     }
-    this.yaw = dampAngle(this.yaw, desiredYaw, st.turn, dt);
+    // A flier turns the glider (updateGlider), not the body.
+    if (!this.glider) this.yaw = dampAngle(this.yaw, desiredYaw, st.turn, dt);
 
-    // Jump / air jump / glide
-    if (!locked && input.wasPressed('jump')) {
+    // Jump / air jump / glide (with the glider open, Jump bends a gust under the wings instead)
+    if (!locked && !this.glider && input.wasPressed('jump')) {
       const coyote = body.airTime < 0.12;
       if ((body.grounded || coyote) && !body.swimming) {
         body.velocity.y = st.jump * ctx.avatar.boosts.jump;
@@ -469,21 +525,26 @@ export class Player extends Entity implements Combatant, Persistable {
         ctx.events.emit('player:jumped', { position: { x: this.root.position.x, y: this.root.position.y, z: this.root.position.z }, double: true });
       }
     }
-    // Airbender glide: hold jump while falling.
-    const canGlide = this.element === 'air' && !body.grounded && !body.swimming && body.velocity.y < -1 && input.isDown('jump') && !locked;
-    if (canGlide !== this.gliding) {
-      this.gliding = canGlide;
-      ctx.events.emit('player:glide', { active: canGlide });
-    }
-    if (this.gliding) {
-      const glider = this.hasAccessoryEffect('glider') ? 1.25 : 1;
-      body.velocity.y = Math.max(body.velocity.y, -2.2 / glider);
-      const fwd = tmpB.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-      const glideSpeed = 12 * glider;
-      body.move.x = damp(body.move.x, fwd.x * glideSpeed + wish.x * 3, 2, dt);
-      body.move.z = damp(body.move.z, fwd.z * glideSpeed + wish.z * 3, 2, dt);
-      if (wishLen > 0.1) this.yaw = dampAngle(this.yaw, Math.atan2(wish.x, wish.z), 2.5, dt);
-      if (Math.random() < dt * 8) ctx.vfx.burst('air', this.castOrigin('hands', tmpA), { count: 1, speed: 0.4 });
+    if (this.staff && this.element === 'air') {
+      // The glider staff: hold Jump while falling to snap the glider open, then fly it.
+      this.updateGlider(dt, wish, wishLen, locked);
+    } else {
+      if (this.glider) this.closeGlider(false);
+      // Airbender glide on spread arms (no glider): hold jump while falling.
+      const canGlide = this.element === 'air' && !body.grounded && !body.swimming && body.velocity.y < -1 && input.isDown('jump') && !locked;
+      if (canGlide !== this.gliding) {
+        this.gliding = canGlide;
+        ctx.events.emit('player:glide', { active: canGlide });
+      }
+      if (this.gliding) {
+        body.velocity.y = Math.max(body.velocity.y, -2.2);
+        const fwd = tmpB.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+        const glideSpeed = 12;
+        body.move.x = damp(body.move.x, fwd.x * glideSpeed + wish.x * 3, 2, dt);
+        body.move.z = damp(body.move.z, fwd.z * glideSpeed + wish.z * 3, 2, dt);
+        if (wishLen > 0.1) this.yaw = dampAngle(this.yaw, Math.atan2(wish.x, wish.z), 2.5, dt);
+        if (Math.random() < dt * 8) ctx.vfx.burst('air', this.castOrigin('hands', tmpA), { count: 1, speed: 0.4 });
+      }
     }
     if (body.grounded) this.airJumps = 0;
 
@@ -491,7 +552,9 @@ export class Player extends Entity implements Combatant, Persistable {
     body.external.multiplyScalar(1); // style applied at impulse time (see receiveHit)
 
     const wasGrounded = body.grounded;
+    const flyFrom = this.glider ? tmpB.copy(this.root.position) : null;
     body.step(dt, this.root.position, ctx.world);
+    if (this.glider && flyFrom) this.afterGliderStep(dt, flyFrom);
     if (body.justLanded) {
       const s = body.lastLandingSpeed;
       anim.notifyLanding(s);
@@ -528,11 +591,173 @@ export class Player extends Entity implements Combatant, Persistable {
     anim.loco.sprinting = sprinting;
     anim.loco.swimming = body.swimming;
     anim.loco.gliding = this.gliding;
+    anim.loco.glider = !!this.glider;
+    anim.loco.glideDive = this.glider ? clamp(-this.glider.pitch / 0.7, 0, 1) : 0;
     anim.loco.sliding = body.sliding;
     anim.loco.mounted = !!this.mountAnchor;
     anim.loco.turnRate = turnRate;
     anim.loco.style = this.element;
     anim.loco.idleVariant = this.poseOverride ?? (ctx.avatar.sphereActive ? 'sphere' : ctx.avatar.active && !body.grounded ? 'float' : 'stand');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Glider (the glider staff)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Fly the glider: hold Jump while falling to snap it open; it stays open until you land, touch
+   * water, fold it (Dodge) or start bending. Steer with the stick; hold Sprint to dive and build
+   * speed, let go to swoop back up; tap Jump to bend a gust of wind under the wings (chi); rising
+   * air over the temple cliffs (updrafts) carries you up for free.
+   */
+  private updateGlider(dt: number, wish: THREE.Vector3, wishLen: number, locked: boolean): void {
+    const ctx = this.ctx;
+    const input = ctx.input;
+    const body = this.body!;
+    this.gliderWait = Math.max(0, this.gliderWait - dt);
+    if (!this.glider) {
+      if (!input.isDown('jump') || body.grounded) this.gliderRearm = false;
+      const canOpen =
+        !locked && !body.grounded && !body.swimming && !body.inWater && body.velocity.y < -1 && input.isDown('jump') && !this.gliderRearm && this.gliderWait <= 0 && !ctx.combat.isBusy(this) && !this.ride && !this.mountAnchor && !ctx.avatar.sphereActive;
+      if (canOpen) this.openGlider();
+      return;
+    }
+    const g = this.glider;
+    if (!locked && input.wasPressed('dodge')) {
+      this.closeGlider(true);
+      return;
+    }
+    if (body.grounded || body.swimming || body.inWater || ctx.combat.isBusy(this) || this.mountAnchor || ctx.avatar.sphereActive) {
+      this.closeGlider(false);
+      return;
+    }
+    const pos = this.root.position;
+    // Bend a gust under the wings.
+    if (!locked && input.wasPressed('jump')) {
+      if (this.chi >= GLIDER.gustCost && gust(g)) {
+        this.chi -= GLIDER.gustCost;
+        const under = tmpFx.copy(pos).setY(pos.y + 0.4);
+        windRing(ctx, under, { r0: 0.4, r1: 2.6, duration: 0.45, height: 0.5, axis: new THREE.Vector3(0, 1, 0), opacity: 0.85 });
+        ctx.vfx.burst('air', under, { count: 16, dir: UP, spread: 1.1, speed: 3.2 });
+        ctx.audio.play('bend_air_puff', { position: pos, volume: 0.75, pitch: 0.8 });
+        ctx.events.emit('glider:gust', { chi: this.chi });
+      } else if (this.chi < GLIDER.gustCost) {
+        ctx.vfx.burst('air', tmpFx.copy(pos).setY(pos.y + 0.4), { count: 4, speed: 0.6 });
+      }
+    }
+    // Steer: the heading turns toward the stick (camera-relative), at a glider's pace.
+    if (!locked && wishLen > 0.1) {
+      const want = Math.atan2(wish.x, wish.z);
+      const step = GLIDER.turnRate * Math.min(1, wishLen) * dt;
+      const d = angleDiff(this.yaw, want);
+      this.yaw += Math.max(-step, Math.min(step, d));
+    }
+    const lift = this.updraftField.liftAt(pos);
+    const dive = !locked && input.isDown('sprint');
+    const v = stepGlider(g, { dive, updraft: lift }, dt);
+    body.gravityScale = 0;
+    body.velocity.y = v.vy;
+    body.move.set(Math.sin(this.yaw) * v.vh, 0, Math.cos(this.yaw) * v.vh);
+    if (this.staff) this.staff.flutter = clamp((g.speed - 6) / 22, 0.15, 1);
+    // Rising air shows as streaks rushing past; wingtip wisps at speed.
+    if (lift > 0.5 && Math.random() < dt * 14) ctx.vfx.burst('air', tmpFx.set(pos.x + (Math.random() - 0.5) * 4, pos.y - 2, pos.z + (Math.random() - 0.5) * 4), { count: 2, dir: UP, speed: 4, spread: 0.2 });
+    if (g.speed > 18 && Math.random() < dt * 10) ctx.vfx.burst('air', tmpFx.copy(pos).setY(pos.y + 1.1), { count: 1, speed: 0.5 });
+  }
+
+  /** After the body moved: flying into something solid stalls the glider and it folds. */
+  private afterGliderStep(dt: number, from: THREE.Vector3): void {
+    const g = this.glider;
+    const body = this.body!;
+    if (!g) return;
+    const want = Math.hypot(body.move.x, body.move.z) * dt;
+    const got = Math.hypot(this.root.position.x - from.x, this.root.position.z - from.z);
+    this.gliderBlocked = want > 0.05 && got < want * 0.35 ? this.gliderBlocked + dt : 0;
+    if (this.gliderBlocked > 0.2) {
+      this.closeGlider(false);
+      this.gliderRearm = true;
+      body.move.multiplyScalar(0.2);
+      return;
+    }
+    if (body.grounded || body.swimming || body.inWater) this.closeGlider(false);
+  }
+
+  private openGlider(): void {
+    const body = this.body!;
+    const hs = Math.hypot(body.move.x, body.move.z);
+    this.glider = newGliderState(Math.max(hs, 9 + Math.min(8, -body.velocity.y * 0.5)));
+    this.gliderBlocked = 0;
+    this.gliding = true;
+    this.airJumps = 0;
+    this.staff?.setMode('glide', 0.14);
+    const pos = this.root.position;
+    this.ctx.events.emit('player:glide', { active: true });
+    this.ctx.audio.play('whoosh', { position: pos, volume: 0.75, pitch: 0.7 });
+    this.ctx.vfx.burst('air', tmpC.copy(pos).setY(pos.y + 1.4), { count: 14, spread: 1.4, speed: 1.6 });
+  }
+
+  /** Fold the glider (byPlayer: Dodge pressed — a short pause before it can snap open again). */
+  closeGlider(byPlayer: boolean): void {
+    if (!this.glider) return;
+    this.glider = null;
+    this.gliding = false;
+    this.gliderWait = byPlayer ? 0.45 : 0.2;
+    const body = this.body!;
+    body.gravityScale = 1;
+    if (this.staff) this.staff.flutter = 0;
+    this.ctx.events.emit('player:glide', { active: false });
+    this.ctx.audio.play('whoosh', { position: this.root.position, volume: 0.45, pitch: 1.35 });
+  }
+
+  /** Fold the glider without a sound (a new journey, a load). */
+  private foldGliderQuietly(): void {
+    if (this.glider) this.ctx.events.emit('player:glide', { active: false });
+    this.glider = null;
+    this.gliding = false;
+    this.gliderWait = 0;
+    this.gliderRearm = false;
+    if (this.body) this.body.gravityScale = 1;
+    if (this.staff) {
+      this.staff.flutter = 0;
+      this.staff.setMode('back', 0);
+    }
+    this.staffLinger = 0;
+    this.updraftField.clear();
+  }
+
+  /**
+   * Where the staff is this frame: open above the back while gliding; in the hands while
+   * airbending (and a moment after); slung on the back otherwise. Also the flight camera.
+   */
+  private updateStaff(dt: number): void {
+    const s = this.staff;
+    const cr = this.ctx.cameraRig;
+    // Flight camera: pull back and up while the glider is open (mounts own the offsets otherwise).
+    const camWant = this.glider && !this.mountAnchor ? 1 : 0;
+    if (camWant || this.camFlight > 0) {
+      this.camFlight = camWant ? Math.min(1, this.camFlight + dt * 1.8) : Math.max(0, this.camFlight - dt * 1.4);
+      if (!this.mountAnchor) {
+        const k = this.camFlight * this.camFlight * (3 - 2 * this.camFlight);
+        cr.extraDistance = 2.4 * k;
+        cr.extraHeight = 0.5 * k;
+      }
+    }
+    // Wisps show the updraft columns (always for a glider, else with the ambient effects).
+    this.updraftField.update(dt, !!s || this.ctx.settings.data.graphics.ambientEffects);
+    if (!s) return;
+    const anim = this.humanoid.animator;
+    const cast = this.ctx.combat.activeCast(this);
+    const airCast = !!cast && cast.phase !== 'done' && cast.def.element === 'air' && !FREE_HANDS.has(cast.def.id);
+    if (airCast || (this.chargeId && this.element === 'air')) this.staffLinger = 2.2;
+    else this.staffLinger = Math.max(0, this.staffLinger - dt);
+    let mode: 'back' | 'hand' | 'glide' = 'back';
+    if (this.glider) mode = 'glide';
+    else if (this.element === 'air' && this.staffLinger > 0 && !this.mountAnchor && !this.defeated) mode = 'hand';
+    s.setMode(mode, mode === 'hand' ? 0.1 : mode === 'glide' ? 0.14 : 0.3);
+    s.update(dt);
+    // Fists close round the shaft while it is held.
+    const held = mode === 'hand' ? 1 : 0;
+    anim.grip[0] = held;
+    anim.grip[1] = held;
   }
 
   // ---------------------------------------------------------------------------
@@ -620,7 +845,8 @@ export class Player extends Entity implements Combatant, Persistable {
     this.invuln = Math.max(0, this.invuln - dt);
     this.sinceCombat += dt;
     // Chi regeneration (faster out of combat).
-    this.chi = Math.min(this.maxChi, this.chi + (this.sinceCombat > 4 ? 26 : 13) * dt);
+    // (Flying a glider, bending the wind keeps the mind busy: chi returns slowly.)
+    this.chi = Math.min(this.maxChi, this.chi + (this.glider ? GLIDER.chiRegen : this.sinceCombat > 4 ? 26 : 13) * dt);
     // Slow health regen out of combat.
     if (this.sinceCombat > 8 && !this.defeated) h.heal(4 * dt);
 
@@ -638,6 +864,7 @@ export class Player extends Entity implements Combatant, Persistable {
       if (!ctx.ui.blocksGameplay) this.handleCombatInput(dt);
       else this.play.update(dt, false);
       this.humanoid.update(dt);
+      this.updateStaff(dt);
       return;
     }
 
@@ -645,8 +872,10 @@ export class Player extends Entity implements Combatant, Persistable {
       this.play.update(dt, false);
       this.defeatTimer += dt;
       this.body!.move.set(0, 0, 0);
+      if (this.glider) this.closeGlider(false);
       this.body!.step(dt, this.root.position, ctx.world);
       this.humanoid.update(dt);
+      this.updateStaff(dt);
       return;
     }
 
@@ -663,6 +892,7 @@ export class Player extends Entity implements Combatant, Persistable {
     else this.play.update(dt, false);
     this.updateSafePoint(dt);
     this.humanoid.update(dt);
+    this.updateStaff(dt);
   }
 
   // ---------------------------------------------------------------------------
@@ -687,6 +917,7 @@ export class Player extends Entity implements Combatant, Persistable {
   }
 
   deserialize(data: any): void {
+    this.foldGliderQuietly();
     if (!data || typeof data !== 'object') return;
     if (typeof data.name === 'string') this.characterName = data.name.slice(0, 24) || 'Avatar';
     const start = this.ctx.progression.startingElement;
@@ -705,6 +936,7 @@ export class Player extends Entity implements Combatant, Persistable {
   }
 
   reset(): void {
+    this.foldGliderQuietly();
     this.characterName = 'Avatar';
     this.element = 'air';
     this.chi = this.maxChi;

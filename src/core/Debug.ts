@@ -230,6 +230,36 @@ export function installDebug(game: Game): void {
     errors: [] as string[],
     debug: {} as Record<string, unknown>,
   };
+  api.debug.glider = {
+    /** The glider staff and its flight (staff: false without the Glider Staff accessory). */
+    state() {
+      const p = game.player;
+      const s = p.staff;
+      const g = p.glider;
+      return {
+        staff: !!s,
+        mode: s?.mode ?? null,
+        open: s?.open ?? 0,
+        inHands: s?.inHands ?? false,
+        gliding: p.gliding,
+        flying: !!g,
+        speed: g?.speed ?? 0,
+        pitch: g?.pitch ?? 0,
+        lift: g?.lift ?? 0,
+        chi: p.chi,
+        y: p.position.y,
+        grip: [...p.humanoid.animator.grip],
+        meshAccessory: p.humanoid.appearance.outfit.accessory,
+      };
+    },
+    /** The staff head in world space (where airbending leaves from while it is held), or null. */
+    tip() {
+      const s = game.player.staff;
+      if (!s) return null;
+      const v = s.tipWorld(new THREE.Vector3());
+      return { x: v.x, y: v.y, z: v.z };
+    },
+  };
   window.addEventListener('error', (e) => api.errors.push(String(e.message)));
   window.addEventListener('unhandledrejection', (e) => api.errors.push(String((e as PromiseRejectionEvent).reason)));
   (window as any).__game = api;

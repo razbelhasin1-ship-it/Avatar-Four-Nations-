@@ -40,6 +40,7 @@ Screenshots are how you judge visuals — take them, open them with the Read too
 | `world/Heightfield.ts` | Pure terrain functions: `heightAt`, `waterAt`, `biomeWeights`, `materialAt`, runtimes for rivers/lakes/roads |
 | `world/Terrain.ts` `Water.ts` `Sky.ts` | Chunked LOD terrain, water surfaces, sky/time-of-day |
 | `world/World.ts` | Facade: ground/water/surface/region queries, raycast, region content streaming, `world.fx` env hooks, discoveries |
+| `world/TimeSkip.ts` | Pass Time (pause menu): wait until an hour with a time-lapse; not near enemies, in mid-air, mounted or defeated (`__game.debug.time`) |
 | `world/Collision.ts` | Static/dynamic colliders (Y-rotated boxes, cylinders, spheres; walkable tops, ramps) |
 | `world/env/WaterShared.ts` `WaterLook.ts` `WaterLife.ts` | What every water surface shares (tones per kind of water, the ripple field, lighting); basin/vessel water material (fountains, ponds, canals, puddles, jars); `water_life` system (basin levels follow their source, wakes, draw/splash rings, bent-water tone) |
 | `world/kit/Paving.ts` | Procedural paving (flagstones, setts, slabs, packed earth): albedo + normal + roughness, world-space mapped, built progressively between frames |
@@ -48,7 +49,7 @@ Screenshots are how you judge visuals — take them, open them with the Read too
 | `world/Interactables.ts` | E-prompt interactions (`ctx.interactions.register(...)`) |
 | `entities/` | `Entity` (health/poise/status/receiveHit), `KinematicBody`, `EntityManager` (spatial queries), `TrainingDummy` |
 | `character/` | `Humanoid` (procedural rigged model), `Animator` (clips + procedural locomotion), `Appearance` data, base clips |
-| `player/` | `Player` (Combatant; movement styles per element; aim; input→techniques), `CameraRig`; `play/` = held-attack play while exploring (water orb from real sources incl. snow and ice, lifting real rocks or stones torn from the ground — `Stones.ts` keeps them as re-liftable loose stones, palm flame; never Air) |
+| `player/` | `Player` (Combatant; movement styles per element; aim; input→techniques), `CameraRig`; `play/` = held-attack play while exploring (water orb from real sources incl. snow and ice, lifting real rocks or stones torn from the ground — `Stones.ts` keeps them as re-liftable loose stones, palm flame; never Air); `glider/` = the Glider Staff (`GliderStaff` prop on the back / in the hands / open as wings; `flight.ts` pure glide model — cruise, dive and zoom climb, stall, gusts; `Updrafts.ts` updraft columns over the temple cliffs: lift and wind streaks) |
 | `combat/` | `types.ts` contracts, `CombatSystem` (casts, projectiles, hits), `WaterSources.ts`, `techniques/` |
 | `vfx/` | `VFXSystem` (particle presets, emitters, rings, flashes, transients) |
 | `audio/AudioEngine.ts` | Procedural WebAudio; `registerSound` / `registerLoop`; music themes |
