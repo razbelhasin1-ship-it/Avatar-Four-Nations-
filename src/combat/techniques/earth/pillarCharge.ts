@@ -20,8 +20,8 @@ import { bendableAt } from './common';
  * there) and the pillar tears along the ground with you riding on top, homes on an enemy and slams into it.
  *
  * The pillar is the one you raised (same stone, same collider), driven kinematically by a motion curve:
- * a short wind-up (it shudders and leans back), an ease in to peak speed, a cruise and a short ease out into
- * the impact. Each frame the driver moves the pillar first, then you with it (you are attached to its top,
+ * the launch (it shudders and leans back as it eases in to peak speed), a cruise and a short ease out into
+ * the impact: a target 20 m away is reached in 0.8 s. Each frame the driver moves the pillar first, then you with it (you are attached to its top,
  * your feet where they stood), then the camera follows: pillar → rider → camera.
  *
  * After the slam you can chain another charge within the window (up to `chain` per pillar, each costing chi);
@@ -40,7 +40,7 @@ const EARTH_HEAVY_DAMAGE = 14 + 18;
 export const PILLAR_CHARGE = {
   /** Peak speed, × your Earth sprint speed (9 m/s → 27 m/s). */
   speedMul: 3,
-  /** Wind-up before it moves (s): the pillar shudders and leans back. */
+  /** Launch (s): the stone shudders for this long and leans back over twice it, while it eases in. */
   windup: 0.1,
   /** Ease in to peak speed (s). */
   rampUp: 0.2,
@@ -96,7 +96,7 @@ const SUB = 1 / 60;
 /** Ground a pillar cannot be driven across (as earth/common.ts: no earth to bend there). */
 const NOT_EARTH: ReadonlySet<string> = new Set(['water', 'ice', 'wood', 'metal', 'lava']);
 
-type Phase = 'windup' | 'charge' | 'brake' | 'slam' | 'chain' | 'lower';
+type Phase = 'charge' | 'brake' | 'slam' | 'chain' | 'lower';
 export type SlamReason = 'target' | 'heavy' | 'blocked' | 'ledge' | 'distance';
 
 interface Ride {
@@ -285,10 +285,11 @@ class ChargeFeel {
       ctx.vfx.burst('dust', at, { count: this.laterSmall ? 12 : 24, radius: (this.laterSmall ? 3 : 5) * 0.45, speed: this.laterSmall ? 1.6 : 2.4 });
       ctx.world.fx.disturb(at, (this.laterSmall ? 3 : 5) + 1, 1);
     }
-    const moving = !!r && (r.phase === 'windup' || r.phase === 'charge' || r.phase === 'brake');
+    const moving = !!r && (r.phase === 'charge' || r.phase === 'brake');
     const k = r && moving ? Math.min(1, r.speed / r.peak) : 0;
     // Camera: pull back and widen with speed (anticipation on the wind-up), critically damped both ways.
-    const want = r?.phase === 'windup' ? 0.2 : k;
+    // (A little anticipation as it sets off.)
+    const want = r?.phase === 'charge' && r.t < 2 * PC.windup ? Math.max(0.2, k) : k;
     const pull = spring(this.pull, PC.camPull * want, 6, dt);
     const fov = spring(this.fov, PC.camFov * want, 6, dt);
     const cr = ctx.cameraRig;
@@ -526,7 +527,7 @@ class PillarChargeDriver {
     const pos = pillar.group.position;
     const dist = Math.min(PC.maxDistance, Math.max(PC.minDistance, pick.distance));
     const ride: Ride = {
-      phase: 'windup',
+      phase: 'charge',
       t: 0,
       cast,
       pillar,
@@ -567,7 +568,7 @@ class PillarChargeDriver {
   /** Channel tick of the cast: it lasts while the pillar winds up, charges and slams. */
   channelKeep(cast: Cast): boolean {
     const r = this.ride;
-    return !!r && r.cast === cast && (r.phase === 'windup' || r.phase === 'charge' || r.phase === 'brake' || r.phase === 'slam');
+    return !!r && r.cast === cast && (r.phase === 'charge' || r.phase === 'brake' || r.phase === 'slam');
   }
 
   /** The cast ended; if it was cut short mid-charge (you were knocked out of it), stop safely. */
@@ -575,7 +576,7 @@ class PillarChargeDriver {
     const r = this.ride;
     if (!r || r.cast !== cast) return;
     r.cast = null;
-    if (interrupted && (r.phase === 'windup' || r.phase === 'charge')) this.brake(r);
+    if (interrupted && r.phase === 'charge') this.brake(r);
   }
 
   // -------------------------------------------------------------------------------------------- frame
@@ -634,16 +635,13 @@ class PillarChargeDriver {
       return;
     }
     // Stunned, a cutscene taking the camera, or Earth put away: stop safely (no slam) and set you down.
-    if ((r.phase === 'windup' || r.phase === 'charge') && (p.stunned > 0 || ctx.cameraRig.isScripted || p.element !== 'earth')) this.brake(r);
+    if (r.phase === 'charge' && (p.stunned > 0 || ctx.cameraRig.isScripted || p.element !== 'earth')) this.brake(r);
     // A modal over the game: hold the move where it is (you stay on) unless it is already stopping safely.
     if (ctx.ui.blocksGameplay && r.phase !== 'brake' && r.phase !== 'lower') {
       if (this.attached(r)) this.attach(r);
       return;
     }
     switch (r.phase) {
-      case 'windup':
-        this.windup(ctx, r, dt);
-        break;
       case 'charge':
         this.charge(ctx, r, dt);
         break;
@@ -666,21 +664,6 @@ class PillarChargeDriver {
     }
   }
 
-  private windup(_ctx: GameContext, r: Ride, dt: number): void {
-    r.t += dt;
-    const k = Math.min(1, r.t / PC.windup);
-    // Lean back a few degrees and shudder (the stone only: you ride the lean, not the shudder).
-    r.tilt = -PC.windupTiltDeg * DEG * Math.sin(k * Math.PI * 0.5);
-    const s = 0.025 * (1 - k * 0.5);
-    r.jx = (Math.random() - 0.5) * s;
-    r.jz = (Math.random() - 0.5) * s;
-    if (r.t >= PC.windup) {
-      r.phase = 'charge';
-      r.t = 0;
-      r.jx = r.jz = 0;
-    }
-  }
-
   /** Distance left to where the pillar should stop (m). */
   private remaining(r: Ride): number {
     const left = Math.max(0, r.plan - r.travelled);
@@ -690,8 +673,19 @@ class PillarChargeDriver {
   }
 
   private charge(ctx: GameContext, r: Ride, dt: number): void {
-    // Ease back out of the wind-up lean as it sets off.
-    r.tilt *= Math.exp(-dt * 18);
+    // The launch, over the ease-in: the stone shudders and leans back a few degrees as it surges forward (like a
+    // cart squatting under the pull), then rights itself. (The shudder moves the stone only, not you.)
+    const w = PC.windup;
+    if (r.t < 2 * w) {
+      const k = r.t / (2 * w);
+      r.tilt = -PC.windupTiltDeg * DEG * Math.sin(k * Math.PI);
+      const sh = r.t < w ? 0.025 * (1 - r.t / w) : 0;
+      r.jx = (Math.random() - 0.5) * sh;
+      r.jz = (Math.random() - 0.5) * sh;
+    } else {
+      r.tilt *= Math.exp(-dt * 18);
+      r.jx = r.jz = 0;
+    }
     // The stick nudges the heading (camera-relative, like walking), at a capped turn rate.
     const mv = ctx.input.move;
     const camF = ctx.camera.getWorldDirection(tmpB).setY(0);
@@ -842,7 +836,7 @@ class PillarChargeDriver {
   }
 
   private brake(r: Ride): void {
-    if (r.phase === 'charge' || r.phase === 'windup') {
+    if (r.phase === 'charge') {
       r.phase = 'brake';
       r.t = 0;
     }
@@ -1133,11 +1127,9 @@ class PillarChargeDriver {
       r.rider.yaw = dampAngle(r.rider.yaw, r.heading, 14, dt);
       r.rider.root.rotation.y = r.rider.yaw;
       // Lean into the speed; on the slam ride half the stone's pitch and brace (a small crouch).
-      want = (r.speed / r.peak) * PC.leanDeg * DEG;
-      if (r.phase === 'slam' || r.phase === 'windup') {
-        want += r.tilt * 0.5;
-        crouch = r.phase === 'slam' ? 0.1 * Math.min(1, Math.abs(r.tilt) / (PC.slamTiltDeg * DEG)) : 0.04;
-      }
+      want = (r.speed / r.peak) * PC.leanDeg * DEG + r.tilt * 0.5;
+      if (r.phase === 'slam') crouch = 0.1 * Math.min(1, Math.abs(r.tilt) / (PC.slamTiltDeg * DEG));
+      else if (r.phase === 'charge' && r.t < 2 * PC.windup) crouch = 0.04;
     }
     if (!ctx.ui.blocksGameplay) {
       this.lean += (want - this.lean) * Math.min(1, dt * 10);
