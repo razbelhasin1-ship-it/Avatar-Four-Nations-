@@ -301,26 +301,36 @@ export const MEDIA: Record<string, MediaInfo> = {
     lqip: "data:image/webp;base64,UklGRp4AAABXRUJQVlA4IJIAAACwBACdASoYAAsAPtFUo0uoJKMhsAgBABoJYgCdMoMjkn/AfGD0adZtMV3mZVoAAPoPfz2Y9wGBo0z5CfhJBLNZ1GTk7hgYRitmzI2odcyJ+Yy5xFzMpWWy1B5CPuz2WtU6XDjmAd8xJiCfuhUVbuWSRjk5eFzS2d8trbPgBvmLKbIbyhwkHenRA5845bPNCAAAAA=="
   },
   "phone_earth": {
-    w: 1600,
-    h: 900,
+    w: 1688,
+    h: 780,
     widths: [
       640,
       1024,
-      1600
+      1688
     ],
-    lqip: "data:image/webp;base64,UklGRmQAAABXRUJQVlA4IFgAAACQAwCdASoYAA4APtFWpEwoJKOiMAgBABoJYwCdAC0jGYYkhn9AAP7vp+6zubtWNYY+eP395ejNJwOAH5kbFDvEc/J9VSAlHNxMLYBKhwK9JCIF5NOS3KQA"
+    lqip: "data:image/webp;base64,UklGRngAAABXRUJQVlA4IGwAAABQBACdASoYAAsAPtFUpEuoJKOhsAgBABoJQBOmUABwUIMcbTdcYSr7OavAAPhiF1U9ieVzWMB4fAsTBGGewr1nmA31op3Ws7duBolu563Jv1ERzWhdHNpwWdJ46h5UzGUrPsjMkOvMV8PAAAA="
   },
   "phone_fire": {
-    w: 1600,
-    h: 900,
+    w: 1688,
+    h: 780,
     widths: [
       640,
       1024,
-      1600
+      1688
     ],
-    lqip: "data:image/webp;base64,UklGRpAAAABXRUJQVlA4IIQAAAAQBACdASoYAA4APtFUo0uoJKMhsAgBABoJbACdMoABz+3Gi09S68mc2AD1mWXDk9rEiln+mCVjkOsvYgjxoTDwVPbRM7X27ZlZEvbrSnaIu33ynwdsEKmsnN5lEaBMr3Jb2pet5c/p3+r4gOCGJEgAmuw3YktGsd2xdIQxIUmt8CwAAAA="
+    lqip: "data:image/webp;base64,UklGRooAAABXRUJQVlA4IH4AAABQBACdASoYAAsAPtFWpEuoJKOhsAgBABoJaACdMoADaYgAK2JCreV+9C2AAP7kaXefjYQdyI2WzQXLapyxjzwZIN1vsTz1gVEFDYOakssQm/09ZmkGtj1fzuzn1aEUhFW294ASmOxfv8f3QRojoZ7DtB40yCfZ4as6c2eAAAA="
   },
   "phone_air": {
+    w: 1688,
+    h: 780,
+    widths: [
+      640,
+      1024,
+      1688
+    ],
+    lqip: "data:image/webp;base64,UklGRnwAAABXRUJQVlA4IHAAAADwAwCdASoYAAsAPtFUo0uoJKMhsAgBABoJYwCw7BbfDzrRQz1nLjAAAMyVlL2Rq4H37pVSI6VfpnYgzRHhnWom4n94+mGpkLse4N/oEhoDd4royM2QDuycwa2YtfUMretGVDFf897KZuiDgAXXVgAA"
+  },
+  "ki_village": {
     w: 1600,
     h: 900,
     widths: [
@@ -328,24 +338,16 @@ export const MEDIA: Record<string, MediaInfo> = {
       1024,
       1600
     ],
-    lqip: "data:image/webp;base64,UklGRoQAAABXRUJQVlA4IHgAAABQBACdASoYAA4APtFWo0uoJKMhsAgBABoJagCsMoACjqvIww2ojrOUiZxgAPzhj76c/i2vSqo35OfGiFztFbNaLMAIyGmYqLPs4OPlmXUkzV0rM62MZrNaqoDoSJfreayk2HkBvFixw3AczcEoFDRzuMCLUDT5WAA="
-  },
-  "ki_village": {
-    w: 1040,
-    h: 480,
-    widths: [
-      640,
-      1040
-    ],
-    lqip: "data:image/webp;base64,UklGRmgAAABXRUJQVlA4IFwAAAAQBACdASoYAAsAPtFUo0uoJKMhsAgBABoJYgCdMoADUw1+2XbH+RREAAD+5B+73DZZxzmlRzyyiBUK5XMaey6JIer/CTS2/nBFCDqop/z/XMgKbvv5t2QGT8AAAA=="
+    lqip: "data:image/webp;base64,UklGRpgAAABXRUJQVlA4IIwAAAAwBACdASoYAA4APtFYpEuoJSOhsAgBABoJYgCdMoADKtytxV/TSnHJd4QA/u+SN0mUeNpIwSKQWYcdO7U45DIclYCqGmiTmXZhGTwFf8hKXhBSJaRdGv02/PkgWdITbcIWuMYX+dJ/zeqoZD0POaOdgDX1SxV37tWQaUZrQfn4oDjYFqp3lXXzCHgAAA=="
   },
   "ki_hall": {
-    w: 1040,
-    h: 480,
+    w: 1600,
+    h: 900,
     widths: [
       640,
-      1040
+      1024,
+      1600
     ],
-    lqip: "data:image/webp;base64,UklGRnYAAABXRUJQVlA4IGoAAAAQBACdASoYAAsAPtFUpEuoJKOhsAgBABoJZgCdABbcXrfhOLq1j0gRgAD+8srrlg6DNCUcxeFY9KI49EX80dHpbt1TUGcGb62xJmEMRrHzBns8wAFKZo2VIIApoc6Ib9NXhhV6P2r0A4AA"
+    lqip: "data:image/webp;base64,UklGRpgAAABXRUJQVlA4IIwAAABQBACdASoYAA4APtFWo0uoJKMhsAgBABoJQBOkBshFhoY6aeLp5G4u/d0IAP6qHj2pxIceXAOFGqT4PO9eSRemXaVLnvPC48r+eqctwNeCg23/ROvbg/SLm+aIkc7FMrbEx8lbgesfuqNYY2brDd5V+MYaEOL9gMK2hwAiUyeEXGXa25qW0o9s2AAAAA=="
   }
 };

@@ -52,9 +52,9 @@ SOURCES = {
     # Played on a phone: the game's touch layout, shown inside a phone frame on the site.
     'phone_hero': ('website/phone_hero.jpg', 0),
     'phone_water': ('website/phone_water.jpg', 0),
-    'phone_earth': ('website/rock_armor.jpg', 0),
-    'phone_fire': ('website/fire_stream.jpg', 0),
-    'phone_air': ('website/air_scooter.jpg', 0),
+    'phone_earth': ('website/phone_earth.jpg', 0),
+    'phone_fire': ('website/phone_fire.jpg', 0),
+    'phone_air': ('website/phone_air.jpg', 0),
     'ki_village': ('website/ki_village.jpg', 0),
     'ki_hall': ('website/ki_hall.jpg', 0),
 }

@@ -23,10 +23,10 @@ const NATION_MEDIA: Record<ElementId, { key: string; alt: string }> = {
 };
 
 const SHOWCASE: Record<ElementId, { key: string; caption: string; signature: string[] }> = {
-  water: { key: 'phone_water', caption: 'A Water Whip drawn from a pond, with the touch controls', signature: ['water_whip', 'octopus_form', 'water_spout', 'ice_prison'] },
-  earth: { key: 'phone_earth', caption: 'Rock Armor in a Ba Sing Se courtyard', signature: ['rock_armor', 'earth_surf', 'boulder_roll', 'seismic_sense'] },
-  fire: { key: 'phone_fire', caption: 'A stream of fire in the Fire Nation', signature: ['dancing_dragon', 'fire_lightning', 'fire_stream', 'fire_shield'] },
-  air: { key: 'phone_air', caption: 'The Air Scooter at the Southern Air Temple', signature: ['air_scooter', 'air_vortex', 'air_redirect', 'air_jump'] },
+  water: { key: 'phone_water', caption: 'A Water Whip drawn from Lake Hiari', signature: ['water_whip', 'octopus_form', 'water_spout', 'ice_prison'] },
+  earth: { key: 'phone_earth', caption: 'A Pillar Charge into Fire Nation soldiers outside Ba Sing Se', signature: ['rock_armor', 'earth_surf', 'boulder_roll', 'seismic_sense'] },
+  fire: { key: 'phone_fire', caption: 'A Fire Stream across the Royal Plaza at dusk', signature: ['dancing_dragon', 'fire_lightning', 'fire_stream', 'fire_shield'] },
+  air: { key: 'phone_air', caption: 'Gliding to the Southern Air Temple on the glider staff', signature: ['air_scooter', 'air_vortex', 'air_redirect', 'air_jump'] },
 };
 
 const GALLERY: Array<{ key: string; title: string; text: string }> = [
@@ -35,7 +35,7 @@ const GALLERY: Array<{ key: string; title: string; text: string }> = [
   { key: 'place_bss', title: 'Ba Sing Se', text: 'The rings and walls of the Earth Kingdom’s capital' },
   { key: 'fire_stream', title: 'Harbor City', text: 'Firebending at dusk in the Fire Nation Capital' },
   { key: 'swt_aurora', title: 'Wolf Cove', text: 'The aurora over the Southern Water Tribe’s festival' },
-  { key: 'ki_village', title: 'Kyoshi Island', text: 'The village street: thatched houses, lanterns and market stalls' },
+  { key: 'ki_village', title: 'Kyoshi Island', text: 'The village street, its thatch and lit paper lanterns' },
   { key: 'bss_train', title: 'Ba Sing Se', text: 'A monorail train on its viaduct' },
   { key: 'water_spout', title: 'Lake Hiari', text: 'Riding a water spout at sunset' },
   { key: 'nwt_oasis', title: 'The Spirit Oasis', text: 'The koi pond at the heart of Agna Qel’a' },
@@ -46,7 +46,7 @@ const GALLERY: Array<{ key: string; title: string; text: string }> = [
   { key: 'swt_lamps', title: 'Wolf Cove', text: 'Igloos by lamplight' },
   { key: 'fnc_throne', title: 'The royal palace', text: 'The throne room behind its wall of fire' },
   { key: 'ki_beach', title: 'Kyoshi Island', text: 'The bay below the village' },
-  { key: 'ki_hall', title: 'Kyoshi Island', text: 'The Meeting Hall at the top of the village street' },
+  { key: 'ki_hall', title: 'Kyoshi Island', text: 'The Meeting Hall, its elders seated on the porch benches' },
 ];
 
 const ELEMENTS: ElementId[] = ['water', 'earth', 'fire', 'air'];
