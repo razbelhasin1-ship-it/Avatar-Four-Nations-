@@ -4,7 +4,7 @@ import { heightAt } from '../../Heightfield';
 import { A, KI, KI_ROADS, yawOutward } from '../../landforms/kyoshiIsland';
 import type { P2 } from '../../WorldLayout';
 import type { BuildEnv } from '../earth/env';
-import { barrel, fence, house, lanternPost, laundry, off, paperWindow, type Mat } from './kit';
+import { barrel, fence, gableRoof, house, lanternPost, laundry, off, paperWindow, profileWallGeometry, type Mat } from './kit';
 import type { KyoshiMats } from './materials';
 
 /**
@@ -264,11 +264,20 @@ function meetingHall(env: BuildEnv, out: VillageOut, km: KyoshiMats): void {
     const p = off(c, yaw, s * (W / 2 - 1.6), D / 2 + 0.12);
     b.box('wood_dark', { x: p.x, y: fy + wallH / 2, z: p.z, sx: 0.24, sy: wallH, sz: 0.12, yaw });
   }
-  // The A-frame: ridge along the hall's length, thick thatch (a second, wider layer shows its depth).
-  b.roof(km.thatch, { x: c.x, y: ry, z: c.z, w: D, d: W, height: roofH, yaw: yaw + Math.PI / 2, overhang: eave, curve: 0.05, style: 'gable', ridge: null });
-  const h1 = W / 2 + eave, h2 = h1 + 0.5;
-  const drop = roofH * (1 - h1 / h2) + 0.12;
-  b.roof(km.thatch, { x: c.x, y: ry - drop, z: c.z, w: D + 1, d: W + 1, height: roofH, yaw: yaw + Math.PI / 2, overhang: eave, curve: 0.05, style: 'gable', ridge: null });
+  // The A-frame: ridge along the hall's length, thick thatch in two layers, open at the gable ends over
+  // plaster gables cut to its underside. (Roof frame: its X runs along the ridge toward the back.)
+  const under = gableRoof(b, km.thatch, { x: c.x, y: ry, z: c.z, yaw: yaw + Math.PI / 2, w: D, d: W, height: roofH, overhang: eave, curve: 0.05, thick: 0.5, ridge: null });
+  /** Half the width of the gable at height `hy` above the roof base (its edge follows the roof). */
+  const halfAt = (hy: number): number => {
+    let lo = 0, hi = W / 2;
+    if (under(hi) >= hy) return hi;
+    for (let i = 0; i < 30; i++) {
+      const m = (lo + hi) / 2;
+      if (under(m) >= hy) lo = m;
+      else hi = m;
+    }
+    return lo;
+  };
   // Straw ridge roll with logs laid across it, crossed boards rising above each gable end.
   const apex = ry + roofH;
   const roll = new THREE.CylinderGeometry(0.5, 0.5, D + eave * 2 + 0.4, 12);
@@ -282,7 +291,8 @@ function meetingHall(env: BuildEnv, out: VillageOut, km: KyoshiMats): void {
     b.mesh('wood_dark', log, { x: p.x, y: apex + 0.55, z: p.z, yaw });
   }
   log.dispose();
-  const slope = Math.atan2(roofH, h1);
+  // The roof is steepest at the ridge (its tangent there: 1.6 × height / half-width).
+  const slope = Math.atan((1.6 * roofH) / (W / 2 + eave));
   for (const f of [-1, 1]) {
     for (const s of [-1, 1]) {
       // Each board continues one roof slope past the ridge: centre 0.7 m out along it from the apex.
@@ -292,41 +302,24 @@ function meetingHall(env: BuildEnv, out: VillageOut, km: KyoshiMats): void {
   }
   // Gables: plaster in a timber frame; the front has the doorway and a band of paper windows.
   for (const f of [-1, 1]) {
-    const q = off(c, yaw, 0, f * (D / 2));
-    const sh = new THREE.Shape();
-    sh.moveTo(-W / 2, 0);
-    sh.lineTo(W / 2, 0);
-    sh.lineTo(0, roofH);
-    sh.closePath();
-    if (f > 0) {
-      const hole = new THREE.Path();
-      hole.moveTo(-1.8, 0);
-      hole.lineTo(1.8, 0);
-      hole.lineTo(1.8, 3.4);
-      hole.lineTo(-1.8, 3.4);
-      hole.closePath();
-      sh.holes.push(hole);
-    }
-    const g = new THREE.ExtrudeGeometry(sh, { depth: 0.3, bevelEnabled: false });
-    g.translate(0, 0, -0.15);
-    b.mesh('plaster_white', g, { x: q.x, y: ry, z: q.z, yaw });
-    g.dispose();
-    // Timber frame on the gable: posts and two tie beams, cut to the triangle.
+    const ge = profileWallGeometry((-f * D) / 2, W / 2, (z) => under(z) - 0.08, 0.3, f > 0 ? [1.8, 3.4] : undefined);
+    b.mesh('plaster_white', ge, { x: c.x, y: ry, z: c.z, yaw: yaw + Math.PI / 2 });
+    ge.dispose();
+    // Timber frame on the gable: posts and two tie beams, cut to the roof line.
     const face = f > 0 ? yaw : yaw + Math.PI;
     const fq = off(c, yaw, 0, f * (D / 2 + 0.18));
-    for (const px of [-4.6, -2.0, 2.0, 4.6]) {
-      if (f > 0 && Math.abs(px) < 2.1) continue; // the door frame has its own timbers
-      const hTop = roofH * (1 - Math.abs(px) / (W / 2)) - 0.2;
+    for (const px of [-3.3, 3.3]) {
+      const hTop = under(px) - 0.25;
       const p = off(fq, face, px, 0);
       b.box('wood_dark', { x: p.x, y: ry + hTop / 2, z: p.z, sx: 0.26, sy: hTop, sz: 0.12, yaw: face });
     }
     for (const hy of [3.6, 7.0]) {
-      const span = W * (1 - hy / roofH) - 0.3;
-      b.box('wood_dark', { x: fq.x, y: ry + hy, z: fq.z, sx: span, sy: 0.26, sz: 0.12, yaw: face });
+      const span = halfAt(hy + 0.13) * 2 - 0.2;
+      if (span > 0.5) b.box('wood_dark', { x: fq.x, y: ry + hy, z: fq.z, sx: span, sy: 0.26, sz: 0.12, yaw: face });
     }
     // Paper windows between the tie beams (front: above the doorway; back: a smaller band).
-    const ww = f > 0 ? 4.4 : 3.0;
-    paperWindow(b, off(c, yaw, 0, f * (D / 2 + 0.1)), ry + 5.3, face, ww, 1.5, km.shoji);
+    const ww = Math.min(f > 0 ? 4.0 : 3.0, halfAt(6.2) * 2 - 0.4);
+    paperWindow(b, off(c, yaw, 0, f * (D / 2 + 0.1)), ry + 5.25, face, ww, 1.4, km.shoji);
   }
   // Big frame timbers on the front, steps, and the dark interior behind the door.
   const front = off(c, yaw, 0, D / 2 + 0.25);

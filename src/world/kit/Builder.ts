@@ -295,8 +295,8 @@ export class ContentBuilder {
    * (x,y,z): centre at the EAVE height. w along local X, d along local Z.
    * style: 'hip' (four slopes), 'gable' (two slopes along X), 'pagoda' (strong upturned corners).
    */
-  roof(material: MatKey, o: { x: number; y: number; z: number; w: number; d: number; height: number; yaw?: number; overhang?: number; curve?: number; style?: 'hip' | 'gable' | 'pagoda'; ridge?: MatKey | null }): void {
-    const g = roofGeometry(o.w + (o.overhang ?? 0.8) * 2, o.d + (o.overhang ?? 0.8) * 2, o.height, o.style ?? 'hip', o.curve ?? (o.style === 'pagoda' ? 0.9 : 0.45));
+  roof(material: MatKey, o: { x: number; y: number; z: number; w: number; d: number; height: number; yaw?: number; overhang?: number; curve?: number; style?: 'hip' | 'gable' | 'pagoda'; ridge?: MatKey | null; open?: boolean }): void {
+    const g = roofGeometry(o.w + (o.overhang ?? 0.8) * 2, o.d + (o.overhang ?? 0.8) * 2, o.height, o.style ?? 'hip', o.curve ?? (o.style === 'pagoda' ? 0.9 : 0.45), o.open ?? false);
     this.mesh(material, g, { x: o.x, y: o.y, z: o.z, yaw: o.yaw ?? 0 });
     g.dispose();
     if (o.ridge !== null) {
@@ -562,7 +562,8 @@ export class ContentBuilder {
  * Roof geometry with upturned eaves. Centred at origin, eaves at y=0, ridge at y=height.
  * UVs: u along the eave, v up the slope (for roofTiles textures).
  */
-export function roofGeometry(w: number, d: number, height: number, style: 'hip' | 'gable' | 'pagoda', curve: number): THREE.BufferGeometry {
+/** `open` (gable roofs): no end triangles, so the gable walls under the overhang show. */
+export function roofGeometry(w: number, d: number, height: number, style: 'hip' | 'gable' | 'pagoda', curve: number, open = false): THREE.BufferGeometry {
   const segs = 10;
   const positions: number[] = [];
   const uvs: number[] = [];
@@ -625,7 +626,7 @@ export function roofGeometry(w: number, d: number, height: number, style: 'hip' 
         Math.hypot(hw - ridgeHalf, height),
       );
     }
-  } else {
+  } else if (!open) {
     // Gable triangles (vertical end walls under the roof).
     for (const side of [1, -1]) {
       const base = positions.length / 3;

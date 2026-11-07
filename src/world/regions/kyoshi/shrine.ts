@@ -139,7 +139,7 @@ function bonsai(b: import('../../kit/Builder').ContentBuilder, mats: BuildEnv['m
   pad.scale(1.2 * s, 0.38 * s, 1.0 * s);
   for (let i = 0; i < 3; i++) {
     const a = seed + i * 2.1;
-    b.mesh(mats.leafDark, pad, { x: x + Math.cos(a) * 0.7 * s, y: y + (1.5 + i * 0.55) * s, z: z + Math.sin(a) * 0.7 * s, yaw: a });
+    b.mesh(mats.leaf, pad, { x: x + Math.cos(a) * 0.7 * s, y: y + (1.5 + i * 0.55) * s, z: z + Math.sin(a) * 0.7 * s, yaw: a });
   }
   pad.dispose();
 }

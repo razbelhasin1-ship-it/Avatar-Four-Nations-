@@ -18,17 +18,99 @@ export function off(o: P2, yaw: number, right: number, fwd: number): P2 {
   return { x: o.x + Math.sin(yaw) * fwd - Math.cos(yaw) * right, z: o.z + Math.cos(yaw) * fwd + Math.sin(yaw) * right };
 }
 
-/** Gable end wall (a triangle prism) closing the space under a gable roof; ridge along local X. */
-export function gableEndGeometry(d: number, h: number, t = 0.16): THREE.BufferGeometry {
+/**
+ * Height of a kit roof (Builder.roofGeometry, gable style) above its eave line at its gable ends,
+ * `z` across from the ridge: the concave profile (steep at the ridge, flaring at the eaves) plus the
+ * upturn of the eave corners. `hd` is half its width across, overhangs included.
+ */
+export function roofProfile(z: number, hd: number, height: number, curve: number): number {
+  const t = Math.max(0, 1 - Math.abs(z) / hd);
+  return height * Math.pow(t, 1.6) + curve * 0.8 * (1 - t) * (1 - t);
+}
+
+/**
+ * Vertical ribbons in a roof's frame (ridge along X) at each x in `xs`, from bottom(z) up to top(z)
+ * for |z| ≤ half: they close a two-layer thatch roof at its gable ends so it reads thick and solid.
+ * UVs in metres / 2 like the roofs. For double-sided materials.
+ */
+export function ribbonGeometry(xs: number[], half: number, top: (z: number) => number, bottom: (z: number) => number, segs = 24): THREE.BufferGeometry {
+  const pos: number[] = [], uv: number[] = [], idx: number[] = [];
+  for (const x of xs) {
+    const base = pos.length / 3;
+    for (let i = 0; i <= segs; i++) {
+      const z = -half + (i / segs) * half * 2;
+      const tp = top(z), bt = Math.min(bottom(z), tp);
+      pos.push(x, tp, z, x, bt, z);
+      uv.push(z / 2, tp / 2, z / 2, bt / 2);
+    }
+    for (let i = 0; i < segs; i++) {
+      const a = base + i * 2;
+      idx.push(a, a + 1, a + 2, a + 2, a + 1, a + 3);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+/**
+ * A gable end wall in a roof's frame (ridge along X), at x, cut to the roof's underside `top(z)` for
+ * |z| ≤ half, `t` thick; `notch` = [half width, height] leaves a doorway at its foot.
+ */
+export function profileWallGeometry(x: number, half: number, top: (z: number) => number, t: number, notch?: [number, number]): THREE.BufferGeometry {
   const sh = new THREE.Shape();
-  sh.moveTo(-d / 2, 0);
-  sh.lineTo(d / 2, 0);
-  sh.lineTo(0, h);
+  const n = 20;
+  sh.moveTo(-half, 0);
+  for (let i = 0; i <= n; i++) {
+    const z = -half + (i / n) * half * 2;
+    sh.lineTo(z, Math.max(0.05, top(z)));
+  }
+  sh.lineTo(half, 0);
+  if (notch) {
+    sh.lineTo(notch[0], 0);
+    sh.lineTo(notch[0], notch[1]);
+    sh.lineTo(-notch[0], notch[1]);
+    sh.lineTo(-notch[0], 0);
+  }
   sh.closePath();
   const g = new THREE.ExtrudeGeometry(sh, { depth: t, bevelEnabled: false });
   g.translate(0, 0, -t / 2);
-  g.rotateY(Math.PI / 2);
+  // Shape u → +Z (across), its depth → X.
+  g.rotateY(-Math.PI / 2);
+  g.translate(x, 0, 0);
   return g;
+}
+
+/**
+ * A gable roof in the house frame of the kit roofs (ridge along the roof's X), open at its gable
+ * ends: one layer for tile and shingles; thatch as two layers (the lower one wider and lower, so it
+ * stays underneath) closed at the ends by straw ribbons, so it reads thick. Returns the underside
+ * profile (height above the eave line, `z` across) for the gable walls under it.
+ */
+export function gableRoof(b: ContentBuilder, mat: Mat, o: { x: number; y: number; z: number; yaw: number; w: number; d: number; height: number; overhang: number; curve: number; thick: number; ridge: Mat | null }): (z: number) => number {
+  b.roof(mat, { x: o.x, y: o.y, z: o.z, w: o.w, d: o.d, height: o.height, yaw: o.yaw, overhang: o.overhang, curve: o.curve, style: 'gable', ridge: o.ridge, open: true });
+  const hd = o.d / 2 + o.overhang;
+  const upper = (z: number) => roofProfile(z, hd, o.height, o.curve);
+  if (o.thick <= 0) return upper;
+  // The wider layer: `widen` more across; dropped enough to stay under the upper one everywhere.
+  const widen = o.thick;
+  const hdL = hd + widen;
+  let gap = 0;
+  for (let i = 0; i <= 40; i++) {
+    const z = (i / 40) * hd;
+    gap = Math.max(gap, roofProfile(z, hdL, o.height, o.curve) - upper(z));
+  }
+  const drop = gap + o.thick * 0.6;
+  b.roof(mat, { x: o.x, y: o.y - drop, z: o.z, w: o.w, d: o.d + widen * 2, height: o.height, yaw: o.yaw, overhang: o.overhang, curve: o.curve, style: 'gable', ridge: null, open: true });
+  const lower = (z: number) => roofProfile(z, hdL, o.height, o.curve) - drop;
+  const ends = o.w / 2 + o.overhang - 0.01;
+  const rib = ribbonGeometry([-ends, ends], hdL, (z) => (Math.abs(z) <= hd ? upper(z) : lower(z)), lower);
+  b.mesh(mat, rib, { x: o.x, y: o.y, z: o.z, yaw: o.yaw });
+  rib.dispose();
+  return lower;
 }
 
 export interface HouseOpts {
@@ -159,9 +241,9 @@ export function house(b: ContentBuilder, o: HouseOpts): void {
   }
   if (o.lantern) {
     // A paper lantern on a bracket beside the door.
-    const br = off(c, yaw, doorW / 2 + 0.42, o.d / 2 + 0.2);
+    const br = off(c, yaw, doorW / 2 + 0.27, o.d / 2 + 0.2);
     b.box('wood_dark', { x: br.x, y: fy + o.h - 0.3, z: br.z, sx: 0.06, sy: 0.06, sz: 0.42, yaw }, { castShadow: false });
-    const lp = off(c, yaw, doorW / 2 + 0.42, o.d / 2 + 0.36);
+    const lp = off(c, yaw, doorW / 2 + 0.27, o.d / 2 + 0.36);
     b.lantern(new THREE.Vector3(lp.x, fy + o.h - 0.62, lp.z), { color: o.lantern, hanging: true });
   }
   // Beams: sill and eave plates, corner posts.
@@ -175,20 +257,13 @@ export function house(b: ContentBuilder, o: HouseOpts): void {
     const q = off(c, yaw, r * (o.w / 2), f * (o.d / 2));
     b.box(trim, { x: q.x, y: wy, z: q.z, sx: 0.22, sy: o.h + 0.1, sz: 0.22, yaw });
   }
-  // Steep gable roof, ridge running front to back (gable ends face the street), closed gables.
+  // Steep gable roof, ridge running front to back (gable ends face the street), open at the ends over
+  // gable walls cut to its underside (thatch: thick, in two layers).
   const ry = fy + o.h;
-  b.roof(o.roof, { x: o.x, y: ry, z: o.z, w: o.d, d: o.w, height: o.roofH, yaw: yaw + Math.PI / 2, overhang: 0.6, curve: 0.12, style: 'gable', ridge: trim });
-  if (o.thickRoof) {
-    // The thatch's thickness: a second layer 0.3 m wider, low enough to stay under the first one
-    // everywhere (its slope is shallower), showing as a thick edge at the eaves and gables.
-    const h1 = o.w / 2 + 0.6, h2 = h1 + 0.3;
-    const drop = o.roofH * (1 - h1 / h2) + 0.1;
-    b.roof(o.roof, { x: o.x, y: ry - drop, z: o.z, w: o.d + 0.6, d: o.w + 0.6, height: o.roofH, yaw: yaw + Math.PI / 2, overhang: 0.6, curve: 0.12, style: 'gable', ridge: null });
-  }
+  const under = gableRoof(b, o.roof, { x: o.x, y: ry, z: o.z, yaw: yaw + Math.PI / 2, w: o.d, d: o.w, height: o.roofH, overhang: 0.6, curve: 0.12, thick: o.thickRoof ? 0.3 : 0, ridge: o.thickRoof ? o.roof : trim });
   for (const f of [-1, 1]) {
-    const q = off(c, yaw, 0, f * (o.d / 2));
-    const ge = gableEndGeometry(o.w, o.roofH * 0.96);
-    b.mesh(wall, ge, { x: q.x, y: ry, z: q.z, yaw: yaw + Math.PI / 2 });
+    const ge = profileWallGeometry((f * o.d) / 2, o.w / 2, (z) => under(z) - 0.05, 0.16);
+    b.mesh(wall, ge, { x: o.x, y: ry, z: o.z, yaw: yaw + Math.PI / 2 });
     ge.dispose();
   }
   // One collider for the body (to the eaves), so the roof stays decorative.
