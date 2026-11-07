@@ -4,6 +4,7 @@
  *  - without lock-on it picks the enemy ahead of the camera (cone)
  *  - a line of enemies: each rammed once and bowled aside; a heavy beast stops it
  *  - an enemy against a wall: rammed, and the pillar stops short of the wall (no tunnelling)
+ *  - a target that dodges right before the impact is still caught by the slam
  *  - up and down a slope; stops before a ledge; no enemy: a 14 m run and a ground slam
  *  - rapid double taps, low chi, cooldown; Jump, a stun, pause and an orientation change mid-charge
  *  - the raised pillar you do not charge still stands and sinks; Dodge off a pillar still dodges
@@ -82,10 +83,20 @@ const settle = async () => {
   }
 };
 const spread = (a) => (a.length ? Math.max(...a) - Math.min(...a) : 0);
+/** Enemies that never sidestep on their own (a check about the ram, not about the AI's dodge). */
+const noDodge = (ids) =>
+  h.eval((g, ids) => {
+    for (const id of ids) {
+      const e = g.debug.enemies.entity(id);
+      if (e) e.arch = { ...e.arch, behaviour: { ...e.arch.behaviour, dodge: 0 } };
+    }
+  }, ids);
 
 try {
   await h.newGame('earth');
   await h.eval((g) => {
+    // No ambient camps (a bandit camp lies 34 m from the wall check): only the enemies each check spawns.
+    g.debug.enemies.camps(false);
     g.debug.enemies?.clear?.();
     g.freezeTime(true);
     g.setTime(12);
@@ -123,7 +134,7 @@ try {
     const d0 = 20;
     assert.ok(chi0 - chi1 > 29 && chi0 - chi1 < 31, `chi ${chi0} -> ${chi1}`);
     assert.ok(reached !== null && reached < 1.0 && reached > 0.6, `reached a target ${d0} m away in ${reached?.toFixed(3)} s`);
-    const att = frames.filter((f) => f.local && ['windup', 'charge', 'slam'].includes(f.phase));
+    const att = frames.filter((f) => f.local && ['charge', 'slam'].includes(f.phase));
     assert.ok(att.length > 30, 'attached frames ' + att.length);
     const sp = Math.max(spread(att.map((f) => f.local.x)), spread(att.map((f) => f.local.y)), spread(att.map((f) => f.local.z)));
     assert.ok(sp < 0.005, `rider offset on the stone moved ${sp} m`);
@@ -151,6 +162,7 @@ try {
   await check('a line of enemies: each rammed once and bowled aside; a heavy beast stops the pillar dead', async () => {
     await onPillar(560, 360, 0.6);
     const ids = await h.eval((g) => ({ a: g.debug.enemies.spawn('bandit_spearman', 6, 0.3).id, b: g.debug.enemies.spawn('bandit_spearman', 10, -0.4).id, bear: g.debug.enemies.spawn('platypus_bear', 16, 0).id }));
+    await noDodge([ids.a, ids.b]);
     await h.step(2, DT);
     await h.eval((g, id) => (g.ctx.player.lockTarget = g.debug.enemies.entity(id)), ids.bear);
     const hp0 = await h.eval((g, ids) => Object.fromEntries(Object.entries(ids).map(([k, id]) => [k, g.debug.enemies.entity(id).health.hp])), ids);
@@ -205,6 +217,38 @@ try {
       await h.eval((g, id) => g.ctx.world.collision.remove(id), wall.id);
       await settle();
     }
+  });
+
+  await check('a target that dodges right before the impact is still caught by the slam', async () => {
+    await onPillar(560, 300, 0.6);
+    const id = await h.eval((g) => g.debug.enemies.spawn('bandit_spearman', 10, 0).id);
+    await h.step(2, DT);
+    await h.eval((g, id) => (g.ctx.player.lockTarget = g.debug.enemies.entity(id)), id);
+    const hp0 = await h.eval((g, id) => g.debug.enemies.entity(id).health.hp, id);
+    await press('dodge');
+    // About 0.1 s before contact it sidesteps (its brief invulnerability covers the ram and the slam's instant).
+    let dodged = false;
+    for (let i = 0; i < 90 && !dodged; i++) {
+      await h.step(1, DT);
+      dodged = await h.eval((g, id) => {
+        const r = g.debug.pillarCharge.driver.ride;
+        const e = g.debug.enemies.entity(id);
+        if (!r || r.phase !== 'charge' || !e) return false;
+        const gap = Math.hypot(e.position.x - r.x, e.position.z - r.z) - (r.pillar.radius + e.radius + 0.1);
+        if (gap > r.speed * 0.1) return false;
+        e.cancelAttack(g.ctx);
+        e.dodgeCD = 0;
+        return e.dodge(g.ctx, new e.position.constructor(Math.cos(r.heading), 0, -Math.sin(r.heading)));
+      }, id);
+    }
+    assert.ok(dodged, 'it sidestepped before the impact');
+    await rideUntil(['chain', 'lower', 'idle']);
+    const foe = await h.eval((g, id) => {
+      const e = g.debug.enemies.entity(id);
+      return e ? { hp: e.health.hp, dodges: e.stats.dodges } : null;
+    }, id);
+    assert.ok((foe?.hp ?? 0) < hp0, `the slam caught it: hp ${hp0} -> ${JSON.stringify(foe)}`);
+    await settle();
   });
 
   await check('up and down a slope: ridden all the way, the stone following the ground', async () => {

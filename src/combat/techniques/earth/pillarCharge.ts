@@ -21,8 +21,9 @@ import { bendableAt } from './common';
  *
  * The pillar is the one you raised (same stone, same collider), driven kinematically by a motion curve:
  * the launch (it shudders and leans back as it eases in to peak speed), a cruise and a short ease out into
- * the impact: a target 20 m away is reached in 0.8 s. Each frame the driver moves the pillar first, then you with it (you are attached to its top,
- * your feet where they stood), then the camera follows: pillar → rider → camera.
+ * the impact: a target 20 m away is reached in 0.8 s. Each frame the driver moves the pillar first, then you
+ * with it (you are attached to its top, your feet where they stood), then the camera follows: pillar → rider →
+ * camera.
  *
  * After the slam you can chain another charge within the window (up to `chain` per pillar, each costing chi);
  * otherwise the pillar sinks and sets you down on the ground. Jump gets you off at any time.
@@ -911,43 +912,67 @@ class PillarChargeDriver {
     ctx.events.emit('pillarcharge:slam', { position: { x: this.slamAt.x, y: this.slamAt.y, z: this.slamAt.z }, hits: r.hits.size + hits, reason });
   }
 
-  /** Where the last slam landed (the ground just ahead of the pillar). */
+  /** Where the last slam landed (the ground just ahead of the pillar), how far it reaches and how hard it is. */
   readonly slamAt = new THREE.Vector3();
+  private slamRadius: number = PC.slamRadius;
+  private slamPower = 1;
+  /** Enemies in the slam who were sidestepping as it went off (a dodge's brief invulnerability). */
+  private readonly dodging: Entity[] = [];
 
   /**
    * The slam's shockwave: around the ground just ahead of the pillar, enemies take the slam (full at the centre,
    * `slamEdge` of it at the rim), are thrown outward and stunned; anyone else is pushed gently. Running into a
-   * wall or stopping at a ledge is a smaller slam. Returns how many enemies it hit.
+   * wall or stopping at a ledge is a smaller slam. An enemy dodging as it goes off is caught the moment its
+   * dodge ends, while the slam lasts (see slamming): the stone visibly lands on it, so it must not pass through.
+   * Returns how many enemies it hit.
    */
   private shockwave(ctx: GameContext, r: Ride, reason: SlamReason): number {
     const fx = Math.sin(r.heading), fz = Math.cos(r.heading);
     const small = reason === 'blocked' || reason === 'ledge';
-    const radius = PC.slamRadius * (small ? 0.6 : 1);
-    const power = small ? 0.5 : 1;
+    this.slamRadius = PC.slamRadius * (small ? 0.6 : 1);
+    this.slamPower = small ? 0.5 : 1;
+    this.dodging.length = 0;
     const c = this.slamAt.set(r.x + fx * (r.pillar.radius + 0.4), r.base, r.z + fz * (r.pillar.radius + 0.4));
     let n = 0;
-    const list = ctx.entities.queryRadius(tmpA.copy(c), radius + 1.5, { aliveOnly: true }, this.found);
+    const list = ctx.entities.queryRadius(tmpA.copy(c), this.slamRadius + 1.5, { aliveOnly: true }, this.found);
     for (const e of list) {
       if (e === r.rider || e.disposed) continue;
-      const dx = e.position.x - c.x, dz = e.position.z - c.z;
-      const d = Math.hypot(dx, dz);
-      if (d > radius + e.radius || Math.abs(e.position.y - c.y) > 2.6) continue;
-      const ux = d > 0.05 ? dx / d : fx, uz = d > 0.05 ? dz / d : fz;
-      const f = 1 - (1 - PC.slamEdge) * Math.min(1, d / radius);
-      if (!ctx.combat.canHarm(r.rider, e)) {
-        this.nudge(e, ux, uz, 3.5 * f);
+      const d = this.slamDistance(e);
+      if (d < 0) continue;
+      if ((e.health?.invulnerable ?? 0) > 0 && ctx.combat.canHarm(r.rider, e)) {
+        this.dodging.push(e);
         continue;
       }
-      if (!r.cast) continue;
-      const kb = isHeavy(e) ? PC.knockback * 0.3 : PC.knockback * 1.5 * f;
-      const res = r.cast.hit(
-        e,
-        { damage: EARTH_HEAVY_DAMAGE * PC.slamDamage * f * power, knockback: new THREE.Vector3(ux * kb, 0, uz * kb), launch: PC.pop * (0.6 + 0.4 * f), stun: PC.slamStun, stagger: 40, unblockable: true, point: e.aimPoint(new THREE.Vector3()) },
-        true,
-      );
-      if (res) n++;
+      if (this.slamHit(ctx, r, e, d)) n++;
     }
     return n;
+  }
+
+  /** How far `e` is from the slam's centre, or -1 if it is out of the slam's reach. */
+  private slamDistance(e: Entity): number {
+    const c = this.slamAt;
+    const d = Math.hypot(e.position.x - c.x, e.position.z - c.z);
+    return d > this.slamRadius + e.radius || Math.abs(e.position.y - c.y) > 2.6 ? -1 : d;
+  }
+
+  /** The slam's blow on one entity `d` metres from its centre. Returns whether an enemy was hit. */
+  private slamHit(ctx: GameContext, r: Ride, e: Entity, d: number): boolean {
+    const c = this.slamAt;
+    const dx = e.position.x - c.x, dz = e.position.z - c.z;
+    const ux = d > 0.05 ? dx / d : Math.sin(r.heading), uz = d > 0.05 ? dz / d : Math.cos(r.heading);
+    const f = 1 - (1 - PC.slamEdge) * Math.min(1, d / this.slamRadius);
+    if (!ctx.combat.canHarm(r.rider, e)) {
+      this.nudge(e, ux, uz, 3.5 * f);
+      return false;
+    }
+    if (!r.cast) return false;
+    const kb = isHeavy(e) ? PC.knockback * 0.3 : PC.knockback * 1.5 * f;
+    const res = r.cast.hit(
+      e,
+      { damage: EARTH_HEAVY_DAMAGE * PC.slamDamage * f * this.slamPower, knockback: new THREE.Vector3(ux * kb, 0, uz * kb), launch: PC.pop * (0.6 + 0.4 * f), stun: PC.slamStun, stagger: 40, unblockable: true, point: e.aimPoint(new THREE.Vector3()) },
+      true,
+    );
+    return !!res;
   }
 
   private slamming(ctx: GameContext, r: Ride, dt: number): void {
@@ -955,8 +980,19 @@ class PillarChargeDriver {
     const max = PC.slamTiltDeg * DEG;
     if (r.t < PC.slamTiltIn) r.tilt = max * (1 - (1 - r.t / PC.slamTiltIn) ** 2);
     else r.tilt = max * (1 - smooth01((r.t - PC.slamTiltIn) / PC.slamTiltOut));
+    // The ground still shakes through the slam (longer than a dodge lasts): anyone who was sidestepping as it went
+    // off takes it as soon as their dodge ends, if they are still in it.
+    const dodging = this.dodging;
+    for (let i = dodging.length - 1; i >= 0; i--) {
+      const e = dodging[i];
+      if (e.alive && !e.disposed && (e.health?.invulnerable ?? 0) > 0) continue;
+      dodging.splice(i, 1);
+      const d = e.alive && !e.disposed ? this.slamDistance(e) : -1;
+      if (d >= 0) this.slamHit(ctx, r, e, d);
+    }
     if (r.t >= PC.slamTiltIn + PC.slamTiltOut) {
       r.tilt = 0;
+      dodging.length = 0;
       this.afterSlam(ctx, r);
     }
   }
@@ -1029,6 +1065,7 @@ class PillarChargeDriver {
     if (ctx && reason !== 'lowered' && r.phase !== 'lower') ctx.combat.startCooldown(p, PILLAR_CHARGE_ID, PC.cooldown);
     if (r.cast && r.cast.phase !== 'done') r.cast.finish();
     this.ride = null;
+    this.dodging.length = 0;
     this.feel.rideOver();
     ctx?.events.emit('pillarcharge:ended', { reason });
   }
@@ -1038,6 +1075,7 @@ class PillarChargeDriver {
     const r = this.ride;
     this.ride = null;
     this.pending = null;
+    this.dodging.length = 0;
     if (r) {
       if (r.pillar.alive) r.pillar.letGo();
       if (r.rider.body) r.rider.body.kinematic = false;
