@@ -161,6 +161,8 @@ export function initPlay(hooks: PlayHooks): { open(): void; isOpen(): boolean } 
   });
 
   document.getElementById('stage-start')?.addEventListener('click', show);
+  // On a computer the stage offers the phone first; this plays here anyway.
+  document.getElementById('stage-start-pc')?.addEventListener('click', show);
 
   return { open: show, isOpen: () => open };
 }

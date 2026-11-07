@@ -44,12 +44,19 @@ SOURCES = {
     'bss_train': ('ba-sing-se/11_train_on_viaduct.jpg', 0),
     'fnc_harbor': ('fire-nation-capital/00_harbor_approach_from_sea_wall.jpg', 0),
     'fnc_throne': ('fire-nation-capital/15_throne_room.jpg', 0),
-    'ki_shrine': ('kyoshi-island/shrine_at_sunset.jpg', 0),
     'ki_falls': ('kyoshi-island/crescent_bridge_and_crystal_falls.jpg', 0),
     'ki_beach': ('kyoshi-island/bay_beach_koi.jpg', 0),
     'bison': ('website/bison.jpg', 0),
     'swt_aurora': ('southern-water-tribe/16_festival_aurora.jpg', 0),
     'swt_lamps': ('southern-water-tribe/15_night_lamplight.jpg', 0),
+    # Played on a phone: the game's touch layout, shown inside a phone frame on the site.
+    'phone_hero': ('website/phone_hero.jpg', 0),
+    'phone_water': ('website/phone_water.jpg', 0),
+    'phone_earth': ('website/rock_armor.jpg', 0),
+    'phone_fire': ('website/fire_stream.jpg', 0),
+    'phone_air': ('website/air_scooter.jpg', 0),
+    'ki_village': ('website/ki_village.jpg', 0),
+    'ki_hall': ('website/ki_hall.jpg', 0),
 }
 
 WIDTHS = [640, 1024, 1600]
@@ -62,7 +69,8 @@ def main() -> None:
         im = Image.open(os.path.join(SHOTS, rel)).convert('RGB')
         if crop:
             im = im.crop((0, 0, im.width, int(im.height * (1 - crop))))
-        widths = sorted({w for w in WIDTHS if w < im.width} | {im.width})
+        # Every listed width below the source (skipping near-duplicates of it), plus the source itself.
+        widths = sorted({w for w in WIDTHS if w < im.width * 0.9} | {im.width})
         for w in widths:
             h = round(im.height * w / im.width)
             im.resize((w, h), Image.LANCZOS).save(os.path.join(OUT, f'{key}-{w}.webp'), 'WEBP', quality=80, method=6)

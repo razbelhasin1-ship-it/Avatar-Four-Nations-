@@ -23,10 +23,10 @@ const NATION_MEDIA: Record<ElementId, { key: string; alt: string }> = {
 };
 
 const SHOWCASE: Record<ElementId, { key: string; caption: string; signature: string[] }> = {
-  water: { key: 'octopus', caption: 'Octopus Form in the harbour of Agna Qel’a', signature: ['water_whip', 'octopus_form', 'water_spout', 'ice_prison'] },
-  earth: { key: 'rock_armor', caption: 'Rock Armor in Ba Sing Se’s Lower Ring', signature: ['rock_armor', 'earth_surf', 'boulder_roll', 'seismic_sense'] },
-  fire: { key: 'dancing_dragon', caption: 'Firebending in the Fire Nation’s Royal Plaza', signature: ['dancing_dragon', 'fire_lightning', 'fire_stream', 'fire_shield'] },
-  air: { key: 'air_scooter', caption: 'The air scooter among the sky bison of the temple', signature: ['air_scooter', 'air_vortex', 'air_redirect', 'air_jump'] },
+  water: { key: 'phone_water', caption: 'A Water Whip drawn from a pond, with the touch controls', signature: ['water_whip', 'octopus_form', 'water_spout', 'ice_prison'] },
+  earth: { key: 'phone_earth', caption: 'Rock Armor in a Ba Sing Se courtyard', signature: ['rock_armor', 'earth_surf', 'boulder_roll', 'seismic_sense'] },
+  fire: { key: 'phone_fire', caption: 'A stream of fire in the Fire Nation', signature: ['dancing_dragon', 'fire_lightning', 'fire_stream', 'fire_shield'] },
+  air: { key: 'phone_air', caption: 'The Air Scooter at the Southern Air Temple', signature: ['air_scooter', 'air_vortex', 'air_redirect', 'air_jump'] },
 };
 
 const GALLERY: Array<{ key: string; title: string; text: string }> = [
@@ -35,7 +35,7 @@ const GALLERY: Array<{ key: string; title: string; text: string }> = [
   { key: 'place_bss', title: 'Ba Sing Se', text: 'The rings and walls of the Earth Kingdom’s capital' },
   { key: 'fire_stream', title: 'Harbor City', text: 'Firebending at dusk in the Fire Nation Capital' },
   { key: 'swt_aurora', title: 'Wolf Cove', text: 'The aurora over the Southern Water Tribe’s festival' },
-  { key: 'ki_shrine', title: 'Kyoshi Island', text: 'The shrine at sunset' },
+  { key: 'ki_village', title: 'Kyoshi Island', text: 'The village street: thatched houses, lanterns and market stalls' },
   { key: 'bss_train', title: 'Ba Sing Se', text: 'A monorail train on its viaduct' },
   { key: 'water_spout', title: 'Lake Hiari', text: 'Riding a water spout at sunset' },
   { key: 'nwt_oasis', title: 'The Spirit Oasis', text: 'The koi pond at the heart of Agna Qel’a' },
@@ -46,6 +46,7 @@ const GALLERY: Array<{ key: string; title: string; text: string }> = [
   { key: 'swt_lamps', title: 'Wolf Cove', text: 'Igloos by lamplight' },
   { key: 'fnc_throne', title: 'The royal palace', text: 'The throne room behind its wall of fire' },
   { key: 'ki_beach', title: 'Kyoshi Island', text: 'The bay below the village' },
+  { key: 'ki_hall', title: 'Kyoshi Island', text: 'The Meeting Hall at the top of the village street' },
 ];
 
 const ELEMENTS: ElementId[] = ['water', 'earth', 'fire', 'air'];
@@ -95,8 +96,8 @@ function showcase(): void {
   const text = root.querySelector('.showcase__text')!;
   const band = root.closest<HTMLElement>('.band--bending');
   const imgs = new Map<ElementId, HTMLImageElement>();
-  const caption = h('figcaption');
-  media.append(caption);
+  // The picture plays inside a phone; its caption sits under the phone.
+  const caption = document.getElementById('showcase-caption') ?? h('p');
   const buttons = ELEMENTS.map((el) => {
     const b = h(
       'button',
@@ -118,9 +119,9 @@ function showcase(): void {
     root.style.setProperty('--el', `var(--${el}-glow)`);
     let img = imgs.get(el);
     if (!img) {
-      img = mediaImg(SHOWCASE[el].key, SHOWCASE[el].caption, '(max-width: 1080px) 100vw, 58vw');
+      img = mediaImg(SHOWCASE[el].key, SHOWCASE[el].caption, '(max-width: 1080px) 94vw, 56vw');
       imgs.set(el, img);
-      media.insertBefore(img, caption);
+      media.append(img);
     }
     for (const [k, v] of imgs) v.classList.toggle('is-on', k === el);
     caption.textContent = SHOWCASE[el].caption;
@@ -154,9 +155,9 @@ function showcase(): void {
   // Preload the other three once the first is shown.
   setTimeout(() => ELEMENTS.slice(1).forEach((el) => {
     if (!imgs.has(el)) {
-      const img = mediaImg(SHOWCASE[el].key, SHOWCASE[el].caption, '(max-width: 1080px) 100vw, 58vw');
+      const img = mediaImg(SHOWCASE[el].key, SHOWCASE[el].caption, '(max-width: 1080px) 94vw, 56vw');
       imgs.set(el, img);
-      media.insertBefore(img, caption);
+      media.append(img);
     }
   }), 2500);
 }

@@ -14,7 +14,7 @@
   --gold-2: #f1d48a;
   --gold-3: #b98a37;
   --text: #f4ead6;
-  --muted: #b7a88c;
+  --muted: #c9bb9c;
   --faint: #7d7463;
   --line: rgba(214, 178, 94, 0.22);
   --line-2: rgba(214, 178, 94, 0.4);
@@ -3331,7 +3331,7 @@ html.game-open body {
   }
 
   .hero__eyebrow .dot,
-  .hero__eyebrow-free {
+  .hero__eyebrow > span:first-child {
     display: none;
   }
 
@@ -3374,5 +3374,556 @@ html.game-open body {
 
   .hero__birds {
     display: none;
+  }
+}
+
+
+/* ==========================================================================================
+   Made for your phone: the phone frame, the steps, QR codes for computers, the Play gate.
+   ========================================================================================== */
+html.is-computer .only-touch,
+html.is-touch .only-computer {
+  display: none !important;
+}
+
+.hero__eyebrow-free {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  color: #fff3d6;
+}
+
+.hero__eyebrow-free svg {
+  width: 1.35em;
+  height: 1.35em;
+  color: var(--gold-2);
+}
+
+/* Two groups, so a narrow screen breaks the line between them and never starts a line with a dot. */
+.hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35em 0;
+}
+
+.hero__meta > span {
+  display: inline-flex;
+  white-space: nowrap;
+}
+
+.hero__meta > * + *::before,
+.hero__meta > span > * + *::before {
+  content: '·';
+  display: inline-block;
+  margin: 0 0.6em;
+  color: var(--gold);
+  text-decoration: none;
+}
+
+@media (max-width: 600px) {
+  .hero__meta {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .hero__meta > * + *::before {
+    content: none;
+  }
+}
+
+/* On a phone the scroll cue is a chevron, not a mouse. */
+html.is-touch .hero__scroll {
+  height: 30px;
+  border: 0;
+  border-radius: 0;
+}
+
+html.is-touch .hero__scroll span {
+  top: 2px;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  border-radius: 0;
+  background: none;
+  border-right: 2px solid var(--gold-2);
+  border-bottom: 2px solid var(--gold-2);
+  transform: rotate(45deg);
+  animation: scroll-chevron 2.2s var(--ease) infinite;
+}
+
+@keyframes scroll-chevron {
+  0%,
+  100% {
+    transform: translateY(0) rotate(45deg);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translateY(8px) rotate(45deg);
+    opacity: 1;
+  }
+}
+
+.hero__pc {
+  margin: 14px 0 0;
+}
+
+.hero__pc a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.45em 1em;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  color: var(--gold-2);
+  text-decoration: none;
+  background: rgba(7, 9, 15, 0.5);
+  border: 1px solid rgba(241, 212, 138, 0.28);
+  transition: border-color 0.3s var(--ease), background 0.3s var(--ease);
+}
+
+.hero__pc a:hover {
+  border-color: var(--gold-2);
+  background: rgba(7, 9, 15, 0.7);
+}
+
+.hero__pc svg {
+  width: 1.2em;
+  height: 1.2em;
+}
+
+/* --- The phone ---------------------------------------------------------------------------- */
+.device {
+  --glow: rgba(159, 216, 255, 0.22);
+  position: relative;
+  margin: 0;
+}
+
+.device__frame {
+  position: relative;
+  aspect-ratio: 2.08 / 1;
+  padding: 1.7% 2.6% 1.7% 3.4%;
+  border-radius: 7.5% / 15.5%;
+  background: linear-gradient(150deg, #313744 0%, #14181f 28%, #0b0e14 62%, #262b36 100%);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(255, 255, 255, 0.1),
+    inset 0 0 0 6px #04060a,
+    0 0 0 1px rgba(214, 178, 94, 0.28),
+    0 60px 90px -50px rgba(0, 0, 0, 0.95),
+    0 0 120px -30px var(--glow);
+}
+
+/* Volume and power keys on the top edge. */
+.device__frame::before,
+.device__frame::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  height: 4px;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(#3a404d, #1b1f27);
+}
+
+.device__frame::before {
+  left: 16%;
+  width: 13%;
+}
+
+.device__frame::after {
+  right: 22%;
+  width: 7%;
+}
+
+.device__screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 4.6% / 10%;
+  background: #05070b;
+}
+
+.device__screen img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 1s var(--ease);
+}
+
+.device__screen img.is-on {
+  opacity: 1;
+}
+
+/* A faint glass sheen over the screen. */
+.device__screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0) 32%, rgba(255, 255, 255, 0) 70%, rgba(255, 255, 255, 0.04) 100%);
+}
+
+.device__cam {
+  position: absolute;
+  left: 1.25%;
+  top: 50%;
+  width: 0.9%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  transform: translateY(-50%);
+  background: radial-gradient(circle at 35% 35%, #33415e, #0b0f18 70%);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.device figcaption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  font-size: 0.95rem;
+  font-style: italic;
+  color: var(--muted);
+}
+
+.device__dots {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.device__dots button {
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(244, 234, 214, 0.25);
+  cursor: pointer;
+  transition: background 0.3s var(--ease), transform 0.3s var(--ease);
+}
+
+.device__dots button[aria-pressed='true'] {
+  background: var(--gold-2);
+  transform: scale(1.25);
+}
+
+/* --- Made for your phone band ------------------------------------------------------------- */
+.band--phone {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(60% 70% at 25% 40%, rgba(63, 134, 232, 0.13), transparent 70%),
+    radial-gradient(50% 60% at 85% 70%, rgba(214, 178, 94, 0.1), transparent 70%),
+    var(--night);
+}
+
+.phone-band {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: clamp(32px, 5vw, 72px);
+  align-items: center;
+}
+
+.device--hero .device__frame {
+  transform: perspective(1600px) rotateY(9deg) rotateX(2deg);
+  transition: transform 1.2s var(--ease-out);
+}
+
+.device--hero:hover .device__frame {
+  transform: perspective(1600px) rotateY(0deg) rotateX(0deg);
+}
+
+.phone-band__lede {
+  margin: 0 0 26px;
+  font-size: var(--step-1);
+  line-height: 1.55;
+  color: #e9dec6;
+}
+
+.steps {
+  counter-reset: step;
+  display: grid;
+  gap: 14px;
+  margin: 0 0 28px;
+  padding: 0;
+  list-style: none;
+}
+
+.steps li {
+  counter-increment: step;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 16px;
+  align-items: center;
+}
+
+.steps li::before {
+  content: counter(step);
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.2rem;
+  color: #1b140e;
+  background: linear-gradient(160deg, var(--gold-2), var(--gold-3));
+  box-shadow: 0 10px 24px -12px rgba(241, 190, 90, 0.8);
+}
+
+.steps b {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.08rem;
+  letter-spacing: 0.03em;
+  color: #fbf3e2;
+}
+
+.steps span {
+  color: var(--muted);
+  font-size: 0.98rem;
+}
+
+.phone-band__cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+/* --- QR codes ----------------------------------------------------------------------------- */
+.qr-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-2);
+  background: linear-gradient(160deg, rgba(23, 28, 40, 0.9), rgba(10, 12, 18, 0.9));
+  box-shadow: 0 30px 60px -40px rgba(0, 0, 0, 0.9);
+}
+
+.qr-card__code {
+  flex: 0 0 auto;
+  width: 132px;
+}
+
+.qr {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+}
+
+.qr-card__text {
+  display: grid;
+  gap: 6px;
+}
+
+.qr-card__text b {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+  color: #fbf3e2;
+}
+
+.qr-card__text span {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.qr-card--stage {
+  max-width: 460px;
+  text-align: left;
+  background: rgba(7, 9, 15, 0.78);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.stage__touch,
+.stage__computer {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+}
+
+.stage__hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7em;
+  max-width: 34ch;
+  text-align: left;
+}
+
+.stage__hint svg {
+  flex: 0 0 auto;
+  width: 1.6em;
+  height: 1.6em;
+  color: var(--gold-2);
+}
+
+/* --- Play it on your phone (computers pressing Play) --------------------------------------- */
+.gate {
+  width: min(460px, calc(100vw - 32px));
+  padding: 0;
+  border: 0;
+  border-radius: 26px;
+  background: transparent;
+  color: var(--text);
+}
+
+.gate::backdrop {
+  background: rgba(4, 6, 10, 0.72);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.gate[open] {
+  animation: gate-in 0.45s var(--ease-out);
+}
+
+@keyframes gate-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+}
+
+.gate__card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 34px 28px 28px;
+  text-align: center;
+  border-radius: 26px;
+  border: 1px solid var(--line-2);
+  background:
+    radial-gradient(80% 60% at 50% 0%, rgba(214, 178, 94, 0.16), transparent 70%),
+    linear-gradient(180deg, #161b26, #0b0e15);
+  box-shadow: 0 60px 120px -40px rgba(0, 0, 0, 0.95);
+}
+
+.gate__card .kicker {
+  margin: 0;
+}
+
+.gate__close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+}
+
+.gate__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(1.6rem, 4vw, 2.1rem);
+  line-height: 1.15;
+  color: #fbf3e2;
+}
+
+.gate__text {
+  margin: 0;
+  color: #e3d7bd;
+  line-height: 1.55;
+}
+
+.gate__qr {
+  width: 210px;
+  padding: 10px;
+  border-radius: 18px;
+  background: #fbf6ea;
+  box-shadow: 0 0 0 1px rgba(214, 178, 94, 0.5), 0 24px 50px -24px rgba(241, 190, 90, 0.6);
+}
+
+.gate__actions {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+/* --- The element showcase plays in a phone ------------------------------------------------ */
+.showcase__device {
+  align-self: start;
+  display: grid;
+  gap: 14px;
+}
+
+.showcase .device .showcase__media {
+  aspect-ratio: auto;
+  height: 100%;
+  border: 0;
+  border-radius: 4.6% / 10%;
+  box-shadow: none;
+}
+
+.showcase .device {
+  --glow: color-mix(in srgb, var(--el) 40%, transparent);
+}
+
+.showcase__caption {
+  margin: 0;
+  text-align: center;
+  font-size: 0.95rem;
+  font-style: italic;
+  color: var(--muted);
+}
+
+/* --- Touch controls on the Play page ------------------------------------------------------ */
+.keys--touch dt {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  color: var(--gold-2);
+}
+
+.keys-pc {
+  margin-top: 18px;
+}
+
+.keys-pc summary {
+  cursor: pointer;
+  margin-bottom: 14px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--gold);
+}
+
+@media (max-width: 960px) {
+  .phone-band {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .device--hero .device__frame,
+  .device--hero:hover .device__frame {
+    transform: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .qr-card {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .device figcaption {
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .device--hero .device__frame {
+    transition: none;
   }
 }
