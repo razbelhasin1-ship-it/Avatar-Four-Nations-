@@ -1,13 +1,18 @@
 import * as THREE from 'three';
+import type { LoopHandle } from '../../../audio/AudioEngine';
 import type { GameContext } from '../../../core/GameContext';
 import { dampAngle, wrapAngle } from '../../../core/MathUtil';
 import type { Entity } from '../../../entities/Entity';
 import { MOVE_STYLES, type Player } from '../../../player/Player';
 import { WORLD_HALF } from '../../../world/WorldLayout';
 import { liveConstructs, RockPillar, solidAt } from '../../../vfx/effects/constructs';
+import { rockImpact, shardRing } from '../../../vfx/effects/earth';
+import { debris } from '../../../vfx/effects/loop';
+import type { Emitter } from '../../../vfx/VFX';
 import { registerTechnique } from '../../CombatSystem';
 import type { Cast, Combatant } from '../../types';
 import { bending } from '../bending/runtime';
+import { shake } from '../bending/util';
 import { bendableAt } from './common';
 
 /**
@@ -164,6 +169,204 @@ export function isHeavy(e: Entity): boolean {
   return e.radius >= 0.75;
 }
 
+/** Critically damped spring step toward `target` (x, v updated in place through the returned pair). */
+function spring(x: number, v: number, target: number, omega: number, dt: number): [number, number] {
+  const e = Math.exp(-omega * dt);
+  const change = x - target;
+  const temp = (v + omega * change) * dt;
+  return [target + (change + temp) * e, (v - omega * temp) * e];
+}
+
+/** A short buzz on phones (behind the Vibration setting). */
+function buzz(ctx: GameContext, ms: number): void {
+  if (!ctx.settings.data.controls.vibration) return;
+  if (ctx.input.lastDevice !== 'touch' && !ctx.ui.touch?.shown) return;
+  try {
+    navigator.vibrate?.(ms);
+  } catch {
+    /* not supported */
+  }
+}
+
+/**
+ * How a ride feels: the camera pulls back and widens with speed (critically damped, eased back after), a
+ * stone-grinding rumble that rises with speed, a dust trail and rock chips off the base, a furrow of cracks
+ * that fade, faint speed lines at the screen's edges; the slam's crunch, boom, shockwave ring, debris, dust,
+ * cracks, camera shake and buzz.
+ */
+class ChargeFeel {
+  private pull = 0;
+  private pullV = 0;
+  private fov = 0;
+  private fovV = 0;
+  private appliedPull = 0;
+  private appliedFov = 0;
+  private loop: LoopHandle | null = null;
+  private dust: Emitter | null = null;
+  private chipT = 0;
+  private furrow = 0;
+  private lastX = NaN;
+  private lastZ = NaN;
+  private lines: HTMLElement | null = null;
+  private linesOn = 0;
+  private paused = false;
+
+  init(ctx: GameContext): void {
+    // Pause freezes the move; keep its grinding quiet meanwhile.
+    ctx.events.on('game:paused', (e: { paused: boolean }) => {
+      this.paused = e.paused;
+      if (e.paused) this.loop?.setVolume(0);
+    });
+  }
+
+  /** The pillar tears free: crack, dust, chips, the rise of stone and the grinding starts. */
+  launch(ctx: GameContext, r: Ride): void {
+    const base = tmpA.set(r.x, r.base + 0.15, r.z);
+    ctx.vfx.burst('dust', base, { count: 10, radius: r.pillar.radius * 1.1, speed: 1.2 });
+    debris(base, 5, { spread: 1, speed: 4, size: 0.12, radius: r.pillar.radius, color: r.pillar.tint, life: 0.8 });
+    ctx.world.fx.crack(base, r.pillar.radius * 1.6, r.heading);
+    ctx.audio.play('bend_earth_rise', { position: base, volume: 0.7, pitch: 0.7 });
+    if (!this.loop) this.loop = ctx.audio.loop('bend_rumble_loop', { position: base, volume: 0.2 });
+    if (!this.dust || !this.dust.active) this.dust = ctx.vfx.emitter('dust', 0, { radius: r.pillar.radius * 0.8, speed: 1.6, size: 1.4 });
+    this.lastX = r.x;
+    this.lastZ = r.z;
+    this.furrow = 0.6;
+  }
+
+  /** The slam: crunch and boom, shockwave ring, shards, debris, dust, cracks, a short shake and a buzz. */
+  slam(ctx: GameContext, r: Ride, at: THREE.Vector3, reason: SlamReason): void {
+    const small = reason === 'blocked' || reason === 'ledge';
+    const radius = PC.slamRadius * (small ? 0.6 : 1);
+    const tint = r.pillar.tint;
+    const fx = Math.sin(r.heading), fz = Math.cos(r.heading);
+    const front = tmpB.set(r.x + fx * r.pillar.radius, r.base + 0.9, r.z + fz * r.pillar.radius);
+    rockImpact(ctx, front, small ? 0.8 : 1.5, tint);
+    if (!small) shardRing(ctx, at, radius, tint, 0.35);
+    ctx.vfx.ring(tmpA.copy(at).setY(at.y + 0.12), '#c8ad84', radius, 0.5, { opacity: 0.7 });
+    debris(at, small ? 8 : 16, { spread: 1.4, speed: small ? 6 : 9, size: 0.18, radius: 1.1, color: tint, life: 1.5 });
+    ctx.vfx.burst('dust', at, { count: small ? 12 : 24, radius: radius * 0.45, speed: small ? 1.6 : 2.4 });
+    ctx.world.fx.crack(at, radius * 0.55, r.heading);
+    ctx.world.fx.disturb(at, radius + 1, 1);
+    ctx.audio.play('bend_earth_crumble', { position: at, volume: small ? 0.75 : 1 });
+    ctx.audio.play('bend_earth_slam', { position: at, volume: small ? 0.6 : 1, pitch: small ? 1.1 : 0.85 });
+    if (!ctx.settings.data.gameplay.reduceIntenseEffects) shake(ctx, at, small ? 0.2 : 0.32, 0.3);
+    buzz(ctx, small ? 25 : 45);
+    this.stopLoop(0.35);
+    this.dust?.stop();
+    this.dust = null;
+  }
+
+  stopLoop(fade: number): void {
+    this.loop?.stop(fade);
+    this.loop = null;
+  }
+
+  update(ctx: GameContext, r: Ride | null, dt: number): void {
+    const moving = !!r && (r.phase === 'windup' || r.phase === 'charge' || r.phase === 'brake');
+    const k = r && moving ? Math.min(1, r.speed / r.peak) : 0;
+    // Camera: pull back and widen with speed (anticipation on the wind-up), critically damped both ways.
+    const want = r?.phase === 'windup' ? 0.2 : k;
+    [this.pull, this.pullV] = spring(this.pull, this.pullV, PC.camPull * want, 6, dt);
+    [this.fov, this.fovV] = spring(this.fov, this.fovV, PC.camFov * want, 6, dt);
+    const cr = ctx.cameraRig;
+    cr.extraDistance += this.pull - this.appliedPull;
+    cr.extraFov += this.fov - this.appliedFov;
+    this.appliedPull = this.pull;
+    this.appliedFov = this.fov;
+    if (Math.abs(this.pull) < 1e-4 && Math.abs(this.pullV) < 1e-4 && !moving) {
+      cr.extraDistance -= this.appliedPull;
+      cr.extraFov -= this.appliedFov;
+      this.pull = this.fov = this.pullV = this.fovV = this.appliedPull = this.appliedFov = 0;
+    }
+    // Speed lines at the screen's edges.
+    const linesWant = ctx.settings.data.gameplay.reduceIntenseEffects ? 0 : Math.max(0, (k - 0.35) / 0.65) * 0.42;
+    this.linesOn += (linesWant - this.linesOn) * Math.min(1, dt * 10);
+    this.drawLines(ctx);
+    if (!r || !moving) return;
+    // Grinding: louder and higher with speed.
+    const foot = tmpA.set(r.x, r.base, r.z);
+    if (this.loop && !this.paused) {
+      this.loop.setPosition(foot);
+      this.loop.setPitch(0.72 + 0.5 * k);
+      this.loop.setVolume(0.2 + 0.6 * k);
+    }
+    // Dust trail and rock chips off the base, behind it.
+    const fx = Math.sin(r.heading), fz = Math.cos(r.heading);
+    const back = tmpB.set(r.x - fx * r.pillar.radius * 0.6, r.base + 0.15, r.z - fz * r.pillar.radius * 0.6);
+    if (this.dust) {
+      this.dust.position.copy(back);
+      this.dust.direction.set(-fx, 0.4, -fz);
+      this.dust.rate = 70 * k;
+    }
+    this.chipT -= dt;
+    if (k > 0.3 && this.chipT <= 0) {
+      this.chipT = 0.07;
+      const side = Math.random() < 0.5 ? -1 : 1;
+      debris(tmpB.set(r.x + fz * side * r.pillar.radius * 0.9, r.base + 0.2, r.z - fx * side * r.pillar.radius * 0.9), 1, {
+        spread: 0.9,
+        speed: 3 + 4 * k,
+        size: 0.06 + Math.random() * 0.06,
+        color: r.pillar.tint,
+        life: 0.7,
+      });
+    }
+    // The furrow: cracks along the path every metre or so, fading on their own.
+    if (Number.isFinite(this.lastX)) this.furrow += Math.hypot(r.x - this.lastX, r.z - this.lastZ);
+    this.lastX = r.x;
+    this.lastZ = r.z;
+    if (this.furrow >= 1.25 && k > 0.15) {
+      this.furrow = 0;
+      ctx.world.fx.crack(foot, 0.85, r.heading);
+      ctx.world.fx.disturb(foot, 2.4, 0.8);
+    }
+  }
+
+  private drawLines(ctx: GameContext): void {
+    if (this.linesOn < 0.005) {
+      if (this.lines) this.lines.style.opacity = '0';
+      return;
+    }
+    if (!this.lines) {
+      const el = document.createElement('div');
+      el.className = 'pillar-charge-lines';
+      const mask = 'radial-gradient(ellipse at center, transparent 46%, #000 82%)';
+      Object.assign(el.style, {
+        position: 'absolute',
+        inset: '0',
+        pointerEvents: 'none',
+        opacity: '0',
+        background: 'repeating-conic-gradient(from var(--pc-a, 0deg) at 50% 50%, rgba(255,248,232,0) 0deg 3.4deg, rgba(255,248,232,0.5) 3.4deg 3.9deg, rgba(255,248,232,0) 3.9deg 7.5deg)',
+        maskImage: mask,
+        webkitMaskImage: mask,
+      } as Partial<CSSStyleDeclaration>);
+      ctx.ui.layers.hud.appendChild(el);
+      this.lines = el;
+    }
+    this.lines.style.opacity = this.linesOn.toFixed(3);
+    this.lines.style.setProperty('--pc-a', `${(Math.random() * 7.5).toFixed(2)}deg`);
+  }
+
+  /** The ride is over: quiet the grinding and the trail (the camera eases back on its own). */
+  rideOver(): void {
+    this.stopLoop(0.3);
+    this.dust?.stop();
+    this.dust = null;
+  }
+
+  /** Session end: undo everything at once. */
+  reset(ctx: GameContext | null): void {
+    this.rideOver();
+    if (ctx) {
+      ctx.cameraRig.extraDistance -= this.appliedPull;
+      ctx.cameraRig.extraFov -= this.appliedFov;
+    }
+    this.pull = this.fov = this.pullV = this.fovV = this.appliedPull = this.appliedFov = 0;
+    this.linesOn = 0;
+    if (this.lines) this.lines.style.opacity = '0';
+    this.lastX = this.lastZ = NaN;
+  }
+}
+
 class PillarChargeDriver {
   private ctx: GameContext | null = null;
   ride: Ride | null = null;
@@ -176,8 +379,13 @@ class PillarChargeDriver {
   private lean = 0;
   private leanOwner: Player | null = null;
 
+  readonly feel = new ChargeFeel();
+  /** The rider's crouch on the slam (m), eased back after. */
+  private crouch = 0;
+
   init(ctx: GameContext): void {
     this.ctx = ctx;
+    this.feel.init(ctx);
   }
 
   // -------------------------------------------------------------------------------------------- queries
@@ -319,6 +527,7 @@ class PillarChargeDriver {
     this.ride = ride;
     this.leanOwner = p;
     this.attach(ride);
+    this.feel.launch(ctx, ride);
     ctx.events.emit('pillarcharge:launched', { targetId: pick.target?.id ?? null, distance: dist, chain: ride.charges });
   }
 
@@ -661,6 +870,7 @@ class PillarChargeDriver {
     r.speed = 0;
     r.reason = reason;
     const hits = this.shockwave(ctx, r, reason);
+    this.feel.slam(ctx, r, this.slamAt, reason);
     ctx.events.emit('pillarcharge:slam', { position: { x: this.slamAt.x, y: this.slamAt.y, z: this.slamAt.z }, hits: r.hits.size + hits, reason });
   }
 
@@ -735,6 +945,7 @@ class PillarChargeDriver {
       r.pillar.letGo();
       ctx.combat.startCooldown(p, PILLAR_CHARGE_ID, PC.cooldown);
       this.ride = null;
+      this.feel.rideOver();
       ctx.events.emit('pillarcharge:ended', { reason: 'left' });
       return;
     }
@@ -781,6 +992,7 @@ class PillarChargeDriver {
     if (ctx && reason !== 'lowered' && r.phase !== 'lower') ctx.combat.startCooldown(p, PILLAR_CHARGE_ID, PC.cooldown);
     if (r.cast && r.cast.phase !== 'done') r.cast.finish();
     this.ride = null;
+    this.feel.rideOver();
     ctx?.events.emit('pillarcharge:ended', { reason });
   }
 
@@ -793,8 +1005,13 @@ class PillarChargeDriver {
       if (r.pillar.alive) r.pillar.letGo();
       if (r.rider.body) r.rider.body.kinematic = false;
     }
-    if (this.leanOwner?.humanoid) this.leanOwner.humanoid.root.rotation.x = 0;
+    if (this.leanOwner?.humanoid) {
+      this.leanOwner.humanoid.root.rotation.x = 0;
+      this.leanOwner.humanoid.root.position.y = 0;
+    }
     this.lean = 0;
+    this.crouch = 0;
+    this.feel.reset(this.ctx);
     this.leanOwner = null;
     if (this.ready) {
       this.ready = false;
@@ -860,19 +1077,32 @@ class PillarChargeDriver {
   // -------------------------------------------------------------------------------------------- after the entities
 
   /** Runs after the entities: you face the way you ride and lean into the speed. */
-  post(dt: number, _ctx: GameContext): void {
+  post(dt: number, ctx: GameContext): void {
     const r = this.ride;
     const p = r?.rider ?? this.leanOwner;
     let want = 0;
+    let crouch = 0;
     if (r && this.attached(r)) {
       r.rider.yaw = dampAngle(r.rider.yaw, r.heading, 14, dt);
       r.rider.root.rotation.y = r.rider.yaw;
+      // Lean into the speed; on the slam ride half the stone's pitch and brace (a small crouch).
       want = (r.speed / r.peak) * PC.leanDeg * DEG;
+      if (r.phase === 'slam' || r.phase === 'windup') {
+        want += r.tilt * 0.5;
+        crouch = r.phase === 'slam' ? 0.1 * Math.min(1, Math.abs(r.tilt) / (PC.slamTiltDeg * DEG)) : 0.04;
+      }
     }
-    this.lean += (want - this.lean) * Math.min(1, dt * 10);
+    if (!ctx.ui.blocksGameplay) {
+      this.lean += (want - this.lean) * Math.min(1, dt * 10);
+      this.crouch += (crouch - this.crouch) * Math.min(1, dt * 14);
+    }
     const hum = p?.humanoid?.root;
-    if (hum) hum.rotation.x = Math.abs(this.lean) < 1e-4 ? 0 : this.lean;
-    if (!r && Math.abs(this.lean) < 1e-4) this.leanOwner = null;
+    if (hum) {
+      hum.rotation.x = Math.abs(this.lean) < 1e-4 ? 0 : this.lean;
+      hum.position.y = Math.abs(this.crouch) < 1e-4 ? 0 : -this.crouch;
+    }
+    if (!r && Math.abs(this.lean) < 1e-4 && Math.abs(this.crouch) < 1e-4) this.leanOwner = null;
+    this.feel.update(ctx, r, dt);
   }
 
   // -------------------------------------------------------------------------------------------- debug

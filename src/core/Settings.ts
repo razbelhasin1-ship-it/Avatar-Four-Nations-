@@ -58,6 +58,8 @@ export interface ControlSettings {
   touchOpacity: number;
   /** Mirror the touch layout: move stick on the right, action buttons on the left. */
   touchLeftHanded: boolean;
+  /** [additive: Pillar Charge] A short buzz on heavy impacts (phones that can vibrate). */
+  vibration: boolean;
 }
 
 export interface GameplaySettings {
@@ -166,6 +168,7 @@ export function defaultSettings(): SettingsData {
       touchButtonSize: 1,
       touchOpacity: 0.85,
       touchLeftHanded: false,
+      vibration: true,
     },
     gameplay: { difficulty: 'balanced', tutorialHints: true, damageNumbers: true, hudScale: 1, compass: true, reduceIntenseEffects: false },
   };

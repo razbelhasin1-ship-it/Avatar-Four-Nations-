@@ -229,6 +229,7 @@ export class SettingsScreen implements Screen {
     this.rowSlider(g, 'Button size', 'controls.touchButtonSize', 0.8, 1.4, 0.05, (v) => `${Math.round(v * 100)}%`, 'Never smaller than a fingertip (44 px)');
     this.rowSlider(g, 'Button opacity', 'controls.touchOpacity', 0.3, 1, 0.05, (v) => `${Math.round(v * 100)}%`);
     this.rowToggle(g, 'Left-handed layout', 'controls.touchLeftHanded', 'Move stick on the right, actions on the left');
+    this.rowToggle(g, 'Vibration', 'controls.vibration', 'A short buzz when a heavy blow lands (phones that can vibrate)');
     this.body.append(
       h(
         'div.bind-head',

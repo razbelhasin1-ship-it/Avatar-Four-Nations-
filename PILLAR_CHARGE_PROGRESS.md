@@ -7,7 +7,7 @@ Rollback branch: `before-pillar-charge` (pushed; = ba82dec, the tree before this
 - [x] 2. Charge motion with a stable rider (no damage)
 - [x] 3. Hit detection, damage, knockback, slam
 - [x] 4. Targeting, steering, terrain and obstacles
-- [ ] 5. Camera, animation, VFX, audio, haptics
+- [x] 5. Camera, animation, VFX, audio, haptics
 - [ ] 6. Controls, UI, tutorial
 - [ ] 7. Tuning, edge cases, tests
 
@@ -80,3 +80,19 @@ Rollback branch: `before-pillar-charge` (pushed; = ba82dec, the tree before this
 - Measured: cone picks the enemy 14 m ahead (skips one 50° off and one 3 m away); a 0.3 m wall stops it from
   27 m/s with the front 0.18 m short; a 5 m platform edge stops it with the front 0.2 m short; a 20° slope
   is ridden (+4.9 m), base change ≤ 0.17 m per frame.
+
+## Phase 5 (camera, animation, VFX, audio, haptics)
+- Camera: `extraDistance` +1.5 m and `extraFov` +10° at full speed (0.2 on the wind-up), each through a
+  critically damped spring (ω = 6) and applied as deltas (other systems' values untouched); lock-on framing is
+  the rig's own. Slam shake via `shake()` → `camera:shake` (scaled by Camera shake; off with Reduce intense
+  effects).
+- Rider: faces the heading; leans forward ∝ speed (≤ 15°); on the slam rides half the stone's pitch and braces
+  (a 10 cm crouch); everything eased (no pops) and eased back after.
+- VFX (all pooled systems): dust emitter off the base (rate ∝ speed), rock chips, a furrow of `world.fx.crack`
+  decals every 1.25 m (they fade) + grass disturbance; speed lines: one DOM layer (repeating conic gradient
+  masked to the screen edges) whose opacity follows speed above 35% (off with Reduce intense effects).
+  Slam: `rockImpact`, `shardRing`, shockwave `vfx.ring`, debris, dust cloud, cracks.
+- Audio: `bend_rumble_loop` (pitch 0.72→1.22 and volume with speed, silenced while paused), `bend_earth_rise`
+  at launch, `bend_earth_crumble` + `bend_earth_slam` on the slam.
+- Haptics: `navigator.vibrate(45 / 25 ms)` on the slam, touch play only, behind a NEW setting
+  Controls ▸ Touch controls ▸ Vibration (`controls.vibration`, default on) — the game had none.
