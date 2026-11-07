@@ -26,6 +26,15 @@ export class CameraRig implements GameSystem {
   extraDistance = 0;
   /** Extra pivot height (mounts). */
   extraHeight = 0;
+  /** [additive: glider] Extra field of view (degrees: the rush of speed). */
+  extraFov = 0;
+  /** [additive: glider] Camera roll (radians, a flier banking). */
+  roll = 0;
+  /** [additive: glider] A heading (player yaw) the camera eases in behind while the player leaves the camera alone (chase camera). */
+  chaseYaw: number | null = null;
+  /** [additive: glider] The camera pitch the chase camera eases to (looking along a dive, up into a climb). */
+  chasePitch: number | null = null;
+  private lookIdle = 0;
 
   init(ctx: GameContext): void {
     this.ctx = ctx;
@@ -76,6 +85,7 @@ export class CameraRig implements GameSystem {
       this.pitch += input.look.y * 0.0028;
     }
     this.pitch = clamp(this.pitch, -0.55, 1.2);
+    this.lookIdle = input.look.x !== 0 || input.look.y !== 0 ? 0 : this.lookIdle + dt;
 
     // Lock-on: steer yaw so the target stays framed.
     const lock = (p as any).lockTarget as { position: THREE.Vector3; alive: boolean } | null;
@@ -84,6 +94,10 @@ export class CameraRig implements GameSystem {
       const desired = Math.atan2(to.x, to.z) + Math.PI;
       this.yaw = dampAngle(this.yaw, desired, 5, dt);
       this.pitch = damp(this.pitch, 0.32, 3, dt);
+    } else if (this.chaseYaw !== null && this.lookIdle > 0.5) {
+      // [additive: glider] Swing in behind the flier when the player is not turning the camera.
+      this.yaw = dampAngle(this.yaw, this.chaseYaw + Math.PI, 1.6, dt);
+      if (this.chasePitch !== null) this.pitch = damp(this.pitch, this.chasePitch, 1.4, dt);
     }
 
     const mounted = (p as any).mountAnchor != null;
@@ -139,9 +153,10 @@ export class CameraRig implements GameSystem {
     if (cam.position.y < gh) cam.position.y = gh;
     const look = pivot.clone().addScaledVector(dir, -2);
     cam.lookAt(look);
+    if (this.roll) cam.rotateZ(this.roll);
     const baseFov = ctl.fov;
     const sprintFov = p.body && p.body.horizontalSpeed > 9 ? 4 : 0;
-    cam.fov = damp(cam.fov, baseFov + sprintFov + fovKick, 6, dt);
+    cam.fov = damp(cam.fov, baseFov + sprintFov + fovKick + this.extraFov, 6, dt);
     cam.updateProjectionMatrix();
     this.applyShake(dt, cam);
   }

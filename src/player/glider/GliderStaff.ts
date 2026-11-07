@@ -2,62 +2,78 @@ import * as THREE from 'three';
 import type { Humanoid } from '../../character/Humanoid';
 
 /**
- * The airbender's glider staff (Aang's, from the show): a long wooden staff with dark joint rings
- * that snaps open into a glider — two big red-orange bat wings stretched over wooden ribs near the
- * top and a small V tail at the foot — and folds back into a slim bundle along the shaft.
+ * The airbender's glider staff (Aang's, from the show): a long, straight wooden staff that snaps
+ * open into a glider made of two folding fans —
+ *  - a big fan near the head: thin dark ribs radiating from a hinge on the shaft, spreading to
+ *    both sides and back along the staff; the orange-red cloth covers only the outer band of the
+ *    fan (bare ribs near the hinge), its rim a smooth arc;
+ *  - a small fan of the same make near the foot (the tail).
+ * Folded, every rib lies inside the line of the shaft and the cloth with it: a plain staff.
  *
  * It is a prop of its own (not baked into the character mesh) so it can move:
  *  - 'back'  : slung diagonally across the back, folded (exploring);
  *  - 'hand'  : held in the hands, folded — spanning both fists when they are a staff's width apart,
  *              in the right fist otherwise (airbending: the wind leaves from its tip);
- *  - 'glide' : open above the back with the flier hanging from it (gliding).
- * Mode changes blend over a fraction of a second; the wings fan open and fold with the mode.
+ *  - 'glide' : open, the flier hanging beneath it from both fists (gliding).
+ * Mode changes blend over a fraction of a second; the fans flick open (a little overshoot, as a
+ * spring-loaded fan does) and fold with the mode.
  *
- * Prop space: the staff runs along +Z (the head with the wings forward), wings span ±X (left wing
- * on +X, the character's left), +Y is the top face of the open glider. Built at character scale 1
- * (a 1.75 m flier) and parented under the humanoid root, so it scales with the character.
+ * Prop space: the staff runs along +Z (the head forward), the fans spread ±X (left on +X, the
+ * character's left), +Y is the top face of the open glider. Built at character scale 1 (a 1.75 m
+ * flier) and parented under the humanoid root, so it scales with the character.
  */
 
 export type StaffMode = 'back' | 'hand' | 'glide';
 
-/** Staff extent along +Z (m): the head (front tip) and the foot. The main wings hinge at z = 0. */
-export const STAFF = { front: 0.52, rear: -1.3, radius: 0.018 } as const;
+/** Staff extent along +Z (m): the head (front tip) and the foot. The big fan hinges at z = 0. */
+export const STAFF = { front: 0.45, rear: -1.65, radius: 0.019 } as const;
 const LENGTH = STAFF.front - STAFF.rear;
 
-interface WingDef {
+const deg = (d: number) => (d * Math.PI) / 180;
+
+export interface FanDef {
   /** Hinge on the staff (z). */
   hub: number;
-  /** Rib lengths (m), leading edge first. */
-  len: number[];
-  /** Rib angles from +Z toward the wing's side, open and folded (radians). */
-  open: number[];
-  fold: number[];
-  /** Upward tilt of the open wing (radians). */
+  /** Rib length (m). */
+  radius: number;
+  /** The cloth starts at this fraction of the radius (bare ribs inside). */
+  inner: number;
+  /** Ribs per side, leading edge to the one lying along the staff. */
+  ribs: number;
+  /** Open angles of the leading and the last rib, from +Z toward the side (π: straight back). */
+  lead: number;
+  trail: number;
+  /** Upward tilt of the open fan (radians). */
   dihedral: number;
-  /** Where the fabric's root edge meets the staff (z), behind the last rib. */
-  attach: number;
-  /** +1 left (+X), -1 right. */
-  side: 1 | -1;
 }
 
-const deg = (d: number) => (d * Math.PI) / 180;
-const MAIN = { hub: 0, len: [1.3, 1.24, 1.1, 0.92], open: [62, 92, 122, 152].map(deg), fold: [176, 177, 178, 179].map(deg), dihedral: deg(7), attach: -0.95 };
-// The tail folds forward along the shaft (its ribs would overhang the foot folded backward).
-const TAIL = { hub: -1.18, len: [0.5, 0.42], open: [116, 150].map(deg), fold: [4, 2].map(deg), dihedral: deg(32), attach: -1.27 };
+/** The show's proportions: the big fan's ribs half the staff long, hinged a fifth of the way down;
+ *  the tail fan two fifths of that, hinged near the foot. */
+export const MAIN_FAN: FanDef = { hub: 0, radius: 1.0, inner: 0.5, ribs: 11, lead: deg(98), trail: deg(180), dihedral: deg(5) };
+export const TAIL_FAN: FanDef = { hub: -1.25, radius: 0.4, inner: 0.45, ribs: 7, lead: deg(100), trail: deg(180), dihedral: deg(3) };
 
-const WOOD = '#7b4b28';
-const WOOD_DARK = '#46291a';
-const RIB = '#5b3920';
-const FABRIC_IN = '#d96d3a';
-const FABRIC_OUT = '#b9472a';
+/** Where the fists grip the shaft while flying (just behind the big fan's hinge, in its bare centre). */
+export const GRIP_Z = -0.12;
+/** The flier hangs this far (radians) below the line of the glider: the body slopes down toward the feet. */
+export const HANG = 0.26;
+
+const WOOD = '#8a5a32';
+const WOOD_DARK = '#4a2c1b';
+const RIB = '#6b4527';
+
+/** Angular samples per gap between ribs (the cloth's rim is a smooth arc) and radial rows across the band. */
+const SUB = 3;
+const ROWS = [0, 0.05, 0.5, 0.95, 1];
 
 const Z = new THREE.Vector3(0, 0, 1);
 const _m = new THREE.Matrix4();
+const _m2 = new THREE.Matrix4();
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _v3 = new THREE.Vector3();
 const _x = new THREE.Vector3();
 const _y = new THREE.Vector3();
+const _z = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
 const _mid = new THREE.Vector3();
 const _up = new THREE.Vector3();
@@ -66,119 +82,71 @@ const _world = new THREE.Matrix4();
 const _pos = new THREE.Vector3();
 const _quat = new THREE.Quaternion();
 const _scl = new THREE.Vector3();
+const _q = new THREE.Quaternion();
 
-class Wing {
-  readonly ribs: THREE.Mesh[] = [];
-  readonly fabric: THREE.Mesh;
-  private readonly geo: THREE.BufferGeometry;
-  private readonly pos: Float32Array;
-  /** Rib tips (prop space), recomputed by pose(). */
-  private readonly tips: THREE.Vector3[];
-
-  constructor(
-    readonly def: WingDef,
-    parent: THREE.Object3D,
-    ribGeo: THREE.BufferGeometry,
-    ribMat: THREE.Material,
-    fabricMat: THREE.Material,
-  ) {
-    const n = def.len.length;
-    this.tips = def.len.map(() => new THREE.Vector3());
-    for (let i = 0; i < n; i++) {
-      const r = new THREE.Mesh(ribGeo, ribMat);
-      r.castShadow = true;
-      parent.add(r);
-      this.ribs.push(r);
+/** The cloth: orange-red with a darker hem at both edges and a thin dark line along each rib. */
+function fabricTexture(): THREE.DataTexture {
+  const w = 64, h = 32;
+  const data = new Uint8Array(w * h * 4);
+  const base = [228, 94, 44], hem = [150, 50, 24], rib = [70, 34, 18];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const v = (y + 0.5) / h;
+      const u = (x + 0.5) / w;
+      let c = base;
+      // A faint weave so large spans are not flat colour.
+      const weave = ((x * 7 + y * 13) % 5) * 1.6 - 3;
+      if (v < 0.07 || v > 0.93) c = hem;
+      const ribDist = Math.min(u, 1 - u) * w;
+      let k = 0;
+      if (ribDist < 1.2) k = 1 - ribDist / 1.2;
+      const i = (y * w + x) * 4;
+      for (let j = 0; j < 3; j++) data[i + j] = Math.max(0, Math.min(255, Math.round(c[j] * (1 - k) + rib[j] * k + weave)));
+      data[i + 3] = 255;
     }
-    // Vertices: hub, tips, scallops between tips, the root attach point on the staff.
-    const verts = 1 + n + (n - 1) + 1;
-    this.pos = new Float32Array(verts * 3);
-    const col = new Float32Array(verts * 3);
-    const cin = new THREE.Color(FABRIC_IN), cout = new THREE.Color(FABRIC_OUT);
-    for (let i = 0; i < verts; i++) {
-      const c = i === 0 || i === verts - 1 ? cin : cout;
-      col.set([c.r, c.g, c.b], i * 3);
-    }
-    const idx: number[] = [];
-    const tip = (i: number) => 1 + i;
-    const sc = (i: number) => 1 + n + i;
-    const att = verts - 1;
-    for (let i = 0; i < n - 1; i++) idx.push(0, tip(i), sc(i), 0, sc(i), tip(i + 1));
-    idx.push(0, tip(n - 1), att);
-    this.geo = new THREE.BufferGeometry();
-    this.geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
-    this.geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    this.geo.setIndex(def.side > 0 ? idx : flipWinding(idx));
-    this.fabric = new THREE.Mesh(this.geo, fabricMat);
-    this.fabric.castShadow = true;
-    this.fabric.frustumCulled = false;
-    parent.add(this.fabric);
   }
-
-  /** Fan the ribs to open fraction f (0 folded .. 1 open); flutter ruffles the trailing edge. */
-  pose(f: number, flutter: number, t: number): void {
-    const d = this.def;
-    const n = d.len.length;
-    const e = f * f * (3 - 2 * f);
-    const dih = d.dihedral * e;
-    const hub = _v.set(0, 0, d.hub);
-    for (let i = 0; i < n; i++) {
-      const a = d.fold[i] + (d.open[i] - d.fold[i]) * e;
-      // Folded, the ribs lie a little off the shaft (the fabric bundle); open, they fan out.
-      const out = Math.sin(a) * d.len[i] + (1 - e) * 0.03;
-      const tipV = this.tips[i].set(out * Math.cos(dih) * d.side, out * Math.sin(dih) + (1 - e) * 0.012, d.hub + Math.cos(a) * d.len[i]);
-      const r = this.ribs[i];
-      r.position.copy(hub);
-      _v2.subVectors(tipV, hub);
-      const len = _v2.length();
-      r.quaternion.setFromUnitVectors(Z, _v2.multiplyScalar(1 / Math.max(len, 1e-4)));
-      r.scale.set(1, 1, len);
-    }
-    const p = this.pos;
-    p[0] = 0;
-    p[1] = 0;
-    p[2] = d.hub;
-    for (let i = 0; i < n; i++) p.set([this.tips[i].x, this.tips[i].y, this.tips[i].z], (1 + i) * 3);
-    // Scalloped trailing edge between the ribs (the bat-wing cut), drawn in toward the hinge.
-    for (let i = 0; i < n - 1; i++) {
-      const a = this.tips[i], b = this.tips[i + 1];
-      const m = _v3.addVectors(a, b).multiplyScalar(0.5);
-      const k = 0.2 * e;
-      m.x -= m.x * k;
-      m.y -= (m.y - 0) * k;
-      m.z -= (m.z - d.hub) * k;
-      m.y += Math.sin(t * 23 + i * 1.7 + d.side) * flutter * 0.025;
-      p.set([m.x, m.y, m.z], (1 + n + i) * 3);
-    }
-    const at = (1 + n + n - 1) * 3;
-    p[at] = 0;
-    p[at + 1] = 0;
-    p[at + 2] = d.attach;
-    this.geo.attributes.position.needsUpdate = true;
-    this.geo.computeVertexNormals();
-    this.geo.computeBoundingSphere();
-  }
-
-  dispose(): void {
-    this.geo.dispose();
-  }
+  const t = new THREE.DataTexture(data, w, h, THREE.RGBAFormat);
+  t.wrapS = THREE.RepeatWrapping;
+  t.wrapT = THREE.ClampToEdgeWrapping;
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  t.needsUpdate = true;
+  return t;
 }
 
-function flipWinding(idx: number[]): number[] {
-  const out = idx.slice();
-  for (let i = 0; i < out.length; i += 3) [out[i + 1], out[i + 2]] = [out[i + 2], out[i + 1]];
-  return out;
+/** One half of a fan (one side of the staff): its ribs and its band of cloth. */
+interface Half {
+  def: FanDef;
+  side: 1 | -1;
+  /** First rib's index in the instanced ribs. */
+  rib0: number;
+  /** First vertex of its cloth in the shared buffer. */
+  v0: number;
+}
+
+/** Ease with a small overshoot (a fan flicked open springs a little past and settles). */
+function backOut(t: number): number {
+  const s = 1.6;
+  const u = t - 1;
+  return 1 + u * u * ((s + 1) * u + s);
 }
 
 export class GliderStaff {
   /** The prop (child of the humanoid root; local transform set every update). */
   readonly root = new THREE.Group();
   mode: StaffMode = 'back';
-  /** Wing opening 0 (folded) .. 1 (open). */
+  /** Fans opening 0 (folded) .. 1 (open). */
   open = 0;
-  /** Wind on the fabric while flying (0..1, set by the flier). */
+  /** Wind on the cloth while flying (0..1, set by the flier): billow and flutter. */
   flutter = 0;
+  /** Extra upward flex of the fans under load (0..1, set by the flier: lift, gusts, pulling out of a dive). */
+  load = 0;
   private time = 0;
+  /** Seconds into the current opening (the flick) — drives the overshoot. */
+  private openT = 1;
   private lastPosed = -1;
   private blend = 1;
   private blendDur = 0.2;
@@ -187,9 +155,20 @@ export class GliderStaff {
   private readonly holdPos = new THREE.Vector3();
   private readonly holdQuat = new THREE.Quaternion();
   private holdInit = false;
-  private readonly wings: Wing[] = [];
   private readonly geos: THREE.BufferGeometry[] = [];
   private readonly mats: THREE.Material[] = [];
+  private readonly tex: THREE.DataTexture;
+  private readonly wings = new THREE.Group();
+  private readonly ribs: THREE.InstancedMesh;
+  private readonly cloth: THREE.Mesh;
+  private readonly clothGeo: THREE.BufferGeometry;
+  private readonly clothPos: Float32Array;
+  private readonly halves: Half[] = [];
+  /** Current rib angles per half (for the cloth between them). */
+  private readonly angles: number[][] = [];
+  /** World positions of the big fan's outermost rib tips (left, right), for wingtip trails. */
+  private readonly tipL = new THREE.Vector3();
+  private readonly tipR = new THREE.Vector3();
 
   constructor(private readonly humanoid: Humanoid) {
     this.root.name = 'glider_staff';
@@ -198,10 +177,11 @@ export class GliderStaff {
       this.mats.push(m);
       return m;
     };
-    const wood = std(WOOD, 0.62);
+    const wood = std(WOOD, 0.6);
     const dark = std(WOOD_DARK, 0.7);
-    const ribMat = std(RIB, 0.7);
-    const fabric = std('#ffffff', 0.86, { vertexColors: true, side: THREE.DoubleSide });
+    const ribMat = std(RIB, 0.75);
+    this.tex = fabricTexture();
+    const clothMat = std('#ffffff', 0.88, { map: this.tex, side: THREE.DoubleSide });
     const add = (geo: THREE.BufferGeometry, mat: THREE.Material, z: number, rx = Math.PI / 2) => {
       this.geos.push(geo);
       const m = new THREE.Mesh(geo, mat);
@@ -211,9 +191,9 @@ export class GliderStaff {
       this.root.add(m);
       return m;
     };
-    // Shaft, with rounded ends.
-    add(new THREE.CylinderGeometry(STAFF.radius, STAFF.radius * 1.06, LENGTH, 8, 1), wood, (STAFF.front + STAFF.rear) / 2);
-    const cap = new THREE.SphereGeometry(STAFF.radius * 1.15, 8, 6);
+    // The shaft, slightly thicker toward the head, with rounded ends.
+    add(new THREE.CylinderGeometry(STAFF.radius, STAFF.radius * 0.92, LENGTH, 10, 1), wood, (STAFF.front + STAFF.rear) / 2);
+    const cap = new THREE.SphereGeometry(STAFF.radius * 1.12, 10, 6);
     this.geos.push(cap);
     for (const z of [STAFF.front, STAFF.rear]) {
       const m = new THREE.Mesh(cap, dark);
@@ -221,30 +201,68 @@ export class GliderStaff {
       m.castShadow = true;
       this.root.add(m);
     }
-    // Dark joint rings where the shaft's sections meet, each with a small peg.
-    const ring = new THREE.CylinderGeometry(STAFF.radius * 1.32, STAFF.radius * 1.32, 0.035, 8, 1);
-    const peg = new THREE.SphereGeometry(STAFF.radius * 0.75, 6, 4);
-    this.geos.push(ring, peg);
-    for (const z of [STAFF.front - 0.13, 0.04, -0.46, STAFF.rear + 0.15]) {
-      const r = new THREE.Mesh(ring, dark);
-      r.rotation.x = Math.PI / 2;
-      r.position.z = z;
-      this.root.add(r);
-      const p = new THREE.Mesh(peg, dark);
-      p.position.set(0, STAFF.radius * 1.3, z + 0.03);
-      this.root.add(p);
+    // Dark collars: the two fan hinges, and bands near the ends.
+    const collar = new THREE.CylinderGeometry(STAFF.radius * 1.45, STAFF.radius * 1.45, 0.05, 10, 1);
+    const band = new THREE.CylinderGeometry(STAFF.radius * 1.2, STAFF.radius * 1.2, 0.025, 10, 1);
+    this.geos.push(collar, band);
+    for (const z of [MAIN_FAN.hub, TAIL_FAN.hub]) {
+      const c = new THREE.Mesh(collar, dark);
+      c.rotation.x = Math.PI / 2;
+      c.position.z = z;
+      this.root.add(c);
     }
-    // Leather grip wrap below the head.
-    add(new THREE.CylinderGeometry(STAFF.radius * 1.15, STAFF.radius * 1.15, 0.2, 8, 1), dark, -0.22);
-    // Ribs: a unit-length rod along +Z from its base, scaled per rib.
-    const ribGeo = new THREE.CylinderGeometry(0.0065, 0.0085, 1, 5, 1);
+    for (const z of [STAFF.front - 0.08, STAFF.rear + 0.08]) {
+      const b = new THREE.Mesh(band, dark);
+      b.rotation.x = Math.PI / 2;
+      b.position.z = z;
+      this.root.add(b);
+    }
+    // Leather grip where the fists hold it.
+    add(new THREE.CylinderGeometry(STAFF.radius * 1.12, STAFF.radius * 1.12, 0.22, 10, 1), dark, GRIP_Z - 0.04);
+
+    // Fans: all ribs in one instanced draw, all cloth in one buffer.
+    this.root.add(this.wings);
+    const ribGeo = new THREE.CylinderGeometry(0.0042, 0.0062, 1, 5, 1);
     ribGeo.rotateX(Math.PI / 2);
     ribGeo.translate(0, 0, 0.5);
     this.geos.push(ribGeo);
-    for (const side of [1, -1] as const) {
-      this.wings.push(new Wing({ ...MAIN, side }, this.root, ribGeo, ribMat, fabric));
-      this.wings.push(new Wing({ ...TAIL, side }, this.root, ribGeo, ribMat, fabric));
+    let ribCount = 0, vertCount = 0;
+    const idx: number[] = [];
+    const uvs: number[] = [];
+    for (const def of [MAIN_FAN, TAIL_FAN]) {
+      for (const side of [1, -1] as const) {
+        const half: Half = { def, side, rib0: ribCount, v0: vertCount };
+        this.halves.push(half);
+        this.angles.push(new Array(def.ribs).fill(def.trail));
+        ribCount += def.ribs;
+        const cols = (def.ribs - 1) * SUB + 1;
+        for (let c = 0; c < cols; c++) {
+          for (let r = 0; r < ROWS.length; r++) uvs.push(c / SUB, ROWS[r]);
+        }
+        for (let c = 0; c < cols - 1; c++) {
+          for (let r = 0; r < ROWS.length - 1; r++) {
+            const a = half.v0 + c * ROWS.length + r, b = a + ROWS.length;
+            if (side > 0) idx.push(a, b, a + 1, a + 1, b, b + 1);
+            else idx.push(a, a + 1, b, a + 1, b + 1, b);
+          }
+        }
+        vertCount += cols * ROWS.length;
+      }
     }
+    this.ribs = new THREE.InstancedMesh(ribGeo, ribMat, ribCount);
+    this.ribs.castShadow = true;
+    this.ribs.frustumCulled = false;
+    this.wings.add(this.ribs);
+    this.clothPos = new Float32Array(vertCount * 3);
+    this.clothGeo = new THREE.BufferGeometry();
+    this.clothGeo.setAttribute('position', new THREE.BufferAttribute(this.clothPos, 3).setUsage(THREE.DynamicDrawUsage));
+    this.clothGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    this.clothGeo.setIndex(idx);
+    this.geos.push(this.clothGeo);
+    this.cloth = new THREE.Mesh(this.clothGeo, clothMat);
+    this.cloth.castShadow = true;
+    this.cloth.frustumCulled = false;
+    this.wings.add(this.cloth);
     humanoid.root.add(this.root);
     this.poseWings();
   }
@@ -256,6 +274,7 @@ export class GliderStaff {
     this.fromQuat.copy(this.root.quaternion);
     this.blend = 0;
     this.blendDur = Math.max(0.01, blend);
+    if (m === 'glide' && this.open < 0.05) this.openT = 0;
     this.mode = m;
     this.holdInit = false;
   }
@@ -266,6 +285,12 @@ export class GliderStaff {
     return out.set(0, 0, STAFF.front + 0.05).applyMatrix4(this.root.matrixWorld);
   }
 
+  /** The big fan's outermost rib tip on one side (world space): where the wingtip streams start. */
+  wingTipWorld(side: 1 | -1, out: THREE.Vector3): THREE.Vector3 {
+    this.root.updateWorldMatrix(true, false);
+    return out.copy(side > 0 ? this.tipL : this.tipR).applyMatrix4(this.root.matrixWorld);
+  }
+
   /** True once the staff has reached its hold in the hands (not still flying off the back). */
   get inHands(): boolean {
     return this.mode === 'hand' && this.blend >= 1;
@@ -273,6 +298,7 @@ export class GliderStaff {
 
   update(dt: number): void {
     this.time += dt;
+    this.openT += dt;
     const h = this.humanoid;
     h.root.updateWorldMatrix(true, true);
     _rootInv.copy(h.root.matrixWorld).invert();
@@ -288,18 +314,92 @@ export class GliderStaff {
       this.root.quaternion.copy(_quat);
     }
     this.root.scale.setScalar(1);
-    // Wings: snap open quickly (it is a spring-loaded glider), fold a little slower.
+    // Fans: flick open fast (spring-loaded), fold a little slower.
     const want = this.mode === 'glide' ? 1 : 0;
     if (this.open !== want) {
-      const rate = want > this.open ? 4.2 : 3.4;
+      const rate = want > this.open ? 3.6 : 3.2;
       this.open = want > this.open ? Math.min(want, this.open + dt * rate) : Math.max(want, this.open - dt * rate);
     }
-    if (this.open !== this.lastPosed || (this.open > 0.5 && this.flutter > 0.01)) this.poseWings();
+    const settling = this.open >= 1 && this.openT < 0.6;
+    if (this.open !== this.lastPosed || settling || (this.open > 0.5 && (this.flutter > 0.01 || this.load > 0.01))) this.poseWings();
   }
 
   private poseWings(): void {
     this.lastPosed = this.open;
-    for (const w of this.wings) w.pose(this.open, this.flutter * this.open, this.time);
+    const f = this.open;
+    this.wings.visible = f > 0.002;
+    if (!this.wings.visible) return;
+    // Opening: eased with a little overshoot that settles (a damped wobble after it locks open).
+    let e: number;
+    if (this.mode === 'glide') {
+      e = backOut(Math.min(1, f));
+      if (f >= 1) e = 1 + Math.sin(this.openT * 26) * Math.exp(-this.openT * 9) * 0.05;
+    } else e = f * f * (3 - 2 * f);
+    const flutter = this.flutter * Math.min(1, f);
+    const load = this.load * Math.min(1, f);
+    for (let hi = 0; hi < this.halves.length; hi++) this.poseHalf(hi, e, flutter, load);
+    this.ribs.instanceMatrix.needsUpdate = true;
+    this.clothGeo.attributes.position.needsUpdate = true;
+    this.clothGeo.computeVertexNormals();
+  }
+
+  /** A point on a half-fan at rib parameter u (rib index + fraction) and radius fraction s (prop space). */
+  private fanPoint(half: Half, ang: number[], u: number, s: number, e: number, flutter: number, load: number, out: THREE.Vector3): THREE.Vector3 {
+    const d = half.def;
+    const i = Math.min(d.ribs - 2, Math.floor(u));
+    const fr = u - i;
+    const a = ang[i] + (ang[i + 1] - ang[i]) * fr;
+    const r = d.radius * s;
+    // The fan flexes up toward the rim under load (dihedral grows outward), more toward the tips.
+    const dih = (d.dihedral + load * deg(7) * s) * Math.min(1, Math.max(0, e));
+    const across = Math.sin(a) * r;
+    let y = across * Math.sin(dih);
+    // Cloth billows up between the ribs and ripples toward the rim in the wind (held at each rib).
+    if (s > d.inner) {
+      const band = (s - d.inner) / (1 - d.inner);
+      const between = Math.sin(Math.PI * fr);
+      y += between * Math.sin(Math.PI * band) * d.radius * (0.012 + 0.03 * flutter);
+      y += Math.sin(this.time * (17 + 9 * flutter) + u * 2.1 + half.side * 1.3) * flutter * between * band * band * d.radius * 0.03;
+    }
+    return out.set(across * Math.cos(dih) * half.side, y, d.hub + Math.cos(a) * r);
+  }
+
+  private poseHalf(hi: number, e: number, flutter: number, load: number): void {
+    const half = this.halves[hi];
+    const d = half.def;
+    const ang = this.angles[hi];
+    // Rib angles: folded, all lie along the staff (inside the shaft); open, spread evenly lead → trail.
+    for (let k = 0; k < d.ribs; k++) {
+      const open = d.lead + ((d.trail - d.lead) * k) / (d.ribs - 1);
+      ang[k] = d.trail + (open - d.trail) * e;
+    }
+    // Ribs: from the hinge to the rim.
+    const hub = _v.set(0, 0, d.hub);
+    for (let k = 0; k < d.ribs; k++) {
+      const tip = this.fanPoint(half, ang, Math.min(k, d.ribs - 1 - 1e-6), 1, e, 0, load, _v2);
+      if (k === 0 && d === MAIN_FAN) (half.side > 0 ? this.tipL : this.tipR).copy(tip);
+      _v3.subVectors(tip, hub);
+      const len = _v3.length();
+      _q.setFromUnitVectors(Z, _v3.multiplyScalar(1 / Math.max(len, 1e-4)));
+      // Ribs ride on the cloth's top face.
+      _m.compose(_v.set(0, 0.004, d.hub), _q, _scl.set(1, 1, len));
+      this.ribs.setMatrixAt(half.rib0 + k, _m);
+      hub.set(0, 0, d.hub);
+    }
+    // Cloth: the outer band, rows from the inner hem to the rim.
+    const cols = (d.ribs - 1) * SUB + 1;
+    const p = this.clothPos;
+    for (let c = 0; c < cols; c++) {
+      const u = Math.min(c / SUB, d.ribs - 1 - 1e-6);
+      for (let r = 0; r < ROWS.length; r++) {
+        const s = d.inner + (1 - d.inner) * ROWS[r];
+        this.fanPoint(half, ang, u, s, e, flutter, load, _v3);
+        const vi = (half.v0 + c * ROWS.length + r) * 3;
+        p[vi] = _v3.x;
+        p[vi + 1] = _v3.y;
+        p[vi + 2] = _v3.z;
+      }
+    }
   }
 
   /** Where the staff wants to be this frame (root space). */
@@ -307,11 +407,23 @@ export class GliderStaff {
     const h = this.humanoid;
     switch (this.mode) {
       case 'glide': {
-        // Above the back, along the spine: the head (wings) toward the flier's head, top face up
-        // away from the back. Hands reach up to the shaft just behind the hinge.
+        // Open above the flier, the shaft through both fists (between them, just behind the big
+        // fan's hinge): the glider's line runs along the body's, tipped toward the belly by HANG,
+        // so the body slopes down beneath it to the feet and the fans ride clear of the back.
         const chest = h.bones.chest;
-        _m.makeRotationX(-Math.PI / 2).setPosition(0, 0.36, -0.2);
-        _world.multiplyMatrices(chest.matrixWorld, _m);
+        _m2.extractRotation(chest.matrixWorld);
+        const c = Math.cos(HANG), s = Math.sin(HANG);
+        _z.set(0, c, s).applyMatrix4(_m2).normalize();
+        _y.set(0, s, -c).applyMatrix4(_m2).normalize();
+        _x.crossVectors(_y, _z).normalize();
+        _m.makeBasis(_x, _y, _z);
+        const hl = h.anchors.handL.getWorldPosition(_v);
+        const hr = h.anchors.handR.getWorldPosition(_v2);
+        const mid = _mid.addVectors(hl, hr).multiplyScalar(0.5);
+        // The shaft sits in the closed fists (a little above the palm anchors).
+        mid.addScaledVector(_y, 0.02).addScaledVector(_z, -GRIP_Z);
+        _m.setPosition(mid);
+        _world.copy(_m);
         break;
       }
       case 'hand': {
@@ -320,15 +432,14 @@ export class GliderStaff {
         break;
       }
       default: {
-        // Slung across the back: head up over the left shoulder, foot down by the right hip, the
-        // fabric bundle lying flat against the back.
+        // Slung across the back: head up over the left shoulder, foot down by the right hip.
         const back = h.anchors.back;
         const zAxis = _v.set(0.32, 1, -0.06).normalize();
         const yAxis = _y.set(0, 0, -1);
         const xAxis = _x.crossVectors(yAxis, zAxis).normalize();
         yAxis.crossVectors(zAxis, xAxis);
         _m.makeBasis(xAxis, yAxis, zAxis);
-        // Centre of the shaft on the anchor (the prop origin is the wing hinge, near the head).
+        // Centre of the shaft on the anchor (the prop origin is the big fan's hinge, near the head).
         const c = (STAFF.front + STAFF.rear) / 2;
         _v2.set(0, 0, -c).applyMatrix4(_m);
         _m.setPosition(-0.02 + _v2.x, -0.08 + _v2.y, -0.02 + _v2.z);
@@ -389,9 +500,10 @@ export class GliderStaff {
 
   dispose(): void {
     this.root.removeFromParent();
-    for (const w of this.wings) w.dispose();
+    this.ribs.dispose();
     for (const g of this.geos) g.dispose();
     for (const m of this.mats) m.dispose();
+    this.tex.dispose();
   }
 }
 
@@ -403,4 +515,3 @@ function orient(out: THREE.Quaternion, axis: THREE.Vector3, fwd: THREE.Vector3):
   _m.makeBasis(x, y, axis);
   return out.setFromRotationMatrix(_m);
 }
-

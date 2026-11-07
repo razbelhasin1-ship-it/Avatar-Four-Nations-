@@ -250,7 +250,19 @@ export function installDebug(game: Game): void {
         y: p.position.y,
         grip: [...p.humanoid.animator.grip],
         meshAccessory: p.humanoid.appearance.outfit.accessory,
+        bank: (p as any).glideBank as number,
+        attitude: (p as any).glideAttitude as number,
+        fov: ctx.camera.fov,
+        chase: ctx.cameraRig.chaseYaw !== null,
+        roll: ctx.cameraRig.roll,
       };
+    },
+    /** The big fan's tips in world space (left, right), or null without the staff. */
+    wingTips() {
+      const s = game.player.staff;
+      if (!s) return null;
+      const l = s.wingTipWorld(1, new THREE.Vector3()), r = s.wingTipWorld(-1, new THREE.Vector3());
+      return { left: { x: l.x, y: l.y, z: l.z }, right: { x: r.x, y: r.y, z: r.z } };
     },
     /** The staff head in world space (where airbending leaves from while it is held), or null. */
     tip() {

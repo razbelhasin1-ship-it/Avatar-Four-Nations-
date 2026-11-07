@@ -55,7 +55,7 @@ export const ELEMENT_STYLE: Record<ElementId, { motto: string; style: string }> 
   air: {
     motto: 'Never stand still',
     style:
-      'Fast and evasive: a double jump, a glider staff that opens into wings (dive, swoop, bend gusts under it and ride the updrafts by the temple cliffs), the air scooter, shields that deflect and redirect projectiles, and a vortex that lifts foes off the ground. Light on damage, heavy on knockback.',
+      'Fast and evasive: a double jump, a glider staff that snaps open into two fans (dive, swoop, bend gusts under it and ride the updrafts by the temple cliffs), the air scooter, shields that deflect and redirect projectiles, and a vortex that lifts foes off the ground. Light on damage, heavy on knockback.',
   },
 };
 

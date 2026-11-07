@@ -153,8 +153,12 @@ export interface LocomotionState {
   gliding: boolean;
   /** Gliding under an open glider (hanging from its shaft) rather than on spread arms. */
   glider?: boolean;
-  /** How steeply the glider dives (0 level .. 1 full dive): the flier tucks and tips forward. */
-  glideDive?: number;
+  /** Under a glider: the body's line above the horizon (rad, head up +) — the glider's attitude plus the hang. */
+  glideBodyPitch?: number;
+  /** Under a glider: roll into a turn (rad, + = left side down, turning left). */
+  glideBank?: number;
+  /** Under a glider: airspeed 0 (stalling) .. 1 (full dive). */
+  glideSpeed?: number;
   sliding: boolean;
   mounted: boolean;
   /** Seated/kneeling/meditating idle (overrides locomotion). 'sphere' = suspended in the Elements Sphere. */
@@ -986,28 +990,42 @@ export class Animator {
     // ---- Glide (airbender) ----
     const g = this.glideBlend;
     if (g > 0.001 && L.glider) {
-      // Hanging from an open glider (the show's pose): body stretched out flat beneath the shaft,
-      // both arms up over the head gripping it, legs together and trailing, eyes ahead. A dive
-      // tips the body down and tucks the knees a little; a turn banks the whole body.
-      const dive = clamp01(L.glideDive ?? 0);
-      const sway = Math.sin(t * 2.3) * 0.03;
-      this.blendLoco('hips', 1.32 + dive * 0.22, 0, this.lean * 1.5, g);
-      this.blendLoco('spine', -0.1, 0, 0, g);
-      this.blendLoco('chest', -0.12 - dive * 0.06, 0, 0, g);
-      this.blendLoco('neck', -0.42, 0, 0, g);
-      this.blendLoco('head', -0.62 + dive * 0.15, 0, 0, g);
-      this.blendLoco('upperArmL', -3.0 + sway, 0, -0.16, g);
-      this.blendLoco('upperArmR', -3.0 - sway, 0, 0.16, g);
-      this.blendLoco('foreArmL', -0.32, 0, 0, g);
-      this.blendLoco('foreArmR', -0.32, 0, 0, g);
-      this.blendLoco('handL', 0.25, 0, 0, g);
-      this.blendLoco('handR', 0.25, 0, 0, g);
-      this.blendLoco('thighL', 0.08 - dive * 0.25, 0, 0.03, g);
-      this.blendLoco('thighR', 0.12 - dive * 0.25, 0, -0.03, g);
-      this.blendLoco('shinL', 0.18 + dive * 0.45, 0, 0, g);
-      this.blendLoco('shinR', 0.12 + dive * 0.45, 0, 0, g);
-      this.blendLoco('footL', 0.75, 0, 0, g);
-      this.blendLoco('footR', 0.75, 0, 0, g);
+      // Hanging from an open glider (the show's pose): both fists on the shaft overhead, the body
+      // stretched out beneath it and sloping down to the feet, legs together and trailing in the
+      // wind. The body follows the glider's attitude (nose down in a dive, up in a swoop) and rolls
+      // with it into turns, the head turning to look into the turn; at speed the legs stream out
+      // straight, slow and stalling they dangle.
+      const pitch = L.glideBodyPitch ?? 0.26;
+      const bank = L.glideBank ?? 0;
+      const v = clamp01(L.glideSpeed ?? 0.5);
+      const slow = clamp01(1 - v * 2.2);
+      const fast = clamp01((v - 0.55) / 0.45);
+      const flap = Math.sin(t * (3.1 + v * 5)) * (0.02 + 0.05 * v);
+      const sway = Math.sin(t * 1.7) * 0.025;
+      // Spine and chest lean back a little (head up); the hips set the rest so the chest's line sits
+      // `pitch` above the horizon. Roll about the body's long axis is the hips' twist (y) once pitched.
+      const bend = 0.12;
+      this.blendLoco('hips', Math.PI / 2 + bend - pitch, -bank, 0, g);
+      this.blendLoco('spine', -0.06, 0, 0, g);
+      this.blendLoco('chest', -0.06, 0, 0, g);
+      this.blendLoco('neck', -0.4, 0, -bank * 0.25, g);
+      this.blendLoco('head', -0.62 - slow * 0.1, 0, -bank * 0.45, g);
+      // Arms straight up over the head to the shaft (a touch behind the head, so it clears it),
+      // fists together; they bend a little when slow, lock out at speed.
+      this.blendLoco('upperArmL', -3.2 + sway, 0, -0.2, g);
+      this.blendLoco('upperArmR', -3.2 - sway, 0, 0.2, g);
+      this.blendLoco('foreArmL', -0.14 - slow * 0.3, 0, 0, g);
+      this.blendLoco('foreArmR', -0.14 - slow * 0.3, 0, 0, g);
+      this.blendLoco('handL', 0.2, 0, 0, g);
+      this.blendLoco('handR', 0.2, 0, 0, g);
+      // Legs in line with the body, trailing; swung toward the outside of a turn; dangling when slow.
+      const outward = bank * 0.22;
+      this.blendLoco('thighL', -bend + flap - slow * 0.45 - fast * 0.04, 0, 0.04 - outward, g);
+      this.blendLoco('thighR', -bend - flap - slow * 0.35 - fast * 0.04, 0, -0.04 - outward, g);
+      this.blendLoco('shinL', 0.1 + slow * 0.7 + Math.max(0, flap) * 0.8, 0, 0, g);
+      this.blendLoco('shinR', 0.06 + slow * 0.6 + Math.max(0, -flap) * 0.8, 0, 0, g);
+      this.blendLoco('footL', 0.7 + fast * 0.2, 0, 0, g);
+      this.blendLoco('footR', 0.7 + fast * 0.2, 0, 0, g);
       this.hipsY = lerp(this.hipsY, 0, g);
       this.hipsZ = lerp(this.hipsZ, 0, g);
       fist = lerp(fist, 1, g);

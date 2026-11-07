@@ -11,10 +11,14 @@ import { Entity, Health, type HitInfo, type HitResult } from '../entities/Entity
 import { KinematicBody } from '../entities/KinematicBody';
 import { originStart } from '../data/starts';
 import { cosmeticById } from '../data/cosmetics';
-import { windRing } from '../vfx/effects/wind';
+import { releaseWindTrail, windRing, windTrail } from '../vfx/effects/wind';
+import { setOpacity } from '../vfx/effects/materials';
+import type { Trail } from '../vfx/effects/ribbon';
+import type { LoopHandle } from '../audio/AudioEngine';
 import { GLIDER, gust, newGliderState, stepGlider, type GliderState } from './glider/flight';
-import { GliderStaff } from './glider/GliderStaff';
+import { GliderStaff, HANG } from './glider/GliderStaff';
 import { UpdraftField } from './glider/Updrafts';
+import './glider/sounds';
 import { ElementPlay } from './play/ElementPlay';
 
 /** Movement profile per element (the Avatar moves in the style of the active element). */
@@ -63,8 +67,9 @@ export const STAFF_AIR_POWER = 1.1;
 const tmpA = new THREE.Vector3();
 const tmpB = new THREE.Vector3();
 const tmpC = new THREE.Vector3();
-/** Glider effects' scratch point (tmpC holds the steering wish while the glider flies). */
+/** Glider effects' scratch points (tmpC holds the steering wish while the glider flies). */
 const tmpFx = new THREE.Vector3();
+const tmpFx2 = new THREE.Vector3();
 const UP: Readonly<THREE.Vector3> = new THREE.Vector3(0, 1, 0);
 
 export class Player extends Entity implements Combatant, Persistable {
@@ -108,6 +113,16 @@ export class Player extends Entity implements Combatant, Persistable {
   private staffLinger = 0;
   /** Camera pull-back applied for flight (eased; mounts own the camera offsets otherwise). */
   private camFlight = 0;
+  /** Flight feel: the glider's attitude (rad, nose up +), its roll into turns (rad, left down +), airspeed 0..1 — eased. */
+  private glideAttitude = 0;
+  private glideBank = 0;
+  private glideSpeedN = 0;
+  /** The roar of the air while flying (a loop rising with speed). */
+  private flightWind: LoopHandle | null = null;
+  /** Streams of air off the big fan's tips. */
+  private tipTrails: Array<{ trail: Trail; mat: THREE.ShaderMaterial }> = [];
+  /** Hair and robes are streaming in the flight wind (Humanoid.wind set by the glider). */
+  private flightWindOnCloth = false;
   private airJumps = 0;
   private chargeId: string | null = null;
   private chargeTime = 0;
@@ -592,7 +607,9 @@ export class Player extends Entity implements Combatant, Persistable {
     anim.loco.swimming = body.swimming;
     anim.loco.gliding = this.gliding;
     anim.loco.glider = !!this.glider;
-    anim.loco.glideDive = this.glider ? clamp(-this.glider.pitch / 0.7, 0, 1) : 0;
+    anim.loco.glideBodyPitch = this.glideAttitude + HANG;
+    anim.loco.glideBank = this.glideBank;
+    anim.loco.glideSpeed = this.glideSpeedN;
     anim.loco.sliding = body.sliding;
     anim.loco.mounted = !!this.mountAnchor;
     anim.loco.turnRate = turnRate;
@@ -646,6 +663,7 @@ export class Player extends Entity implements Combatant, Persistable {
       }
     }
     // Steer: the heading turns toward the stick (camera-relative), at a glider's pace.
+    const yaw0 = this.yaw;
     if (!locked && wishLen > 0.1) {
       const want = Math.atan2(wish.x, wish.z);
       const step = GLIDER.turnRate * Math.min(1, wishLen) * dt;
@@ -658,10 +676,73 @@ export class Player extends Entity implements Combatant, Persistable {
     body.gravityScale = 0;
     body.velocity.y = v.vy;
     body.move.set(Math.sin(this.yaw) * v.vh, 0, Math.cos(this.yaw) * v.vh);
-    if (this.staff) this.staff.flutter = clamp((g.speed - 6) / 22, 0.15, 1);
-    // Rising air shows as streaks rushing past; wingtip wisps at speed.
+    // Attitude follows the flight path (nose down diving, up swooping); glider and flier roll into
+    // turns (the bank a real glider needs for the turn, toned down); the cloth billows with speed
+    // and the fans flex up under lift, gusts and hard turns.
+    const turn = angleDiff(yaw0, this.yaw) / Math.max(dt, 1e-3);
+    const speedN = clamp((g.speed - GLIDER.minSpeed) / (GLIDER.maxSpeed - GLIDER.minSpeed), 0, 1);
+    this.glideSpeedN = speedN;
+    this.glideAttitude = damp(this.glideAttitude, clamp(g.pitch * 0.85 + 0.06, -0.62, 0.5), 5, dt);
+    this.glideBank = damp(this.glideBank, clamp(((turn * g.speed) / 9.81) * 0.5, -0.6, 0.6), 4, dt);
+    if (this.staff) {
+      this.staff.flutter = clamp((g.speed - 6) / 22, 0.15, 1);
+      this.staff.load = clamp(g.lift / 9 + lift / 12 + Math.abs(this.glideBank) * 0.6 + Math.max(0, speedN - 0.5) * 0.6, 0, 1);
+    }
+    this.flightFeel(dt, speedN);
+    // Rising air shows as streaks rushing past.
     if (lift > 0.5 && Math.random() < dt * 14) ctx.vfx.burst('air', tmpFx.set(pos.x + (Math.random() - 0.5) * 4, pos.y - 2, pos.z + (Math.random() - 0.5) * 4), { count: 2, dir: UP, speed: 4, spread: 0.2 });
-    if (g.speed > 18 && Math.random() < dt * 10) ctx.vfx.burst('air', tmpFx.copy(pos).setY(pos.y + 1.1), { count: 1, speed: 0.5 });
+  }
+
+  /** Flying: hair and robes stream in the wind, the air roars louder with speed, streams of air
+   *  peel off the fan tips and streaks of air rush past the camera in a dive. */
+  private flightFeel(dt: number, speedN: number): void {
+    const ctx = this.ctx;
+    const body = this.body!;
+    // Airflow on hair and cloth (not while the Avatar State's own winds stir them).
+    if (!ctx.avatar.active) {
+      const t = this.playTime;
+      const swirl = 3 + 5 * speedN;
+      this.humanoid.wind.set(-body.move.x * 1.6 + Math.sin(t * 9.1) * swirl, -body.velocity.y * 1.2 + 4, -body.move.z * 1.6 + Math.cos(t * 7.3) * swirl);
+      this.flightWindOnCloth = true;
+    }
+    // The roar of the air.
+    if (!this.flightWind) this.flightWind = ctx.audio.loop('amb.wind.high', { volume: 0, bus: 'sfx' });
+    this.flightWind.setVolume(0.14 + 0.62 * speedN * speedN);
+    this.flightWind.setPitch(0.82 + 0.5 * speedN);
+    this.flightWind.setParam('intensity', 0.3 + 0.7 * speedN);
+    // Streams of air off the big fan's tips (stronger the faster).
+    const s = this.staff;
+    if (s && s.open > 0.95) {
+      if (!this.tipTrails.length) for (let i = 0; i < 2; i++) this.tipTrails.push(windTrail(ctx, 0.09, 0.3, { opacity: 0.4 }));
+      const now = ctx.time.elapsed;
+      for (let i = 0; i < this.tipTrails.length; i++) {
+        const tt = this.tipTrails[i];
+        tt.trail.push(s.wingTipWorld(i === 0 ? 1 : -1, tmpFx), now);
+        tt.trail.update(now, ctx.camera.position);
+        setOpacity(tt.mat, 0.1 + 0.5 * speedN);
+      }
+    }
+    // Streaks of air rushing past at speed.
+    if (speedN > 0.45 && Math.random() < dt * (speedN - 0.45) * 40) {
+      const cam = ctx.camera;
+      const p = tmpFx2.copy(cam.position).addScaledVector(cam.getWorldDirection(tmpFx), 6 + Math.random() * 7);
+      p.x += (Math.random() - 0.5) * 8;
+      p.y += (Math.random() - 0.5) * 4;
+      p.z += (Math.random() - 0.5) * 8;
+      ctx.vfx.burst('air', p, { count: 1, dir: tmpFx.set(-body.move.x, -body.velocity.y, -body.move.z), spread: 0.04, speed: 16 + speedN * 16, size: 0.5 });
+    }
+  }
+
+  /** The glider folded: still air on the cloth, the roar fades, the tip streams drift away. */
+  private endFlightFeel(): void {
+    if (this.flightWindOnCloth) {
+      this.humanoid.wind.set(0, 0, 0);
+      this.flightWindOnCloth = false;
+    }
+    this.flightWind?.stop(0.6);
+    this.flightWind = null;
+    for (const t of this.tipTrails) releaseWindTrail(this.ctx, t);
+    this.tipTrails = [];
   }
 
   /** After the body moved: flying into something solid stalls the glider and it folds. */
@@ -688,10 +769,16 @@ export class Player extends Entity implements Combatant, Persistable {
     this.gliderBlocked = 0;
     this.gliding = true;
     this.airJumps = 0;
+    // Caught falling: the glider starts nose down and levels out as the fans bite.
+    this.glideAttitude = -0.45;
+    this.glideBank = 0;
     this.staff?.setMode('glide', 0.14);
     const pos = this.root.position;
     this.ctx.events.emit('player:glide', { active: true });
-    this.ctx.audio.play('whoosh', { position: pos, volume: 0.75, pitch: 0.7 });
+    // The fans flick open: cloth snap and a knock, a rush of air, the view kicks out a little.
+    this.ctx.audio.play('glider.open', { position: pos, volume: 0.9 });
+    this.ctx.audio.play('whoosh', { position: pos, volume: 0.6, pitch: 0.7 });
+    this.ctx.events.emit('camera:impulse', { fovKick: 5, pullback: 0.5, duration: 0.5 });
     this.ctx.vfx.burst('air', tmpC.copy(pos).setY(pos.y + 1.4), { count: 14, spread: 1.4, speed: 1.6 });
   }
 
@@ -703,9 +790,14 @@ export class Player extends Entity implements Combatant, Persistable {
     this.gliderWait = byPlayer ? 0.45 : 0.2;
     const body = this.body!;
     body.gravityScale = 1;
-    if (this.staff) this.staff.flutter = 0;
+    if (this.staff) {
+      this.staff.flutter = 0;
+      this.staff.load = 0;
+    }
+    this.endFlightFeel();
     this.ctx.events.emit('player:glide', { active: false });
-    this.ctx.audio.play('whoosh', { position: this.root.position, volume: 0.45, pitch: 1.35 });
+    this.ctx.audio.play('glider.fold', { position: this.root.position, volume: 0.8 });
+    this.ctx.audio.play('whoosh', { position: this.root.position, volume: 0.35, pitch: 1.35 });
   }
 
   /** Fold the glider without a sound (a new journey, a load). */
@@ -718,8 +810,12 @@ export class Player extends Entity implements Combatant, Persistable {
     if (this.body) this.body.gravityScale = 1;
     if (this.staff) {
       this.staff.flutter = 0;
+      this.staff.load = 0;
       this.staff.setMode('back', 0);
     }
+    this.endFlightFeel();
+    this.glideBank = 0;
+    this.glideAttitude = 0;
     this.staffLinger = 0;
     this.updraftField.clear();
   }
@@ -731,16 +827,23 @@ export class Player extends Entity implements Combatant, Persistable {
   private updateStaff(dt: number): void {
     const s = this.staff;
     const cr = this.ctx.cameraRig;
-    // Flight camera: pull back and up while the glider is open (mounts own the offsets otherwise).
+    // Flight camera: pull back and up while the glider is open, swing in behind the heading (a chase
+    // camera, unless the player turns it), widen with speed and roll a little with the bank (mounts
+    // own the offsets otherwise).
     const camWant = this.glider && !this.mountAnchor ? 1 : 0;
     if (camWant || this.camFlight > 0) {
       this.camFlight = camWant ? Math.min(1, this.camFlight + dt * 1.8) : Math.max(0, this.camFlight - dt * 1.4);
+      const k = this.mountAnchor ? 0 : this.camFlight * this.camFlight * (3 - 2 * this.camFlight);
       if (!this.mountAnchor) {
-        const k = this.camFlight * this.camFlight * (3 - 2 * this.camFlight);
-        cr.extraDistance = 2.4 * k;
+        cr.extraDistance = (1.4 + this.glideSpeedN * 1.2) * k;
         cr.extraHeight = 0.5 * k;
       }
+      cr.extraFov = Math.min(10, this.glideSpeedN * 14) * k;
+      cr.roll = this.glideBank * 0.22 * k;
     }
+    cr.chaseYaw = camWant ? this.yaw : null;
+    // Low behind the glider looking out to the horizon; above it looking down a dive; under it in a climb.
+    cr.chasePitch = camWant ? clamp(0.14 - this.glideAttitude * 0.6, -0.15, 0.55) : null;
     // Wisps show the updraft columns (always for a glider, else with the ambient effects).
     this.updraftField.update(dt, !!s || this.ctx.settings.data.graphics.ambientEffects);
     if (!s) return;

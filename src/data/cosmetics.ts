@@ -125,7 +125,7 @@ export const COSMETICS: CosmeticDef[] = [
 
   // ---------------- Accessories ----------------
   { id: 'none_acc', name: 'None', slot: 'accessory', nation: 'any', unlock: 'start', description: 'Nothing.', shape: {} },
-  { id: 'air_glider', name: 'Glider Staff', slot: 'accessory', nation: 'air', unlock: 'start', description: 'A folding glider staff, carried on the back. Hold Jump in mid-air to open its wings and fly; airbending flows from its head, a little stronger.', shape: { style: 'glider_staff' }, effect: 'glider' },
+  { id: 'air_glider', name: 'Glider Staff', slot: 'accessory', nation: 'air', unlock: 'start', description: 'A folding glider staff, carried on the back. Hold Jump in mid-air and its two fans snap open to fly on; airbending flows from its head, a little stronger.', shape: { style: 'glider_staff' }, effect: 'glider' },
   { id: 'water_flask', name: 'Water Skin', slot: 'accessory', nation: 'water', unlock: 'start', description: 'A leather water skin at the hip. Carries a small supply of bendable water anywhere.', shape: { style: 'flask' }, effect: 'water_flask' },
   { id: 'fans', name: 'War Fans', slot: 'accessory', nation: 'earth', unlock: 'quest', description: 'Golden fans of the Kyoshi Warriors.', shape: { style: 'fans' } },
   { id: 'dao_swords', name: 'Dual Dao', slot: 'accessory', nation: 'fire', unlock: 'merchant', price: 260, description: 'Twin broadswords, sheathed on the back.', shape: { style: 'swords' } },

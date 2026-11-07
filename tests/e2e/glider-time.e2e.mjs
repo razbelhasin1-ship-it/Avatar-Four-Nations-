@@ -127,6 +127,12 @@ try {
     const s = await launchGlider(300);
     assert.ok(s.flying && s.open > 0.99 && s.gliding, JSON.stringify(s));
     assert.equal(s.mode, 'glide');
+    assert.ok(s.chase, 'the camera follows behind the glider');
+    // Both fans spread wide to the sides (the big fan's tips ~2 m apart) and hang above the flier.
+    const tips = await h.eval((g) => ({ t: g.debug.glider.wingTips(), p: g.ctx.player.position.y }));
+    const span = Math.hypot(tips.t.left.x - tips.t.right.x, tips.t.left.z - tips.t.right.z);
+    assert.ok(span > 1.6 && span < 2.6, `fan span ${span.toFixed(2)} m`);
+    assert.ok(Math.min(tips.t.left.y, tips.t.right.y) > tips.p + 0.4, 'the fans ride above the flier');
     const a = await h.eval((g) => ({ ...g.state().player }));
     await h.step(150, 1 / 30); // 5 s
     const b = await h.eval((g) => ({ ...g.state().player, gl: g.debug.glider.state() }));
@@ -152,10 +158,14 @@ try {
 
   await check('hold Sprint: the glider dives and builds speed; released it swoops back up', async () => {
     await h.step(60, 1 / 30);
+    const cruise = await st();
     await hold('sprint', true);
     const dive = await stepUntil((s) => s.speed > 26, 150);
     await hold('sprint', false);
     assert.ok(dive.speed > 26, `dive speed ${dive.speed.toFixed(1)}`);
+    // Nose down, and the view widens with the rush of speed.
+    assert.ok(dive.attitude < -0.3, `attitude ${dive.attitude.toFixed(2)}`);
+    assert.ok(dive.fov > cruise.fov + 3, `fov ${cruise.fov.toFixed(1)} → ${dive.fov.toFixed(1)}`);
     let climbed = false;
     for (let i = 0; i < 12 && !climbed; i++) {
       await h.step(5, 1 / 30);
@@ -193,11 +203,15 @@ try {
       await h.step(3, 1 / 30);
       if (i === 20) wisps = await h.eval((g) => g.ctx.player.updraftField.live.size);
     }
+    const b = await h.eval((g, s) => ({ y: g.ctx.player.position.y, d: Math.hypot(g.ctx.player.position.x - s.x, g.ctx.player.position.z - s.z), gl: g.debug.glider.state(), tips: g.debug.glider.wingTips() }), r);
     await h.eval((g) => g.ctx.input.setVirtualMove(0, 0));
-    const b = await h.eval((g, s) => ({ y: g.ctx.player.position.y, d: Math.hypot(g.ctx.player.position.x - s.x, g.ctx.player.position.z - s.z), gl: g.debug.glider.state() }), r);
     assert.ok(b.gl.flying, JSON.stringify(b));
     assert.ok(b.y > y0 + 15, `rose ${(b.y - y0).toFixed(1)} m in 4 s of circling (${b.d.toFixed(1)} m from the core)`);
     assert.ok(wisps > 0, `mist wisps rise in the column (${wisps} columns showing)`);
+    // Circling left: the glider banks into the turn (its left fan tip dips) and the camera rolls with it.
+    assert.ok(b.gl.bank > 0.2, `bank ${b.gl.bank.toFixed(2)}`);
+    assert.ok(b.tips.left.y < b.tips.right.y - 0.3, `tips L ${b.tips.left.y.toFixed(2)} R ${b.tips.right.y.toFixed(2)}`);
+    assert.ok(b.gl.roll > 0.03, `camera roll ${b.gl.roll.toFixed(3)}`);
   });
 
   await check('Dodge folds the glider; holding Jump while falling opens it again', async () => {
