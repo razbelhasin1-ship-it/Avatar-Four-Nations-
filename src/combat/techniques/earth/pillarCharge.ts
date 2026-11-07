@@ -143,12 +143,27 @@ const smooth01 = (t: number) => {
   return x * x * (3 - 2 * x);
 };
 
+/**
+ * Heavy: it stops the pillar instead of being bowled aside. The game has no weight class, so this reads what
+ * it has: training dummies (they never budge), bosses, beasts (non-humanoid bodies), very high poise, big bodies.
+ */
+export function isHeavy(e: Entity): boolean {
+  if (e.kind === 'target') return true;
+  const enemy = e as Entity & { rank?: string; arch?: { body?: string } };
+  if (enemy.rank === 'boss') return true;
+  if (enemy.arch?.body && enemy.arch.body !== 'humanoid') return true;
+  if ((e.health?.maxPoise ?? 0) >= 90) return true;
+  return e.radius >= 0.75;
+}
+
 class PillarChargeDriver {
   private ctx: GameContext | null = null;
   ride: Ride | null = null;
   /** Standing on your own raised pillar with Earth up: Dodge charges. */
   ready = false;
   private pending: Pick | null = null;
+  /** Reused query buffer. */
+  private readonly found: Entity[] = [];
   /** Rider lean applied to the model (radians), eased back to 0 after a ride. */
   private lean = 0;
   private leanOwner: Player | null = null;
@@ -405,7 +420,13 @@ class PillarChargeDriver {
       const brake = Math.sqrt(2 * decel * R);
       r.speed = Math.max(0, Math.min(r.peak, ramp + 0.5, brake));
       const stepLen = Math.min(r.speed * h, R);
-      if (stepLen > 0) this.advance(ctx, r, stepLen);
+      if (stepLen > 0) {
+        const ax = r.x, az = r.z;
+        this.advance(ctx, r, stepLen);
+        if (this.ride !== r || r.phase !== 'charge') return;
+        // Everything the front swept through on this step (swept: nothing tunnels at speed).
+        if (this.sweep(ctx, r, ax, az)) return;
+      }
       if (this.ride !== r || r.phase !== 'charge') return;
       if (R - stepLen <= 1e-3) {
         this.slam(ctx, r, r.target ? 'target' : 'distance');
@@ -453,12 +474,111 @@ class PillarChargeDriver {
     }
   }
 
-  /** The pillar stops and pitches forward into the ground. */
-  private slam(_ctx: GameContext, r: Ride, reason: SlamReason): void {
+  /**
+   * The front of the pillar swept from the foot at (ax, az) to where it is now: a box its width plus a margin
+   * and its full height. Each one is met once per charge: enemies take the ram (light ones are bowled aside,
+   * a heavy one stops the pillar dead); anyone else is pushed gently out of the way. Returns true if it stopped.
+   */
+  private sweep(ctx: GameContext, r: Ride, ax: number, az: number): boolean {
+    const fx = Math.sin(r.heading), fz = Math.cos(r.heading);
+    const R = r.pillar.radius;
+    // Front points before and after this step, and the box around the segment between them.
+    const sx = ax + fx * R, sz = az + fz * R;
+    const seg = Math.hypot(r.x - ax, r.z - az);
+    const halfW = R + 0.35;
+    const reach = 0.25;
+    const top = r.base + r.pillar.height * r.pillar.level;
+    const list = ctx.entities.queryRadius(tmpA.set(sx + fx * seg * 0.5, r.base + 1, sz + fz * seg * 0.5), seg * 0.5 + halfW + reach + 1.4, { aliveOnly: true }, this.found);
+    for (const e of list) {
+      if (e === r.rider || r.hits.has(e.id) || e.disposed) continue;
+      const rx = e.position.x - sx, rz = e.position.z - sz;
+      const along = rx * fx + rz * fz;
+      const lat = rx * fz - rz * fx;
+      if (along < -e.radius - R || along > seg + e.radius + reach) continue;
+      if (Math.abs(lat) > halfW + e.radius) continue;
+      if (e.position.y > top + 0.2 || e.position.y + e.height < r.base - 0.4) continue;
+      r.hits.add(e.id);
+      const side = lat >= 0 ? 1 : -1;
+      if (!ctx.combat.canHarm(r.rider, e)) {
+        this.nudge(e, fz * side * 0.8 + fx * 0.6, -fx * side * 0.8 + fz * 0.6, 4);
+        continue;
+      }
+      const heavy = isHeavy(e);
+      if (r.cast) {
+        // Along the travel with a little upward pop; light ones also out to the side they were on. (No block stops a
+        // charging pillar.)
+        const kb = heavy ? 0 : PC.knockback;
+        const knock = new THREE.Vector3(fx * kb + fz * side * kb * 0.45, 0, fz * kb - fx * side * kb * 0.45);
+        r.cast.hit(e, { damage: EARTH_HEAVY_DAMAGE * PC.hitDamage, knockback: knock, launch: heavy ? 0 : PC.pop, stun: PC.stagger, stagger: 25, unblockable: true, point: e.aimPoint(new THREE.Vector3()) });
+      }
+      if (heavy) {
+        // It stops dead with its front against them.
+        const back = Math.max(0, seg - Math.max(0, along - e.radius - 0.05));
+        r.x -= fx * back;
+        r.z -= fz * back;
+        r.travelled -= back;
+        this.slam(ctx, r, 'heavy');
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** A gentle shove for someone the pillar must not hurt (allies, townsfolk, animals). */
+  private nudge(e: Entity, dx: number, dz: number, strength: number): void {
+    const b = e.body;
+    if (!b || b.kinematic) return;
+    const l = Math.hypot(dx, dz) || 1;
+    b.impulse((dx / l) * strength, 1.2, (dz / l) * strength);
+  }
+
+  /** The pillar stops and pitches forward into the ground: the shockwave goes off now. */
+  private slam(ctx: GameContext, r: Ride, reason: SlamReason): void {
     r.phase = 'slam';
     r.t = 0;
     r.speed = 0;
     r.reason = reason;
+    const hits = this.shockwave(ctx, r, reason);
+    ctx.events.emit('pillarcharge:slam', { position: { x: this.slamAt.x, y: this.slamAt.y, z: this.slamAt.z }, hits: r.hits.size + hits, reason });
+  }
+
+  /** Where the last slam landed (the ground just ahead of the pillar). */
+  readonly slamAt = new THREE.Vector3();
+
+  /**
+   * The slam's shockwave: around the ground just ahead of the pillar, enemies take the slam (full at the centre,
+   * `slamEdge` of it at the rim), are thrown outward and stunned; anyone else is pushed gently. Running into a
+   * wall or stopping at a ledge is a smaller slam. Returns how many enemies it hit.
+   */
+  private shockwave(ctx: GameContext, r: Ride, reason: SlamReason): number {
+    const fx = Math.sin(r.heading), fz = Math.cos(r.heading);
+    const small = reason === 'blocked' || reason === 'ledge';
+    const radius = PC.slamRadius * (small ? 0.6 : 1);
+    const power = small ? 0.5 : 1;
+    const c = this.slamAt.set(r.x + fx * (r.pillar.radius + 0.4), r.base, r.z + fz * (r.pillar.radius + 0.4));
+    let n = 0;
+    const list = ctx.entities.queryRadius(tmpA.copy(c), radius + 1.5, { aliveOnly: true }, this.found);
+    for (const e of list) {
+      if (e === r.rider || e.disposed) continue;
+      const dx = e.position.x - c.x, dz = e.position.z - c.z;
+      const d = Math.hypot(dx, dz);
+      if (d > radius + e.radius || Math.abs(e.position.y - c.y) > 2.6) continue;
+      const ux = d > 0.05 ? dx / d : fx, uz = d > 0.05 ? dz / d : fz;
+      const f = 1 - (1 - PC.slamEdge) * Math.min(1, d / radius);
+      if (!ctx.combat.canHarm(r.rider, e)) {
+        this.nudge(e, ux, uz, 3.5 * f);
+        continue;
+      }
+      if (!r.cast) continue;
+      const kb = isHeavy(e) ? PC.knockback * 0.3 : PC.knockback * 1.5 * f;
+      const res = r.cast.hit(
+        e,
+        { damage: EARTH_HEAVY_DAMAGE * PC.slamDamage * f * power, knockback: new THREE.Vector3(ux * kb, 0, uz * kb), launch: PC.pop * (0.6 + 0.4 * f), stun: PC.slamStun, stagger: 40, unblockable: true, point: e.aimPoint(new THREE.Vector3()) },
+        true,
+      );
+      if (res) n++;
+    }
+    return n;
   }
 
   private slamming(ctx: GameContext, r: Ride, dt: number): void {
@@ -724,4 +844,4 @@ registerTechnique({
 
 void tmpB;
 void UP;
-void EARTH_HEAVY_DAMAGE;
+

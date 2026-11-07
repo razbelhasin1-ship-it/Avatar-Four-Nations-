@@ -5,7 +5,7 @@ Rollback branch: `before-pillar-charge` (pushed; = ba82dec, the tree before this
 ## Phases
 - [x] 1. Read the systems (notes below)
 - [x] 2. Charge motion with a stable rider (no damage)
-- [ ] 3. Hit detection, damage, knockback, slam
+- [x] 3. Hit detection, damage, knockback, slam
 - [ ] 4. Targeting, steering, terrain and obstacles
 - [ ] 5. Camera, animation, VFX, audio, haptics
 - [ ] 6. Controls, UI, tutorial
@@ -55,3 +55,15 @@ Rollback branch: `before-pillar-charge` (pushed; = ba82dec, the tree before this
 - `core/events.ts`: `pillarcharge:ready|launched|slam|ended` appended.
 - Measured (fixed 1/60 steps, live loop stopped): 14 m no-target run slams 0.75 s after the tap; rider offset
   in the stone's frame constant to 0.4 mm over 98 frames; lowering 0.5 s.
+
+## Phase 3 (hits, damage, knockback, slam)
+- Swept front box each sub-step: width = 2·(radius + 0.35), full height, from the front before the step to the
+  front after it (+0.25 m reach), queried through `EntityManager.queryRadius` into a reused buffer.
+- Once per charge each: enemies (`combat.canHarm`) take the ram through the cast (1.5× Earth heavy = 48,
+  knockback 8 m/s along the travel + out to their side, pop 3 m/s, stun 0.4 s, unblockable); heavy ones
+  (`isHeavy`: dummies, bosses, beasts, poise ≥ 90, radius ≥ 0.75) stop the pillar dead with its front on them.
+  Allies, NPCs, companions and animals get a gentle shove (body impulse, no damage).
+- Slam shockwave 5 m around the ground ahead: 2× Earth heavy (64) at the centre falling to 50% at the rim,
+  thrown outward (12 m/s × falloff), pop, stun 0.6 s, unblockable; walls/ledges make a 60%, half-power slam.
+- Measured: line of three bandits rammed (−48 each) and bowled aside, slam on the locked target; a platypus
+  bear stops the pillar ('heavy'); chain window → lowered → 5 s cooldown. Chi 100 → 70.
