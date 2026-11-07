@@ -36,6 +36,8 @@ const press = async (action) => {
 };
 /** Fresh ground at (x, z) facing `yaw`: no enemies, full chi, cooldowns clear, then a pillar raised under you. */
 async function onPillar(x, z, yaw) {
+  // A check that failed mid-ride leaves its ride behind: let it end first (its cooldown is cleared below).
+  await settle();
   await h.eval(
     (g, a) => {
       g.debug.enemies.clear();
@@ -87,7 +89,8 @@ try {
     g.debug.enemies?.clear?.();
     g.freezeTime(true);
     g.setTime(12);
-    window.__pc = { slams: [], ended: [], failed: [], launched: [] };
+    window.__pc = { slams: [], ended: [], failed: [], launched: [], hits: [] };
+    g.ctx.events.on('hit', (e) => window.__pc.hits.push({ target: e.targetId, damage: +e.damage.toFixed(1), tech: e.techniqueId, blocked: e.blocked }));
     g.ctx.events.on('pillarcharge:slam', (e) => window.__pc.slams.push(e));
     g.ctx.events.on('pillarcharge:ended', (e) => window.__pc.ended.push(e));
     g.ctx.events.on('pillarcharge:launched', (e) => window.__pc.launched.push(e));
@@ -171,18 +174,37 @@ try {
       const y = g.ctx.world.heightAt(x, z);
       return { id: g.ctx.world.collision.add({ shape: 'box', x, y: y + 1.5, z, hx: 3, hy: 1.5, hz: 0.12, yaw, solid: true, walkable: false, surface: 'rock' }, true), x, z };
     });
-    const id = await h.eval((g) => g.debug.enemies.spawn('bandit_spearman', 12, 0).id);
-    await h.step(2, DT);
-    await h.eval((g, id) => (g.ctx.player.lockTarget = g.debug.enemies.entity(id)), id);
-    await press('dodge');
-    const frames = await rideUntil(['chain', 'lower', 'idle']);
-    const s = frames.filter((f) => f.pillar).slice(-1)[0];
-    const hpLeft = await h.eval((g, id) => g.debug.enemies.entity(id)?.health.hp ?? 0, id);
-    assert.ok(hpLeft < 99, 'the enemy was hit');
-    const front = Math.hypot(wall.x - s.pillar.x, wall.z - s.pillar.z) - 1.05;
-    assert.ok(front > -0.05, `the pillar's front went ${-front} m into the wall`);
-    await h.eval((g, id) => g.ctx.world.collision.remove(id), wall.id);
-    await settle();
+    try {
+      const id = await h.eval((g) => g.debug.enemies.spawn('bandit_spearman', 12, 0).id);
+      await h.step(2, DT);
+      await h.eval((g, id) => (g.ctx.player.lockTarget = g.debug.enemies.entity(id)), id);
+      const n0 = await h.eval(() => ({ launched: window.__pc.launched.length, hits: window.__pc.hits.length }));
+      await press('dodge');
+      const frames = await rideUntil(['chain', 'lower', 'idle']);
+      const s = frames.filter((f) => f.pillar).slice(-1)[0];
+      const foe = await h.eval((g, id) => {
+        const e = g.debug.enemies.entity(id);
+        return e ? { hp: e.health.hp, alive: e.alive, x: +e.position.x.toFixed(2), z: +e.position.z.toFixed(2), dodges: e.stats?.dodges ?? null } : null;
+      }, id);
+      // What happened, for the failure message.
+      const e = await ev();
+      const why = JSON.stringify({
+        foe,
+        wall: [+wall.x.toFixed(2), +wall.z.toFixed(2)],
+        launched: e.launched.length - n0.launched,
+        hits: e.hits.slice(n0.hits),
+        slam: e.slams.slice(-1)[0],
+        failed: e.failed.slice(-1)[0]?.reason ?? null,
+        phases: [...new Set(frames.map((f) => f.phase))],
+        last: s ? { travelled: s.travelled, hits: s.hits, reason: s.reason, at: [s.pillar.x, s.pillar.z] } : null,
+      });
+      assert.ok((foe?.hp ?? 0) < 99, 'the enemy was hit ' + why);
+      const front = Math.hypot(wall.x - s.pillar.x, wall.z - s.pillar.z) - 1.05;
+      assert.ok(front > -0.05, `the pillar's front went ${-front} m into the wall`);
+    } finally {
+      await h.eval((g, id) => g.ctx.world.collision.remove(id), wall.id);
+      await settle();
+    }
   });
 
   await check('up and down a slope: ridden all the way, the stone following the ground', async () => {
