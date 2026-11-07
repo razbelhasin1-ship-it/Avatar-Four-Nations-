@@ -137,6 +137,9 @@ interface Ride {
   scanZ: number;
   blockAt: number;
   blockReason: SlamReason;
+  /** Where the ride last put you (to notice a teleport). */
+  lastX: number;
+  lastZ: number;
 }
 
 interface Pick {
@@ -169,12 +172,18 @@ export function isHeavy(e: Entity): boolean {
   return e.radius >= 0.75;
 }
 
-/** Critically damped spring step toward `target` (x, v updated in place through the returned pair). */
-function spring(x: number, v: number, target: number, omega: number, dt: number): [number, number] {
+/** A critically damped spring (no overshoot), stepped toward `target`. */
+interface Spring {
+  x: number;
+  v: number;
+}
+function spring(s: Spring, target: number, omega: number, dt: number): number {
   const e = Math.exp(-omega * dt);
-  const change = x - target;
-  const temp = (v + omega * change) * dt;
-  return [target + (change + temp) * e, (v - omega * temp) * e];
+  const change = s.x - target;
+  const temp = (s.v + omega * change) * dt;
+  s.x = target + (change + temp) * e;
+  s.v = (s.v - omega * temp) * e;
+  return s.x;
 }
 
 /** A short buzz on phones (behind the Vibration setting). */
@@ -195,10 +204,8 @@ function buzz(ctx: GameContext, ms: number): void {
  * cracks, camera shake and buzz.
  */
 class ChargeFeel {
-  private pull = 0;
-  private pullV = 0;
-  private fov = 0;
-  private fovV = 0;
+  private readonly pull: Spring = { x: 0, v: 0 };
+  private readonly fov: Spring = { x: 0, v: 0 };
   private appliedPull = 0;
   private appliedFov = 0;
   private loop: LoopHandle | null = null;
@@ -241,12 +248,14 @@ class ChargeFeel {
     const fx = Math.sin(r.heading), fz = Math.cos(r.heading);
     const front = tmpB.set(r.x + fx * r.pillar.radius, r.base + 0.9, r.z + fz * r.pillar.radius);
     rockImpact(ctx, front, small ? 0.8 : 1.5, tint);
-    if (!small) shardRing(ctx, at, radius, tint, 0.35);
     ctx.vfx.ring(tmpA.copy(at).setY(at.y + 0.12), '#c8ad84', radius, 0.5, { opacity: 0.7 });
-    debris(at, small ? 8 : 16, { spread: 1.4, speed: small ? 6 : 9, size: 0.18, radius: 1.1, color: tint, life: 1.5 });
-    ctx.vfx.burst('dust', at, { count: small ? 12 : 24, radius: radius * 0.45, speed: small ? 1.6 : 2.4 });
     ctx.world.fx.crack(at, radius * 0.55, r.heading);
-    ctx.world.fx.disturb(at, radius + 1, 1);
+    // The rest of the burst lands on the next frame (keeps the impact frame light: no hitch on phones).
+    this.later.set(at.x, at.y, at.z);
+    this.laterTint = tint;
+    this.laterRadius = small ? 0 : radius;
+    this.laterSmall = small;
+    this.laterDue = true;
     ctx.audio.play('bend_earth_crumble', { position: at, volume: small ? 0.75 : 1 });
     ctx.audio.play('bend_earth_slam', { position: at, volume: small ? 0.6 : 1, pitch: small ? 1.1 : 0.85 });
     if (!ctx.settings.data.gameplay.reduceIntenseEffects) shake(ctx, at, small ? 0.2 : 0.32, 0.3);
@@ -261,22 +270,36 @@ class ChargeFeel {
     this.loop = null;
   }
 
+  private readonly later = new THREE.Vector3();
+  private laterTint = '#8a7860';
+  private laterRadius = 0;
+  private laterSmall = false;
+  private laterDue = false;
+
   update(ctx: GameContext, r: Ride | null, dt: number): void {
+    if (this.laterDue) {
+      this.laterDue = false;
+      const at = this.later;
+      if (this.laterRadius > 0) shardRing(ctx, at, this.laterRadius, this.laterTint, 0.35);
+      debris(at, this.laterSmall ? 8 : 16, { spread: 1.4, speed: this.laterSmall ? 6 : 9, size: 0.18, radius: 1.1, color: this.laterTint, life: 1.5 });
+      ctx.vfx.burst('dust', at, { count: this.laterSmall ? 12 : 24, radius: (this.laterSmall ? 3 : 5) * 0.45, speed: this.laterSmall ? 1.6 : 2.4 });
+      ctx.world.fx.disturb(at, (this.laterSmall ? 3 : 5) + 1, 1);
+    }
     const moving = !!r && (r.phase === 'windup' || r.phase === 'charge' || r.phase === 'brake');
     const k = r && moving ? Math.min(1, r.speed / r.peak) : 0;
     // Camera: pull back and widen with speed (anticipation on the wind-up), critically damped both ways.
     const want = r?.phase === 'windup' ? 0.2 : k;
-    [this.pull, this.pullV] = spring(this.pull, this.pullV, PC.camPull * want, 6, dt);
-    [this.fov, this.fovV] = spring(this.fov, this.fovV, PC.camFov * want, 6, dt);
+    const pull = spring(this.pull, PC.camPull * want, 6, dt);
+    const fov = spring(this.fov, PC.camFov * want, 6, dt);
     const cr = ctx.cameraRig;
-    cr.extraDistance += this.pull - this.appliedPull;
-    cr.extraFov += this.fov - this.appliedFov;
-    this.appliedPull = this.pull;
-    this.appliedFov = this.fov;
-    if (Math.abs(this.pull) < 1e-4 && Math.abs(this.pullV) < 1e-4 && !moving) {
+    cr.extraDistance += pull - this.appliedPull;
+    cr.extraFov += fov - this.appliedFov;
+    this.appliedPull = pull;
+    this.appliedFov = fov;
+    if (Math.abs(pull) < 1e-4 && Math.abs(this.pull.v) < 1e-4 && Math.abs(fov) < 1e-3 && !moving) {
       cr.extraDistance -= this.appliedPull;
       cr.extraFov -= this.appliedFov;
-      this.pull = this.fov = this.pullV = this.fovV = this.appliedPull = this.appliedFov = 0;
+      this.pull.x = this.pull.v = this.fov.x = this.fov.v = this.appliedPull = this.appliedFov = 0;
     }
     // Speed lines at the screen's edges.
     const linesWant = ctx.settings.data.gameplay.reduceIntenseEffects ? 0 : Math.max(0, (k - 0.35) / 0.65) * 0.42;
@@ -356,11 +379,12 @@ class ChargeFeel {
   /** Session end: undo everything at once. */
   reset(ctx: GameContext | null): void {
     this.rideOver();
+    this.laterDue = false;
     if (ctx) {
       ctx.cameraRig.extraDistance -= this.appliedPull;
       ctx.cameraRig.extraFov -= this.appliedFov;
     }
-    this.pull = this.fov = this.pullV = this.fovV = this.appliedPull = this.appliedFov = 0;
+    this.pull.x = this.pull.v = this.fov.x = this.fov.v = this.appliedPull = this.appliedFov = 0;
     this.linesOn = 0;
     if (this.lines) this.lines.style.opacity = '0';
     this.lastX = this.lastZ = NaN;
@@ -388,6 +412,11 @@ class PillarChargeDriver {
   init(ctx: GameContext): void {
     this.ctx = ctx;
     this.feel.init(ctx);
+    // A conversation starting mid-charge: stop safely and set you down. Travel: let go at once.
+    ctx.events.on('dialogue:started', () => {
+      if (this.ride) this.brake(this.ride);
+    });
+    ctx.events.on('travel:started', () => this.reset());
   }
 
   // -------------------------------------------------------------------------------------------- queries
@@ -525,6 +554,8 @@ class PillarChargeDriver {
       scanZ: pos.z,
       blockAt: Infinity,
       blockReason: 'blocked',
+      lastX: p.position.x,
+      lastZ: p.position.z,
     };
     this.ride = ride;
     this.leanOwner = p;
@@ -589,6 +620,11 @@ class PillarChargeDriver {
       this.end(r, 'cancelled', true);
       return;
     }
+    // Moved far from where the ride put you (fast travel, a respawn, a script): let go at once.
+    if (this.attached(r) && Math.hypot(p.position.x - r.lastX, p.position.z - r.lastZ) > 6) {
+      this.end(r, 'cancelled', false);
+      return;
+    }
     // Jump gets you off (the jump itself is yours, from the last frame): keep some of the pillar's momentum.
     if (this.attached(r) && b.velocity.y > 0.5) {
       const keep = r.speed * 0.45;
@@ -597,8 +633,10 @@ class PillarChargeDriver {
       this.end(r, 'jumped', true);
       return;
     }
-    // A dialogue or modal over the game: hold the move where it is (you stay on).
-    if (ctx.ui.blocksGameplay) {
+    // Stunned, a cutscene taking the camera, or Earth put away: stop safely (no slam) and set you down.
+    if ((r.phase === 'windup' || r.phase === 'charge') && (p.stunned > 0 || ctx.cameraRig.isScripted || p.element !== 'earth')) this.brake(r);
+    // A modal over the game: hold the move where it is (you stay on) unless it is already stopping safely.
+    if (ctx.ui.blocksGameplay && r.phase !== 'brake' && r.phase !== 'lower') {
       if (this.attached(r)) this.attach(r);
       return;
     }
@@ -1063,6 +1101,8 @@ class PillarChargeDriver {
       z = r.z;
     }
     p.root.position.set(x, y, z);
+    r.lastX = x;
+    r.lastZ = z;
     b.kinematic = true;
     b.velocity.set(0, 0, 0);
     b.move.set(0, 0, 0);
@@ -1214,6 +1254,8 @@ bending.hook({
         canCharge: () => (ctx.player ? pillarCharge.canCharge(ctx, ctx.player as Player) : false),
         /** Toggle the debug overlay (hit volume, path, speed, your offset on the pillar). */
         overlay: (on = true) => pillarCharge.overlay(on),
+        /** The driver itself (profiling, tests). */
+        driver: pillarCharge,
         /** Where a charge set off now would go. */
         pick: () => {
           const p = ctx.player as Player | null;

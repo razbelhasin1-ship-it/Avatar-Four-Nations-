@@ -74,6 +74,7 @@ nearest real source). Ice techniques may use ice; snow only with `water_snow_dra
 | `rock_armor` | Rock Armor | defense | 3 | master | Encase in stone plates: armor status, stagger immunity, slower |
 | `earth_surf` | Earth Surf | movement | 2 | master | Ride the crest of a travelling wave of earth (toggle): builds speed, carves, feels slopes, breaks against walls, bowls enemies over; jump off with its momentum |
 | `earth_launch` | Earth Launch | movement | 3 | master | Pillar catapults you high into the air |
+| `earth_pillar_charge` | Pillar Charge | movement | 2 | innate (with Earth Pillar) | On your own raised pillar, Dodge (touch: CHARGE) rides it into an enemy: homes on it, rams each in the way once (a heavy one stops it), slams with a 5 m shockwave; chain 3 per pillar. Tuning: `PILLAR_CHARGE` in earth/pillarCharge.ts |
 | `seismic_sense` | Seismic Sense | passive | 3 | master | Stomp/landings briefly reveal nearby enemies and hidden things (outline/markers) |
 
 ## Fire — aggressive, fast combos, explosive, controlled
