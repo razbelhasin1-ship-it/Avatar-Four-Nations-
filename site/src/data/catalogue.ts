@@ -229,7 +229,7 @@ export interface Companion {
 
 /** Bondable companions (src/data/creatures.ts), with their bond perks. */
 export const COMPANIONS: Companion[] = [
-  { name: 'Sky Bison', kind: 'Flying mount', how: 'Sky Bison Meadow near the Southern Air Temple; sold by the temple’s beast keeper', perks: ['Flight', 'Endurance', 'Yip Yip! speed boost', 'Sky Carrier', 'Tail Gust'] },
+  { name: 'Sky Bison', kind: 'Flying mount', how: 'Sky Bison Meadow near the Southern Air Temple; sold by the temple’s beast keeper', perks: ['Flight', 'Yip Yip! speed boost', 'Sky Carrier', 'Tail Gust'] },
   { name: 'Sun Warrior Dragon', kind: 'Flying mount', how: 'Only one remains, sleeping near the Sun Warrior Ruins. It answers when the Sun Stone is rekindled. Never for sale', perks: ['Flight', 'Dragonfire', 'Sun Dash', 'Guardian', 'Inferno'] },
   { name: 'Polar Bear Dog', kind: 'Mount', how: 'The Snowdrift Den in the north; sold in the Northern Water Tribe', perks: ['Swims icy water', 'Gallop', 'Charge', 'Guardian', 'Tracker'] },
   { name: 'Badgermole', kind: 'Mount', how: 'The Badgermole Caves; sold in Ba Sing Se’s Lower Ring', perks: ['Dig for mushrooms and jade', 'Burrow under walls', 'Tremor Sense', 'Earth Hide'] },

@@ -219,6 +219,8 @@ export class Input {
   /** When true, gameplay actions read as idle (UI open, dialogue, cutscene). */
   gameplayLocked = false;
   lastDevice: 'kbm' | 'touch' | 'gamepad' = 'kbm';
+  /** [mobile] Touch buttons that read differently right now (riding: CLIMB, DESCEND, BOOST, DISMOUNT). */
+  private readonly touchCaptions: Partial<Record<Action, string>> = {};
   pointerLocked = false;
   /** If set, the next physical input code is sent here instead of being processed (rebinding UI). */
   private captureNext: CodeListener | null = null;
@@ -537,10 +539,16 @@ export class Input {
     return this.codeDown.size > 0 || this.virtualDown.size > 0;
   }
 
+  /** [mobile] The touch button for `action` reads `caption` for now (null: back to its usual name). */
+  setTouchCaption(action: Action, caption: string | null): void {
+    if (caption) this.touchCaptions[action] = caption;
+    else delete this.touchCaptions[action];
+  }
+
   /** Short label for the primary binding of an action, for prompts like "[E] Talk". */
   label(action: Action): string {
-    // [mobile] Touch players see the on-screen button names in prompts and hints.
-    if (this.lastDevice === 'touch') return TOUCH_LABELS[action] ?? ACTION_LABELS[action];
+    // [mobile] Touch players see the on-screen button names, as the buttons read now, in prompts and hints.
+    if (this.lastDevice === 'touch') return this.touchCaptions[action] ?? TOUCH_LABELS[action] ?? ACTION_LABELS[action];
     const codes = this.bindings[action] ?? [];
     const prefer = this.lastDevice === 'gamepad' ? codes.find((c) => c.startsWith('Pad')) : codes.find((c) => !c.startsWith('Pad'));
     return codeLabel(prefer ?? codes[0] ?? '?');

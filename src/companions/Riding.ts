@@ -7,8 +7,9 @@ import type { CompanionSystem } from './CompanionSystem';
 /**
  * Riding: mounting / dismounting transitions, ground riding (walk / run /
  * gallop, jump, swim or refuse deep water) and flight (take-off, climb with
- * Jump, descend with Dodge, boost with Sprint, banking turns, stamina,
- * terrain-following floor, automatic landing). Specials on Interact (E).
+ * Jump, descend with Dodge, boost with Sprint, banking turns,
+ * terrain-following floor, automatic landing). Mounts never tire: they fly,
+ * boost and gallop for as long as you ride. Specials on Interact (E).
  *
  * Bending while mounted: Player.handleCombatInput keeps running in the saddle,
  * so attacks and abilities work from any mount (ground or air). Movement
@@ -39,8 +40,6 @@ export class RidingController {
   autopilot: THREE.Vector3 | null = null;
   /** Challenge ride (not yet bonded): no saddle, no specials. */
   challengeRide = false;
-  stamina = 0;
-  private tired = false;
   private emergency = false;
   private specialCd = 0;
   private charging = 0;
@@ -62,12 +61,6 @@ export class RidingController {
     if (this.challengeRide) return ability === 'flight';
     const rec = c.companionId ? this.sys.record(c.companionId) : null;
     return !!rec && rec.abilities.includes(ability);
-  }
-
-  staminaMax(c: Creature): number {
-    const s = c.def.fly?.stamina ?? 0;
-    if (s <= 0) return Infinity;
-    return s * (this.hasFor(c, 'endurance') ? 3 : 1);
   }
 
   private hasFor(c: Creature, ability: string): boolean {
@@ -99,9 +92,6 @@ export class RidingController {
     const seat = this.seatPos(c, tmpA);
     this.trans = { t: 0, dur: 0.55, from: p.position.clone(), to: seat.clone(), on: true };
     p.controlLock = Math.max(p.controlLock, 0.6);
-    const max = this.staminaMax(c);
-    this.stamina = Number.isFinite(max) ? Math.min(max, this.stamina > 0 ? this.stamina : max) : Infinity;
-    this.tired = false;
     this.emergency = false;
     this.distance = 0;
     const cam = CAMERA[c.def.id] ?? { dist: 1, height: 0.4 };
@@ -132,7 +122,7 @@ export class RidingController {
     }
     const alt = c.position.y - c.groundY(c.position.x, c.position.z, c.position.y + 1);
     if (c.flying && alt > 6 && !force) {
-      this.ctx.events.emit('ui:notify', { text: `Too high to jump off — hold ${this.ctx.input.label('dodge')} to descend and land first.`, kind: 'warning', duration: 2.5 });
+      this.ctx.events.emit('ui:notify', { text: `Too high to jump off — hold ${this.ctx.input.label('dodge')} to fly down and land first.`, kind: 'warning', duration: 2.5 });
       return false;
     }
     // Safe ground beside the mount: left (+X local), right, behind, then a search.
@@ -309,35 +299,19 @@ export class RidingController {
     const down = !blocked && input.isDown('dodge');
     if (c.flying && d.fly) {
       const f = d.fly;
-      const boosting = sprint && this.has('boost') && !this.tired;
-      let speed = wishLen > 0.1 ? (boosting ? f.boost : f.cruise) * Math.min(1, 0.35 + wishLen) : 3;
-      if (this.tired) speed = Math.min(speed, f.cruise * 0.6);
+      const boosting = sprint && this.has('boost');
+      const speed = wishLen > 0.1 ? (boosting ? f.boost : f.cruise) * Math.min(1, 0.35 + wishLen) : 3;
       c.steer(wishYaw, speed);
-      c.climbInput = this.tired || this.emergency ? 0 : jump ? 1 : down ? -1 : 0;
-      // Stamina (bison).
-      if (Number.isFinite(this.stamina)) {
-        const drain = boosting ? 2.5 : this.has('carry') ? 0 : 1;
-        this.stamina = Math.max(0, this.stamina - drain * dt);
-        if (this.stamina <= 0 && !this.tired) {
-          this.tired = true;
-          c.land();
-          ctx.events.emit('ui:notify', { text: `${c.name} is exhausted and glides down to rest.`, kind: 'warning', duration: 3 });
-        }
-      }
+      c.climbInput = this.emergency ? 0 : jump ? 1 : down ? -1 : 0;
       // Landing: descend close to the ground.
       const alt = c.position.y - c.groundY(c.position.x, c.position.z, c.position.y + 1);
-      if ((down && alt < 3.5) || this.tired) c.land();
-      if (jumpPressed && c.landing && !this.tired && !this.emergency) {
+      if (down && alt < 3.5) c.land();
+      if (jumpPressed && c.landing && !this.emergency) {
         c.landing = false;
         c.wantAlt = NaN;
       }
     } else {
       // Ground.
-      const max = this.staminaMax(c);
-      if (Number.isFinite(max)) {
-        this.stamina = Math.min(max, this.stamina + 6 * dt);
-        if (this.tired && this.stamina > max * 0.35) this.tired = false;
-      }
       let speed = wishLen < 0.05 ? 0 : wishLen < 0.5 ? d.walk : d.run;
       if (sprint && wishLen > 0.3 && (this.has('sprint') || d.id === 'ostrich_horse' && this.has('ride'))) speed = d.sprint * (this.has('windrunner') ? 1.18 : 1);
       if (this.charging > 0) speed = d.sprint * 1.3;
@@ -352,10 +326,8 @@ export class RidingController {
       c.steer(wishYaw, speed);
       c.climbInput = 0;
       if (jumpPressed) {
-        if (d.flying && (this.has('flight') || this.challengeRide)) {
-          if (this.tired) ctx.events.emit('ui:notify', { text: `${c.name} needs to rest before flying again.`, kind: 'info', duration: 2 });
-          else c.takeOff(c.position.y + 6);
-        } else if (d.jump > 0 && c.body!.grounded) c.body!.launch(d.jump * (this.has('leap') ? 1.45 : 1));
+        if (d.flying && (this.has('flight') || this.challengeRide)) c.takeOff(c.position.y + 6);
+        else if (d.jump > 0 && c.body!.grounded) c.body!.launch(d.jump * (this.has('leap') ? 1.45 : 1));
       }
       if (!c.body!.canSwim && c.body!.waterDepth > d.wadeDepth * 0.8 && Math.random() < dt * 0.6) {
         ctx.events.emit('ui:notify', { text: `${c.name} refuses to go into deep water.`, kind: 'info', duration: 1.5 });

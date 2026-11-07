@@ -86,7 +86,7 @@ export interface SpeciesDef {
   canSwim: boolean;
   swimSpeed: number;
   /** Flight (flyers / flying mounts). */
-  fly?: { cruise: number; boost: number; climb: number; descend: number; turn: number; stamina: number; bank: number };
+  fly?: { cruise: number; boost: number; climb: number; descend: number; turn: number; bank: number };
   temperament: Temperament;
   diet: { preferred: string[]; liked: string[] };
   taming?: TamingProfile;
@@ -135,7 +135,7 @@ export const SPECIES: SpeciesDef[] = [
     wadeDepth: 2.6,
     canSwim: true,
     swimSpeed: 2.2,
-    fly: { cruise: 16, boost: 27, climb: 7, descend: 9, turn: 1.05, stamina: 70, bank: 0.32 },
+    fly: { cruise: 16, boost: 27, climb: 7, descend: 9, turn: 1.05, bank: 0.32 },
     temperament: 'gentle',
     diet: { preferred: ['moon_peaches'], liked: ['cabbage'] },
     taming: {
@@ -157,9 +157,8 @@ export const SPECIES: SpeciesDef[] = [
     },
     bondUnlocks: [
       L(0, 'flight', 'Flight', 'Space takes off and climbs, Q descends. Lands by itself when you descend near flat ground.'),
-      L(20, 'endurance', 'Endurance', 'Flies three times longer before it needs to rest.'),
       L(45, 'boost', 'Yip Yip!', 'Hold {sprint} in flight for a burst of speed.'),
-      L(70, 'carry', 'Sky Carrier', 'Your pet rides along on the saddle, and cruising no longer tires it.'),
+      L(70, 'carry', 'Sky Carrier', 'Your pet rides along on the saddle.'),
       L(90, 'gust', 'Tail Gust', 'Press {interact} while riding: a mighty tail stroke sweeps enemies away.'),
     ],
     clues: ['tracks', 'fur'],
@@ -192,7 +191,7 @@ export const SPECIES: SpeciesDef[] = [
     wadeDepth: 2.0,
     canSwim: false,
     swimSpeed: 0,
-    fly: { cruise: 22, boost: 35, climb: 10, descend: 12, turn: 1.45, stamina: 0, bank: 0.55 },
+    fly: { cruise: 22, boost: 35, climb: 10, descend: 12, turn: 1.45, bank: 0.55 },
     temperament: 'proud',
     diet: { preferred: [], liked: ['fire_flakes'] },
     taming: {
@@ -457,7 +456,7 @@ export const SPECIES: SpeciesDef[] = [
     wadeDepth: 0.15,
     canSwim: false,
     swimSpeed: 0,
-    fly: { cruise: 9, boost: 12, climb: 6, descend: 7, turn: 4, stamina: 0, bank: 0.7 },
+    fly: { cruise: 9, boost: 12, climb: 6, descend: 7, turn: 4, bank: 0.7 },
     temperament: 'playful',
     diet: { preferred: ['lychee_nuts'], liked: ['moon_peaches'] },
     taming: {
@@ -603,7 +602,7 @@ export const SPECIES: SpeciesDef[] = [
     wadeDepth: 0.1,
     canSwim: false,
     swimSpeed: 0,
-    fly: { cruise: 8, boost: 11, climb: 4, descend: 6, turn: 3, stamina: 0, bank: 0.6 },
+    fly: { cruise: 8, boost: 11, climb: 4, descend: 6, turn: 3, bank: 0.6 },
     temperament: 'wary',
     diet: { preferred: [], liked: [] },
     bondUnlocks: [],

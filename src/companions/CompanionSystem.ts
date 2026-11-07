@@ -811,14 +811,21 @@ export class CompanionSystem implements GameSystem, Persistable {
     else if (R.mount) {
       const c = R.mount;
       const name = c.companionId ? this.record(c.companionId)?.name ?? c.name : c.name;
+      // "Space climb" on a keyboard; touch buttons relabel for riding (CLIMB, DESCEND, DISMOUNT...), so there
+      // the button names say it: "Climb · Descend to land · Dismount".
+      const act = (a: Parameters<GameContext['input']['label']>[0], verb: string) => {
+        const l = ctx.input.label(a);
+        const first = verb.split(' ')[0];
+        return l.toLowerCase() === first ? `<b>${l}</b>${verb.slice(first.length)}` : `<b>${l}</b> ${verb}`;
+      };
       if (c.flying) {
-        const st = Number.isFinite(R.stamina) ? ` · stamina ${Math.round((R.stamina / R.staminaMax(c)) * 100)}%` : '';
-        t = `${name}: ${k('jump')} climb · ${k('dodge')} descend/land · ${R.has('boost') ? `${k('sprint')} boost · ` : ''}${R.has('fire_breath') || R.has('gust') ? `${k('interact')} ${R.has('fire_breath') ? 'dragonfire' : 'tail gust'} · ` : ''}${k('companion')} dismount${st}`;
+        const spc = R.has('fire_breath') ? 'dragonfire' : R.has('gust') ? 'tail gust' : '';
+        t = `${name}: ${act('jump', 'climb')} · ${act('dodge', 'descend to land')} · ${R.has('boost') ? `${act('sprint', 'boost')} · ` : ''}${spc ? `${act('interact', spc)} · ` : ''}${act('companion', 'dismount')}`;
       } else {
-        const sp = R.has('sprint') ? `${k('sprint')} gallop · ` : R.has('burrow') ? `${k('sprint')} burrow · ` : '';
-        const ex = c.def.flying ? `${k('jump')} take off · ` : c.def.jump > 0 ? `${k('jump')} jump · ` : '';
+        const sp = R.has('sprint') ? `${act('sprint', 'gallop')} · ` : R.has('burrow') ? `${act('sprint', 'burrow')} · ` : '';
+        const ex = c.def.flying ? `${act('jump', 'take off')} · ` : c.def.jump > 0 ? `${act('jump', 'jump')} · ` : '';
         const spc = R.has('charge') ? 'charge' : R.has('kick') ? 'kick' : R.has('dig') ? 'dig' : '';
-        t = `${name}: ${sp}${ex}${spc ? `${k('interact')} ${spc} · ` : ''}${k('companion')} dismount`;
+        t = `${name}: ${sp}${ex}${spc ? `${act('interact', spc)} · ` : ''}${act('companion', 'dismount')}`;
       }
     } else if (!ctx.ui.blocksGameplay) {
       const p = ctx.player!;
@@ -926,7 +933,6 @@ export class CompanionSystem implements GameSystem, Persistable {
         mounted: self.mounted,
         mountedFlying: self.mountedFlying,
         mount: self.riding.mount ? info(self.riding.mount) : null,
-        stamina: Number.isFinite(self.riding.stamina) ? self.riding.stamina : null,
         discovered: [...self.discoveredSpecies],
         flags: [...self.flags],
         challenge: self.taming.challenge ? { kind: self.taming.challenge.kind, stage: self.taming.challenge.stage, t: self.taming.challenge.t, uid: self.taming.challenge.creature.uid, finish: (self.taming.challenge as any).finish?.toArray?.() ?? null } : null,

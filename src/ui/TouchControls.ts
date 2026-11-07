@@ -154,6 +154,8 @@ export class TouchControls {
     };
     window.addEventListener('resize', relayout);
     window.addEventListener('orientationchange', () => setTimeout(relayout, 250));
+    // Captions are fitted to their buttons by measuring them: measure again once the title font arrives.
+    document.fonts?.addEventListener('loadingdone', relayout);
     window.addEventListener(
       'pointerdown',
       (e) => {
@@ -579,6 +581,7 @@ export class TouchControls {
     place('map', top);
     place('avatarState', top);
     place('companion', top);
+    for (const b of this.btns.values()) fitCap(b);
     // Look covers the screen except the stick side.
     const split = Math.round(W * 0.45);
     Object.assign(this.moveZone.style, lefty ? { left: `${W - split}px`, width: `${split}px` } : { left: '0px', width: `${split}px` });
@@ -655,6 +658,9 @@ export class TouchControls {
       setCap(this.btns.get('dodge')!, fly ? 'Descend' : 'Dodge');
       setCap(this.btns.get('sprint')!, fly ? 'Boost' : cs.mounted ? 'Gallop' : 'Sprint');
       setCap(this.btns.get('companion')!, cs.mounted ? 'Dismount' : 'Mount');
+      // While riding, hints and prompts name these buttons as they now read (the interact pill idles as INTERACT).
+      for (const a of ['jump', 'dodge', 'sprint', 'companion'] as const) ctx.input.setTouchCaption(a, cs.mounted ? this.btns.get(a)!.cap.textContent : null);
+      ctx.input.setTouchCaption('interact', cs.mounted ? 'Interact' : null);
       this.abilityCount = count;
       this.layout(true);
     }
@@ -731,6 +737,30 @@ export class TouchControls {
 function setCap(b: { cap: HTMLElement; el: HTMLElement }, text: string): void {
   if (b.cap.textContent !== text) b.cap.textContent = text;
   b.el.classList.toggle('long', text.length > 6);
+}
+
+/**
+ * A caption too wide for its round button (DISMOUNT, SCOOTER, JUMP·GLIDE on small buttons) shrinks and
+ * then narrows until it fits across the circle, instead of being cut off with an ellipsis.
+ */
+function fitCap(b: { cap: HTMLElement; el: HTMLElement }): void {
+  const cap = b.cap;
+  cap.style.removeProperty('font-size');
+  cap.style.removeProperty('max-width');
+  cap.style.removeProperty('transform');
+  if (b.el.classList.contains('pill')) return; // the interact pill grows with its label instead
+  // The caption sits below the icon, where the circle is ~85% of its full width.
+  const room = b.el.clientWidth * 0.84;
+  const need = cap.scrollWidth;
+  if (!room || !need || need <= room) return;
+  // Narrow the letters a little first (they keep their height), then take a smaller size if still needed.
+  const ratio = room / need;
+  const base = parseFloat(getComputedStyle(cap).fontSize) || 8;
+  const size = Math.max(6.5, base * Math.min(1, ratio / 0.85));
+  if (size < base) cap.style.fontSize = `${size.toFixed(2)}px`;
+  cap.style.maxWidth = 'none';
+  const left = cap.scrollWidth;
+  if (left > room) cap.style.transform = `scaleX(${Math.max(0.7, room / left).toFixed(3)})`;
 }
 
 /** Short caption for a technique button ("Water Whip" → "Whip", "Fire Tornado" → "Tornado"). */
