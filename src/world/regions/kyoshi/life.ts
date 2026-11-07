@@ -64,6 +64,8 @@ export interface LifeInput {
   yard: { x: number; y: number; z: number; yaw: number; w: number; d: number };
   posts: P2[];
   marks: Record<string, { x: number; y: number; z: number }>;
+  /** Bench seats at the Meeting Hall: an elder sitting there takes a free one (feet at x/z, facing yaw). */
+  seats?: Array<{ x: number; z: number; y: number; yaw: number }>;
   /** Ground (walkable decks included) under a point. */
   ground: (x: number, z: number) => number;
 }
@@ -93,6 +95,8 @@ interface Agent {
   greet: number;
   /** Drill slot (warriors) in the yard frame. */
   slot: P2 | null;
+  /** The hall bench seat this elder sits on (index into input.seats), or -1. */
+  seat: number;
 }
 
 const LINES: Record<Role, string[]> = {
@@ -400,6 +404,7 @@ export class KyoshiLife {
           scale: role === 'girl' ? rnd.range(0.66, 0.78) : rnd.range(0.94, 1.03),
           greet: 0,
           slot: null,
+          seat: -1,
         };
         if (role === 'warrior') {
           const k = this.agents.filter((x) => x.role === 'warrior').length;
@@ -463,6 +468,7 @@ export class KyoshiLife {
   /** Put everyone where the routine wants them at this hour (drill slots, stalls, homes...). */
   settle(): void {
     const yard = this.input.yard;
+    for (const a of this.agents) a.seat = -1;
     for (const a of this.agents) {
       const plan = this.plan(a);
       const n = this.nav.nodes[plan.goal];
@@ -493,6 +499,22 @@ export class KyoshiLife {
    */
   private spread(a: Agent): void {
     const n = this.nav.nodes[a.node];
+    // Sitting at the Meeting Hall: on a free council bench, never on thin air (all taken: stand by).
+    const seats = this.input.seats;
+    if (a.activity === 'sit' && n.tags & T.hall && seats?.length) {
+      let free = -1;
+      for (let i = 0; i < seats.length && free < 0; i++) if (!this.agents.some((o) => o !== a && o.seat === i)) free = i;
+      if (free >= 0) {
+        const st = seats[free];
+        a.seat = free;
+        a.x = st.x;
+        a.z = st.z;
+        a.y = st.y;
+        a.yaw = st.yaw;
+        return;
+      }
+      a.activity = 'idle';
+    }
     if (!(n.tags & SHARED)) return;
     const k = this.agents.indexOf(a);
     const ang = k * 2.399963, r = 0.9 + (k % 3) * 0.7;
@@ -517,6 +539,7 @@ export class KyoshiLife {
     a.path = p.slice();
     a.pi = 0;
     a.activity = 'walk';
+    a.seat = -1;
   }
 
   // ---------------------------------------------------------------------------

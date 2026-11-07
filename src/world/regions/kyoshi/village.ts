@@ -1,9 +1,11 @@
 import * as THREE from 'three';
+import { Random } from '../../../core/Random';
 import { heightAt } from '../../Heightfield';
 import { A, KI, KI_ROADS, yawOutward } from '../../landforms/kyoshiIsland';
 import type { P2 } from '../../WorldLayout';
 import type { BuildEnv } from '../earth/env';
-import { barrel, fence, house, laundry, off, type Mat } from './kit';
+import { barrel, fence, house, lanternPost, laundry, off, paperWindow, type Mat } from './kit';
+import type { KyoshiMats } from './materials';
 
 /**
  * Suki's village (image 1): at the entrance, the carved and painted Avatar Kyoshi on a very tall
@@ -23,6 +25,8 @@ export interface VillageOut {
   wells: P2[];
   /** Lanterns lit at dusk. */
   lanterns: THREE.Vector3[];
+  /** Bench seats at the Meeting Hall (where a seated elder's feet go, facing `yaw`). */
+  seats: Array<{ x: number; z: number; y: number; yaw: number }>;
   /** Painted textures / materials to dispose. */
   owned: Array<THREE.Material | THREE.Texture>;
 }
@@ -153,36 +157,44 @@ function statue(env: BuildEnv, at: P2, out: VillageOut): void {
   const b = env.chunks.at('major', at.x, at.z).builder;
   const y0 = H(at.x, at.z);
   const yaw = STREET_YAW + Math.PI; // faces the arriving road / the bay
-  // Stone base and the tall pillar with carved rings.
-  b.cylinder('stone_grey', { x: at.x, y: y0 - 0.4, z: at.z, r: 1.7, rTop: 1.5, h: 1.2, segments: 16 }, { collide: true, solid: true });
+  // Two-step stone plinth and the tall pillar of pale carved cedar, lacquered red bands with gold rims.
+  b.cylinder('stone_grey', { x: at.x, y: y0 - 0.5, z: at.z, r: 2.5, rTop: 2.35, h: 0.85, segments: 20 }, { collide: true, solid: true });
+  b.cylinder('stone_light', { x: at.x, y: y0 + 0.35, z: at.z, r: 1.8, rTop: 1.65, h: 0.55, segments: 20 }, { collide: true, solid: true });
   const PH = 15;
-  b.cylinder('wood_dark', { x: at.x, y: y0 + 0.8, z: at.z, r: 0.95, rTop: 0.85, h: PH, segments: 18 }, { collide: true, solid: true });
-  for (const k of [0.12, 0.45, 0.78, 0.97]) b.cylinder('wood', { x: at.x, y: y0 + 0.8 + PH * k, z: at.z, r: 1.02, h: 0.28, segments: 18 });
-  const top = y0 + 0.8 + PH;
-  b.cylinder('wood', { x: at.x, y: top, z: at.z, r: 1.35, rTop: 1.2, h: 0.35, segments: 18 });
-  // Figure (~3.6 m): flared green robe, sash, torso, white face, gold headdress.
-  const fy = top + 0.35;
-  b.cylinder('cloth_green', { x: at.x, y: fy, z: at.z, r: 1.15, rTop: 0.62, h: 1.9, segments: 16 });
-  b.cylinder('roof_green', { x: at.x, y: fy + 0.05, z: at.z, r: 1.18, rTop: 1.05, h: 0.35, segments: 16 });
-  b.cylinder('gold', { x: at.x, y: fy + 1.75, z: at.z, r: 0.64, h: 0.22, segments: 16 });
-  b.cylinder('cloth_green', { x: at.x, y: fy + 1.95, z: at.z, r: 0.6, rTop: 0.5, h: 0.95, segments: 14 });
-  b.box('stone_dark', { x: at.x, y: fy + 2.45, z: at.z, sx: 1.25, sy: 0.38, sz: 0.62, yaw }); // shoulder armour
-  const head = new THREE.SphereGeometry(0.34, 14, 10);
-  b.mesh('plaster_white', head, { x: at.x, y: fy + 3.18, z: at.z });
+  b.cylinder('wood', { x: at.x, y: y0 + 0.9, z: at.z, r: 0.95, rTop: 0.85, h: PH, segments: 18 }, { collide: true, solid: true });
+  for (const k of [0.08, 0.4, 0.72, 0.95]) {
+    const by = y0 + 0.9 + PH * k;
+    b.cylinder('wood_red', { x: at.x, y: by, z: at.z, r: 1.0, h: 0.46, segments: 18 });
+    for (const e of [-0.03, 0.46]) b.cylinder('gold', { x: at.x, y: by + e, z: at.z, r: 1.03, h: 0.05, segments: 18 });
+  }
+  const top = y0 + 0.9 + PH;
+  b.cylinder('wood_red', { x: at.x, y: top, z: at.z, r: 1.55, rTop: 1.4, h: 0.4, segments: 18 });
+  b.cylinder('gold', { x: at.x, y: top + 0.38, z: at.z, r: 1.42, h: 0.05, segments: 18 });
+  // Figure, carved large (it is read from the street far below): flared green robe, sash, torso,
+  // white face, gold headdress. S scales the original 3.6 m figure.
+  const S = 1.55;
+  const fy = top + 0.4;
+  b.cylinder('cloth_green', { x: at.x, y: fy, z: at.z, r: 1.15 * S, rTop: 0.62 * S, h: 1.9 * S, segments: 16 });
+  b.cylinder('roof_green', { x: at.x, y: fy + 0.05 * S, z: at.z, r: 1.18 * S, rTop: 1.05 * S, h: 0.35 * S, segments: 16 });
+  b.cylinder('gold', { x: at.x, y: fy + 1.75 * S, z: at.z, r: 0.64 * S, h: 0.22 * S, segments: 16 });
+  b.cylinder('cloth_green', { x: at.x, y: fy + 1.95 * S, z: at.z, r: 0.6 * S, rTop: 0.5 * S, h: 0.95 * S, segments: 14 });
+  b.box('stone_dark', { x: at.x, y: fy + 2.45 * S, z: at.z, sx: 1.25 * S, sy: 0.38 * S, sz: 0.62 * S, yaw }); // shoulder armour
+  const head = new THREE.SphereGeometry(0.34 * S, 14, 10);
+  b.mesh('plaster_white', head, { x: at.x, y: fy + 3.18 * S, z: at.z });
   head.dispose();
-  const hair = new THREE.SphereGeometry(0.36, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55);
-  const hb = off(at, yaw, 0, -0.04);
-  b.mesh('stone_dark', hair, { x: hb.x, y: fy + 3.22, z: hb.z });
+  const hair = new THREE.SphereGeometry(0.36 * S, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55);
+  const hb = off(at, yaw, 0, -0.04 * S);
+  b.mesh('stone_dark', hair, { x: hb.x, y: fy + 3.22 * S, z: hb.z });
   hair.dispose();
   // Red eye make-up band and the gold headdress (crown band + tall front plate + side ornaments).
-  const eb = off(at, yaw, 0, 0.27);
-  b.box('cloth_red', { x: eb.x, y: fy + 3.22, z: eb.z, sx: 0.5, sy: 0.09, sz: 0.06, yaw }, { castShadow: false });
-  b.cylinder('gold', { x: at.x, y: fy + 3.36, z: at.z, r: 0.37, h: 0.12, segments: 16 });
-  const fp = off(at, yaw, 0, 0.3);
-  b.box('gold', { x: fp.x, y: fy + 3.62, z: fp.z, sx: 0.36, sy: 0.46, sz: 0.06, yaw });
+  const eb = off(at, yaw, 0, 0.27 * S);
+  b.box('cloth_red', { x: eb.x, y: fy + 3.22 * S, z: eb.z, sx: 0.5 * S, sy: 0.09 * S, sz: 0.06 * S, yaw }, { castShadow: false });
+  b.cylinder('gold', { x: at.x, y: fy + 3.36 * S, z: at.z, r: 0.37 * S, h: 0.12 * S, segments: 16 });
+  const fp = off(at, yaw, 0, 0.3 * S);
+  b.box('gold', { x: fp.x, y: fy + 3.62 * S, z: fp.z, sx: 0.36 * S, sy: 0.46 * S, sz: 0.06 * S, yaw });
   for (const s of [-1, 1]) {
-    const q = off(at, yaw, s * 0.38, 0.06);
-    b.box('gold', { x: q.x, y: fy + 3.46, z: q.z, sx: 0.08, sy: 0.32, sz: 0.22, yaw });
+    const q = off(at, yaw, s * 0.38 * S, 0.06 * S);
+    b.box('gold', { x: q.x, y: fy + 3.46 * S, z: q.z, sx: 0.08 * S, sy: 0.32 * S, sz: 0.22 * S, yaw });
   }
   // Arms with the two open fans (京 raised high, 士 held out), painted on both faces.
   const fans: Array<{ ch: '京' | '士'; right: number; up: number; fwd: number; tilt: number }> = [
@@ -190,44 +202,95 @@ function statue(env: BuildEnv, at: P2, out: VillageOut): void {
     { ch: '士', right: -1.05, up: 2.35, fwd: 0.55, tilt: -0.15 },
   ];
   for (const f of fans) {
-    const sh = off(at, yaw, Math.sign(f.right) * 0.6, 0);
-    const hand = off(at, yaw, f.right, f.fwd);
-    const len = Math.hypot(hand.x - sh.x, hand.z - sh.z, f.up - 2.55);
-    const arm = new THREE.CylinderGeometry(0.15, 0.17, len, 8);
+    const sh = off(at, yaw, Math.sign(f.right) * 0.6 * S, 0);
+    const hand = off(at, yaw, f.right * S, f.fwd * S);
+    const len = Math.hypot(hand.x - sh.x, hand.z - sh.z, (f.up - 2.55) * S);
+    const arm = new THREE.CylinderGeometry(0.15 * S, 0.17 * S, len, 8);
     arm.translate(0, len / 2, 0);
-    const dir = new THREE.Vector3(hand.x - sh.x, f.up - 2.55, hand.z - sh.z).normalize();
+    const dir = new THREE.Vector3(hand.x - sh.x, (f.up - 2.55) * S, hand.z - sh.z).normalize();
     const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
     arm.applyQuaternion(q);
-    b.mesh('cloth_green', arm, { x: sh.x, y: fy + 2.55, z: sh.z });
+    b.mesh('cloth_green', arm, { x: sh.x, y: fy + 2.55 * S, z: sh.z });
     arm.dispose();
     const tex = fanTexture(f.ch);
     const mat = new THREE.MeshStandardMaterial({ map: tex, metalness: 0.45, roughness: 0.45, side: THREE.DoubleSide });
     mat.name = 'gold_fan';
     out.owned.push(mat, tex);
-    const fan = fanGeometry(0.85);
-    b.mesh(mat, fan, { x: hand.x, y: fy + f.up, z: hand.z, yaw, roll: f.tilt });
+    const fan = fanGeometry(0.85 * S);
+    b.mesh(mat, fan, { x: hand.x, y: fy + f.up * S, z: hand.z, yaw, roll: f.tilt });
     fan.dispose();
   }
   out.marks.statue = { x: at.x, y: y0, z: at.z };
-  out.marks.statue_top = { x: at.x, y: fy + 3.6, z: at.z };
+  out.marks.statue_top = { x: at.x, y: fy + 3.6 * S, z: at.z };
 }
 
-/** The Meeting Hall: a large A-frame — a steep thatched roof almost to the ground over low walls. */
-function meetingHall(env: BuildEnv, out: VillageOut): void {
+/**
+ * The Meeting Hall: a large A-frame — a steep, thick straw roof almost to the ground over low plaster
+ * walls, a straw ridge with logs across it and crossed boards at the gable ends; plastered gables in
+ * a timber frame with a band of paper windows over the doorway; a stone platform with two benches
+ * against the front where the elders sit in council.
+ */
+function meetingHall(env: BuildEnv, out: VillageOut, km: KyoshiMats): void {
   const c = A(V.u, V.hallR + 2);
   const b = env.chunks.at('major', c.x, c.z).builder;
   const y = H(c.x, c.z);
   const yaw = STREET_YAW + Math.PI; // its gable front looks down the street
-  const W = 15, D = 21, wallH = 1.8, roofH = 11;
-  b.box('stone_grey', { x: c.x, y: y + 0.25, z: c.z, sx: W + 1.2, sy: 0.5, sz: D + 1.2, yaw }, { collide: true, walkable: true, solid: true });
+  const W = 15, D = 21, wallH = 1.8, roofH = 11, eave = 0.9;
+  const fy = y + 0.5; // platform top
+  const ry = fy + wallH; // roof base
+  // Stone platform, deeper at the front for the council benches.
+  const FRONT = 2.4;
+  const pc = off(c, yaw, 0, FRONT / 2);
+  b.box('stone_grey', { x: pc.x, y: y + 0.25, z: pc.z, sx: W + 1.2, sy: 0.5, sz: D + 1.2 + FRONT, yaw }, { collide: true, walkable: true, solid: true });
+  // Low plaster walls in a dark timber frame (posts every few metres, a sill and a top plate).
   for (const s of [-1, 1]) {
-    const q = off(c, yaw, s * W / 2, 0);
-    b.box('wood_dark', { x: q.x, y: y + 0.5 + wallH / 2, z: q.z, sx: 0.3, sy: wallH, sz: D, yaw });
+    const q = off(c, yaw, (s * W) / 2, 0);
+    b.box('plaster_white', { x: q.x, y: fy + wallH / 2, z: q.z, sx: 0.3, sy: wallH, sz: D, yaw });
+    for (let k = 0; k <= 6; k++) {
+      const p = off(c, yaw, s * (W / 2 + 0.08), -D / 2 + (k * D) / 6);
+      b.box('wood_dark', { x: p.x, y: fy + wallH / 2, z: p.z, sx: 0.24, sy: wallH, sz: 0.24, yaw });
+    }
+    for (const hy of [0.12, wallH - 0.1]) {
+      const p = off(c, yaw, s * (W / 2 + 0.1), 0);
+      b.box('wood_dark', { x: p.x, y: fy + hy, z: p.z, sx: 0.16, sy: 0.18, sz: D + 0.3, yaw });
+    }
   }
   const backW = off(c, yaw, 0, -D / 2);
-  b.box('wood_dark', { x: backW.x, y: y + 0.5 + wallH / 2, z: backW.z, sx: W, sy: wallH, sz: 0.3, yaw });
-  // The A-frame: ridge along the hall's length; thatch, with timber gable fronts.
-  b.roof(env.mats.hay, { x: c.x, y: y + 0.5 + wallH, z: c.z, w: D, d: W, height: roofH, yaw: yaw + Math.PI / 2, overhang: 0.9, curve: 0.05, style: 'gable', ridge: 'wood_dark' });
+  b.box('plaster_white', { x: backW.x, y: fy + wallH / 2, z: backW.z, sx: W, sy: wallH, sz: 0.3, yaw });
+  // The front under the gable: low walls either side of the doorway (the benches stand against them).
+  for (const s of [-1, 1]) {
+    const q = off(c, yaw, s * (2.2 + (W / 2 - 2.2) / 2), D / 2);
+    b.box('plaster_white', { x: q.x, y: fy + wallH / 2, z: q.z, sx: W / 2 - 2.2, sy: wallH, sz: 0.3, yaw });
+    const p = off(c, yaw, s * (W / 2 - 1.6), D / 2 + 0.12);
+    b.box('wood_dark', { x: p.x, y: fy + wallH / 2, z: p.z, sx: 0.24, sy: wallH, sz: 0.12, yaw });
+  }
+  // The A-frame: ridge along the hall's length, thick thatch (a second, wider layer shows its depth).
+  b.roof(km.thatch, { x: c.x, y: ry, z: c.z, w: D, d: W, height: roofH, yaw: yaw + Math.PI / 2, overhang: eave, curve: 0.05, style: 'gable', ridge: null });
+  const h1 = W / 2 + eave, h2 = h1 + 0.5;
+  const drop = roofH * (1 - h1 / h2) + 0.12;
+  b.roof(km.thatch, { x: c.x, y: ry - drop, z: c.z, w: D + 1, d: W + 1, height: roofH, yaw: yaw + Math.PI / 2, overhang: eave, curve: 0.05, style: 'gable', ridge: null });
+  // Straw ridge roll with logs laid across it, crossed boards rising above each gable end.
+  const apex = ry + roofH;
+  const roll = new THREE.CylinderGeometry(0.5, 0.5, D + eave * 2 + 0.4, 12);
+  roll.rotateX(Math.PI / 2);
+  b.mesh(km.thatchOld, roll, { x: c.x, y: apex + 0.05, z: c.z, yaw });
+  roll.dispose();
+  const log = new THREE.CylinderGeometry(0.17, 0.17, 1.7, 8);
+  log.rotateZ(Math.PI / 2);
+  for (let k = 0; k < 8; k++) {
+    const p = off(c, yaw, 0, -D / 2 + 1.2 + (k * (D - 2.4)) / 7);
+    b.mesh('wood_dark', log, { x: p.x, y: apex + 0.55, z: p.z, yaw });
+  }
+  log.dispose();
+  const slope = Math.atan2(roofH, h1);
+  for (const f of [-1, 1]) {
+    for (const s of [-1, 1]) {
+      // Each board continues one roof slope past the ridge: centre 0.7 m out along it from the apex.
+      const p = off(c, yaw, -s * Math.cos(slope) * 0.7, f * (D / 2 + eave + 0.12));
+      b.box('wood_dark', { x: p.x, y: apex + Math.sin(slope) * 0.7, z: p.z, sx: 3.2, sy: 0.34, sz: 0.14, yaw, roll: s * slope });
+    }
+  }
+  // Gables: plaster in a timber frame; the front has the doorway and a band of paper windows.
   for (const f of [-1, 1]) {
     const q = off(c, yaw, 0, f * (D / 2));
     const sh = new THREE.Shape();
@@ -236,7 +299,6 @@ function meetingHall(env: BuildEnv, out: VillageOut): void {
     sh.lineTo(0, roofH);
     sh.closePath();
     if (f > 0) {
-      // Front gable: open doorway framed by heavy timbers.
       const hole = new THREE.Path();
       hole.moveTo(-1.8, 0);
       hole.lineTo(1.8, 0);
@@ -247,26 +309,55 @@ function meetingHall(env: BuildEnv, out: VillageOut): void {
     }
     const g = new THREE.ExtrudeGeometry(sh, { depth: 0.3, bevelEnabled: false });
     g.translate(0, 0, -0.15);
-    b.mesh('wood', g, { x: q.x, y: y + 0.5 + wallH, z: q.z, yaw });
+    b.mesh('plaster_white', g, { x: q.x, y: ry, z: q.z, yaw });
     g.dispose();
+    // Timber frame on the gable: posts and two tie beams, cut to the triangle.
+    const face = f > 0 ? yaw : yaw + Math.PI;
+    const fq = off(c, yaw, 0, f * (D / 2 + 0.18));
+    for (const px of [-4.6, -2.0, 2.0, 4.6]) {
+      if (f > 0 && Math.abs(px) < 2.1) continue; // the door frame has its own timbers
+      const hTop = roofH * (1 - Math.abs(px) / (W / 2)) - 0.2;
+      const p = off(fq, face, px, 0);
+      b.box('wood_dark', { x: p.x, y: ry + hTop / 2, z: p.z, sx: 0.26, sy: hTop, sz: 0.12, yaw: face });
+    }
+    for (const hy of [3.6, 7.0]) {
+      const span = W * (1 - hy / roofH) - 0.3;
+      b.box('wood_dark', { x: fq.x, y: ry + hy, z: fq.z, sx: span, sy: 0.26, sz: 0.12, yaw: face });
+    }
+    // Paper windows between the tie beams (front: above the doorway; back: a smaller band).
+    const ww = f > 0 ? 4.4 : 3.0;
+    paperWindow(b, off(c, yaw, 0, f * (D / 2 + 0.1)), ry + 5.3, face, ww, 1.5, km.shoji);
   }
   // Big frame timbers on the front, steps, and the dark interior behind the door.
   const front = off(c, yaw, 0, D / 2 + 0.25);
   for (const s of [-1, 1]) {
     const q = off(front, yaw, s * 2.0, 0);
-    b.box('wood_dark', { x: q.x, y: y + 0.5 + (wallH + 3.6) / 2, z: q.z, sx: 0.4, sy: wallH + 3.6, sz: 0.4, yaw });
+    b.box('wood_dark', { x: q.x, y: fy + (wallH + 3.6) / 2, z: q.z, sx: 0.4, sy: wallH + 3.6, sz: 0.4, yaw });
   }
-  b.box('wood_dark', { x: front.x, y: y + 0.5 + wallH + 3.55, z: front.z, sx: 4.6, sy: 0.4, sz: 0.45, yaw });
+  b.box('wood_dark', { x: front.x, y: fy + wallH + 3.55, z: front.z, sx: 4.6, sy: 0.4, sz: 0.45, yaw });
   const inner = off(c, yaw, 0, D / 2 - 0.6);
-  b.box('stone_dark', { x: inner.x, y: y + 0.5 + 2.2, z: inner.z, sx: 3.6, sy: 4.4, sz: 0.2, yaw }, { castShadow: false });
-  const st0 = off(c, yaw, 0, D / 2 + 2.6), st1 = off(c, yaw, 0, D / 2 + 0.6);
-  b.stairs({ from: new THREE.Vector3(st0.x, y - 0.05, st0.z), to: new THREE.Vector3(st1.x, y + 0.5, st1.z), width: 4.4, material: 'stone_grey' });
-  b.collider({ shape: 'box', x: c.x, y: y + 0.5 + (wallH + roofH * 0.5) / 2, z: c.z, hx: W / 2 + 0.4, hy: (wallH + roofH * 0.5) / 2, hz: D / 2, yaw, walkable: true, solid: true, surface: 'wood' });
-  // Lanterns either side of the door.
+  b.box('stone_dark', { x: inner.x, y: fy + 2.2, z: inner.z, sx: 3.6, sy: 4.4, sz: 0.2, yaw }, { castShadow: false });
+  const st0 = off(c, yaw, 0, D / 2 + 2.6 + FRONT), st1 = off(c, yaw, 0, D / 2 + 0.6 + FRONT);
+  b.stairs({ from: new THREE.Vector3(st0.x, y - 0.05, st0.z), to: new THREE.Vector3(st1.x, fy, st1.z), width: 4.4, material: 'stone_grey' });
+  b.collider({ shape: 'box', x: c.x, y: fy + (wallH + roofH * 0.5) / 2, z: c.z, hx: W / 2 + 0.4, hy: (wallH + roofH * 0.5) / 2, hz: D / 2, yaw, walkable: true, solid: true, surface: 'wood' });
+  // Council benches against the front either side of the door; the elders sit on them facing the street.
+  const benchFwd = D / 2 + 0.55;
   for (const s of [-1, 1]) {
-    const q = off(front, yaw, s * 3.4, 1.2);
-    out.lanterns.push(new THREE.Vector3(q.x, y + 2.9, q.z));
-    b.lantern(new THREE.Vector3(q.x, y + 2.9, q.z), { color: 'warm', post: true });
+    const bc = off(c, yaw, s * 3.9, benchFwd);
+    b.box('wood', { x: bc.x, y: fy + 0.42, z: bc.z, sx: 3.3, sy: 0.08, sz: 0.5, yaw }, { collide: true, walkable: true, solid: true, surface: 'wood' });
+    for (const k of [-1.4, 0, 1.4]) {
+      const l = off(bc, yaw, k, 0);
+      b.box('wood_dark', { x: l.x, y: fy + 0.19, z: l.z, sx: 0.1, sy: 0.38, sz: 0.42, yaw }, { castShadow: false });
+    }
+    for (const k of [-1, 0, 1]) {
+      const st = off(c, yaw, s * 3.9 + k * 1.05, benchFwd + 0.42);
+      out.seats.push({ x: st.x, z: st.z, y: fy, yaw });
+    }
+  }
+  // Lamps at the platform's front corners, their lanterns toward the steps.
+  for (const s of [-1, 1]) {
+    const q = off(c, yaw, s * (W / 2 + 0.1), D / 2 + FRONT + 0.2);
+    out.lanterns.push(lanternPost(b, q.x, fy, q.z, yaw + (s * Math.PI) / 2, 'red'));
   }
   out.marks.meeting_hall = { x: front.x, y, z: front.z };
 }
@@ -384,7 +475,7 @@ function well(env: BuildEnv, c: P2, out: VillageOut): void {
   out.wells.push(c);
 }
 
-export function* buildVillage(env: BuildEnv, out: VillageOut): Generator<unknown, void, unknown> {
+export function* buildVillage(env: BuildEnv, out: VillageOut, km: KyoshiMats): Generator<unknown, void, unknown> {
   const rnd = env.rnd;
   // Entrance plaza: statue on the left of the street as you walk in.
   statue(env, streetPt(-1, -9), out);
@@ -411,6 +502,12 @@ export function* buildVillage(env: BuildEnv, out: VillageOut): Generator<unknown
       const floor = Math.max(0.5, ground + rnd.range(0.55, 0.9) - ground) + Math.max(0, ground - gy) * 0.5;
       const tiled = rnd.chance(0.35);
       let finish = 0;
+      // The look comes from its own dice, so the plots above (and every test that walks between the
+      // houses) keep their places: thatch, grey tile or cedar shingles; white or cream plaster in a dark
+      // timber frame, pale cedar boards or dark planks; paper windows; a lantern by many doors.
+      const look = new Random(0x6b5100 + i * 2 + (side > 0 ? 1 : 0));
+      const thatch = !tiled && look.chance(0.7);
+      const roof: Mat = tiled ? 'roof_dark' : thatch ? (look.chance(0.55) ? km.thatch : km.thatchOld) : 'wood';
       const opts: Parameters<typeof house>[1] = {
         x: c.x,
         z: c.z,
@@ -421,13 +518,15 @@ export function* buildVillage(env: BuildEnv, out: VillageOut): Generator<unknown
         d,
         h: rnd.range(2.5, 2.9),
         floor,
-        roofH: rnd.range(2.7, 3.3),
-        roof: tiled ? 'roof_dark' : 'wood_dark',
-        // Painted plaster on dark timber, or plain boards.
-        wall: (finish = rnd.range(0, 1)) < 0.4 ? 'plaster_cream' : finish < 0.7 ? 'wood' : 'wood_dark',
-        trim: finish < 0.4 ? 'wood_dark' : 'wood',
+        roofH: rnd.range(2.7, 3.3) + (thatch ? 0.4 : 0),
+        roof,
+        thickRoof: thatch,
+        wall: (finish = rnd.range(0, 1)) < 0.22 ? 'plaster_white' : finish < 0.42 ? 'plaster_cream' : finish < 0.86 ? 'wood' : 'wood_dark',
+        trim: finish < 0.86 ? 'wood_dark' : 'wood',
         stairs: rnd.chance(0.5) ? 'front' : 'side',
         porch: rnd.chance(0.4),
+        windows: km.shoji,
+        lantern: look.chance(0.65) ? (look.chance(0.5) ? 'red' : 'warm') : undefined,
       };
       // A lane where the dojo path leaves the street (its plot stays open; the dice still roll so
       // every other house keeps its look).
@@ -437,15 +536,16 @@ export function* buildVillage(env: BuildEnv, out: VillageOut): Generator<unknown
     }
     if (i % 2 === 0) yield;
   }
-  meetingHall(env, out);
+  meetingHall(env, out, km);
   yield;
-  // Street lanterns and fences along the plots behind the houses.
+  // Street lamps (paper lanterns on timber posts, their arms over the street) and fences along the
+  // plots behind the houses.
+  let lamp = 0;
   for (let s = 10; s <= 98; s += 14) {
     for (const side of [-1, 1]) {
       const q = streetPt(s + (side > 0 ? 7 : 0), side * 3.6);
       const y = H(q.x, q.z);
-      env.chunks.at('props', q.x, q.z).builder.lantern(new THREE.Vector3(q.x, y + 2.9, q.z), { color: 'warm', post: true });
-      out.lanterns.push(new THREE.Vector3(q.x, y + 2.9, q.z));
+      out.lanterns.push(lanternPost(env.chunks.at('props', q.x, q.z).builder, q.x, y, q.z, STREET_YAW + (side * Math.PI) / 2, lamp++ % 2 ? 'red' : 'warm'));
     }
   }
   for (const side of [-1, 1]) {

@@ -17,6 +17,7 @@ import { kyoshiLook } from './people';
 import { buildShrine, type ShrineOut } from './shrine';
 import './spots';
 import { buildVillage, type VillageOut } from './village';
+import { kyoshiMaterials } from './materials';
 
 /**
  * Kyoshi Island (zone `kyoshi_island`, its own map): Suki's village, the Kyoshi Dojo and Shrine,
@@ -59,16 +60,19 @@ export class KyoshiIsland extends EarthRegion {
   protected *construct(env: BuildEnv): Generator<unknown, void, unknown> {
     this.anchors();
     yield;
-    const v: VillageOut = { marks: {}, doors: [], stalls: [], kitchens: [], fields: [], wells: [], lanterns: [], owned: [] };
-    yield* buildVillage(env, v);
+    // The island's own straw and paper (disposed with the rest of what it owns).
+    const km = kyoshiMaterials();
+    this.owned.push(...km.owned);
+    const v: VillageOut = { marks: {}, doors: [], stalls: [], kitchens: [], fields: [], wells: [], lanterns: [], seats: [], owned: [] };
+    yield* buildVillage(env, v, km);
     const d: DojoOut = { marks: {}, yard: { x: 0, y: 0, z: 0, yaw: 0, w: 0, d: 0 }, posts: [], owned: [] };
     yield* buildDojo(env, d);
     const s: ShrineOut = { marks: {}, owned: [], lanterns: [] };
     yield* buildShrine(env, s);
     const h: HarborOut = { marks: {}, piers: [], stalls: [], doors: [], lanterns: [] };
-    yield* buildHarbor(env, h);
+    yield* buildHarbor(env, h, km);
     const b: BayOut = { marks: {}, lanterns: [] };
-    yield* buildBay(env, b);
+    yield* buildBay(env, b, km);
     for (const out of [v, d, s, h, b]) for (const [k, m] of Object.entries(out.marks)) this.mark(k, m.x, m.y, m.z);
     for (const out of [v, d, s]) this.owned.push(...out.owned);
     this.village = v;
@@ -93,6 +97,7 @@ export class KyoshiIsland extends EarthRegion {
         yard: d.yard,
         posts: d.posts,
         marks: this.marks,
+        seats: v.seats,
         ground,
       },
       density,

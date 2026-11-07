@@ -4,6 +4,7 @@ import { A, KI, yawOutward } from '../../landforms/kyoshiIsland';
 import type { P2 } from '../../WorldLayout';
 import type { BuildEnv } from '../earth/env';
 import { barrel, dryingRack, house, off } from './kit';
+import type { KyoshiMats } from './materials';
 
 /**
  * Koi Harbor, the island's fishing and trading port on the east side of the bay: a timber quay and
@@ -27,7 +28,7 @@ const QUAY_R = 213;
 const DECK_Y = KI.harbor.y + 0.05;
 const PIER_END_R = 168;
 
-export function* buildHarbor(env: BuildEnv, out: HarborOut): Generator<unknown, void, unknown> {
+export function* buildHarbor(env: BuildEnv, out: HarborOut, km: KyoshiMats): Generator<unknown, void, unknown> {
   const rnd = env.rnd;
   // Quay: timber bulkhead and a plank boardwalk along the water from one end of the harbor to the other.
   const u0 = KI.harbor.u0 + 0.005, u1 = KI.harbor.u1 - 0.005;
@@ -119,7 +120,7 @@ export function* buildHarbor(env: BuildEnv, out: HarborOut): Generator<unknown, 
     const y = heightAt(c.x, c.z);
     const yaw = yawOutward(u) + Math.PI;
     const b = env.chunks.at('houses', c.x, c.z).builder;
-    b.building({ x: c.x, y, z: c.z, w: 18, d: 10, h: 5.2, yaw, wall: 'wood_dark', roof: 'roof_dark', trim: 'wood', roofStyle: 'gable', roofHeight: 3.4, windows: false, plinth: 'stone_grey' });
+    b.building({ x: c.x, y, z: c.z, w: 18, d: 10, h: 5.2, yaw, wall: 'wood', roof: 'roof_dark', trim: 'wood_dark', roofStyle: 'gable', roofHeight: 3.4, windows: false, plinth: 'stone_grey' });
     const door = off(c, yaw, 0, 5.05);
     b.box('wood', { x: door.x, y: y + 1.7, z: door.z, sx: 3.6, sy: 3.4, sz: 0.12, yaw });
     out.doors.push({ ...off(c, yaw, 0, 6.5), yaw });
@@ -153,7 +154,8 @@ export function* buildHarbor(env: BuildEnv, out: HarborOut): Generator<unknown, 
     const c = A(u, QUAY_R + 52 + (i % 2) * 9);
     const y = heightAt(c.x, c.z);
     const yaw = yawOutward(u) + Math.PI;
-    house(env.chunks.at('houses', c.x, c.z).builder, { x: c.x, z: c.z, y, yaw, w: rnd.range(5.4, 6.4), d: rnd.range(5, 5.8), h: 2.7, floor: rnd.range(0.5, 0.9), roofH: 3, roof: 'roof_dark', wall: 'wood_dark', trim: 'wood', stairs: 'front', porch: rnd.chance(0.5) });
+    // Grey tile at the harbor; pale cedar or white plaster in a dark frame, paper windows, red lanterns.
+    house(env.chunks.at('houses', c.x, c.z).builder, { x: c.x, z: c.z, y, yaw, w: rnd.range(5.4, 6.4), d: rnd.range(5, 5.8), h: 2.7, floor: rnd.range(0.5, 0.9), roofH: 3, roof: 'roof_dark', wall: i % 3 === 1 ? 'plaster_white' : 'wood', trim: 'wood_dark', stairs: 'front', porch: rnd.chance(0.5), windows: km.shoji, lantern: i % 2 ? 'red' : 'warm' });
     out.doors.push({ ...off(c, yaw, 0, 4.6), yaw });
   }
   // Crates, barrels and boat hulls on the boardwalk.

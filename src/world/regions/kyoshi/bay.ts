@@ -3,6 +3,7 @@ import { getRiverRuntime, heightAt } from '../../Heightfield';
 import { A, KI, yawOutward } from '../../landforms/kyoshiIsland';
 import type { BuildEnv } from '../earth/env';
 import { off } from './kit';
+import type { KyoshiMats } from './materials';
 import { shipParts } from '../../../travel/kit';
 
 /**
@@ -17,7 +18,7 @@ export interface BayOut {
   lanterns: THREE.Vector3[];
 }
 
-export function* buildBay(env: BuildEnv, out: BayOut): Generator<unknown, void, unknown> {
+export function* buildBay(env: BuildEnv, out: BayOut, km: KyoshiMats): Generator<unknown, void, unknown> {
   const rnd = env.rnd;
   // ---- Bison meadow: keeper's hut, hay stacks, a water trough ----
   {
@@ -26,7 +27,7 @@ export function* buildBay(env: BuildEnv, out: BayOut): Generator<unknown, void, 
     const hut = off(m, yaw, -12, -10);
     const y = heightAt(hut.x, hut.z);
     const b = env.chunks.at('props', hut.x, hut.z).builder;
-    b.building({ x: hut.x, y, z: hut.z, w: 5, d: 4.4, h: 2.6, yaw, wall: 'wood_dark', roof: env.mats.hay, trim: 'wood', roofStyle: 'gable', roofHeight: 2.6, windows: false, plinth: null });
+    b.building({ x: hut.x, y, z: hut.z, w: 5, d: 4.4, h: 2.6, yaw, wall: 'wood', roof: km.thatchOld, trim: 'wood_dark', roofStyle: 'gable', roofHeight: 2.6, windows: false, plinth: null });
     for (const [r, f] of [[8, -8], [10.5, -6], [9, -10.5]] as const) {
       const q = off(m, yaw, r, f);
       const hy = heightAt(q.x, q.z);
