@@ -168,6 +168,16 @@ export interface GameEvents {
   // ---- time of day (src/world/TimeSkip) ----
   /** Time was passed from the pause menu: from/to are hours of day, `hours` how long it waited. */
   'time:skipped': { from: number; to: number; hours: number };
+
+  // ---- Pillar Charge (src/combat/techniques/earth/pillarCharge.ts) ----
+  /** Standing on your own raised Earth Pillar, Dodge charges it (the touch DODGE button reads CHARGE). */
+  'pillarcharge:ready': { ready: boolean };
+  /** A charge set off toward a target (null: along the aim) `distance` metres away (`chain`: 1..3 on this pillar). */
+  'pillarcharge:launched': { targetId: number | null; distance: number; chain: number };
+  /** The pillar slammed down at `position` (why it stopped) after hitting `hits` enemies on the way. */
+  'pillarcharge:slam': { position: { x: number; y: number; z: number }; hits: number; reason: 'target' | 'heavy' | 'blocked' | 'ledge' | 'distance' };
+  /** The ride ended and you are back on the ground (or jumped off). */
+  'pillarcharge:ended': { reason: 'lowered' | 'jumped' | 'left' | 'cancelled' };
 }
 
 export type GameEventName = keyof GameEvents;

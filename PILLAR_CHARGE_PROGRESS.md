@@ -4,7 +4,7 @@ Rollback branch: `before-pillar-charge` (pushed; = ba82dec, the tree before this
 
 ## Phases
 - [x] 1. Read the systems (notes below)
-- [ ] 2. Charge motion with a stable rider (no damage)
+- [x] 2. Charge motion with a stable rider (no damage)
 - [ ] 3. Hit detection, damage, knockback, slam
 - [ ] 4. Targeting, steering, terrain and obstacles
 - [ ] 5. Camera, animation, VFX, audio, haptics
@@ -41,3 +41,17 @@ Rollback branch: `before-pillar-charge` (pushed; = ba82dec, the tree before this
   innate with Earth Pillar (not taught, never auto-slotted, cast with `force` when you know Earth Pillar).
 - A `PillarCharge` driver (bending pre hook) owns the move: wind-up → charge → slam → chain window → lower.
 - Additive API on `RockPillar` so an external driver can hold, move, tilt and lower it.
+
+## Phase 2 (charge motion, stable rider)
+- `combat/techniques/earth/pillarCharge.ts`: `PILLAR_CHARGE` tuning block, the `earth_pillar_charge` technique
+  (innate with Earth Pillar, cast with `force`, windup 0, channel while the pillar moves) and the driver.
+- Driver phases: windup (0.1 s, leans back 4°, the stone shudders) → charge (smoothstep ease-in over 0.2 s to
+  3× Earth sprint = 27 m/s, cruise, constant deceleration over the last 0.12 s, sub-steps of 1/60 s) → slam
+  (pitch 15° in 0.12 s, back in 0.25 s) → chain window or lower (0.5 s smoothstep, never below the ground).
+- Rider: `body.kinematic` while attached; each pre-frame the feet are put on the (tilted) top at the offset
+  they had, velocities zeroed (knockback cannot move you), grounded on the pillar's collider. Jump = off.
+- Terrain: ground sampled below the pillar's own top; slopes followed exactly, steps eased out.
+- `RockPillar` (vfx/effects/constructs.ts): additive `takeOver / place / letGo / vanish / colliderId / isHeld`.
+- `core/events.ts`: `pillarcharge:ready|launched|slam|ended` appended.
+- Measured (fixed 1/60 steps, live loop stopped): 14 m no-target run slams 0.75 s after the tap; rider offset
+  in the stone's frame constant to 0.4 mm over 98 frames; lowering 0.5 s.

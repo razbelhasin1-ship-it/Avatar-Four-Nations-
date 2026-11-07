@@ -202,10 +202,14 @@ export interface PillarOptions {
 export class RockPillar extends EarthConstruct {
   readonly radius: number;
   readonly height: number;
-  readonly baseY: number;
+  /** Ground under the pillar (moves with it while a driver rides it across the ground, see takeOver). */
+  baseY: number;
   protected readonly visualHeight: number;
   top: number;
   private readonly mesh: THREE.Mesh;
+  /** [additive: Pillar Charge] Held by an external driver (it neither ages nor sinks; see takeOver). */
+  private held = false;
+  private yaw0 = 0;
 
   constructor(ctx: GameContext, o: PillarOptions) {
     const tint = o.tint ?? '#8a7860';
@@ -244,7 +248,73 @@ export class RockPillar extends EarthConstruct {
     const r = this.radius;
     this.carry(prevTop, this.top, p.x, p.z, r, (x, z, pad) => Math.hypot(x - p.x, z - p.z) < r + pad);
   }
+
+  // [additive: Pillar Charge] An external driver can ride the raised pillar across the ground (the same
+  // stone and collider): takeOver() → place() each frame → letGo() (it sinks as usual) or vanish().
+
+  /** The collider you stand on when you are on top of this pillar. */
+  get colliderId(): number {
+    return this.colliders[0] ?? -1;
+  }
+
+  /** True while an external driver holds the pillar. */
+  get isHeld(): boolean {
+    return this.held;
+  }
+
+  /** Hold the fully raised pillar: it stops aging (no sink) and only moves through place(). */
+  takeOver(): boolean {
+    if (this.held || this.phase === 'gone' || this.phase === 'sink') return false;
+    if (this.phase === 'rise' && this.level < 0.98) return false;
+    this.held = true;
+    this.phase = 'move';
+    this.level = 1;
+    this.age = 0;
+    this.yaw0 = this.mesh.rotation.y;
+    return true;
+  }
+
+  /**
+   * Put the held pillar with its base on the ground at (x, base, z), raised `level` (0..1), the stone tilted by
+   * `tilt` radians about the horizontal axis (ax, 0, az) through its foot and nudged by (jx, jz) (a shudder).
+   * The collider stays upright (the tilt is visual).
+   */
+  place(x: number, base: number, z: number, level = 1, ax = 1, az = 0, tilt = 0, jx = 0, jz = 0): void {
+    if (!this.held) return;
+    this.baseY = base;
+    this.level = level;
+    this.group.position.set(x, 0, z);
+    const raised = this.height * level;
+    this.top = base + raised;
+    this.mesh.position.set(jx, base - this.height + raised, jz);
+    pillarQ.setFromAxisAngle(pillarAxis.set(ax, 0, az), tilt);
+    pillarQ2.setFromAxisAngle(pillarUp, this.yaw0);
+    this.mesh.quaternion.multiplyQuaternions(pillarQ, pillarQ2);
+    this.ctx.world.collision.update(this.colliders[0], { x, z, y: this.top - this.height / 2 });
+  }
+
+  /** Let go where it stands: upright again, it sinks back into the ground as usual. */
+  letGo(): void {
+    if (!this.held) return;
+    this.held = false;
+    this.mesh.quaternion.setFromAxisAngle(pillarUp, this.yaw0);
+    this.mesh.position.x = 0;
+    this.mesh.position.z = 0;
+    this.phase = 'stand';
+    this.retract();
+  }
+
+  /** Remove it now (a driver already lowered it into the ground). */
+  vanish(): void {
+    this.held = false;
+    if (this.phase !== 'gone') this.phase = 'gone';
+  }
 }
+
+const pillarQ = new THREE.Quaternion();
+const pillarQ2 = new THREE.Quaternion();
+const pillarAxis = new THREE.Vector3();
+const pillarUp = new THREE.Vector3(0, 1, 0);
 
 // ---------------------------------------------------------------------------
 // Wall (can be punched forward)

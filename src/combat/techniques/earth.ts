@@ -10,3 +10,4 @@ import './earth/basic';
 import './earth/constructs';
 import './earth/defense';
 import './earth/movement';
+import './earth/pillarCharge';
