@@ -299,6 +299,13 @@ try {
     await h.eval((g) => {
       window.__skipped = null;
       g.ctx.events.on('time:skipped', (e) => (window.__skipped = e));
+      // The banner takes itself down after a few seconds of wall-clock time, which the software renderer
+      // can spend on a few frames: record each banner as it appears.
+      window.__banners = [];
+      window.__bannerObs = new MutationObserver((muts) => {
+        for (const m of muts) for (const n of m.addedNodes) if (n.classList?.contains('banner')) window.__banners.push(n.textContent);
+      });
+      window.__bannerObs.observe(document.body, { childList: true, subtree: true });
     });
     await h.page.click('[data-action="skip-night"]');
     await h.step(2);
@@ -308,7 +315,10 @@ try {
       await h.step(10, 1 / 30);
       if (!(await h.eval((g) => g.debug.time.state().passing))) break;
     }
-    const after = await h.eval((g) => ({ hour: g.ctx.world.sky.timeOfDay, day: g.ctx.extra.get('moon')?.day ?? null, ev: window.__skipped, lock: g.ctx.player.controlLock, passing: g.debug.time.state().passing, banner: document.querySelector('.banner')?.textContent ?? '' }));
+    const after = await h.eval((g) => {
+      window.__bannerObs.disconnect();
+      return { hour: g.ctx.world.sky.timeOfDay, day: g.ctx.extra.get('moon')?.day ?? null, ev: window.__skipped, lock: g.ctx.player.controlLock, passing: g.debug.time.state().passing, banner: window.__banners.filter((t) => /passed/.test(t)).at(-1) ?? window.__banners.join(' | ') };
+    });
     assert.ok(!after.passing, 'done');
     assert.match(after.banner, /Dawn.*06:00.*7 h 30 min passed/, `banner: ${after.banner}`);
     assert.ok(Math.abs(after.hour - 6) < 0.02, `hour ${after.hour}`);

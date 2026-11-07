@@ -844,8 +844,8 @@ export class Player extends Entity implements Combatant, Persistable {
     cr.chaseYaw = camWant ? this.yaw : null;
     // Low behind the glider looking out to the horizon; above it looking down a dive; under it in a climb.
     cr.chasePitch = camWant ? clamp(0.14 - this.glideAttitude * 0.6, -0.15, 0.55) : null;
-    // Wisps show the updraft columns (always for a glider, else with the ambient effects).
-    this.updraftField.update(dt, !!s || this.ctx.settings.data.graphics.ambientEffects);
+    // Faint wisps show the updraft columns, only while gliding.
+    this.updraftField.update(dt, !!this.glider);
     if (!s) return;
     const anim = this.humanoid.animator;
     const cast = this.ctx.combat.activeCast(this);

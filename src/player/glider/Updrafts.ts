@@ -1,7 +1,4 @@
-import * as THREE from 'three';
 import type { GameContext } from '../../core/GameContext';
-import { setOpacity, windMaterial } from '../../vfx/effects/materials';
-import { ringWall, shared } from '../../vfx/effects/shapes';
 import type { Emitter } from '../../vfx/VFX';
 import { spotsWithPrefix, type Spot } from '../../world/Spots';
 import { GLIDER } from './flight';
@@ -10,8 +7,9 @@ import { GLIDER } from './flight';
  * Updraft columns: rising air over the temple cliffs (the `updraft_*` spots) that carries an open
  * glider up. Each column is wide enough to circle in at full stick (the glider turns on a ~10 m
  * radius) and lifts hardest in its core, fading to nothing at its rim, below its foot and near its
- * top. Near the camera each column shows as streaks of wind rushing up a slowly turning shell (the
- * core where the lift is full) with wisps of mist rising through it, so you can see where to ride.
+ * top. Nothing is drawn for them while you walk the temple; while you glide, faint wisps of mist
+ * rise through the nearest columns (and streaks of air rush past you inside one), so you can find
+ * them from the air.
  */
 
 export interface UpdraftColumn {
@@ -64,29 +62,12 @@ export function updraftLift(columns: readonly UpdraftColumn[], x: number, y: num
   return best;
 }
 
-/** How many columns show their wisps at once, and from how far (m); streak shells show farther, fading out. */
-const SHOW = { max: 3, range: 170, every: 0.4, shellRange: 320, shellFade: 120, shellOpacity: 0.36 };
-
-/** Unit open cylinder (foot at 0, top at 1) whose streaks wind round it as they rise: a spiralling updraft, not a waterfall. */
-function twistedShell(): THREE.BufferGeometry {
-  const g = ringWall(1, 1, 36, 'up');
-  const uv = g.getAttribute('uv') as THREE.BufferAttribute;
-  // u wraps round the shell; shifting it with height turns the vertical streaks into a helix
-  // (2.5 turns over the column; still seamless as the streak repeats across are whole).
-  for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) + uv.getY(i) * 2.5);
-  uv.needsUpdate = true;
-  return g;
-}
-
-interface Shell {
-  mesh: THREE.Mesh;
-  mat: THREE.ShaderMaterial;
-}
+/** How many columns show their wisps at once, and from how far (m). */
+const SHOW = { max: 3, range: 170, every: 0.4 };
 
 export class UpdraftField {
   private columns: UpdraftColumn[] = [];
   private readonly live = new Map<UpdraftColumn, Emitter>();
-  private readonly shells = new Map<UpdraftColumn, Shell>();
   private timer = 0;
 
   constructor(private readonly ctx: GameContext) {}
@@ -104,13 +85,9 @@ export class UpdraftField {
     return updraftLift(this.all(), p.x, p.y, p.z);
   }
 
-  /**
-   * Keep the wisps going in the columns nearest the camera (`show`: someone here can ride them —
-   * the glider staff is worn — or ambient effects are on).
-   */
+  /** Keep faint wisps rising in the columns nearest the camera while `show` (gliding). */
   update(dt: number, show: boolean): void {
     const ctx = this.ctx;
-    this.updateShells(dt, show && ctx.session.active);
     this.timer -= dt;
     if (this.timer > 0) return;
     this.timer = SHOW.every;
@@ -134,57 +111,19 @@ export class UpdraftField {
       let em = this.live.get(c);
       if (!em) {
         // (The particle density setting scales the rate.)
-        em = ctx.vfx.emitter('mist', 10, { radius: c.radius * 0.72, speed: 6.5, swirl: 0.55, size: 1.7, spread: 0.25 });
+        em = ctx.vfx.emitter('mist', 6, { radius: c.radius * 0.6, speed: 5, swirl: 0.55, size: 1.4, spread: 0.25 });
         em.direction.set(0, 1, 0);
         this.live.set(c, em);
       }
       // The wisps rise past the camera's height, within the column.
-      em.position.set(c.x, Math.min(c.top - 30, Math.max(c.base, cam.y - 14)), c.z);
+      em.position.set(c.x, Math.min(c.top - 30, Math.max(c.base, cam.y - 12)), c.z);
     }
   }
 
-  /** Wind streaks rushing up each column's core, fading out with distance (built when first near). */
-  private updateShells(dt: number, show: boolean): void {
-    const ctx = this.ctx;
-    const cam = ctx.camera.position;
-    for (const c of show ? this.all() : []) {
-      const d = Math.hypot(cam.x - c.x, cam.z - c.z);
-      let s = this.shells.get(c);
-      if (!s && d > SHOW.shellRange) continue;
-      if (!s) {
-        const geo = shared('glider_updraft_shell', twistedShell);
-        // Streaks ~10 m apart up the shell, rising ~12 m/s (uv speed is in repeat cells per second).
-        const mat = windMaterial({ speed: 1.2, repeat: [11, 24], threshold: 0.66, body: 0, opacity: SHOW.shellOpacity, fade: [0.08, 0.25], wrapAcross: true, color: '#ffffff', tint: '#d8ecf8' });
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.name = 'updraft_shell';
-        mesh.frustumCulled = false;
-        mesh.renderOrder = 2;
-        // The core (full lift) reaches up from the column's foot; it turns slowly, like the air.
-        mesh.position.set(c.x, c.base - UPDRAFT.below * 0.5, c.z);
-        mesh.scale.set(c.radius * UPDRAFT.core, c.top - c.base, c.radius * UPDRAFT.core);
-        ctx.scene.add(mesh);
-        s = { mesh, mat };
-        this.shells.set(c, s);
-      }
-      // Fade with distance; lighter from inside, where the streaks wrap round the view.
-      const inside = d < c.radius * UPDRAFT.core * 1.1 ? 0.5 : 1;
-      const k = Math.max(0, Math.min(1, (SHOW.shellRange - d) / SHOW.shellFade)) * inside;
-      s.mesh.visible = k > 0.01;
-      s.mesh.rotation.y += dt * 0.12;
-      setOpacity(s.mat, SHOW.shellOpacity * k);
-    }
-    if (!show) for (const s of this.shells.values()) s.mesh.visible = false;
-  }
-
-  /** Stop every wisp and drop the streak shells (session end, the player gone). */
+  /** Stop every wisp (session end, the player gone). */
   clear(): void {
     for (const em of this.live.values()) em.stop();
     this.live.clear();
-    for (const s of this.shells.values()) {
-      s.mesh.removeFromParent();
-      s.mat.dispose();
-    }
-    this.shells.clear();
     this.columns = [];
   }
 }
