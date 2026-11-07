@@ -6,7 +6,7 @@ Rollback branch: `before-pillar-charge` (pushed; = ba82dec, the tree before this
 - [x] 1. Read the systems (notes below)
 - [x] 2. Charge motion with a stable rider (no damage)
 - [x] 3. Hit detection, damage, knockback, slam
-- [ ] 4. Targeting, steering, terrain and obstacles
+- [x] 4. Targeting, steering, terrain and obstacles
 - [ ] 5. Camera, animation, VFX, audio, haptics
 - [ ] 6. Controls, UI, tutorial
 - [ ] 7. Tuning, edge cases, tests
@@ -67,3 +67,16 @@ Rollback branch: `before-pillar-charge` (pushed; = ba82dec, the tree before this
   thrown outward (12 m/s × falloff), pop, stun 0.6 s, unblockable; walls/ledges make a 60%, half-power slam.
 - Measured: line of three bandits rammed (−48 each) and bowled aside, slam on the locked target; a platypus
   bear stops the pillar ('heavy'); chain window → lowered → 5 s cooldown. Chi 100 → 70.
+
+## Phase 4 (targeting, steering, terrain, obstacles)
+- Target at launch: the locked enemy; else the harmable one within a 60° cone of the camera's view and 4..30 m,
+  scored by angle from the reticle (then distance); else straight along the reticle for 14 m (ground slam).
+- Homing on a (moving) target at 5 rad/s; the stick nudges the heading camera-relative at ≤ 1.1 rad/s.
+  A target that dies keeps its last known position.
+- Look-ahead once per frame along the heading (braking distance + margin, 0.35 m samples): solid colliders
+  across the pillar's whole width (`solidAt`, own collider ignored, kerbs < 0.5 m climbed), per-sample rises
+  > step + 35° and sustained rises over 2 m, drops > 1.2 m (ledges), water and non-earth ground, the world's
+  edge. The braking curve then stops the front short of it; the slam is the small one ('blocked'/'ledge').
+- Measured: cone picks the enemy 14 m ahead (skips one 50° off and one 3 m away); a 0.3 m wall stops it from
+  27 m/s with the front 0.18 m short; a 5 m platform edge stops it with the front 0.2 m short; a 20° slope
+  is ridden (+4.9 m), base change ≤ 0.17 m per frame.

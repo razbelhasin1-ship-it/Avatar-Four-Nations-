@@ -3,7 +3,8 @@ import type { GameContext } from '../../../core/GameContext';
 import { dampAngle, wrapAngle } from '../../../core/MathUtil';
 import type { Entity } from '../../../entities/Entity';
 import { MOVE_STYLES, type Player } from '../../../player/Player';
-import { liveConstructs, RockPillar } from '../../../vfx/effects/constructs';
+import { WORLD_HALF } from '../../../world/WorldLayout';
+import { liveConstructs, RockPillar, solidAt } from '../../../vfx/effects/constructs';
 import { registerTechnique } from '../../CombatSystem';
 import type { Cast, Combatant } from '../../types';
 import { bending } from '../bending/runtime';
@@ -87,6 +88,8 @@ const PC = PILLAR_CHARGE;
 const DEG = Math.PI / 180;
 /** Simulation sub-step (s): the motion is integrated in steps no longer than this, whatever the frame rate. */
 const SUB = 1 / 60;
+/** Ground a pillar cannot be driven across (as earth/common.ts: no earth to bend there). */
+const NOT_EARTH: ReadonlySet<string> = new Set(['water', 'ice', 'wood', 'metal', 'lava']);
 
 type Phase = 'windup' | 'charge' | 'brake' | 'slam' | 'chain' | 'lower';
 export type SlamReason = 'target' | 'heavy' | 'blocked' | 'ledge' | 'distance';
@@ -124,6 +127,11 @@ interface Ride {
   charges: number;
   hits: Set<number>;
   reason: SlamReason;
+  /** The look-ahead's stop: the furthest the foot may go along the heading from (scanX, scanZ), and why. */
+  scanX: number;
+  scanZ: number;
+  blockAt: number;
+  blockReason: SlamReason;
 }
 
 interface Pick {
@@ -206,23 +214,50 @@ class PillarChargeDriver {
   /** Where a charge set off now would go. */
   pick(ctx: GameContext, p: Player): Pick {
     const pillar = this.pillarUnder(p);
-    const from = tmpA.copy(pillar ? pillar.group.position : p.position).setY(0);
+    const src = pillar ? pillar.group.position : p.position;
+    const ox = src.x, oz = src.z;
     // Locked on: that enemy.
     const lock = p.lockTarget;
     if (lock && lock.alive) {
-      const d = Math.hypot(lock.position.x - from.x, lock.position.z - from.z);
+      const d = Math.hypot(lock.position.x - ox, lock.position.z - oz);
       if (d <= PC.maxDistance + 2) {
-        const dir = new THREE.Vector3(lock.position.x - from.x, 0, lock.position.z - from.z);
+        const dir = new THREE.Vector3(lock.position.x - ox, 0, lock.position.z - oz);
         if (dir.lengthSq() < 1e-6) dir.set(Math.sin(p.yaw), 0, Math.cos(p.yaw));
         dir.normalize();
         return { target: lock, dir, goal: lock.position.clone(), distance: d };
       }
     }
-    // Nothing to aim at: straight along the aim.
-    const dir = new THREE.Vector3(p.aimDir.x, 0, p.aimDir.z);
-    if (dir.lengthSq() < 1e-6) dir.set(Math.sin(p.yaw), 0, Math.cos(p.yaw));
-    dir.normalize();
-    const goal = from.clone().addScaledVector(dir, PC.noTargetDistance);
+    // The reticle: the camera's view, flattened onto the ground.
+    const aim = ctx.camera.getWorldDirection(tmpB).setY(0);
+    if (aim.lengthSq() < 1e-6) aim.set(p.aimDir.x, 0, p.aimDir.z);
+    if (aim.lengthSq() < 1e-6) aim.set(Math.sin(p.yaw), 0, Math.cos(p.yaw));
+    aim.normalize();
+    // Else the enemy ahead: within the cone and range, the one nearest the reticle (then the nearer one).
+    const half = (PC.coneDeg * DEG) / 2;
+    let best: Entity | null = null;
+    let bestScore = Infinity;
+    let bestD = 0;
+    for (const e of ctx.entities.queryRadius(tmpA.set(ox, p.position.y, oz), PC.maxDistance + 1, { aliveOnly: true }, this.found)) {
+      if (e === p || !ctx.combat.canHarm(p, e)) continue;
+      const dx = e.position.x - ox, dz = e.position.z - oz;
+      const d = Math.hypot(dx, dz);
+      if (d < PC.minDistance || d > PC.maxDistance) continue;
+      const ang = Math.acos(Math.max(-1, Math.min(1, (dx * aim.x + dz * aim.z) / d)));
+      if (ang > half) continue;
+      const score = ang / half + 0.35 * (d / PC.maxDistance);
+      if (score < bestScore) {
+        bestScore = score;
+        best = e;
+        bestD = d;
+      }
+    }
+    if (best) {
+      const dir = new THREE.Vector3(best.position.x - ox, 0, best.position.z - oz).normalize();
+      return { target: best, dir, goal: best.position.clone(), distance: bestD };
+    }
+    // Nothing to aim at: straight along the reticle, ending in a ground slam.
+    const dir = aim.clone();
+    const goal = new THREE.Vector3(ox, 0, oz).addScaledVector(dir, PC.noTargetDistance);
     return { target: null, dir, goal, distance: PC.noTargetDistance };
   }
 
@@ -276,6 +311,10 @@ class PillarChargeDriver {
       charges: (prev?.charges ?? 0) + 1,
       hits: new Set(),
       reason: 'distance',
+      scanX: pos.x,
+      scanZ: pos.z,
+      blockAt: Infinity,
+      blockReason: 'blocked',
     };
     this.ride = ride;
     this.leanOwner = p;
@@ -393,7 +432,7 @@ class PillarChargeDriver {
   /** Distance left to where the pillar should stop (m). */
   private remaining(r: Ride): number {
     const left = Math.max(0, r.plan - r.travelled);
-    if (!r.target) return Math.min(left, Math.hypot(r.goal.x - r.x, r.goal.z - r.z));
+    if (!r.target) return left;
     const contact = r.pillar.radius + r.target.radius + 0.1;
     return Math.min(left, Math.max(0, Math.hypot(r.goal.x - r.x, r.goal.z - r.z) - contact));
   }
@@ -401,6 +440,16 @@ class PillarChargeDriver {
   private charge(ctx: GameContext, r: Ride, dt: number): void {
     // Ease back out of the wind-up lean as it sets off.
     r.tilt *= Math.exp(-dt * 18);
+    // The stick nudges the heading (camera-relative, like walking), at a capped turn rate.
+    const mv = ctx.input.move;
+    const camF = ctx.camera.getWorldDirection(tmpB).setY(0);
+    if (camF.lengthSq() < 1e-6) camF.set(Math.sin(r.heading), 0, Math.cos(r.heading));
+    camF.normalize();
+    const wx = camF.x * mv.y - camF.z * mv.x, wz = camF.z * mv.y + camF.x * mv.x;
+    const stick = Math.min(1, Math.hypot(wx, wz));
+    const stickYaw = Math.atan2(wx, wz);
+    // What lies ahead (walls, steep rises, ledges, water, the world's edge): brake before it.
+    this.scan(ctx, r);
     let left = dt;
     while (left > 1e-6 && r.phase === 'charge' && this.ride === r) {
       const h = Math.min(left, SUB);
@@ -414,7 +463,15 @@ class PillarChargeDriver {
         const turn = PC.homing * h;
         r.heading = wrapAngle(r.heading + Math.max(-turn, Math.min(turn, d)));
       }
-      const R = this.remaining(r);
+      if (stick > 0.3) {
+        const d = wrapAngle(stickYaw - r.heading);
+        const turn = PC.nudge * h * stick;
+        r.heading = wrapAngle(r.heading + Math.max(-turn, Math.min(turn, d)));
+      }
+      const goalLeft = this.remaining(r);
+      const blockLeft = (r.blockAt - ((r.x - r.scanX) * Math.sin(r.heading) + (r.z - r.scanZ) * Math.cos(r.heading)));
+      const blocked = blockLeft < goalLeft;
+      const R = Math.max(0, Math.min(goalLeft, blockLeft));
       const decel = r.peak / PC.easeOut;
       const ramp = r.peak * smooth01(r.t / PC.rampUp);
       const brake = Math.sqrt(2 * decel * R);
@@ -429,10 +486,75 @@ class PillarChargeDriver {
       }
       if (this.ride !== r || r.phase !== 'charge') return;
       if (R - stepLen <= 1e-3) {
-        this.slam(ctx, r, r.target ? 'target' : 'distance');
+        this.slam(ctx, r, blocked ? r.blockReason : r.target ? 'target' : 'distance');
         return;
       }
     }
+  }
+
+  /**
+   * Look ahead along the heading as far as it takes to stop (plus a margin) and find the first place the pillar
+   * cannot go: anything solid it would hit (swept as its whole width, from a step above its foot), a rise
+   * steeper than the slope it can ride plus a step, a drop off a ledge, water or ground that is not earth, the
+   * world's edge. The foot must stop with the front short of it (r.blockAt, measured from r.scanX/Z).
+   */
+  private scan(ctx: GameContext, r: Ride): void {
+    const fx = Math.sin(r.heading), fz = Math.cos(r.heading);
+    const R = r.pillar.radius;
+    const decel = r.peak / PC.easeOut;
+    const v = Math.max(r.speed, r.peak * 0.5);
+    const look = (v * v) / (2 * decel) + v / 20 + R + 1.5;
+    const step = 0.35;
+    const slopeTan = Math.tan(PC.maxSlopeDeg * DEG);
+    const edge = WORLD_HALF - 6;
+    r.scanX = r.x;
+    r.scanZ = r.z;
+    r.blockAt = Infinity;
+    const mid = tmpA;
+    let prev = r.ground;
+    const hist: number[] = this.hist;
+    hist.length = 0;
+    hist.push(r.ground);
+    for (let d = step; d <= look; d += step) {
+      const x = r.x + fx * d, z = r.z + fz * d;
+      if (Math.abs(x) > edge || Math.abs(z) > edge) {
+        this.block(r, d - R - 0.15, 'blocked');
+        return;
+      }
+      const gs = ctx.world.groundAt(x, z, prev + PC.stepUp + 0.35);
+      const g = gs.y;
+      const dg = g - prev;
+      // Two metres back along the scan (or the foot): a sustained climb or fall beyond the slope it rides.
+      const back = hist[Math.max(0, hist.length - Math.round(2 / step))];
+      const span = Math.min(2, d);
+      if (dg > PC.stepUp + slopeTan * step || g - back > PC.stepUp + slopeTan * span) {
+        this.block(r, d - R - 0.15, 'blocked');
+        return;
+      }
+      // (The edge lies between the last good sample and this one: the front stops on the near side.)
+      if (dg < -(PC.maxDrop + slopeTan * step) || back - g > PC.maxDrop + slopeTan * span) {
+        this.block(r, d - step - R, 'ledge');
+        return;
+      }
+      if (NOT_EARTH.has(gs.surface) || (ctx.world.liquidAt(x, z)?.level ?? -Infinity) > g + 0.3) {
+        this.block(r, d - step - R, 'ledge');
+        return;
+      }
+      // Solid things in the way of its whole body (low kerbs it climbs are ignored).
+      if (d > 0.2 && solidAt(ctx, mid.set(x, g + 1.5, z), R * 0.95, r.pillar.colliders, 0.05)) {
+        this.block(r, d - 0.3, 'blocked');
+        return;
+      }
+      hist.push(g);
+      prev = g;
+    }
+  }
+
+  private readonly hist: number[] = [];
+
+  private block(r: Ride, at: number, reason: SlamReason): void {
+    r.blockAt = Math.max(0, at);
+    r.blockReason = reason;
   }
 
   /** Move the foot `len` metres along the heading, following the ground (steps eased out, slopes exact). */
