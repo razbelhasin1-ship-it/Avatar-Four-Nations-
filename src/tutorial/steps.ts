@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getTechnique } from '../combat/CombatSystem';
+import { pillarCharge } from '../combat/techniques/earth/pillarCharge';
 import { TrainingDummy } from '../entities/TrainingDummy';
 import { getSpot } from '../world/Spots';
 import type { GameContext } from '../core/GameContext';
@@ -165,6 +166,16 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     onEvent: { hit: hitCounter('earth', 'earth') },
     check: (rt) => c(rt, 'earth') >= 2,
     progress: (rt) => `${Math.min(2, c(rt, 'earth'))} / 2 earth hits`,
+  },
+  {
+    id: 'pillar_charge',
+    title: 'Pillar Charge',
+    text: 'Standing on a pillar? Press {dodge} to CHARGE and ride it into your enemies.',
+    touch: 'Standing on a pillar? Tap CHARGE to ride it into your enemies.',
+    element: 'earth',
+    onEvent: { 'pillarcharge:slam': () => 'slam' },
+    check: (rt) => c(rt, 'slam') >= 1,
+    progress: () => (pillarCharge.ready || pillarCharge.ride ? 'Charge!' : 'First raise an Earth Pillar under yourself (aim away from the dummy)'),
   },
   {
     id: 'lock',

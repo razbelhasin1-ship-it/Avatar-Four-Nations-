@@ -170,7 +170,7 @@ export interface GameEvents {
   'time:skipped': { from: number; to: number; hours: number };
 
   // ---- Pillar Charge (src/combat/techniques/earth/pillarCharge.ts) ----
-  /** Standing on your own raised Earth Pillar, Dodge charges it (the touch DODGE button reads CHARGE). */
+  /** Dodge is Pillar Charge now (you stand on your own raised Earth Pillar, or ride it): touch DODGE reads CHARGE. */
   'pillarcharge:ready': { ready: boolean };
   /** A charge set off toward a target (null: along the aim) `distance` metres away (`chain`: 1..3 on this pillar). */
   'pillarcharge:launched': { targetId: number | null; distance: number; chain: number };

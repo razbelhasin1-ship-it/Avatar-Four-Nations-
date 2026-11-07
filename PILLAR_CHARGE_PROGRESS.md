@@ -8,7 +8,7 @@ Rollback branch: `before-pillar-charge` (pushed; = ba82dec, the tree before this
 - [x] 3. Hit detection, damage, knockback, slam
 - [x] 4. Targeting, steering, terrain and obstacles
 - [x] 5. Camera, animation, VFX, audio, haptics
-- [ ] 6. Controls, UI, tutorial
+- [x] 6. Controls, UI, tutorial
 - [ ] 7. Tuning, edge cases, tests
 
 ## Phase 1 notes (how the existing systems work)
@@ -96,3 +96,16 @@ Rollback branch: `before-pillar-charge` (pushed; = ba82dec, the tree before this
   at launch, `bend_earth_crumble` + `bend_earth_slam` on the slam.
 - Haptics: `navigator.vibrate(45 / 25 ms)` on the slam, touch play only, behind a NEW setting
   Controls ▸ Touch controls ▸ Vibration (`controls.vibration`, default on) — the game had none.
+
+## Phase 6 (controls, UI, tutorial)
+- Button: DODGE (dash-arrow icon) — on your raised pillar it is CHARGE (same slot, relabelled while you can
+  charge or ride, `pillarcharge:ready`), with the conic cooldown ring (`cooldownFraction`), dimmed when cooling
+  or short of chi, and it shakes (`.tbtn.deny`) when a charge is refused for chi/cooldown (the HUD's existing
+  chi-bar flash and fail sounds play too). Dodge does nothing important on a pillar (it would roll you off),
+  so no other slot was needed. Keyboard/gamepad: the Dodge binding. `Input.label('dodge')` reads "Charge".
+- Tutorial: step 11/20 `pillar_charge` right after Earthbending (there is no Pillar step): "Standing on a
+  pillar? Tap CHARGE to ride it into your enemies." (keyboard: "Press {dodge} to CHARGE…"), progress hint
+  until you stand on one; completes on `pillarcharge:slam`. Counter updates (19 → 20).
+- Debug: `__game.debug.pillarCharge.overlay(true)` draws the hit volume and the path and shows phase, speed,
+  distance, chain, hits, tilt and your offset on the pillar; `state()`, `pick()`, `canCharge()`.
+- Site catalogue: Pillar Charge under Earth.

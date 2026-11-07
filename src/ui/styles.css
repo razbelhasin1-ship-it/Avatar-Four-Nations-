@@ -2097,6 +2097,30 @@ select {
   background: conic-gradient(rgba(0, 0, 0, 0.62) calc(var(--cd, 0) * 360deg), transparent 0);
 }
 
+/* [additive: Pillar Charge] A refused press (not enough chi, cooling down) shakes the button. */
+.touch .tbtn.deny {
+  animation: tbtn-deny 0.42s ease;
+}
+
+@keyframes tbtn-deny {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  20% {
+    translate: -5px 0;
+  }
+  40% {
+    translate: 5px 0;
+  }
+  60% {
+    translate: -3px 0;
+  }
+  80% {
+    translate: 3px 0;
+  }
+}
+
 .touch .tbtn.ult {
   border-color: #cfefff;
   box-shadow: 0 0 12px rgba(207, 239, 255, 0.45);

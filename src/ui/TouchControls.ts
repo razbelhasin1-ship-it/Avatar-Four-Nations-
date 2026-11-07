@@ -109,6 +109,8 @@ export class TouchControls {
   private insetProbe: HTMLElement;
   private rotateDismissed = false;
   private abilityCount = 4;
+  /** [additive: Pillar Charge] On your raised pillar DODGE reads CHARGE (with its cooldown ring). */
+  private chargeOn = false;
   private elementPress = { t: 0, long: false, timer: 0 };
 
   constructor(private readonly ctx: GameContext) {
@@ -146,6 +148,13 @@ export class TouchControls {
       }),
     );
     ctx.events.on('settings:changed', () => this.refresh());
+    // [additive: Pillar Charge] DODGE becomes CHARGE on your pillar; a refused charge shakes the button.
+    ctx.events.on('pillarcharge:ready', (e) => {
+      this.chargeOn = e.ready;
+    });
+    ctx.events.on('technique:failed', (e) => {
+      if (e.id === 'earth_pillar_charge' && (e.reason === 'chi' || e.reason === 'cooldown')) this.deny('dodge');
+    });
     const relayout = () => {
       if (this.visible) {
         this.layout(true);
@@ -177,7 +186,7 @@ export class TouchControls {
     const cap = h('span.tc', caption);
     const el = h(`div.tbtn.${size}`, { 'data-touch': action, role: 'button', 'aria-label': caption }, iconEl, cap);
     const b: Btn = { action, el, size, hold, icon: iconEl, cap, pointer: null };
-    if (action.startsWith('ability')) {
+    if (action.startsWith('ability') || action === 'dodge') {
       b.cd = h('span.tcd');
       el.prepend(b.cd);
     }
@@ -626,7 +635,7 @@ export class TouchControls {
     const cs = ctx.companions;
     const waterEl = p.element === 'water' && ctx.progression.canBend('water');
     const multi = ctx.progression.unlocked.size > 1;
-    const sig = `${p.element}|${ids.join(',')}|${cs.mounted}|${cs.mountedFlying}|${waterEl}|${multi}|${ctx.avatar.active}`;
+    const sig = `${p.element}|${ids.join(',')}|${cs.mounted}|${cs.mountedFlying}|${waterEl}|${multi}|${ctx.avatar.active}|${this.chargeOn}`;
     if (sig !== this.labelSig) {
       this.labelSig = sig;
       ids.forEach((id, i) => {
@@ -655,11 +664,11 @@ export class TouchControls {
       // Riding / flying relabels the movement buttons.
       const fly = cs.mounted && cs.mountedFlying;
       setCap(this.btns.get('jump')!, fly ? 'Climb' : p.element === 'air' && !cs.mounted ? 'Jump·Glide' : 'Jump');
-      setCap(this.btns.get('dodge')!, fly ? 'Descend' : 'Dodge');
+      setCap(this.btns.get('dodge')!, this.chargeOn && !cs.mounted ? 'Charge' : fly ? 'Descend' : 'Dodge');
       setCap(this.btns.get('sprint')!, fly ? 'Boost' : cs.mounted ? 'Gallop' : 'Sprint');
       setCap(this.btns.get('companion')!, cs.mounted ? 'Dismount' : 'Mount');
       // While riding, hints and prompts name these buttons as they now read (the interact pill idles as INTERACT).
-      for (const a of ['jump', 'dodge', 'sprint', 'companion'] as const) ctx.input.setTouchCaption(a, cs.mounted ? this.btns.get(a)!.cap.textContent : null);
+      for (const a of ['jump', 'dodge', 'sprint', 'companion'] as const) ctx.input.setTouchCaption(a, cs.mounted || (a === 'dodge' && this.chargeOn) ? this.btns.get(a)!.cap.textContent : null);
       ctx.input.setTouchCaption('interact', cs.mounted ? 'Interact' : null);
       this.abilityCount = count;
       this.layout(true);
@@ -674,6 +683,18 @@ export class TouchControls {
       b.el.classList.toggle('cooling', f > 0);
       const def = getTechnique(id);
       if (def) b.el.classList.toggle('nochi', p.chi < def.chiCost - 0.01);
+    }
+    // [additive: Pillar Charge] CHARGE shows its cooldown and dims without the chi for it.
+    const dodge = this.btns.get('dodge')!;
+    if (this.chargeOn && !cs.mounted) {
+      const f = clamp(ctx.combat.cooldownFraction(p, 'earth_pillar_charge'), 0, 1);
+      dodge.cd?.style.setProperty('--cd', f.toFixed(3));
+      dodge.el.classList.toggle('cooling', f > 0);
+      const def = getTechnique('earth_pillar_charge');
+      dodge.el.classList.toggle('nochi', !!def && p.chi < def.chiCost * (ctx.avatar.active ? ctx.avatar.boosts.chiCost : 1) - 0.01);
+    } else if (dodge.el.classList.contains('cooling') || dodge.el.classList.contains('nochi') || dodge.cd?.style.getPropertyValue('--cd')) {
+      dodge.cd?.style.removeProperty('--cd');
+      dodge.el.classList.remove('cooling', 'nochi');
     }
     // Draw Water lights up when a real source is in reach.
     this.waterT -= ctx.time.dt;
@@ -700,6 +721,16 @@ export class TouchControls {
       this.interact.el.setAttribute('aria-label', label || 'Interact');
       this.placeInteract();
     }
+  }
+
+  /** [additive: Pillar Charge] Shake a button: what it asks for cannot happen now (chi, cooldown). */
+  private deny(action: Action): void {
+    const el = this.btns.get(action)?.el;
+    if (!el) return;
+    el.classList.remove('deny');
+    void el.offsetWidth;
+    el.classList.add('deny');
+    setTimeout(() => el.classList.remove('deny'), 450);
   }
 
   // ---------------------------------------------------------------------------

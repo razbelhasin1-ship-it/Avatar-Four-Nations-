@@ -90,6 +90,7 @@ export const TECHNIQUES: Record<ElementId, Technique[]> = {
     { id: 'rock_armor', name: 'Rock Armor', kind: 'defense', text: 'Slabs tear out of the ground and clamp onto you from boots to helmet: half the force of every blow, and nothing staggers you.' },
     { id: 'earth_surf', name: 'Earth Surf', kind: 'movement', text: 'Ride the crest of a wave of earth that builds speed, carves turns and bowls enemies over.' },
     { id: 'earth_launch', name: 'Earth Launch', kind: 'movement', text: 'A pillar of stone catapults you high into the air. Come down hard for a shockwave.' },
+    { id: 'earth_pillar_charge', name: 'Pillar Charge', kind: 'movement', text: 'Standing on your raised pillar, ride it across the ground into your enemies and slam it down with a shockwave. Chain up to three charges.' },
     { id: 'seismic_sense', name: 'Seismic Sense', kind: 'passive', text: 'Stomps and hard landings reveal nearby enemies and hidden things, even through walls.' },
   ],
   fire: [

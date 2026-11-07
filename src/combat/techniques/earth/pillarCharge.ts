@@ -372,6 +372,8 @@ class PillarChargeDriver {
   ride: Ride | null = null;
   /** Standing on your own raised pillar with Earth up: Dodge charges. */
   ready = false;
+  /** Dodge reads CHARGE (ready, or riding). */
+  private shown = false;
   private pending: Pick | null = null;
   /** Reused query buffer. */
   private readonly found: Entity[] = [];
@@ -554,9 +556,12 @@ class PillarChargeDriver {
     const r = this.ride;
     // Dodge on your pillar is the charge; while the pillar moves it does nothing (no rolling off it).
     const ready = this.canCharge(ctx, p);
-    if (ready !== this.ready) {
-      this.ready = ready;
-      ctx.events.emit('pillarcharge:ready', { ready });
+    this.ready = ready;
+    // Dodge reads CHARGE on your pillar and stays so while you ride it.
+    const shown = ready || (!!r && r.rider === p);
+    if (shown !== this.shown) {
+      this.shown = shown;
+      ctx.events.emit('pillarcharge:ready', { ready: shown });
     }
     if (ctx.input.wasPressed('dodge')) {
       if (r && r.phase !== 'chain' && r.rider === p) ctx.input.consume('dodge');
@@ -1013,10 +1018,12 @@ class PillarChargeDriver {
     this.crouch = 0;
     this.feel.reset(this.ctx);
     this.leanOwner = null;
-    if (this.ready) {
-      this.ready = false;
+    this.ready = false;
+    if (this.shown) {
+      this.shown = false;
       this.ctx?.events.emit('pillarcharge:ready', { ready: false });
     }
+    this.overlay(false);
   }
 
   // -------------------------------------------------------------------------------------------- placing
@@ -1103,9 +1110,66 @@ class PillarChargeDriver {
     }
     if (!r && Math.abs(this.lean) < 1e-4 && Math.abs(this.crouch) < 1e-4) this.leanOwner = null;
     this.feel.update(ctx, r, dt);
+    if (this.dbg) this.drawOverlay();
   }
 
   // -------------------------------------------------------------------------------------------- debug
+
+  private dbg: { box: THREE.LineSegments; path: THREE.Line; text: HTMLElement } | null = null;
+
+  /** Debug overlay: the hit volume, the path to the goal, speed and your offset on the pillar. */
+  overlay(on: boolean): boolean {
+    const ctx = this.ctx;
+    if (!on || !ctx) {
+      if (this.dbg) {
+        this.dbg.box.removeFromParent();
+        this.dbg.box.geometry.dispose();
+        (this.dbg.box.material as THREE.Material).dispose();
+        this.dbg.path.removeFromParent();
+        this.dbg.path.geometry.dispose();
+        (this.dbg.path.material as THREE.Material).dispose();
+        this.dbg.text.remove();
+        this.dbg = null;
+      }
+      return false;
+    }
+    if (this.dbg) return true;
+    const box = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0xff5533, depthTest: false }));
+    const path = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0x44ddff, depthTest: false }));
+    box.renderOrder = path.renderOrder = 999;
+    box.frustumCulled = path.frustumCulled = false;
+    ctx.vfx.group.add(box, path);
+    const text = document.createElement('div');
+    Object.assign(text.style, { position: 'absolute', left: '8px', bottom: '8px', padding: '4px 8px', font: '12px/1.4 monospace', color: '#fff', background: 'rgba(0,0,0,0.55)', pointerEvents: 'none', whiteSpace: 'pre' });
+    ctx.ui.layers.hud.appendChild(text);
+    this.dbg = { box, path, text };
+    return true;
+  }
+
+  private drawOverlay(): void {
+    const d = this.dbg;
+    if (!d) return;
+    const r = this.ride;
+    d.box.visible = d.path.visible = !!r;
+    if (!r) {
+      d.text.textContent = `pillar charge: ${this.ready ? 'ready' : 'idle'}`;
+      return;
+    }
+    const fx = Math.sin(r.heading), fz = Math.cos(r.heading);
+    const R = r.pillar.radius;
+    const H = r.pillar.height * r.pillar.level;
+    // The front hit volume this frame (width + margin, full height, a little ahead).
+    const len = Math.max(0.3, r.speed / 60 + 0.25);
+    d.box.position.set(r.x + fx * (R + len / 2), r.base + H / 2, r.z + fz * (R + len / 2));
+    d.box.rotation.set(0, r.heading, 0);
+    d.box.scale.set(2 * (R + 0.35), H, len);
+    const pos = d.path.geometry.getAttribute('position') as THREE.BufferAttribute;
+    pos.setXYZ(0, r.x, r.base + 0.3, r.z);
+    pos.setXYZ(1, r.goal.x, r.base + 0.3, r.goal.z);
+    pos.needsUpdate = true;
+    const s = this.state() as { local: { x: number; y: number; z: number } };
+    d.text.textContent = `pillar charge  ${r.phase}  ${r.speed.toFixed(1)} m/s  ${r.travelled.toFixed(1)}/${Math.min(r.plan, PC.maxDistance).toFixed(0)} m\nchain ${r.charges}/${PC.chain}  hits ${r.hits.size}  tilt ${(r.tilt / DEG).toFixed(1)}°\nrider offset  x ${s.local.x.toFixed(3)}  y ${s.local.y.toFixed(3)}  z ${s.local.z.toFixed(3)}`;
+  }
 
   state(): Record<string, unknown> {
     const r = this.ride;
@@ -1148,6 +1212,8 @@ bending.hook({
       g.debug.pillarCharge = {
         state: () => pillarCharge.state(),
         canCharge: () => (ctx.player ? pillarCharge.canCharge(ctx, ctx.player as Player) : false),
+        /** Toggle the debug overlay (hit volume, path, speed, your offset on the pillar). */
+        overlay: (on = true) => pillarCharge.overlay(on),
         /** Where a charge set off now would go. */
         pick: () => {
           const p = ctx.player as Player | null;
