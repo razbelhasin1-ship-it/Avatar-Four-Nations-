@@ -460,6 +460,49 @@ try {
     assert.equal(await h.eval(() => window.__dodged), 1, 'dodged');
   });
 
+  await check('on Kyoshi Island (its own map, far off the mainland) it rides and slams like anywhere else', async () => {
+    await settle();
+    await h.eval((g) => g.debug.travel.toIsland('ki_meadow'));
+    for (let i = 0; i < 40; i++) {
+      await h.step(10, DT);
+      if (await h.eval((g) => !!g.ctx.world.getRegionContent('kyoshi_isle')?.ready)) break;
+    }
+    // The flattest open line across the meadow, away from the bison keeper.
+    const spot = await h.eval((g) => {
+      const W = g.ctx.world;
+      const m = g.debug.kyoshi.marks().meadow;
+      let best = null;
+      for (let a = 0; a < 16; a++) {
+        const yaw = (a / 16) * Math.PI * 2;
+        const x = m.x + Math.sin(yaw) * 6, z = m.z + Math.cos(yaw) * 6;
+        let worst = 0, prev = W.heightAt(x, z), wet = false;
+        for (let d = 1; d <= 16; d++) {
+          const h = W.heightAt(x + Math.sin(yaw) * d, z + Math.cos(yaw) * d);
+          worst = Math.max(worst, Math.abs(h - prev));
+          prev = h;
+          if (W.liquidAt(x + Math.sin(yaw) * d, z + Math.cos(yaw) * d)) wet = true;
+        }
+        if (!wet && (!best || worst < best.worst)) best = { x, z, yaw, worst };
+      }
+      return best;
+    });
+    assert.ok(spot && spot.x > 4000 && spot.worst < 0.35, 'an open line on the island ' + JSON.stringify(spot));
+    await onPillar(spot.x, spot.z, spot.yaw);
+    const id = await h.eval((g) => g.debug.enemies.spawn('bandit_spearman', 12, 0).id);
+    await noDodge([id]);
+    await h.step(2, DT);
+    await h.eval((g, id) => (g.ctx.player.lockTarget = g.debug.enemies.entity(id)), id);
+    const hp0 = await h.eval((g, id) => g.debug.enemies.entity(id).health.hp, id);
+    await press('dodge');
+    const fr = await rideUntil(['chain', 'lower', 'idle']);
+    const last = fr.filter((f) => f.pillar).slice(-1)[0];
+    const hp1 = await h.eval((g, id) => g.debug.enemies.entity(id)?.health.hp ?? 0, id);
+    assert.ok(last && last.travelled > 6, `rode ${last?.travelled} m (${last?.reason})`);
+    assert.equal(last.reason, 'target', JSON.stringify(last));
+    assert.ok(hp1 < hp0, `the enemy took the charge: ${hp0} -> ${hp1}`);
+    await settle();
+  });
+
   await check('no console errors', async () => {
     assert.deepEqual(h.errors, []);
   });

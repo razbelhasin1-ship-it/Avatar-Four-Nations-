@@ -5,6 +5,7 @@ import { dampAngle, wrapAngle } from '../../../core/MathUtil';
 import type { Entity } from '../../../entities/Entity';
 import { MOVE_STYLES, type Player } from '../../../player/Player';
 import { WORLD_HALF } from '../../../world/WorldLayout';
+import { zoneAt } from '../../../world/Zones';
 import { liveConstructs, RockPillar, solidAt } from '../../../vfx/effects/constructs';
 import { rockImpact, shardRing } from '../../../vfx/effects/earth';
 import { debris } from '../../../vfx/effects/loop';
@@ -96,6 +97,17 @@ const DEG = Math.PI / 180;
 const SUB = 1 / 60;
 /** Ground a pillar cannot be driven across (as earth/common.ts: no earth to bend there). */
 const NOT_EARTH: ReadonlySet<string> = new Set(['water', 'ice', 'wood', 'metal', 'lava']);
+
+/**
+ * Inside the map you are on, 6 m short of its edge: the mainland's square, or a far zone's own square
+ * (Kyoshi Island lies far off the mainland, at x = 7200).
+ */
+function inPlayArea(x: number, z: number): boolean {
+  const m = 6;
+  if (Math.abs(x) <= WORLD_HALF - m && Math.abs(z) <= WORLD_HALF - m) return true;
+  const zn = zoneAt(x, z);
+  return !!zn && Math.abs(x - zn.cx) <= zn.half - m && Math.abs(z - zn.cz) <= zn.half - m;
+}
 
 type Phase = 'charge' | 'brake' | 'slam' | 'chain' | 'lower';
 export type SlamReason = 'target' | 'heavy' | 'blocked' | 'ledge' | 'distance';
@@ -753,7 +765,6 @@ class PillarChargeDriver {
     const look = (v * v) / (2 * decel) + v / 20 + R + 1.5;
     const step = 0.35;
     const slopeTan = Math.tan(PC.maxSlopeDeg * DEG);
-    const edge = WORLD_HALF - 6;
     r.scanX = r.x;
     r.scanZ = r.z;
     r.blockAt = Infinity;
@@ -764,7 +775,7 @@ class PillarChargeDriver {
     hist.push(r.ground);
     for (let d = step; d <= look; d += step) {
       const x = r.x + fx * d, z = r.z + fz * d;
-      if (Math.abs(x) > edge || Math.abs(z) > edge) {
+      if (!inPlayArea(x, z)) {
         this.block(r, d - R - 0.15, 'blocked');
         return;
       }
