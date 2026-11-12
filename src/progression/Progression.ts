@@ -10,7 +10,8 @@ import { defaultOrigin, isOrigin, startOption, type OriginId } from '../data/sta
  *  - learned techniques and per-element loadouts (4 slots each)
  *  - per-element mastery: proficiency (earned by bending), master lessons and the
  *    element's Mastery Trial. Mastery is distinct from knowing techniques.
- *  - Elements Sphere unlocks only when all four elements are mastered.
+ *  - Elements Sphere awakens as soon as the Avatar can bend all four elements (mastery is a
+ *    separate, longer road and does not gate it).
  */
 
 export interface MasteryState {
@@ -149,6 +150,8 @@ export class Progression implements Persistable, GameSystem {
       this.ctx?.events.emit('element:unlocked', { element: e });
       this.ctx?.events.emit('ui:notify', { text: `You can now bend ${ELEMENT_INFO[e].name}!`, kind: 'avatar', duration: 5 });
     }
+    // The fourth element awakens the Elements Sphere.
+    this.checkSphere();
   }
 
   learn(id: string, source: 'start' | 'master' | 'mastery' | 'sphere' | 'quest' | 'debug', silent = false): boolean {
@@ -223,19 +226,18 @@ export class Progression implements Persistable, GameSystem {
       m.mastered = true;
       this.ctx?.events.emit('mastery:achieved', { element: e });
       this.ctx?.events.emit('ui:notify', { text: `${ELEMENT_INFO[e].name}bending Mastered`, kind: 'avatar', duration: 6 });
-      this.checkSphere();
       return true;
     }
     return false;
   }
 
-  /** Unlock Elements Sphere iff all four elements are mastered. */
-  checkSphere(): boolean {
+  /** Unlock the Elements Sphere once the Avatar can bend all four elements (mastered or not). */
+  checkSphere(silent = false): boolean {
     if (this.elementsSphereUnlocked) return true;
-    if (!ELEMENTS.every((e) => this.mastery[e].mastered)) return false;
+    if (!ELEMENTS.every((e) => this.unlocked.has(e))) return false;
     this.elementsSphereUnlocked = true;
     for (const id of SPHERE_TECHNIQUES) if (getTechnique(id)) this.learn(id, 'sphere', true);
-    this.ctx?.events.emit('elementsSphere:unlocked', {});
+    if (!silent) this.ctx?.events.emit('elementsSphere:unlocked', {});
     return true;
   }
 
@@ -323,7 +325,13 @@ export class Progression implements Persistable, GameSystem {
     if (typeof data.xp === 'number') this.xp = data.xp;
     this.avatarStateUnlocked = data.avatarState !== false;
     this.elementsSphereUnlocked = !!data.sphere;
-    if (this.elementsSphereUnlocked) for (const id of SPHERE_TECHNIQUES) if (getTechnique(id) && !this.learned.has(id)) this.learned.set(id, { source: 'sphere', at: 0 });
+    if (this.elementsSphereUnlocked) {
+      for (const id of SPHERE_TECHNIQUES) if (getTechnique(id) && !this.learned.has(id)) this.learned.set(id, { source: 'sphere', at: 0 });
+    } else {
+      // Journeys saved when the Sphere still waited for four masteries: bending all four now awakens
+      // it (quietly here; the spirit vision plays when the journey resumes).
+      this.checkSphere(true);
+    }
   }
 
   reset(): void {

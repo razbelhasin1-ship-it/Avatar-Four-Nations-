@@ -45,7 +45,7 @@ export const LORE: LoreEntry[] = [
     id: 'lore_sphere',
     title: 'The Elements Sphere',
     group: 'The Avatar',
-    text: 'Only an Avatar who has truly mastered all four arts can draw them together at once. The elements circle the Avatar in a great sphere, and techniques no single nation could perform become possible.',
+    text: 'Only an Avatar who can bend all four arts can draw them together at once. The elements circle the Avatar in a great sphere, and techniques no single nation could perform become possible.',
     unlock: { sphere: true },
   },
   {

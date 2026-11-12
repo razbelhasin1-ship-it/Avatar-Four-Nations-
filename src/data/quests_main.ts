@@ -52,7 +52,7 @@ function avatarCycle(start: Element): QuestDef {
     id: `mq_avatar_cycle_${start}`,
     title: 'The Avatar Cycle',
     category: 'main',
-    summary: 'Water, earth, fire, air. The Avatar must learn all four from those who love them most — and master each before the Elements Sphere will answer.',
+    summary: 'Water, earth, fire, air. The Avatar must learn all four from those who love them most. Once all four answer, so does the Elements Sphere — and mastering each is the work of a lifetime.',
     autoStart: { startingElement: start, flag: 'avatar_awakened' },
     steps: [
       { id: 'meet', text: `Your first true teacher waits: find ${sm.name} ${sm.where}.`, objectives: [{ type: 'talk', npc: sm.id, text: `Meet ${sm.name}` }] },
@@ -63,12 +63,13 @@ function avatarCycle(start: Element): QuestDef {
         onStart: seekOrder.map((e) => ({ type: 'startQuest' as const, quest: `mq_seek_${e}` })),
         objectives: others.map((e) => ({ type: 'element' as const, element: e, text: `Learn ${bender(e)}` })),
       },
+      // All four elements answer: the Elements Sphere awakens (Progression.checkSphere) before any mastery.
+      { id: 'sphere', text: 'The past Avatars have spoken. Enter the Avatar State — all four elements will answer as one.', objectives: [{ type: 'avatarState', sphere: true, text: 'Summon the Elements Sphere (Avatar State)' }] },
       {
         id: 'mastery',
         text: 'Master each element: three lessons, true proficiency, and a grandmaster\'s trial for each.',
         objectives: ELEMENTS.map((e) => ({ type: 'master' as const, element: e, text: `Master ${bender(e)}` })),
       },
-      { id: 'sphere', text: 'The past Avatars have spoken. Enter the Avatar State — all four elements will answer as one.', objectives: [{ type: 'avatarState', sphere: true, text: 'Summon the Elements Sphere (Avatar State)' }] },
     ],
     rewards: { xp: 1500, currency: 500, cosmetics: ['avatar_robe'] },
   };

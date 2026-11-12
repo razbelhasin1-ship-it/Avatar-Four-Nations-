@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import '../../src/combat/techniques';
 import { allTechniques } from '../../src/combat/CombatSystem';
 import { ELEMENTS } from '../../src/core/types';
-import { MASTERY_REQUIREMENTS, Progression } from '../../src/progression/Progression';
+import { MASTERY_REQUIREMENTS, Progression, SPHERE_TECHNIQUES } from '../../src/progression/Progression';
 
 describe('Progression', () => {
   it('starting element grants its starter techniques only', () => {
@@ -15,24 +15,44 @@ describe('Progression', () => {
     for (const id of learned) expect(allTechniques().find((t) => t.id === id)?.element).toBe('water');
   });
 
-  it('knowing techniques is not mastery; the sphere needs all four masteries', () => {
+  it('the sphere awakens once all four elements can be bent; mastery is separate', () => {
     const p = new Progression();
     p.setupNewGame('earth');
-    for (const e of ELEMENTS) p.unlockElement(e, true);
+    // Mastering one element (lessons, proficiency, trial) does not awaken it.
+    p.addProficiency('earth', MASTERY_REQUIREMENTS.earth.proficiency);
+    for (let i = 0; i < MASTERY_REQUIREMENTS.earth.lessons; i++) p.completeLesson('earth', `l${i}`);
+    p.completeTrial('earth');
+    expect(p.mastery.earth.mastered).toBe(true);
     expect(p.elementsSphereUnlocked).toBe(false);
-    for (const e of ELEMENTS.slice(0, 3)) {
-      p.addProficiency(e, MASTERY_REQUIREMENTS[e].proficiency);
-      for (let i = 0; i < MASTERY_REQUIREMENTS[e].lessons; i++) p.completeLesson(e, `l${i}`);
-      p.completeTrial(e);
-      expect(p.mastery[e].mastered).toBe(true);
-    }
+    // Three elements are not enough...
+    p.unlockElement('water', true);
+    p.unlockElement('fire', true);
     expect(p.elementsSphereUnlocked).toBe(false);
-    const last = ELEMENTS[3];
-    p.addProficiency(last, MASTERY_REQUIREMENTS[last].proficiency);
-    for (let i = 0; i < MASTERY_REQUIREMENTS[last].lessons; i++) p.completeLesson(last, `l${i}`);
-    expect(p.mastery[last].mastered).toBe(false); // trial still missing
-    p.completeTrial(last);
+    expect([...p.learned.keys()].some((id) => id.startsWith('ult_'))).toBe(false);
+    // ...the fourth awakens it, with no other element mastered.
+    p.unlockElement('air', true);
     expect(p.elementsSphereUnlocked).toBe(true);
+    for (const id of SPHERE_TECHNIQUES) expect(p.knows(id), id).toBe(true);
+    for (const e of ['water', 'fire', 'air'] as const) expect(p.mastery[e].mastered).toBe(false);
+  });
+
+  it('an older save that bends all four elements gets the sphere on load', () => {
+    const p = new Progression();
+    p.setupNewGame('water');
+    const data = JSON.parse(JSON.stringify(p.serialize()));
+    data.unlocked = [...ELEMENTS];
+    data.sphere = false;
+    const q = new Progression();
+    q.reset();
+    q.deserialize(data);
+    expect(q.elementsSphereUnlocked).toBe(true);
+    for (const id of SPHERE_TECHNIQUES) expect(q.knows(id), id).toBe(true);
+    // ...and one that does not stays sealed.
+    data.unlocked = ['water', 'earth', 'fire'];
+    const r = new Progression();
+    r.reset();
+    r.deserialize(data);
+    expect(r.elementsSphereUnlocked).toBe(false);
   });
 
   it('serialize/deserialize preserves masteries and the sphere', () => {

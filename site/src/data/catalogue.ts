@@ -390,7 +390,7 @@ export const CATEGORIES: FeatureCategory[] = [
     detail: 'ultimates',
     items: [
       { title: 'Avatar State at will', text: 'Enter the Avatar State from the start: glowing eyes and tattoos, a wave of energy, a light wind around you, stronger bending and a spirit meter.' },
-      { title: 'The Elements Sphere', text: 'Master all four elements and the same input raises the Elements Sphere: a sphere of air, a ring of water, a plate of fire and orbiting rocks.' },
+      { title: 'The Elements Sphere', text: 'Once you can bend all four elements, the same input raises the Elements Sphere: a sphere of air, a ring of water, a plate of fire and orbiting rocks.' },
       { title: 'Five ultimate techniques', text: 'Inside the sphere: Hurricane, Tsunami, Earthquake, Fire Tornado and the Avatar Cataclysm, which joins all four.' },
       { title: 'Any nation, all four elements', text: 'Your start chooses your arrival, first quest, first master and starting moves, but never limits what you can learn.' },
     ],
@@ -465,7 +465,7 @@ export const CATEGORIES: FeatureCategory[] = [
     tint: 'fire',
     detail: 'quests',
     items: [
-      { title: 'The Avatar Cycle', text: 'The main story: seek each nation, learn its element from those who love it most, master all four, and the Elements Sphere will answer.' },
+      { title: 'The Avatar Cycle', text: 'The main story: seek each nation and learn its element from those who love it most. Once all four answer, so does the Elements Sphere, and mastering each is the road beyond.' },
       { title: 'Hidden masters', text: 'Three masters are only found by following clues: rumours of a hermit, a poster in Gaoling, travellers’ whispers about a swamp sage.' },
       { title: 'The Avatar Awakens', text: 'Each start has its own opening quest in its own city.' },
       { title: 'Fourteen side quests', text: 'From cabbage merchants to the koi of the Spirit Oasis.' },

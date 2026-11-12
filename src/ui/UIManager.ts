@@ -43,7 +43,7 @@ const TIPS = [
   'Hold Jump while falling to glide as an Airbender.',
   'Earthbenders are hard to knock down. Firebenders strike fastest. Find your rhythm.',
   'The Avatar State can be entered at will — but your spirit needs time to recover.',
-  'Master all four elements to awaken the Elements Sphere.',
+  'Learn to bend all four elements to awaken the Elements Sphere.',
   'Animals remember kindness. Bring the right food and approach slowly.',
   'Press M for the world map, J for your journal, K for techniques.',
   // Lore

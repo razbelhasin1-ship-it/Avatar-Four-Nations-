@@ -4,7 +4,9 @@
  *     challenge → technique learned, equipped, immediately castable, still known after save/load;
  *  2. element awakening for a non-start element at its first master (Master Lien → earthbending);
  *  3. the Mastery Trial is refused before the requirements and accepted after (Master Siku);
- *  4. the Elements Sphere story moment (spirit vision + journal note) after debug-mastering everything.
+ *  4. the Elements Sphere story moment (spirit vision + journal note) after debug-mastering everything;
+ *  5. the Elements Sphere awakens as soon as all four elements can be bent, with nothing mastered;
+ *  6. The Hermit's Vortex lesson: the tornado breaks the practice posts it passes through.
  * Run: node tests/e2e/masters.e2e.mjs   (SHOTS=dir to save screenshots)
  */
 import assert from 'node:assert/strict';
@@ -283,6 +285,76 @@ try {
     assert.ok(/The Elements Sphere/.test(txt) && /Master Jeong/.test(txt), 'journal masters page: ' + txt.slice(0, 300));
     await shot('journal_masters');
     await tr((g) => g.ctx.ui.closeAll());
+  });
+
+  await check('Elements Sphere awakens once all four elements can be bent, with nothing mastered', async () => {
+    await fresh('water');
+    await tr((g) => g.debug.training.cancel());
+    // Awaken the other elements the way the masters do (unlockElement), never mastering any.
+    await tr((g) => {
+      g.ctx.progression.unlockElement('earth');
+      g.ctx.progression.unlockElement('fire');
+    });
+    await wait(2);
+    let s = await h.state();
+    assert.equal(s.progression.sphereUnlocked, false, 'three elements are not enough');
+    await tr((g) => g.ctx.progression.unlockElement('air'));
+    await wait(3);
+    s = await h.state();
+    assert.ok(s.progression.sphereUnlocked, 'the fourth element awakens the Sphere');
+    assert.equal(Object.values(s.progression.mastery).filter((m) => m.mastered).length, 0, 'nothing mastered');
+    const dlg = await tr((g) => g.debug.training.dialogue());
+    assert.ok(dlg && /Spirit Vision/.test(dlg.speaker), 'the past Avatars speak: ' + JSON.stringify(dlg));
+    for (let i = 0; i < 4; i++) {
+      await tr((g) => g.debug.training.choose(0));
+      await h.step(1);
+    }
+    // The Avatar State now summons the Sphere, with its ultimates.
+    const av = await tr((g) => {
+      const a = g.ctx.avatar;
+      a.spirit = a.maxSpirit;
+      a.activate();
+      return { active: a.active, sphere: a.sphereActive, knows: ['ult_hurricane', 'ult_cataclysm'].map((id) => g.ctx.progression.knows(id)) };
+    });
+    assert.ok(av.active && av.sphere, 'Avatar State summons the Elements Sphere: ' + JSON.stringify(av));
+    assert.deepEqual(av.knows, [true, true], 'Sphere ultimates known');
+    await h.step(30);
+    await shot('sphere_from_bending');
+    await tr((g) => g.ctx.avatar.deactivate(true));
+    await h.step(2);
+  });
+
+  await check('Vortex lesson (The Hermit): the tornado breaks the practice posts it passes through', async () => {
+    await fresh('air');
+    await tr((g) => g.debug.enemies?.camps?.(false));
+    await tr((g) => g.debug.training.completeLesson('hermit_air_redirect'));
+    assert.ok(await tr((g) => g.debug.training.startLesson('master_hermit', 'hermit_air_vortex')), 'lesson starts');
+    await wait(2);
+    for (let i = 0; i < 6; i++) {
+      await tr((g) => g.debug.training.skipDemo());
+      await h.step(3);
+    }
+    let st = await tr((g) => g.debug.training.state());
+    assert.equal(st.phase, 'running', JSON.stringify(st).slice(0, 300));
+    assert.equal(st.info.targets.length, 5);
+    // One Vortex through the middle of the cluster, as a player would aim it.
+    const ts = st.info.targets;
+    const c = { x: ts.reduce((a, t) => a + t.x, 0) / ts.length, y: ts[0].y, z: ts.reduce((a, t) => a + t.z, 0) / ts.length };
+    await tr((g, c) => g.faceTowards(c.x, c.z), c);
+    const r = await tr((g, c) => g.cast('air_vortex', { x: c.x, y: c.y + 1.4, z: c.z }), c);
+    assert.ok(r.ok, 'vortex cast: ' + JSON.stringify(r));
+    await h.step(150); // 2.5 s: the tornado crosses the cluster
+    st = await tr((g) => g.debug.training.state());
+    assert.ok(st.info.broken >= 1, 'posts in the tornado path broke: ' + st.counter);
+    await shot('vortex_lesson_phone_card');
+    // Then the rest, one aimed tornado at a time.
+    st = await breakTargets('air_vortex');
+    await h.step(4);
+    st = await tr((g) => g.debug.training.state());
+    assert.ok(!st || st.phase === 'success', 'lesson completed with Vortex: ' + JSON.stringify(st).slice(0, 300));
+    await h.step(5);
+    const s = await h.state();
+    assert.ok(s.progression.learned.includes('air_vortex'), 'Vortex learned');
   });
 
   await check('every lesson, awakening and trial-stage challenge builds and runs', async () => {

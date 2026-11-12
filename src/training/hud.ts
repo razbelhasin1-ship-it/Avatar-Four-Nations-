@@ -10,9 +10,6 @@ const CSS = `
   padding:6px 14px 8px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);
   font-family:var(--font-body);text-align:center;pointer-events:none;box-shadow:0 6px 24px rgba(0,0,0,.35);z-index:5}
 .trn-hud.hidden{display:none}
-#ui.touch-on .trn-hud{top:calc(64px + env(safe-area-inset-top,0px));min-width:0;max-width:min(420px,52vw);padding:4px 10px 6px;background:rgba(12,16,22,.72)}
-#ui.touch-on .trn-hud .trn-say,#ui.touch-on .trn-hud .trn-hint{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#ui.touch-on .trn-hud .trn-count{font-size:15px}
 .trn-hud .trn-kind{font-family:var(--font-title);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
 .trn-hud .trn-title{font-family:var(--font-title);font-size:15px;color:var(--gold-2);margin:1px 0 2px}
 .trn-hud .trn-obj{font-size:14px}
@@ -27,6 +24,21 @@ const CSS = `
 .trn-hud .trn-stamp{font-family:var(--font-title);font-size:26px;letter-spacing:.06em;margin:2px 0}
 .trn-hud.success{border-color:var(--ok)} .trn-hud.success .trn-stamp{color:var(--ok)}
 .trn-hud.failed{border-color:var(--danger)} .trn-hud.failed .trn-stamp{color:var(--danger)}
+/* Touch screens (phones): a small card at the top right under the compass, the tutorial card's size and
+   place, so the middle of the screen stays clear while you train. The quest tracker steps aside meanwhile. */
+#ui.touch-on .trn-hud{left:auto;right:calc(10px + env(safe-area-inset-right,0px));top:calc(34px + env(safe-area-inset-top,0px));transform:none;
+  width:min(290px,calc(50vw - 140px - env(safe-area-inset-right,0px)));min-width:0;max-width:none;padding:4px 8px 6px;border-radius:8px;
+  background:rgba(12,16,22,.8);box-shadow:0 4px 14px rgba(0,0,0,.35);text-align:left}
+#ui.touch-on .trn-hud .trn-kind{font-size:9px;letter-spacing:.14em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#ui.touch-on .trn-hud .trn-title{font-size:12.5px;margin:0 0 1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#ui.touch-on .trn-hud .trn-obj{font-size:11.5px;line-height:1.3}
+#ui.touch-on .trn-hud .trn-count{font-size:13px;margin:1px 0 0}
+#ui.touch-on .trn-hud .trn-bar{height:4px;margin-top:3px}
+#ui.touch-on .trn-hud .trn-time{height:2px;margin-top:2px}
+#ui.touch-on .trn-hud .trn-stamp{font-size:17px;margin:0}
+#ui.touch-on .trn-hud .trn-say,#ui.touch-on .trn-hud .trn-hint{font-size:10.5px;line-height:1.3;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#ui.touch-on .trn-on .hud .hud-quest-body{display:none}
+#ui.touch-on .trn-on .hud .hud-quest{padding:0;border-left:0;background:none}
 .trn-journal .trn-m{display:flex;gap:12px;align-items:flex-start}
 .trn-journal .trn-l{margin:2px 0;font-size:15px}
 .trn-journal .trn-l.done{color:var(--ok)} .trn-journal .trn-l.locked{color:var(--muted)}
@@ -78,6 +90,8 @@ export class ChallengeHUD {
 
   show(v: HUDView): void {
     this.el.classList.remove('hidden');
+    // Lets the layout make room (on phones the quest tracker steps aside for the card).
+    this.el.parentElement?.classList.add('trn-on');
     this.el.classList.toggle('success', v.state === 'success');
     this.el.classList.toggle('failed', v.state === 'failed');
     const t = v.timeLeft === null ? '' : `${Math.max(0, Math.ceil(v.timeLeft))}s`;
@@ -101,6 +115,7 @@ export class ChallengeHUD {
 
   hide(): void {
     this.el.classList.add('hidden');
+    this.el.parentElement?.classList.remove('trn-on');
     this.sig = '';
   }
 
@@ -109,6 +124,7 @@ export class ChallengeHUD {
   }
 
   dispose(): void {
+    this.el.parentElement?.classList.remove('trn-on');
     this.el.remove();
   }
 }

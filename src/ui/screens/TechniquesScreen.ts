@@ -34,7 +34,7 @@ export function techniqueSources(): Map<string, string> {
     for (const t of q.rewards?.techniques ?? []) if (!m.has(t)) m.set(t, `Quest reward — “${q.title}”`);
     for (const s of q.steps) for (const a of [...(s.onStart ?? []), ...(s.onComplete ?? [])]) if (a.type === 'learn' && !m.has(a.technique)) m.set(a.technique, `Quest — “${q.title}”`);
   }
-  for (const id of SPHERE_TECHNIQUES) m.set(id, 'Awakens with the Elements Sphere (master all four elements)');
+  for (const id of SPHERE_TECHNIQUES) m.set(id, 'Awakens with the Elements Sphere (bend all four elements)');
   for (const d of allTechniques()) if (d.innate) m.set(d.id, d.innate);
   sourceCache = m;
   return m;
@@ -87,7 +87,7 @@ export class TechniquesScreen extends GameScreen {
         h(
           `div.gs-card.tq-banner${pr.elementsSphereUnlocked ? '.awake' : ''}`,
           emblem('avatar', 'emblem tq-banner-emblem'),
-          h('div', h('h4', pr.elementsSphereUnlocked ? 'Elements Sphere — awakened' : 'Elements Sphere — sealed'), h('p', pr.elementsSphereUnlocked ? `Enter the Avatar State (${this.ctx.input.label('avatarState')}) to summon the Sphere. Its ultimates replace your slots 1–4, with the Cataclysm on ${this.ctx.input.label('ability5')}. They cost spirit, not slots.` : `Master all four elements (${pr.masteredCount}/4) to awaken the Sphere and its ultimates. The Avatar State itself is available at any time.`)),
+          h('div', h('h4', pr.elementsSphereUnlocked ? 'Elements Sphere — awakened' : 'Elements Sphere — sealed'), h('p', pr.elementsSphereUnlocked ? `Enter the Avatar State (${this.ctx.input.label('avatarState')}) to summon the Sphere. Its ultimates replace your slots 1–4, with the Cataclysm on ${this.ctx.input.label('ability5')}. They cost spirit, not slots.` : `Learn to bend all four elements (${pr.unlocked.size}/4) to awaken the Sphere and its ultimates. The Avatar State itself is available at any time.`)),
         ),
       );
       const g = h('div.tq-grid');

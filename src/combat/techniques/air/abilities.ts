@@ -203,16 +203,20 @@ registerTechnique({
           const b = e.body;
           const to = tmp.set(base.x - e.position.x, 0, base.z - e.position.z);
           const d = to.length();
-          if (d > 5.5 || !b) continue;
-          if (d > 0.05) to.divideScalar(d);
-          const k = 1 - d / 5.5;
-          b.external.addScaledVector(to, (14 + 30 * k) * dt);
-          b.external.add(tmp2.set(-to.z, 0, to.x).multiplyScalar(10 * k * dt));
-          if (d < 1.9 && e.position.y < base.y + 3.4) {
-            b.velocity.y = Math.max(b.velocity.y, 5.2);
-            b.grounded = false;
-            e.addStatus('lifted', 0.5);
+          if (d > 5.5) continue;
+          // Whatever can move is dragged in, spun round and lifted...
+          if (b) {
+            if (d > 0.05) to.divideScalar(d);
+            const k = 1 - d / 5.5;
+            b.external.addScaledVector(to, (14 + 30 * k) * dt);
+            b.external.add(tmp2.set(-to.z, 0, to.x).multiplyScalar(10 * k * dt));
+            if (d < 1.9 && e.position.y < base.y + 3.4) {
+              b.velocity.y = Math.max(b.velocity.y, 5.2);
+              b.grounded = false;
+              e.addStatus('lifted', 0.5);
+            }
           }
+          // ...and anything standing in the funnel is ground by it, rooted or not (practice posts, dummies).
           if (d < 2.6 && (ticks.get(e.id) ?? 0) <= now) {
             ticks.set(e.id, now + 0.45);
             cast.hit(e, { damage: 3, stagger: 12, point: e.aimPoint(tmp2).clone() }, true);

@@ -83,8 +83,8 @@ const TRIAL_REWARDS: Record<Element, string[]> = {
 
 const SPIRITS: Array<{ speaker: string; text: string }> = [
   { speaker: 'Spirit Vision · Avatar Yangchen', text: 'The air grows still around you, and four figures stand where there was no one. "You have listened to the wind, young one. You did not command it — you understood it."' },
-  { speaker: 'Spirit Vision · Avatar Kuruk', text: '"Water, earth, fire and air — you mastered each the hard way, from people who loved their element. That is why the four now answer as one."' },
-  { speaker: 'Spirit Vision · Avatar Kyoshi', text: '"Do not mistake this for an ending. The Elements Sphere is a responsibility. Call on it when the world needs every element at once — and not before."' },
+  { speaker: 'Spirit Vision · Avatar Kuruk', text: '"Water, earth, fire and air — you learned each from people who loved their element. That is why the four now answer as one."' },
+  { speaker: 'Spirit Vision · Avatar Kyoshi', text: '"Do not mistake this for an ending. You can bend all four; mastering them is the work of a lifetime. The Elements Sphere is a responsibility — call on it when the world needs every element at once, and not before."' },
   { speaker: 'Spirit Vision · Avatar Roku', text: '"When you enter the Avatar State now, the four elements will circle you as a sphere. We will be with you. We always have been."' },
 ];
 
@@ -225,6 +225,12 @@ export class TrainingSystem implements GameSystem {
       if (d) Object.assign(d, { x: pl.x, z: pl.z, y: pl.y, yaw: pl.yaw });
     }
     this.syncStoryFlags();
+    // A journey that already bends all four elements but never heard the past Avatars (saved before
+    // the Sphere answered to bending rather than mastery) hears them once, shortly after it resumes.
+    if (ctx.progression.elementsSphereUnlocked && !ctx.quests.hasFlag('sphere_vision')) {
+      this.visionQueued = true;
+      this.visionDelay = 4;
+    }
   }
 
   onSessionEnd(): void {

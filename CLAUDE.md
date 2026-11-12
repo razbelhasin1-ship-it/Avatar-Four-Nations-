@@ -92,5 +92,5 @@ Screenshots are how you judge visuals — take them, open them with the Read too
 - The four elements must feel distinct (movement, rhythm, ranges, shapes), not recoloured copies.
 - Waterbending depends on real environmental water. Ordinary attacks never create unlimited water from nothing.
 - Masters teach real, usable, persisted techniques. Mastery ≠ knowing techniques.
-- Avatar State is available early, at will; Elements Sphere only after all four masteries.
+- Avatar State is available early, at will; the Elements Sphere awakens once the Avatar can bend all four elements (the owner's rule: bending, not mastery — mastery is a separate, longer road).
 - Effects must match actual collision/gameplay. Never claim something works without verifying it.

@@ -12,7 +12,7 @@ import { byQuality, dynamicLights } from './common';
 import { airShellMaterial, flameRingGeometry, flameRingMaterial, ringTube, type FlameRingSpec } from './sphereMaterials';
 
 /**
- * Elements Sphere (Avatar State after all four masteries), after the series' Sozin's Comet frame:
+ * Elements Sphere (the Avatar State once all four elements can be bent), after the series' Sozin's Comet frame:
  * the Avatar hangs at the centre of a sphere of whirling air, a translucent bubble streaked by the
  * wind circling it, girdled at the waist by a broad band of fire that reaches past the sphere,
  * with a ring of water spinning on a steep tilt and stones torn from the ground orbiting inside.

@@ -315,7 +315,7 @@ export class JournalScreen extends GameScreen {
         h(
           'div',
           h('h4', sphere ? 'The Elements Sphere is awakened' : 'The Elements Sphere'),
-          h('p', sphere ? `Enter the Avatar State (${ctx.input.label('avatarState')}) to call the Sphere: Hurricane, Tsunami, Earthquake, Fire Tornado and the Avatar Cataclysm take your technique slots.` : `Master all four elements to awaken it — ${pr.masteredCount} of 4 mastered. The Avatar State is yours already: press ${ctx.input.label('avatarState')}.`),
+          h('p', sphere ? `Enter the Avatar State (${ctx.input.label('avatarState')}) to call the Sphere: Hurricane, Tsunami, Earthquake, Fire Tornado and the Avatar Cataclysm take your technique slots.` : `Learn to bend all four elements to awaken it — you can bend ${pr.unlocked.size} of 4. The Avatar State is yours already: press ${ctx.input.label('avatarState')}.`),
         ),
       ),
       grid,

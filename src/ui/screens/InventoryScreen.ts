@@ -417,7 +417,7 @@ export class InventoryScreen extends GameScreen {
       h('div.gs-sec', 'Elements'),
       els,
       h('div.gs-sec', 'The Avatar'),
-      h('p.pf-avatar', pr.elementsSphereUnlocked ? `✦ Elements Sphere awakened. Enter the Avatar State (${ctx.input.label('avatarState')}) to call it.` : `Avatar State available (${ctx.input.label('avatarState')}). Elements Sphere: ${pr.masteredCount}/4 elements mastered.`),
+      h('p.pf-avatar', pr.elementsSphereUnlocked ? `✦ Elements Sphere awakened. Enter the Avatar State (${ctx.input.label('avatarState')}) to call it.` : `Avatar State available (${ctx.input.label('avatarState')}). Elements Sphere: ${pr.unlocked.size}/4 elements you can bend.`),
       h('div.gs-sec', 'Journey'),
       h(
         'div.pf-stats',

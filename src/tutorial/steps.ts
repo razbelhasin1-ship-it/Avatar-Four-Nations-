@@ -249,8 +249,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 'sphere',
     title: 'A Vision: The Elements Sphere',
-    text: 'When you have MASTERED all four elements in your journey, the Avatar State awakens into the Elements Sphere. Here, as a vision, you may feel it: press {avatarState}, then unleash ultimates with {ability1}–{ability4} and {ability5}.',
-    touch: 'When you have MASTERED all four elements in your journey, the Avatar State awakens into the Elements Sphere. Here, as a vision, you may feel it: tap AVATAR, then unleash ultimates with the technique buttons.',
+    text: 'When you can bend all four elements in your journey, the Avatar State awakens into the Elements Sphere. Here, as a vision, you may feel it: press {avatarState}, then unleash ultimates with {ability1}–{ability4} and {ability5}.',
+    touch: 'When you can bend all four elements in your journey, the Avatar State awakens into the Elements Sphere. Here, as a vision, you may feel it: tap AVATAR, then unleash ultimates with the technique buttons.',
     enter: (rt) => {
       rt.data.prevSphere = rt.ctx.progression.elementsSphereUnlocked;
       // Still in the plain Avatar State from the last lesson: end it quietly so the next press awakens the Sphere.
