@@ -62,6 +62,26 @@ registerClip({
   ],
 });
 
+// Fifth strike, the finisher: Air Bomb (Aang's leaping slam). A deep crouch, a spring into the air
+// with the arms swinging up, a full spin tucked in the air with both hands (or the staff) overhead,
+// then the hands drive down to the ground as the bender lands in a deep crouch. Ends at hips -2π:
+// play with fadeOut ~0.
+registerClip({
+  id: 'air_palm_bomb',
+  duration: 1.05,
+  mask: 'full',
+  events: [{ t: 0.42, name: 'release' }],
+  keys: [
+    { t: 0, pose: { hips: [0, 0, 0], spine: [0.4, 0, 0], head: [-0.2, 0, 0], thighL: [-1.1, 0, 0.18], shinL: [1.8, 0, 0], thighR: [-1.1, 0, -0.18], shinR: [1.8, 0, 0], upperArmL: [0.55, 0, 0.35], foreArmL: [-0.4, 0, 0], upperArmR: [0.55, 0, -0.35], foreArmR: [-0.4, 0, 0], hipsY: -0.42 } },
+    { t: 0.12, pose: { hips: [0, 0, 0], spine: [-0.15, 0, 0], head: [0, 0, 0], thighL: [-0.25, 0, 0.08], shinL: [0.35, 0, 0], footL: [0.5, 0, 0], thighR: [-0.15, 0, -0.08], shinR: [0.25, 0, 0], footR: [0.5, 0, 0], upperArmL: [-2.85, 0, 0.15], foreArmL: [-0.2, 0, 0], upperArmR: [-2.85, 0, -0.15], foreArmR: [-0.2, 0, 0], hipsY: 0 }, ease: 'out' },
+    { t: 0.24, pose: { hips: [0, -Math.PI, 0], spine: [0.1, 0, 0], thighL: [-1.4, 0, 0.15], shinL: [2.0, 0, 0], footL: [0.2, 0, 0], thighR: [-1.3, 0, -0.15], shinR: [2.0, 0, 0], footR: [0.2, 0, 0], upperArmL: [-2.9, 0, -0.08], foreArmL: [-0.25, 0, 0], upperArmR: [-2.9, 0, 0.08], foreArmR: [-0.25, 0, 0], hipsY: 0.05 }, ease: 'linear' },
+    { t: 0.4, pose: { hips: [0, -2 * Math.PI, 0], spine: [-0.1, 0, 0], thighL: [-1.2, 0, 0.15], shinL: [1.8, 0, 0], thighR: [-1.1, 0, -0.15], shinR: [1.8, 0, 0], upperArmL: [-3.0, 0, -0.1], foreArmL: [-0.2, 0, 0], upperArmR: [-3.0, 0, 0.1], foreArmR: [-0.2, 0, 0], hipsY: 0.05 }, ease: 'out' },
+    { t: 0.5, pose: { hips: [0, -2 * Math.PI, 0], spine: [0.75, 0, 0], head: [-0.45, 0, 0], thighL: [-1.35, 0, 0.32], shinL: [2.05, 0, 0], footL: [0, 0, 0], thighR: [-1.25, 0, -0.32], shinR: [2.05, 0, 0], footR: [0, 0, 0], upperArmL: [-0.45, 0, 0.12], foreArmL: [-0.08, 0, 0], upperArmR: [-0.45, 0, -0.12], foreArmR: [-0.08, 0, 0], hipsY: -0.5 }, ease: 'in' },
+    { t: 0.72, pose: { hips: [0, -2 * Math.PI, 0], spine: [0.7, 0, 0], head: [-0.42, 0, 0], hipsY: -0.48 } },
+    { t: 1.05, pose: { hips: [0, -2 * Math.PI, 0], spine: [0.04, 0, 0], head: [0, 0, 0], upperArmL: [-0.5, 0, 0.3], foreArmL: [-0.9, 0, 0], upperArmR: [-0.5, 0, -0.3], foreArmR: [-0.9, 0, 0], thighL: [-0.1, 0, 0.06], shinL: [0.15, 0, 0], thighR: [-0.1, 0, -0.06], shinR: [0.15, 0, 0], hipsY: 0 }, ease: 'inout' },
+  ],
+});
+
 // Air blast release: step through and thrust both palms (light, extended).
 registerClip({
   id: 'air_push',

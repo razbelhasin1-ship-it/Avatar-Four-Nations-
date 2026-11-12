@@ -1,24 +1,26 @@
 import * as THREE from 'three';
 import type { Entity } from '../../../entities/Entity';
-import { fireballVisual, fireBoltVisual, fireExplosion, fireMuzzle, flameArc, flameBlade, flameTrail } from '../../../vfx/effects/fire';
+import { fireballVisual, fireBoltVisual, fireExplosion, fireMuzzle, flameArc, flameBlade, FlameFin, flameRing, flameTrail, groundFlame, steam } from '../../../vfx/effects/fire';
 import { effect } from '../../../vfx/effects/loop';
 import { flameMaterial, setOpacity } from '../../../vfx/effects/materials';
 import { shared } from '../../../vfx/effects/shapes';
 import { registerTechnique } from '../../CombatSystem';
 import type { Cast, ProjectileVisual } from '../../types';
 import { bending, registerWarmup } from '../bending/runtime';
-import { anchorPos, anim, hitSphere, push, shake, sweep } from '../bending/util';
+import { aimFlat, anchorPos, anim, enemiesNear, finisherFreeze, finisherImpact, groundY, hitSphere, push, shake, sweep } from '../bending/util';
 import { aimFrom, fireOnEntity, fireWorldImpact, heat, quenchCheck } from './common';
 
 /**
- * Fire basics: Flame Punch (fire_jab) 4-step chain — right and left punches, a
- * sweeping fire-arc slash, a spinning kick — and the Charged Fireball
- * (fire_blast). Fire rewards aggression: every fire hit builds Heat (up to 5
- * stacks, decays 1.6 s after the last hit) which makes bolts bigger, hotter and
- * eventually igniting.
+ * Fire basics: Flame Punch (fire_jab) 5-step chain — right and left punches, a
+ * sweeping fire-arc slash, a spinning kick, and the finisher, Flame Cleave (an
+ * axe kick that splits the ground with a wall of fire) — and the Charged
+ * Fireball (fire_blast). Fire rewards aggression: every fire hit builds Heat (up
+ * to 5 stacks, decays 1.6 s after the last hit) which makes bolts bigger, hotter
+ * and eventually igniting.
  */
 
 const tmp = new THREE.Vector3();
+const tmp2 = new THREE.Vector3();
 
 /** A flame trail that follows a limb for `time` seconds (the slashing hand), then burns away. */
 function limbTrail(cast: Cast, bone: 'handR' | 'footR', time: number, width: number, hot: boolean): void {
@@ -100,8 +102,10 @@ registerTechnique({
   kind: 'basic',
   tier: 1,
   starter: true,
-  description: 'Fast alternating punches that hurl bolts of flame, a sweeping slash that throws a wide crescent of fire, then a spinning kick that launches a heavier, igniting blast.',
-  usage: 'Primary attack — chain four strikes. The third (fire arc) catches everyone in front of you. Landing fire hits builds Heat: hotter, bigger bolts that start to burn.',
+  description:
+    'Fast alternating punches that hurl bolts of flame, a sweeping slash that throws a wide crescent of fire, a spinning kick that launches a heavier, igniting blast — and the finisher, Flame Cleave: leap into an axe kick and bring the heel down to split the ground with a tall wall of fire.',
+  usage:
+    'Primary attack — chain five strikes. The third (fire arc) catches everyone in front of you; the fifth (Flame Cleave) tears a wall of fire 12 m along the ground that launches everyone in its line and leaves the furrow burning. Landing fire hits builds Heat: hotter, bigger bolts that start to burn.',
   icon: 'fire',
   chiCost: 3,
   cooldown: 0,
@@ -111,9 +115,14 @@ registerTechnique({
   airborne: true,
   interruptible: false,
   range: 20,
-  comboLength: 4,
+  comboLength: 5,
   begin(cast) {
     const step = cast.comboIndex;
+    if (step === 4) {
+      beginCleave(cast);
+      if (cast.isPlayer) cast.ctx.events.emit('combo:advanced', { element: 'fire', index: step });
+      return;
+    }
     const kick = step === 3;
     const arc = step === 2;
     anim(cast.caster, kick ? 'fire_jab_kick' : arc ? 'fire_jab_arc' : step % 2 ? 'fire_jab_l' : 'fire_jab_r', { speed: kick ? 1.15 : 1.1, fadeIn: 0.03, fadeOut: 0.12 });
@@ -138,6 +147,10 @@ registerTechnique({
     const h = bending.heat(c);
     const hot = h >= 3;
     const hk = 1 + h * 0.07;
+    if (step === 4) {
+      flameCleave(cast, h);
+      return;
+    }
     if (step === 2) {
       fireArc(cast, h);
       return;
@@ -223,6 +236,172 @@ function fireArc(cast: Cast, h: number): void {
   const b = c.body;
   if (b && b.grounded) b.impulse(dir.x * 2.5, 0, dir.z * 2.5);
   else if (b) b.velocity.y = Math.max(b.velocity.y, 1.2);
+}
+
+// ---------------------------------------------------------------------------
+// Fifth strike: Flame Cleave (the finisher)
+// ---------------------------------------------------------------------------
+
+/** Reach of the wall (m), how long its front takes to run it (s), how long the furrow burns (s), hit half-width (m). */
+export const CLEAVE = { length: 12, duration: 0.42, burn: 1.15, radius: 1.25 };
+
+/** The finisher winds up: a hop as the right leg swings up high, flame streaming off the heel. */
+function beginCleave(cast: Cast): void {
+  const ctx = cast.ctx;
+  const c = cast.caster;
+  anim(c, 'fire_jab_cleave', { speed: 1, fadeIn: 0.04, fadeOut: 0.16 });
+  // The leg goes all the way up before the heel comes down (0.36 s into the clip).
+  cast.elapsed -= 0.3;
+  cast.movement = 'root';
+  cast.recovery = 0.42;
+  const b = c.body;
+  if (b && b.grounded) b.launch(3.6);
+  limbTrail(cast, 'footR', 0.4, 0.75, true);
+  const foot = anchorPos(c, 'footR');
+  ctx.vfx.burst('flame', foot, { count: 8, speed: 0.7, size: 1 });
+  ctx.vfx.burst('embers', foot, { count: 10, speed: 1.4 });
+  ctx.audio.play('bend_fire_whoosh', { position: foot, volume: 0.5, pitch: 0.75 });
+}
+
+/**
+ * Fifth strike, the finisher: Flame Cleave (Zuko's axe kick). The heel comes down like an axe and
+ * splits the ground with fire: a tall blade of flame tears forward along the ground for 12 m,
+ * launching and burning everyone in its line, and the furrow it cuts keeps burning for a moment
+ * (whoever stands in it catches fire) before it dies down to a scorched line. It follows the
+ * ground, breaks against walls, and hisses out in steam where it meets water.
+ */
+function flameCleave(cast: Cast, h: number): void {
+  const ctx = cast.ctx;
+  const c = cast.caster;
+  const hot = h >= 3;
+  const hk = 1 + h * 0.07;
+  const low = ctx.vfx.quality === 'low';
+  const palette = hot ? 'hot' : 'fire';
+  const dir = aimFlat(cast);
+  // The wall starts where the heel lands, at least a step ahead of the bender.
+  const heel = anchorPos(c, 'footR');
+  const ahead = Math.max(0.9, (heel.x - c.position.x) * dir.x + (heel.z - c.position.z) * dir.z);
+  const start = new THREE.Vector3(c.position.x + dir.x * ahead, 0, c.position.z + dir.z * ahead);
+  start.y = groundY(ctx, start.x, start.z, c.position.y);
+
+  // The heel strike: a low ring of flame bursts out from the foot (kept low, so the bender's own
+  // view down the line stays clear), a small blast, the ground scorched, the camera punched.
+  flameRing(ctx, tmp.copy(start).setY(start.y + 0.08), { r0: 0.3, r1: 2.4, height: 0.85, duration: 0.38, palette });
+  fireExplosion(ctx, tmp.copy(start).setY(start.y + 0.2), 0.55, { hot, smoke: false });
+  ctx.vfx.burst('sparks', start, { count: 14, speed: 2.2 });
+  finisherImpact(cast, start, 0.34, 0.38);
+  ctx.audio.play('bend_explosion', { position: start, volume: 0.85, pitch: 0.75 });
+  ctx.audio.play('bend_fire_whoosh', { position: start, volume: 1, pitch: 0.55 });
+
+  const front = { pos: start.clone(), done: false, quenched: false };
+  /** Burning stretches of the furrow (ground points) and when each dies down. */
+  const furrow: Array<{ p: THREE.Vector3; until: number }> = [];
+  const ticks = new Map<number, number>();
+  const spacing = low ? 0.85 : 0.55;
+  let lastTuft = -spacing;
+  let lastMark = -99;
+  let lastHeat = -99;
+  sweep(cast, {
+    from: start,
+    dir,
+    length: CLEAVE.length,
+    duration: CLEAVE.duration,
+    radius: CLEAVE.radius,
+    height: 1.5,
+    hug: 1,
+    hit: (_e, pushDir) =>
+      front.quenched ? null : { damage: 20 * hk, knockback: push(pushDir, 8), launch: 6.5, stagger: 70, knockdown: true, status: [{ type: 'burn', duration: hot ? 3.5 : 2.5 }] },
+    onHit: (e) => {
+      const at = e.aimPoint(new THREE.Vector3());
+      ctx.vfx.burst('fire', at, { count: 16, speed: 1.6 });
+      ctx.vfx.flash(at, '#ff9a40', 3, 0.14, 8);
+      fireOnEntity(ctx, e, at, 1);
+      finisherFreeze(cast, e);
+      // Thrown clear of the wall: no burning ticks for the next moment.
+      ticks.set(e.id, ctx.time.elapsed + 0.6);
+    },
+    onStep: (center, t) => {
+      if (front.quenched) return;
+      const d = t * CLEAVE.length;
+      const g = tmp2.set(center.x, center.y - 1, center.z);
+      // Water puts the wall out: it hisses into steam and goes no further.
+      const w = ctx.world.waterAt(g.x, g.z);
+      if (w && !w.frozen && w.level > g.y + 0.05) {
+        front.quenched = true;
+        steam(ctx, tmp.set(g.x, w.level + 0.1, g.z), 1.8);
+        ctx.audio.play('water_fizzle', { position: g, volume: 0.8, pitch: 0.8 });
+        return;
+      }
+      front.pos.copy(g);
+      if (d - lastTuft >= spacing) {
+        lastTuft = d;
+        const life = CLEAVE.burn * (0.85 + Math.random() * 0.3);
+        // Painted flames for the wall's body (a row of glowing ones would wash out to white),
+        // with a glowing tongue at every other one for the heat.
+        groundFlame(ctx, g.clone(), life, low ? 1.8 : 1.55, { tall: 1.9, blend: 'normal' });
+        if (!low && Math.round(d / spacing) % 2 === 0) groundFlame(ctx, g.clone(), life * 0.7, 0.9, { tall: 1.6, palette });
+        furrow.push({ p: g.clone(), until: ctx.time.elapsed + life * 0.8 });
+        if (Math.random() < 0.6) ctx.vfx.burst('embers', g, { count: 3, speed: 1.6 });
+      }
+      if (d - lastMark >= 1.4) {
+        lastMark = d;
+        ctx.world.fx.scorch(g, 0.95);
+        ctx.world.fx.disturb(g, 2.2, 0.8);
+        ctx.vfx.burst('fire', tmp.copy(g).setY(g.y + 0.5), { count: 4, speed: 2 });
+      }
+      if (d - lastHeat >= 2) {
+        lastHeat = d;
+        heat(ctx, g, 1.6, 1.2, c.id);
+        ctx.vfx.flash(tmp.copy(g).setY(g.y + 1.2), '#ff8a30', 3.5, 0.18, 9);
+      }
+    },
+    onStop: (center, blocked) => {
+      // The front breaks against a wall (or runs out): a last flare.
+      if (!front.quenched) {
+        const g = tmp2.set(center.x, groundY(ctx, center.x, center.z, center.y), center.z);
+        ctx.vfx.burst('fire', tmp.copy(g).setY(g.y + 0.8), { count: 14, speed: 2 });
+        if (blocked) fireWorldImpact(ctx, cast, center.clone(), 1);
+      }
+      front.done = true;
+    },
+  });
+
+  // The blade itself, riding the front.
+  const fin = new FlameFin(ctx, palette);
+  let age = 0;
+  let fade = -1;
+  effect(
+    (dt) => {
+      age += dt;
+      if ((front.done || front.quenched) && fade < 0) fade = 0;
+      else if (fade >= 0) fade += dt;
+      const k = Math.min(1, age / CLEAVE.duration);
+      const o = fade < 0 ? Math.min(1, age / 0.05) : Math.max(0, 1 - fade / 0.16);
+      fin.update(front.pos, dir, 1.25 + 0.45 * k, 1.5 + 0.5 * k, o);
+      return o > 0;
+    },
+    () => fin.dispose(),
+  );
+
+  // The furrow keeps burning: whoever stands in it catches fire (a light tick every half second).
+  let scan = 0;
+  effect((dt) => {
+    const now = ctx.time.elapsed;
+    for (let i = furrow.length - 1; i >= 0; i--) if (furrow[i].until <= now) furrow.splice(i, 1);
+    if (!furrow.length) return !front.done && age < 3;
+    scan -= dt;
+    if (scan > 0) return true;
+    scan = 0.15;
+    const mid = tmp.copy(start).add(front.pos).multiplyScalar(0.5);
+    for (const e of enemiesNear(cast, mid, start.distanceTo(front.pos) * 0.5 + 2)) {
+      if ((ticks.get(e.id) ?? 0) > now) continue;
+      const inFire = furrow.some((f) => Math.hypot(e.position.x - f.p.x, e.position.z - f.p.z) < 0.7 + e.radius && Math.abs(e.position.y - f.p.y) < 1.6);
+      if (!inFire) continue;
+      ticks.set(e.id, now + 0.5);
+      cast.hit(e, { damage: 2.5 * hk, stagger: 6, status: [{ type: 'burn', duration: 1.5 }], point: e.aimPoint(new THREE.Vector3()) }, true);
+    }
+    return true;
+  });
 }
 
 // ---------------------------------------------------------------------------

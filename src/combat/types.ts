@@ -211,6 +211,10 @@ export interface Cast {
   phase: 'windup' | 'channel' | 'recovery' | 'done';
   /** Free storage for technique-specific runtime data. */
   data: Record<string, any>;
+  /** Per-cast override of the technique's movement rule (a combo finisher holds the bender for its big strike). */
+  movement?: 'free' | 'slow' | 'root';
+  /** Per-cast override of the technique's recovery in seconds (a combo finisher recovers longer). */
+  recovery?: number;
   /** Apply an area hit now (deduplicated per cast & target). */
   areaHit(o: AreaHitOptions): Entity[];
   /** Launch a projectile owned by this cast. */

@@ -147,6 +147,28 @@ registerClip({
   ],
 });
 
+// Fifth strike, the finisher: Earth Crusher. The right knee comes up and stomps back into a deep
+// stance as the arms swing out wide to the sides (two slabs burst out of the ground), the arms open
+// wider still with the chest, then the hands clap together in front at 0.5 — the slabs slam shut.
+registerClip({
+  id: 'earth_strike_crush',
+  duration: 1.0,
+  mask: 'full',
+  events: [{ t: 0.5, name: 'release' }],
+  keys: plantedPaths(
+    [
+      { t: 0, pose: { ...STAND } },
+      { t: 0.09, pose: { spine: [0.02, 0, 0], ...standOn('L', -0.12, 0.07), thighR: [-1.15, -ES.toes, -0.3], shinR: [1.3, 0, 0], upperArmL: [-0.35, 0, 1.0], foreArmL: [-0.5, 0, 0], upperArmR: [-0.35, 0, -1.0], foreArmR: [-0.5, 0, 0] }, ease: 'out' },
+      { t: 0.19, pose: { spine: [0.28, 0, 0], ...planted(-0.32), upperArmL: [-0.6, 0, 1.15], foreArmL: [-0.35, 0, 0], upperArmR: [-0.6, 0, -1.15], foreArmR: [-0.35, 0, 0] }, ease: 'in' },
+      { t: 0.38, pose: { spine: [-0.08, 0, 0], chest: [-0.1, 0, 0], ...planted(-0.26), upperArmL: [-1.2, 0, 1.35], foreArmL: [-0.2, 0, 0], upperArmR: [-1.2, 0, -1.35], foreArmR: [-0.2, 0, 0] }, ease: 'inout' },
+      { t: 0.5, pose: { spine: [0.32, 0, 0], chest: [0.08, 0, 0], ...planted(-0.34, 0, ES.sit + 0.06), upperArmL: [-1.5, 0, -0.16], foreArmL: [-0.12, 0, 0], handL: [-0.3, 0, 0], upperArmR: [-1.5, 0, 0.16], foreArmR: [-0.12, 0, 0], handR: [-0.3, 0, 0] }, ease: 'in' },
+      { t: 0.72, pose: { spine: [0.3, 0, 0], ...planted(-0.33, 0, ES.sit + 0.05), upperArmL: [-1.45, 0, -0.14], upperArmR: [-1.45, 0, 0.14] } },
+      { t: 1.0, pose: { ...STAND, chest: [0, 0, 0], handL: [0, 0, 0], handR: [0, 0, 0] }, ease: 'inout' },
+    ],
+    [['L', 0, 0.09], ['L', 0.09, 0.19]],
+  ),
+});
+
 // Seismic slam: the weight rides over the right foot (planted on its stance spot) as the left
 // knee comes up high, then a crushing stomp back into a very deep horse stance with both arms
 // driving down.

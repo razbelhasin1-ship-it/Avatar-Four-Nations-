@@ -50,7 +50,7 @@ Screenshots are how you judge visuals — take them, open them with the Read too
 | `entities/` | `Entity` (health/poise/status/receiveHit), `KinematicBody`, `EntityManager` (spatial queries), `TrainingDummy` |
 | `character/` | `Humanoid` (procedural rigged model), `Animator` (clips + procedural locomotion), `Appearance` data, base clips |
 | `player/` | `Player` (Combatant; movement styles per element; aim; input→techniques), `CameraRig`; `play/` = held-attack play while exploring (water orb from real sources incl. snow and ice, lifting real rocks or stones torn from the ground — `Stones.ts` keeps them as re-liftable loose stones, palm flame; never Air); `glider/` = the Glider Staff (`GliderStaff` prop on the back / in the hands / open as wings; `flight.ts` pure glide model — cruise, dive and zoom climb, stall, gusts; `Updrafts.ts` updraft columns over the temple cliffs: lift, and faint mist wisps while gliding) |
-| `combat/` | `types.ts` contracts, `CombatSystem` (casts, projectiles, hits), `WaterSources.ts`, `techniques/` |
+| `combat/` | `types.ts` contracts, `CombatSystem` (casts, projectiles, hits), `WaterSources.ts`, `techniques/`. Each element's basic combo runs five strikes; the fifth is a show-style finisher (Crashing Wave `water/wave.ts`, Earth Crusher `earth/crusher.ts`, Flame Cleave, Air Bomb) using `finisherImpact` / `finisherFreeze` (bending/util) and the per-cast `cast.movement` / `cast.recovery` overrides |
 | `vfx/` | `VFXSystem` (particle presets, emitters, rings, flashes, transients) |
 | `audio/AudioEngine.ts` | Procedural WebAudio; `registerSound` / `registerLoop`; music themes |
 | `progression/` | Elements, learned techniques, loadouts, mastery (proficiency+lessons+trial), Elements Sphere rule |

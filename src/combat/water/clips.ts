@@ -91,6 +91,24 @@ registerClip({
   ],
 });
 
+// ---- Water Whip 5, the finisher: Crashing Wave ----------------------------------
+// Sunk low, the arms scoop the water up in front and carry it all the way overhead (the body
+// rising onto the toes and arching back), then drive it down in front at 0.45 into a deep lunge.
+registerClip({
+  id: 'water_whip_wave',
+  duration: 1.0,
+  mask: 'full',
+  events: [{ t: 0.45, name: 'release' }],
+  keys: [
+    { t: 0, pose: { spine: [0.35, 0, 0], chest: [0.05, 0, 0], upperArmL: [0.3, 0, 0.4], foreArmL: [-0.3, 0, 0], upperArmR: [0.3, 0, -0.4], foreArmR: [-0.3, 0, 0], thighL: [-0.6, 0, 0.2], shinL: [0.9, 0, 0], thighR: [-0.5, 0, -0.2], shinR: [0.9, 0, 0], hipsY: -0.2 } },
+    { t: 0.24, pose: { spine: [-0.2, 0, 0], chest: [-0.08, 0, 0], upperArmL: [-2.55, 0, 0.35], foreArmL: [-0.45, 0, 0], upperArmR: [-2.55, 0, -0.35], foreArmR: [-0.45, 0, 0], thighL: [-0.2, 0, 0.12], shinL: [0.3, 0, 0], footL: [0.3, 0, 0], thighR: [-0.12, 0, -0.12], shinR: [0.25, 0, 0], footR: [0.3, 0, 0], hipsY: 0.02 }, ease: 'out' },
+    { t: 0.38, pose: { spine: [-0.34, 0, 0], chest: [-0.12, 0, 0], upperArmL: [-2.95, 0, 0.3], foreArmL: [-0.35, 0, 0], upperArmR: [-2.95, 0, -0.3], foreArmR: [-0.35, 0, 0], hipsY: 0.03 }, ease: 'inout' },
+    { t: 0.45, pose: { spine: [0.55, 0, 0], chest: [0.15, 0, 0], upperArmL: [-1.05, 0, 0.22], foreArmL: [-0.12, 0, 0], handL: [-0.5, 0, 0], upperArmR: [-1.05, 0, -0.22], foreArmR: [-0.12, 0, 0], handR: [-0.5, 0, 0], thighL: [-0.82, 0, 0.14], shinL: [0.7, 0, 0], footL: [0, 0, 0], thighR: [0.4, 0, -0.1], shinR: [0.35, 0, 0], footR: [0, 0, 0], hipsY: -0.26, hipsZ: 0.1 }, ease: 'in' },
+    { t: 0.7, pose: { spine: [0.5, 0, 0], chest: [0.12, 0, 0], upperArmL: [-1.0, 0, 0.24], upperArmR: [-1.0, 0, -0.24], hipsY: -0.25, hipsZ: 0.09 } },
+    { t: 1.0, pose: { spine: [0.08, 0, 0], chest: [0, 0, 0], upperArmL: [-0.5, 0, 0.3], foreArmL: [-0.7, 0, 0], handL: [0, 0, 0], upperArmR: [-0.5, 0, -0.3], foreArmR: [-0.7, 0, 0], handR: [0, 0, 0], thighL: [-0.12, 0, 0.1], shinL: [0.15, 0, 0], thighR: [0, 0, -0.1], shinR: [0.15, 0, 0], hipsY: 0, hipsZ: 0 }, ease: 'inout' },
+  ],
+});
+
 // ---- Freezing Strike: snapping lash ending in a palm thrust --------------------
 registerClip({
   id: 'water_freeze_strike',

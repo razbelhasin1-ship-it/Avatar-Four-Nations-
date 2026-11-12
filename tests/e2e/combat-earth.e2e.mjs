@@ -7,7 +7,7 @@
  * Run: node tests/e2e/combat-earth.e2e.mjs   (screenshots → $COMBAT_SHOTS)
  */
 import assert from 'node:assert/strict';
-import { adv, dealt, finish, hitCount, openArena, trial } from './combat-common.mjs';
+import { adv, dealt, finish, hitCount, openArena, since, targetDamage, trial } from './combat-common.mjs';
 
 const E = 'earth';
 const h = await openArena(E);
@@ -27,6 +27,29 @@ try {
       const t = r.targets[0];
       assert.ok(t.totalDamage > 0, 'rock strikes dealt no damage');
       assert.ok(t.hits >= 2, `expected several rocks to land (hits ${t.hits})`);
+    },
+  });
+  // The full five-strike chain: the fifth, Earth Crusher, claps two slabs shut on the foe ahead.
+  let earthBefore = [];
+  await run({
+    id: 'earth_strike',
+    name: 'earth_strike five strikes',
+    casts: 5,
+    gap: 14,
+    targets: [[7, 0.3], [3, 6], [-4, 0.5]],
+    frames: 112,
+    shots: [64, 72, 92],
+    hooks: [56],
+    during: async (hh, frame) => {
+      if (frame === 56) earthBefore = await targetDamage(hh);
+    },
+    check: async (r, hh) => {
+      assert.equal(r.casts.length, 5, 'expected the full five-strike chain');
+      const d = since(r, earthBefore);
+      assert.ok(d[0] >= 20, `Earth Crusher should crush the dummy ahead, even knocked back by the slab (finisher damage ${d.map((x) => x.toFixed(0))})`);
+      assert.equal(d[1] + d[2], 0, 'only the foe between the slabs is caught');
+      const stones = await hh.eval((g) => g.game.player.play.stones.count);
+      assert.ok(stones >= 1, `the rubble should leave loose stones to lift (${stones})`);
     },
   });
   await run({

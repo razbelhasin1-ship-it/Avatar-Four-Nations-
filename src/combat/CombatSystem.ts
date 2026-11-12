@@ -79,6 +79,8 @@ class CastImpl implements Cast {
   released = false;
   channelTime = 0;
   recoveryLeft = 0;
+  movement?: 'free' | 'slow' | 'root';
+  recovery?: number;
   constructor(
     readonly sys: CombatSystem,
     readonly ctx: GameContext,
@@ -129,7 +131,7 @@ class CastImpl implements Cast {
         this.sys.safeCall(() => this.def.release(this));
       }
       this.phase = 'recovery';
-      this.recoveryLeft = this.def.recovery;
+      this.recoveryLeft = this.recovery ?? this.def.recovery;
     }
   }
 }
@@ -237,8 +239,8 @@ export class CombatSystem implements GameSystem {
     const a = this.state(c).active;
     if (!a || a.phase === 'done') return 'free';
     // The player moves freely out of most of a recovery; other benders hold their pose longer.
-    if (a.phase === 'recovery' && a.recoveryLeft < a.def.recovery * (c.isPlayer ? 0.75 : 0.4)) return 'free';
-    return a.def.movement;
+    if (a.phase === 'recovery' && a.recoveryLeft < (a.recovery ?? a.def.recovery) * (c.isPlayer ? 0.75 : 0.4)) return 'free';
+    return a.movement ?? a.def.movement;
   }
 
   /** Cancel the caster's cast (dodge cancel, stagger). */
@@ -386,7 +388,7 @@ export class CombatSystem implements GameSystem {
       c.channelTime = 0;
     } else {
       c.phase = 'recovery';
-      c.recoveryLeft = c.def.recovery;
+      c.recoveryLeft = c.recovery ?? c.def.recovery;
     }
   }
 
@@ -666,7 +668,7 @@ export class CombatSystem implements GameSystem {
         });
         if (!keep || c.channelTime >= (c.def.channel ?? 0)) {
           c.phase = 'recovery';
-          c.recoveryLeft = c.def.recovery;
+          c.recoveryLeft = c.recovery ?? c.def.recovery;
         }
       } else if (c.phase === 'recovery') {
         c.recoveryLeft -= dt * tempo;

@@ -228,14 +228,24 @@ export function fireExplosion(ctx: GameContext, pos: THREE.Vector3, radius: numb
   ctx.world.fx.disturb(pos, radius * 2.2, 1);
 }
 
-/** Small lingering tuft of flame on the ground (burning trails, aftermath). */
-export function groundFlame(ctx: GameContext, pos: THREE.Vector3, life: number, size = 1): { position: THREE.Vector3; done: boolean } {
-  const mat = flameMaterial({ sheet: true, scroll: [0.2, -2.6], scale: [1, 1.2], intensity: 1.8, seed: Math.random() * 20 });
+/**
+ * Small lingering tuft of flame on the ground (burning trails, aftermath). Options: `tall`
+ * stretches it upward; `blend: 'normal'` paints it (rows of tufts don't saturate to white).
+ */
+export function groundFlame(
+  ctx: GameContext,
+  pos: THREE.Vector3,
+  life: number,
+  size = 1,
+  o: { tall?: number; palette?: FlameOptions['palette']; blend?: FlameOptions['blend'] } = {},
+): { position: THREE.Vector3; done: boolean } {
+  const tall = o.tall ?? 1;
+  const mat = flameMaterial({ sheet: true, scroll: [0.2, -2.6], scale: [1, 1.2], intensity: o.blend === 'normal' ? 1.3 : 1.8, seed: Math.random() * 20, palette: o.palette, blend: o.blend });
   const mesh = new THREE.Mesh(shared('fx_tuft', () => crossPlanes(1, 1)), mat);
   mesh.rotation.x = -Math.PI / 2;
   mesh.rotation.z = Math.random() * Math.PI;
   mesh.position.copy(pos);
-  const h = size * (0.8 + Math.random() * 0.5);
+  const h = size * tall * (0.8 + Math.random() * 0.5);
   const handle = { position: pos.clone(), done: false };
   ctx.vfx.addTransient(mesh, life, (t) => {
     const grow = Math.min(1, t * life * 6);
@@ -331,6 +341,51 @@ export function flameRing(ctx: GameContext, center: THREE.Vector3, o: { r0: numb
     mWall.rotation.y -= 0.1;
     setOpacity(wall, t < 0.5 ? 1 : 1 - (t - 0.5) / 0.5);
   }, () => wall.dispose());
+}
+
+const FIN_ROLL = new THREE.Quaternion().setFromAxisAngle(Z, Math.PI / 2);
+
+/**
+ * Tall blade of fire running along the ground (the axe-kick cleave): a crescent standing upright
+ * in the line of travel, its lower tip in the ground and its belly leading, flames streaming up
+ * along it, a white-hot core inside. Pose it every frame with update(); dispose() when done.
+ */
+export class FlameFin {
+  private readonly layers: Array<{ mesh: THREE.Mesh; mat: THREE.ShaderMaterial; core: boolean }> = [];
+  private readonly quat = new THREE.Quaternion();
+
+  constructor(ctx: GameContext, palette: FlameOptions['palette'] = 'fire') {
+    const low = q(ctx) === 'low';
+    const geo = shared(`fx_fin_${low ? 'l' : 'h'}`, () => arcSheet({ radius: 1, arc: 2.5, height: 1, segA: low ? 16 : 28, segH: 3, taper: 1, flow: 'arc' }));
+    for (let i = 0; i < (low ? 1 : 2); i++) {
+      const core = i === 1;
+      const mat = flameMaterial({ sheet: true, scroll: [0.5, core ? -3.4 : -2.6], scale: [1.2, 4], intensity: core ? 2 : 1.55, palette: core ? 'hot' : palette, heat: core ? 0.35 : 0.05 });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.frustumCulled = false;
+      ctx.vfx.group.add(mesh);
+      this.layers.push({ mesh, mat, core });
+    }
+  }
+
+  /** `base`: ground point under the blade; `dir`: travel (horizontal, unit); height ≈ 1.8·r; `width` across. */
+  update(base: THREE.Vector3, dir: THREE.Vector3, r: number, width: number, opacity: number): void {
+    this.quat.setFromUnitVectors(Z, dir).multiply(FIN_ROLL);
+    for (const l of this.layers) {
+      const k = l.core ? 0.88 : 1;
+      l.mesh.quaternion.copy(this.quat);
+      l.mesh.position.copy(base).addScaledVector(UP, r * 0.86 * k);
+      l.mesh.scale.set(r * k, width * (l.core ? 0.45 : 1), r * 0.6 * k);
+      setOpacity(l.mat, opacity);
+    }
+  }
+
+  dispose(): void {
+    for (const l of this.layers) {
+      l.mesh.removeFromParent();
+      l.mat.dispose();
+    }
+    this.layers.length = 0;
+  }
 }
 
 /**

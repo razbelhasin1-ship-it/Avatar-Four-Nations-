@@ -6,7 +6,7 @@
  * Run: node tests/e2e/combat-fire.e2e.mjs   (screenshots → $COMBAT_SHOTS)
  */
 import assert from 'node:assert/strict';
-import { dealt, finish, hitCount, openArena, trial } from './combat-common.mjs';
+import { dealt, finish, hitCount, openArena, since, targetDamage, trial } from './combat-common.mjs';
 
 const E = 'fire';
 const h = await openArena(E);
@@ -24,9 +24,32 @@ try {
     check: (r) => {
       const t = r.targets[0];
       assert.ok(t.totalDamage > 0, 'flame punches dealt no damage');
-      assert.ok(t.hits >= 3, `expected the 4-step chain to land several bolts (hits ${t.hits})`);
+      assert.ok(t.hits >= 3, `expected the first four strikes to land several bolts (hits ${t.hits})`);
       assert.ok(hitCount(r) >= 2, `the fire arc (third strike) should catch more than the aimed dummy (hit ${hitCount(r)})`);
       assert.ok(r.peaks.projectiles >= 1, 'no fire bolts were thrown');
+    },
+  });
+  // The full five-strike chain: the fifth, Flame Cleave, tears a wall of fire 12 m down the line.
+  let fireBefore = [];
+  await run({
+    id: 'fire_jab',
+    name: 'fire_jab five strikes',
+    casts: 5,
+    gap: 9,
+    targets: [[4, 0.3], [8, -0.4], [11, 0.5], [2, 6]],
+    frames: 78,
+    shots: [44, 50, 60],
+    hooks: [36],
+    during: async (hh, frame) => {
+      if (frame === 36) fireBefore = await targetDamage(hh);
+    },
+    check: (r) => {
+      assert.equal(r.casts.length, 5, 'expected the full five-strike chain');
+      const d = since(r, fireBefore);
+      assert.ok(d[2] > 12, `Flame Cleave should burn down the line to the dummy 11 m out (finisher damage ${d.map((x) => x.toFixed(0))})`);
+      assert.ok(r.targets[2].statuses.includes('burn'), 'the wall of fire sets what it hits burning');
+      assert.ok(r.targets[2].rise > 0.3 || r.targets[2].maxLaunch > 0, 'the wall launches what it hits');
+      assert.equal(d[3], 0, 'Flame Cleave is a line: the dummy off to the side stays untouched');
     },
   });
   await run({

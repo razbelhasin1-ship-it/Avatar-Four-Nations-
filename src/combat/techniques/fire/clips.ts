@@ -62,6 +62,24 @@ registerClip({
   ],
 });
 
+// Fifth strike, the finisher: Flame Cleave, an axe kick. A crouch, then a hop as the straight right
+// leg swings up past vertical (body leaning back, arms flung up for balance), and the heel comes
+// down like an axe at 0.36 into a deep lunge, both arms driving down with it; held, then recovered.
+registerClip({
+  id: 'fire_jab_cleave',
+  duration: 1.0,
+  mask: 'full',
+  events: [{ t: 0.36, name: 'release' }],
+  keys: [
+    { t: 0, pose: { spine: [0.3, 0.15, 0], head: [0, 0, 0], thighL: [-0.7, 0, 0.15], shinL: [1.2, 0, 0], thighR: [-0.5, 0, -0.15], shinR: [1.2, 0, 0], upperArmL: [-0.4, 0, 0.5], foreArmL: [-1.6, 0, 0], upperArmR: [-0.3, 0, -0.5], foreArmR: [-1.6, 0, 0], fistL: 1, fistR: 1, hipsY: -0.22 } },
+    { t: 0.12, pose: { spine: [-0.12, 0, 0], thighL: [0.05, 0, 0.08], shinL: [0.15, 0, 0], footL: [0.45, 0, 0], thighR: [-2.0, 0, -0.12], shinR: [0.12, 0, 0], footR: [-0.2, 0, 0], upperArmL: [-1.9, 0, 0.9], foreArmL: [-0.35, 0, 0], upperArmR: [-1.9, 0, -0.9], foreArmR: [-0.35, 0, 0], hipsY: 0.04 }, ease: 'out' },
+    { t: 0.24, pose: { spine: [-0.34, 0, 0], head: [0.25, 0, 0], thighL: [0.08, 0, 0.08], shinL: [0.1, 0, 0], footL: [0.5, 0, 0], thighR: [-2.8, 0, -0.08], shinR: [0.02, 0, 0], footR: [-0.5, 0, 0], upperArmL: [-2.65, 0, 0.5], foreArmL: [-0.4, 0, 0], upperArmR: [-2.65, 0, -0.5], foreArmR: [-0.4, 0, 0], hipsY: 0.08 }, ease: 'out' },
+    { t: 0.36, pose: { spine: [0.55, 0, 0], head: [-0.35, 0, 0], thighL: [0.38, 0, 0.12], shinL: [0.95, 0, 0], footL: [0.1, 0, 0], thighR: [-0.6, 0, -0.1], shinR: [0.28, 0, 0], footR: [0.15, 0, 0], upperArmL: [0.55, 0, 0.6], foreArmL: [-0.5, 0, 0], upperArmR: [-0.95, 0, -0.35], foreArmR: [-0.2, 0, 0], hipsY: -0.34, hipsZ: 0.12 }, ease: 'in' },
+    { t: 0.56, pose: { spine: [0.5, 0, 0], head: [-0.3, 0, 0], upperArmL: [0.5, 0, 0.55], upperArmR: [-0.9, 0, -0.35], hipsY: -0.31, hipsZ: 0.11 } },
+    { t: 1.0, pose: { spine: [0.08, 0, 0], head: [0, 0, 0], thighL: [-0.15, 0, 0.12], shinL: [0.25, 0, 0], footL: [0, 0, 0], thighR: [-0.1, 0, -0.12], shinR: [0.25, 0, 0], footR: [0, 0, 0], upperArmL: [-0.6, 0, 0.3], foreArmL: [-1.5, 0, 0], upperArmR: [-0.6, 0, -0.3], foreArmR: [-1.5, 0, 0], hipsY: -0.04, hipsZ: 0 }, ease: 'inout' },
+  ],
+});
+
 // Two-handed push (fire blast release), stepping into a lunge.
 registerClip({
   id: 'fire_push',

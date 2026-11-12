@@ -5,7 +5,7 @@
  * Run: node tests/e2e/combat-air.e2e.mjs   (screenshots → $COMBAT_SHOTS)
  */
 import assert from 'node:assert/strict';
-import { adv, dealt, finish, hitCount, openArena, trial } from './combat-common.mjs';
+import { adv, dealt, finish, hitCount, openArena, since, targetDamage, trial } from './combat-common.mjs';
 
 const E = 'air';
 const h = await openArena(E);
@@ -23,7 +23,29 @@ try {
     check: (r) => {
       assert.ok(dealt(r) > 0, 'no damage');
       assert.ok(r.targets.some((t) => t.moved > 0.8), 'palm strikes did not knock anyone back');
-      assert.equal(r.casts.length, 4, 'expected the full 4-strike chain (palms, crescent kick, spin)');
+      assert.equal(r.casts.length, 4, 'expected the first four strikes (palms, crescent kick, spin)');
+    },
+  });
+  // The full five-strike chain: the fifth, Air Bomb, throws everyone within 6.5 m up and away.
+  let airBefore = [];
+  await run({
+    id: 'air_palm',
+    name: 'air_palm five strikes',
+    casts: 5,
+    gap: 9,
+    targets: [[4, 0.4], [2.5, -4], [1, 4.2], [14, 0.3]],
+    frames: 72,
+    shots: [42, 47, 52],
+    hooks: [36],
+    during: async (hh, frame) => {
+      if (frame === 36) airBefore = await targetDamage(hh);
+    },
+    check: (r) => {
+      assert.equal(r.casts.length, 5, 'expected the full five-strike chain');
+      const d = since(r, airBefore);
+      assert.ok(d[1] > 10 && d[2] > 10, `Air Bomb should hit all around the bender, both sides (finisher damage ${d.map((x) => x.toFixed(0))})`);
+      assert.ok(r.targets[1].rise > 0.5 && r.targets[2].rise > 0.5, `Air Bomb should throw them up (rise ${r.targets[1].rise.toFixed(2)}, ${r.targets[2].rise.toFixed(2)})`);
+      assert.equal(d[3], 0, 'the dummy far ahead is out of the burst');
     },
   });
   await run({

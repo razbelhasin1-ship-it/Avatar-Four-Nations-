@@ -57,6 +57,28 @@ export function shake(ctx: GameContext, pos: THREE.Vector3, intensity: number, d
   ctx.events.emit('camera:shake', { intensity: intensity * k, duration, position: { x: pos.x, y: pos.y, z: pos.z } });
 }
 
+/**
+ * A combo finisher lands: a heavier shake than ordinary strikes and, for the player, a punch of
+ * the camera (FOV kick and a short pull back).
+ */
+export function finisherImpact(cast: Cast, at: THREE.Vector3, intensity = 0.32, duration = 0.36): void {
+  shake(cast.ctx, at, intensity, duration);
+  if (cast.isPlayer) cast.ctx.events.emit('camera:impulse', { fovKick: 4.5, pullback: 0.6, duration: 0.5 });
+}
+
+/**
+ * A finisher's blow connects: the struck hold their pose longer than on an ordinary hit (the
+ * CombatSystem's hit-stop tops out lower), and the striker's first contact holds a beat too.
+ */
+export function finisherFreeze(cast: Cast, e: Entity, seconds = 0.15): void {
+  if (!cast.isPlayer && e.kind !== 'player') return;
+  (e as Entity & { humanoid?: { hitFreeze(s: number): void } | null }).humanoid?.hitFreeze(seconds);
+  if (!cast.data.finisherFrozen) {
+    cast.data.finisherFrozen = true;
+    cast.caster.humanoid?.hitFreeze(seconds * 0.65);
+  }
+}
+
 /** Ability action the player has `id` slotted on (null for AI casters / unslotted). */
 export function slotAction(ctx: GameContext, cast: Cast): Action | null {
   if (!cast.isPlayer) return null;

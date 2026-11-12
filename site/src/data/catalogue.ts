@@ -50,7 +50,7 @@ export const ELEMENT_STYLE: Record<ElementId, { motto: string; style: string }> 
   fire: {
     motto: 'Breath is power',
     style:
-      'Aggressive and combo-driven: four-hit chains, a flamethrower stream, jet dashes, an explosive finisher and lightning that leaps between foes. A small flame lives in your palm while you explore.',
+      'Aggressive and combo-driven: five-hit chains that end in a flaming axe kick, a flamethrower stream, jet dashes, an explosive finisher and lightning that leaps between foes. A small flame lives in your palm while you explore.',
   },
   air: {
     motto: 'Never stand still',
@@ -61,7 +61,7 @@ export const ELEMENT_STYLE: Record<ElementId, { motto: string; style: string }> 
 
 export const TECHNIQUES: Record<ElementId, Technique[]> = {
   water: [
-    { id: 'water_whip', name: 'Water Whip', kind: 'basic', text: 'A flowing four-step whip pulled from real water: right and left lashes, a spinning lash all around you, then a crack from overhead.' },
+    { id: 'water_whip', name: 'Water Whip', kind: 'basic', text: 'A flowing five-step whip pulled from real water: right and left lashes, a spinning lash all around you, a crack from overhead, then Crashing Wave: the water rises overhead and breaks over everyone in front of you.' },
     { id: 'water_blast', name: 'Water Blast', kind: 'heavy', text: 'Gather a churning sphere of water and drive it forward like a battering ram.' },
     { id: 'water_shield', name: 'Water Shield', kind: 'defense', text: 'Spinning rings of water block projectiles, soften blows and put out flames.' },
     { id: 'ice_shards', name: 'Ice Shards', kind: 'ability', text: 'A fan of razor-sharp shards. Carves straight from ice when there is any nearby.' },
@@ -78,7 +78,7 @@ export const TECHNIQUES: Record<ElementId, Technique[]> = {
     { id: 'ice_prison', name: 'Ice Prison', kind: 'ability', text: 'Water rushes to a foe and freezes around them to the chest. They cannot move or bend until it cracks.' },
   ],
   earth: [
-    { id: 'earth_strike', name: 'Rock Strike', kind: 'basic', text: 'Stomp rocks out of the ground and punch them forward, in a combo that ends with a disc of stone kicked at your foe.' },
+    { id: 'earth_strike', name: 'Rock Strike', kind: 'basic', text: 'Stomp rocks out of the ground and punch them forward, kick a disc of stone, heave a slab, then Earth Crusher: two slabs burst up around your foe and clap shut on them.' },
     { id: 'earth_slam', name: 'Seismic Slam', kind: 'heavy', text: 'A charged stomp sends a shockwave around you and launches foes.' },
     { id: 'earth_pillar', name: 'Earth Pillar', kind: 'ability', text: 'A pillar erupts under your target, or under you to lift you up. You can stand on it.' },
     { id: 'ground_spikes', name: 'Ground Spikes', kind: 'ability', text: 'A line of stone spikes races along the ground, launching anything in its path.' },
@@ -94,7 +94,7 @@ export const TECHNIQUES: Record<ElementId, Technique[]> = {
     { id: 'seismic_sense', name: 'Seismic Sense', kind: 'passive', text: 'Stomps and hard landings reveal nearby enemies and hidden things, even through walls.' },
   ],
   fire: [
-    { id: 'fire_jab', name: 'Flame Punch', kind: 'basic', text: 'A four-hit chain of fire punches with an arcing flame slash and a heavy finishing bolt.' },
+    { id: 'fire_jab', name: 'Flame Punch', kind: 'basic', text: 'A five-hit chain: fire punches, an arcing flame slash, a spinning kick, then Flame Cleave: an axe kick that splits the ground with a wall of fire.' },
     { id: 'fire_blast', name: 'Charged Fireball', kind: 'heavy', text: 'Charge a fireball that explodes and sets foes burning.' },
     { id: 'flame_sweep', name: 'Flame Sweep', kind: 'ability', text: 'A low sweep kick throws an arc of flame across several foes.' },
     { id: 'spinning_flame_kick', name: 'Spinning Flame Kick', kind: 'ability', text: 'Leap into a spinning kick that throws an expanding ring of fire around you.' },
@@ -109,7 +109,7 @@ export const TECHNIQUES: Record<ElementId, Technique[]> = {
     { id: 'fire_dash', name: 'Fire Dash', kind: 'movement', text: 'Rocket forward on flame from fists and feet, leaving a burning trail.' },
   ],
   air: [
-    { id: 'air_palm', name: 'Air Palm', kind: 'basic', text: 'A four-step combo of palm gusts ending in a crescent kick: fast, wide and full of knockback.' },
+    { id: 'air_palm', name: 'Air Palm', kind: 'basic', text: 'A five-step combo of palm gusts, a crescent kick and a spin, then Air Bomb: leap, spin and slam down to burst a dome of air that throws everyone away.' },
     { id: 'air_blast', name: 'Air Blast', kind: 'heavy', text: 'Charge a cone of wind that launches light enemies off their feet.' },
     { id: 'air_sweep', name: 'Air Sweep', kind: 'ability', text: 'A low sweeping kick sends a crescent of wind skimming along the ground.' },
     { id: 'air_spin_strike', name: 'Spinning Air Strike', kind: 'ability', text: 'Spin on the spot and throw everything around you outward, projectiles included.' },
@@ -481,7 +481,7 @@ export const CATEGORIES: FeatureCategory[] = [
     tint: 'fire',
     detail: 'enemies',
     items: [
-      { title: 'Combos and charge', text: 'A basic combo per element, a charged heavy attack, four technique slots, dodge, sprint and lock-on.' },
+      { title: 'Combos and charge', text: 'A five-strike combo per element that ends in a finisher straight from the show, a charged heavy attack, four technique slots, dodge, sprint and lock-on.' },
       { title: 'Chi', text: 'Bending spends chi, which flows back quickly and faster out of combat; every landed strike returns a little.' },
       { title: 'Status effects', text: 'Burning, soaking, freezing, knockdowns, launches and stagger.' },
       { title: 'Enemy tells', text: 'Foes signal their attacks before they land, so timing a shield, a guard or a dodge pays off.' },

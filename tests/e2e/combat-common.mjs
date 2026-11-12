@@ -253,6 +253,12 @@ export function summary(r) {
   return `targets[${t}] player ${pk.playerMoved.toFixed(1)}m/${pk.playerRise.toFixed(1)}up colliders ${pk.colliders0}->${pk.colliders} proj ${pk.projectiles} fx ${pk.effects} particles ${pk.particles}`;
 }
 
+/** Damage each trial target has taken so far (trial order), e.g. to isolate a combo's last strike. */
+export const targetDamage = (h) => h.eval((g) => window.__ct.targets.map((t) => g.ctx.entities.get(t.id)?.totalDamage ?? 0));
+
+/** Damage dealt since `before` (from targetDamage), per target. */
+export const since = (r, before) => r.targets.map((t, i) => (t.totalDamage ?? 0) - (before[i] ?? 0));
+
 /** Helpers for checks. */
 export const dealt = (r) => r.targets.reduce((s, t) => s + (t.totalDamage ?? 0), 0);
 export const hitCount = (r) => r.targets.filter((t) => (t.totalDamage ?? 0) > 0).length;

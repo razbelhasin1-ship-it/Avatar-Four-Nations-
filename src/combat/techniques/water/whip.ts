@@ -6,6 +6,7 @@ import { capTaper } from '../../water/FlowTube';
 import { StreamBody, type WaterEffect, type WaterFX } from '../../water/WaterFX';
 import type { Cast } from '../../types';
 import { basis, contactsAlongPath, douse, fxOf, handPos, refundWater, returnToReserve, shake, spill, UP, type HandName, type PathContact } from './shared';
+import { CrashWaveEffect, drawWaveWater } from './wave';
 
 /**
  * Water whip: the core of moment-to-moment waterbending.
@@ -371,8 +372,18 @@ export class WhipEffect implements WaterEffect {
 }
 
 // ---------------------------------------------------------------------------
-// Water Whip — 4-step basic combo
+// Water Whip — 5-step basic combo (four lashes, then the Crashing Wave finisher)
 // ---------------------------------------------------------------------------
+
+/** Fifth strike: the water is swept up overhead (more drawn for it) and comes down as a breaking wave. */
+function beginWave(cast: Cast): void {
+  cast.caster.humanoid?.animator.play('water_whip_wave', { speed: 1, fadeIn: 0.05, fadeOut: 0.18 });
+  // The arms carry the water up and round overhead; it comes down at 0.45 s into the clip.
+  cast.elapsed -= 0.32;
+  cast.movement = 'root';
+  cast.recovery = 0.42;
+  cast.data.wave = fxOf(cast).add(new CrashWaveEffect(cast, drawWaveWater(cast)));
+}
 
 const STEPS: Array<Pick<WhipOptions, 'style' | 'hand' | 'range' | 'swing' | 'radius' | 'damage' | 'knockback' | 'stagger' | 'launch' | 'delay'> & { clip: string }> = [
   { style: 'right', hand: 'handR', range: 9.5, swing: 0.26, radius: 0.28, damage: 8, knockback: 4, stagger: 12, clip: 'water_whip_r' },
@@ -389,8 +400,9 @@ registerTechnique({
   kind: 'basic',
   tier: 1,
   description:
-    'Pull a ribbon of water from a river, the sea or a pond — or peel it off the water orbiting you — and lash it at foes. A flowing four-step combo: right and left lashes, a spinning lash that circles you and strikes everything around, then a crack down from overhead. Part of the water snaps back to you after each lash.',
-  usage: 'Primary attack. Chain up to four lashes — the third spins all around you. Needs real water nearby or in your reserve.',
+    'Pull a ribbon of water from a river, the sea or a pond — or peel it off the water orbiting you — and lash it at foes. A flowing five-step combo: right and left lashes, a spinning lash that circles you and strikes everything around, a crack down from overhead, and the finisher, Crashing Wave: the water rises overhead and comes down in front as a breaking wave. Part of the water snaps back to you after each lash.',
+  usage:
+    'Primary attack. Chain up to five strikes — the third spins all around you; the fifth draws extra water (from your reserve or a source within reach) into a wave that knocks down and soaks everyone across a wide front, then spills into puddles you can bend again. Needs real water nearby or in your reserve.',
   icon: 'water',
   chiCost: 4,
   cooldown: 0,
@@ -402,8 +414,12 @@ registerTechnique({
   interruptible: false,
   range: 10,
   starter: true,
-  comboLength: 4,
+  comboLength: 5,
   begin(cast) {
+    if (cast.comboIndex === 4) {
+      beginWave(cast);
+      return;
+    }
     const step = STEPS[cast.comboIndex % 4];
     // The spin ends a full turn round (-2π): no fade-out, or the body would unwind.
     cast.caster.humanoid?.animator.play(step.clip, { speed: step.style === 'overhead' ? 1.15 : step.style === 'spin' ? 1 : 1.1, fadeIn: 0.05, fadeOut: step.style === 'spin' ? 0.01 : undefined });
@@ -431,6 +447,12 @@ registerTechnique({
     );
   },
   release(cast) {
+    if (cast.comboIndex === 4) {
+      (cast.data.wave as CrashWaveEffect | undefined)?.release();
+      cast.ctx.audio.play('water_whip', { position: handPos(cast.caster, 'hands', tA), volume: 0.9, pitch: 0.7 });
+      if (cast.isPlayer) cast.ctx.events.emit('combo:advanced', { element: 'water', index: cast.comboIndex });
+      return;
+    }
     const step = STEPS[cast.comboIndex % 4];
     (cast.data.whip as WhipEffect | undefined)?.release();
     const h = handPos(cast.caster, step.hand, tA);
@@ -438,7 +460,9 @@ registerTechnique({
     if (cast.isPlayer) cast.ctx.events.emit('combo:advanced', { element: 'water', index: cast.comboIndex });
   },
   end(cast, interrupted) {
-    if (interrupted) (cast.data.whip as WhipEffect | undefined)?.abort();
+    if (!interrupted) return;
+    (cast.data.whip as WhipEffect | undefined)?.abort();
+    (cast.data.wave as CrashWaveEffect | undefined)?.abort();
   },
   aiScore(_caster, _target, dist) {
     return dist < 9 ? 0.85 : dist < 12 ? 0.35 : 0;

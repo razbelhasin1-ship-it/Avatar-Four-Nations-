@@ -7,13 +7,15 @@ import { bending } from '../bending/runtime';
 import { aimFlat, anim, hitSphere, push, ringSweep, shake } from '../bending/util';
 import { earthPrecheck, groundPoint, takeCounter, tintAt } from './common';
 import { ownWallInFront, punchWall } from './constructs';
+import { beginCrusher, releaseCrusher, type Crusher } from './crusher';
 import { seismicPulse } from './seismic';
 
 /**
  * Earth basics: Rock Strike (stomp a rock out of the ground and punch it, right
- * then left; kick a spinning stone disc; heave a heavy slab) and Seismic Slam
- * (charged stomp shockwave). Earth is slow to start but every hit lands hard; a
- * counter window after Stone Guard boosts them.
+ * then left; kick a spinning stone disc; heave a heavy slab; and the finisher,
+ * Earth Crusher — two slabs burst up around a foe and slam shut on the clap) and
+ * Seismic Slam (charged stomp shockwave). Earth is slow to start but every hit
+ * lands hard; a counter window after Stone Guard boosts them.
  */
 
 const tmp = new THREE.Vector3();
@@ -25,8 +27,10 @@ registerTechnique({
   kind: 'basic',
   tier: 1,
   starter: true,
-  description: 'Stomp a rock up out of the ground and punch it at your foe; the third strike kicks a spinning stone disc, the fourth heaves up a heavy slab that shatters on impact.',
-  usage: 'Primary attack — two quick rocks, a kicked stone disc that flies flat and fast, then a heavy fourth. Strike right after a Stone Guard block for a powerful counter. Punch your own Stone Wall to send it flying.',
+  description:
+    'Stomp a rock up out of the ground and punch it at your foe; the third strike kicks a spinning stone disc, the fourth heaves up a heavy slab that shatters on impact — and the finisher, Earth Crusher, bursts two slabs of rock out of the ground on either side of your foe and claps them shut.',
+  usage:
+    'Primary attack — chain five strikes: two quick rocks, a kicked stone disc that flies flat and fast, a heavy slab, then Earth Crusher, which closes on the nearest foe ahead (up to 13 m) and stuns them; the rubble leaves stones you can lift again. Strike right after a Stone Guard block for a powerful counter. Punch your own Stone Wall to send it flying.',
   icon: 'earth',
   chiCost: 5,
   cooldown: 0,
@@ -36,7 +40,7 @@ registerTechnique({
   airborne: false,
   interruptible: true,
   range: 22,
-  comboLength: 4,
+  comboLength: 5,
   precheck: earthPrecheck,
   begin(cast) {
     const ctx = cast.ctx;
@@ -48,6 +52,11 @@ registerTechnique({
     if (wall) {
       cast.data.wall = wall;
       anim(c, 'earth_push', { fadeIn: 0.05 });
+      return;
+    }
+    if (cast.isPlayer) ctx.events.emit('combo:advanced', { element: 'earth', index: step });
+    if (step === 4) {
+      beginCrusher(cast);
       return;
     }
     anim(c, heavy ? 'earth_strike_heavy' : kick ? 'earth_strike_kick' : step ? 'earth_strike_l' : 'earth_strike_r', { speed: heavy ? 1 : 1.05, fadeIn: 0.05 });
@@ -73,6 +82,10 @@ registerTechnique({
     const ctx = cast.ctx;
     if (cast.data.wall) {
       punchWall(cast, cast.data.wall);
+      return;
+    }
+    if (cast.data.crush) {
+      releaseCrusher(cast);
       return;
     }
     const rock = cast.data.rock as RisingRock | undefined;
@@ -134,7 +147,9 @@ registerTechnique({
     if (heavy) shake(ctx, from, 0.1, 0.15);
   },
   end(cast, interrupted) {
-    if (interrupted) (cast.data.rock as RisingRock | undefined)?.crumble();
+    if (!interrupted) return;
+    (cast.data.rock as RisingRock | undefined)?.crumble();
+    (cast.data.crush as Crusher | undefined)?.cancel();
   },
   aiScore: (_c, _t, dist) => (dist > 3 && dist < 20 ? 0.6 : 0.2),
 });
