@@ -343,12 +343,31 @@ try {
     await tr((g, c) => g.faceTowards(c.x, c.z), c);
     const r = await tr((g, c) => g.cast('air_vortex', { x: c.x, y: c.y + 1.4, z: c.z }), c);
     assert.ok(r.ok, 'vortex cast: ' + JSON.stringify(r));
-    await h.step(150); // 2.5 s: the tornado crosses the cluster
+    // Small steps, like real frames: long synchronous batches in a running lesson pile up renderer
+    // memory under software rendering (seen before this change too), so the check plays it briskly.
+    for (let i = 0; i < 15; i++) await h.step(5); // 2.5 s: the tornado crosses the cluster
     st = await tr((g) => g.debug.training.state());
     assert.ok(st.info.broken >= 1, 'posts in the tornado path broke: ' + st.counter);
-    await shot('vortex_lesson_phone_card');
-    // Then the rest, one aimed tornado at a time.
-    st = await breakTargets('air_vortex');
+    await shot('vortex_lesson_card');
+    // Then the rest: a tornado at the next standing post as soon as the cooldown allows.
+    let last = -99;
+    for (let f = 0; f < 120 && st && st.phase === 'running'; f++) {
+      await h.step(5);
+      st = await tr((g) => {
+        const s = g.debug.training.state();
+        return s && { ...s, t: g.ctx.time.elapsed };
+      });
+      const left = st?.info?.targets?.filter((t) => !t.broken) ?? [];
+      if (!st || st.phase !== 'running' || !left.length || st.t - last < 4.2) continue;
+      const cast = await tr((g, t) => {
+        const p = g.game.player.position;
+        const d = Math.hypot(t.x - p.x, t.z - p.z);
+        if (d > 7.5) g.teleport(t.x + ((p.x - t.x) / d) * 6.5, t.z + ((p.z - t.z) / d) * 6.5, t.y);
+        g.faceTowards(t.x, t.z);
+        return g.cast('air_vortex', { x: t.x, y: t.y + 1.4, z: t.z });
+      }, left[0]);
+      if (cast.ok) last = st.t;
+    }
     await h.step(4);
     st = await tr((g) => g.debug.training.state());
     assert.ok(!st || st.phase === 'success', 'lesson completed with Vortex: ' + JSON.stringify(st).slice(0, 300));
